@@ -1,0 +1,29 @@
+
+
+button:hover {
+    background-color: yellow;
+  }
+
+  .btn{
+    width:160px;
+    font-variant:small-caps;
+  }
+
+  .btn:hover {
+    padding:0;
+    margin:0;
+    border:none;
+    font-size:17px;
+    background:#333;
+    color: white;
+    height:50pxpx;
+    width:165px; 
+    text-decoration:none;
+    font-variant:small-caps;
+    background-color: #111 !important;
+  }
+  
+  #btnGcia{
+    background-color: #797D7F; 
+    color: white
+ }

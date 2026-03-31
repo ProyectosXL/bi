@@ -1,0 +1,504 @@
+/* ============================================================
+   ANÁLISIS TAB — Extensión del Dashboard Sales XL
+   Hereda variables CSS del dashboard principal
+   ============================================================ */
+
+/* ── NAVEGACIÓN DE PESTAÑAS ──────────────────────── */
+.tab-nav {
+    background  : var(--bg-header2);
+    display     : flex;
+    align-items : flex-end;
+    padding     : 0 20px;
+    border-bottom: 3px solid var(--accent);
+    gap         : 4px;
+    position    : sticky;
+    top         : 64px; /* altura del topbar */
+    z-index     : 99;
+}
+
+.tab-btn {
+    background    : transparent;
+    border        : none;
+    color         : rgba(255,255,255,.55);
+    font-family   : var(--font-display);
+    font-size     : .9rem;
+    font-weight   : 600;
+    letter-spacing: .5px;
+    padding       : 8px 20px 10px;
+    cursor        : pointer;
+    border-radius : 6px 6px 0 0;
+    transition    : background var(--transition), color var(--transition);
+    position      : relative;
+    text-transform: uppercase;
+}
+
+.tab-btn:hover {
+    background: rgba(255,255,255,.08);
+    color     : rgba(255,255,255,.85);
+}
+
+.tab-btn.active {
+    background: var(--bg-base);
+    color     : var(--text-1);
+}
+
+.tab-btn.active::after {
+    content   : '';
+    position  : absolute;
+    bottom    : -3px;
+    left      : 0;
+    right     : 0;
+    height    : 3px;
+    background: var(--accent);
+}
+
+/* ── BOTÓN RECARGAR PESTAÑA ──────────────────────── */
+.tab-reload-btn {
+    margin-left  : auto;
+    align-self   : center;
+    background   : transparent;
+    border       : 1px solid rgba(255,255,255,.25);
+    border-radius: 6px;
+    color        : rgba(255,255,255,.65);
+    font-size    : .95rem;
+    width        : 32px;
+    height       : 28px;
+    display      : flex;
+    align-items  : center;
+    justify-content: center;
+    cursor       : pointer;
+    transition   : background var(--transition), color var(--transition), transform .3s ease;
+    flex-shrink  : 0;
+}
+.tab-reload-btn:hover {
+    background: rgba(255,255,255,.12);
+    color     : #fff;
+}
+.tab-reload-btn.spinning i {
+    display  : inline-block;
+    animation: tab-spin .7s linear infinite;
+}
+@keyframes tab-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+/* ── CONTENIDO DE PESTAÑAS ───────────────────────── */
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ── SECCIÓN ANÁLISIS ─────────────────────────────── */
+.analisis-content {
+    padding       : 16px 20px;
+    display       : flex;
+    flex-direction: column;
+    gap           : 16px;
+}
+
+/* ── CARDS DE RUBROS ESPECÍFICOS ─────────────────── */
+.rubros-cards-grid {
+    display              : grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap                  : 12px;
+}
+
+.rubro-kpi-card {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius);
+    padding      : 14px 16px;
+    box-shadow   : var(--shadow);
+    position     : relative;
+    overflow     : hidden;
+    transition   : transform .15s ease, box-shadow .15s ease;
+}
+
+.rubro-kpi-card:hover {
+    transform  : translateY(-2px);
+    box-shadow : 0 6px 20px rgba(26,35,64,0.13);
+}
+
+/* Línea superior de color (igual que summary-card) */
+.rubro-kpi-card::before {
+    content   : '';
+    position  : absolute;
+    top       : 0; left: 0; right: 0;
+    height    : 3px;
+    background: var(--accent3);
+}
+.rubro-kpi-card.pos-card::before { background: var(--pos); }
+.rubro-kpi-card.neg-card::before { background: var(--neg); }
+
+/* ── Header: label izq. + valor anterior der. (= kpi-card-header) ── */
+.rk-header {
+    display        : flex;
+    justify-content: space-between;
+    align-items    : flex-start;
+    margin-bottom  : 8px;
+    gap            : 6px;
+}
+
+.rk-label {
+    font-size     : .65rem;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color         : var(--text-3);
+    font-weight   : 600;
+    line-height   : 1.3;
+    flex          : 1;
+}
+
+.rk-prev-wrap   { text-align: right; flex-shrink: 0; }
+
+.rk-prev-label {
+    font-size     : .58rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color         : var(--text-3);
+    font-weight   : 500;
+    display       : block;
+}
+
+.rk-prev-val {
+    font-family: var(--font-display);
+    font-size  : 1rem;
+    font-weight: 600;
+    color      : var(--text-2);
+    display    : block;
+    line-height: 1.1;
+}
+
+/* ── Body: valor grande + variación (= kpi-card-body) ── */
+.rk-body {
+    display    : flex;
+    align-items: flex-end;
+    gap        : 8px;
+}
+
+.rk-value {
+    font-family: var(--font-display);
+    font-size  : 2.2rem;
+    font-weight: 700;
+    line-height: 1;
+    color      : var(--text-1);
+    flex-shrink: 0;
+}
+
+.rk-var {
+    font-family  : var(--font-display);
+    font-size    : 1.1rem;
+    font-weight  : 600;
+    line-height  : 1;
+    margin-bottom: 3px;
+}
+
+/* ── TABLA JERÁRQUICA ────────────────────────────── */
+.analisis-section-header {
+    background    : var(--accent2);
+    padding       : 10px 14px;
+    font-family   : var(--font-display);
+    font-size     : 1rem;
+    font-weight   : 600;
+    letter-spacing: .5px;
+    color         : #fff;
+    border-radius : var(--radius) var(--radius) 0 0;
+    display       : flex;
+    align-items   : center;
+    gap           : 8px;
+}
+
+.analisis-card {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow     : hidden;
+    box-shadow   : var(--shadow);
+}
+
+.jerarquia-wrap {
+    overflow-x: auto;
+    max-height : 480px;
+    overflow-y : auto;
+}
+
+.tabla-jerarquia {
+    width          : 100%;
+    border-collapse: collapse;
+    font-size      : .78rem;
+}
+
+.tabla-jerarquia thead th {
+    background    : var(--bg-card2);
+    color         : var(--text-2);
+    font-weight   : 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    padding       : 8px 12px;
+    white-space   : nowrap;
+    position      : sticky;
+    top           : 0;
+    z-index       : 5;
+    border-bottom : 2px solid var(--border);
+    border-left   : 1px solid var(--border);
+    cursor        : pointer;
+    user-select   : none;
+}
+
+.tabla-jerarquia thead th:first-child { border-left: none; }
+.tabla-jerarquia thead th:hover { background: #e8eaf2; }
+.tabla-jerarquia thead th.sort-asc::after  { content: ' ▲'; }
+.tabla-jerarquia thead th.sort-desc::after { content: ' ▼'; }
+
+/* Filas de niveles */
+.tr-destino td {
+    background  : #e8ecf6;
+    font-weight : 700;
+    font-size   : .82rem;
+    color       : var(--text-1);
+    padding     : 8px 12px;
+    border-bottom: 1px solid var(--border);
+    border-left : 1px solid var(--border);
+}
+.tr-destino td:first-child { border-left: none; }
+
+.tr-rubro td {
+    background  : var(--bg-card);
+    font-weight : 600;
+    color       : var(--text-1);
+    padding     : 6px 12px;
+    border-bottom: 1px solid var(--border);
+    border-left : 1px solid var(--border);
+}
+.tr-rubro td:first-child { border-left: none; }
+
+.tr-categoria td {
+    background  : var(--bg-card);
+    color       : var(--text-2);
+    padding     : 5px 12px;
+    border-bottom: 1px solid #f0f2f7;
+    border-left : 1px solid var(--border);
+}
+.tr-categoria td:first-child { border-left: none; }
+
+.tr-total-general td {
+    background  : #d1d8f0;
+    font-weight : 700;
+    padding     : 8px 12px;
+    border-top  : 2px solid var(--accent2);
+    border-left : 1px solid var(--border);
+    font-size   : .82rem;
+}
+.tr-total-general td:first-child { border-left: none; }
+
+.td-jerarquia-num {
+    text-align        : right;
+    font-variant-numeric: tabular-nums;
+    white-space       : nowrap;
+}
+
+/* Toggle expandir/colapsar */
+.toggle-icon {
+    cursor     : pointer;
+    display    : inline-block;
+    width      : 18px;
+    height     : 18px;
+    line-height: 18px;
+    text-align : center;
+    font-size  : .72rem;
+    border-radius: 3px;
+    transition : background .12s;
+    margin-right: 4px;
+    background : rgba(37,99,235,.12);
+    color      : var(--accent2);
+}
+.toggle-icon:hover { background: rgba(37,99,235,.22); }
+
+/* Indentación jerárquica */
+.indent-rubro    { padding-left: 28px !important; }
+.indent-categoria{ padding-left: 52px !important; }
+
+/* Variaciones con colores e íconos */
+.var-cell { white-space: nowrap; }
+.var-pos   { color: var(--pos); font-weight: 600; }
+.var-neg   { color: var(--neg); font-weight: 600; }
+.var-neu   { color: var(--text-3); }
+
+/* ── TABLA VENDEDORES ANÁLISIS ───────────────────── */
+.tabla-vendedores-analisis {
+    width          : 100%;
+    border-collapse: collapse;
+    font-size      : .78rem;
+}
+
+.tabla-vendedores-analisis thead th {
+    background    : var(--bg-card2);
+    color         : var(--text-2);
+    font-weight   : 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    padding       : 8px 12px;
+    white-space   : nowrap;
+    position      : sticky;
+    top           : 0;
+    z-index       : 5;
+    border-bottom : 2px solid var(--border);
+    border-left   : 1px solid var(--border);
+    cursor        : pointer;
+    user-select   : none;
+}
+.tabla-vendedores-analisis thead th:first-child { border-left: none; }
+.tabla-vendedores-analisis thead th:hover { background: #e8eaf2; }
+.tabla-vendedores-analisis thead th.sort-asc::after  { content: ' ▲'; }
+.tabla-vendedores-analisis thead th.sort-desc::after { content: ' ▼'; }
+
+.tabla-vendedores-analisis tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition   : background var(--transition);
+}
+.tabla-vendedores-analisis tbody tr:hover { background: var(--bg-card2); }
+
+.tabla-vendedores-analisis td {
+    padding   : 6px 12px;
+    color     : var(--text-1);
+    border-left: 1px solid var(--border);
+}
+.tabla-vendedores-analisis td:first-child { border-left: none; }
+
+.tabla-vendedores-analisis .tr-total-vend td {
+    border-top : 2px solid var(--border);
+    font-weight: 700;
+    background : var(--bg-card2);
+}
+
+/* ── TABLAS LADO A LADO ──────────────────────────── */
+.analisis-tablas-row {
+    display              : grid;
+    grid-template-columns: 1fr 1fr;
+    gap                  : 14px;
+}
+
+/* ── GRÁFICOS EVOLUCIÓN ──────────────────────────── */
+.charts-row {
+    display              : grid;
+    grid-template-columns: 1fr 1fr;
+    gap                  : 14px;
+}
+
+.chart-card {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow     : hidden;
+    box-shadow   : var(--shadow);
+}
+
+.chart-card-header {
+    background    : var(--bg-header2);
+    padding       : 10px 14px;
+    font-family   : var(--font-display);
+    font-size     : 1rem;
+    font-weight   : 600;
+    letter-spacing: .5px;
+    color         : #fff;
+    display       : flex;
+    align-items   : center;
+    gap           : 8px;
+}
+
+.chart-canvas-wrap {
+    padding : 14px;
+    height  : 300px;
+    position: relative;
+}
+
+/* ── RANKING RUBROS (en análisis) ────────────────── */
+.ranking-analisis-wrap {
+    display              : grid;
+    grid-template-columns: 1fr 1fr;
+    gap                  : 14px;
+}
+
+/* ── DRILLDOWN RANKING ───────────────────────────── */
+.rubro-row-drillable:hover {
+    background    : var(--bg-card2);
+    border-radius : 4px;
+}
+.rubro-row-drillable:hover .rubro-nombre {
+    color: var(--accent2);
+}
+
+.ranking-drill-label {
+    font-size  : .7rem;
+    color      : var(--text-3);
+    margin-left: 10px;
+    font-style : italic;
+}
+
+.tooltip-hint {
+    margin-top : 6px;
+    font-size  : .62rem;
+    color      : #9ba8c8;
+    border-top : 1px solid rgba(255,255,255,.1);
+    padding-top: 5px;
+}
+
+/* ── LOADING / SKELETON ──────────────────────────── */
+.analisis-loading {
+    display        : flex;
+    align-items    : center;
+    justify-content: center;
+    padding        : 40px;
+    color          : var(--text-3);
+    font-size      : .85rem;
+    gap            : 10px;
+    animation      : analisis-fade-pulse 1.6s ease-in-out infinite;
+}
+
+/* Ícono giratorio */
+.analisis-loading .bi {
+    animation  : analisis-spin 1s linear infinite;
+    display    : inline-block;
+    font-size  : 1.1rem;
+    flex-shrink: 0;
+}
+
+/* Puntos animados después del texto */
+.analisis-loading .loading-text::after {
+    content   : '';
+    animation : analisis-dots 1.4s steps(3, end) infinite;
+    display   : inline-block;
+    min-width : 1.4ch;
+    text-align: left;
+}
+
+@keyframes analisis-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+@keyframes analisis-fade-pulse {
+    0%, 100% { opacity: 1;    }
+    50%      { opacity: 0.45; }
+}
+
+@keyframes analisis-dots {
+    0%   { content: '.';   }
+    33%  { content: '..';  }
+    66%  { content: '...'; }
+}
+
+/* ── RESPONSIVE ──────────────────────────────────── */
+@media (max-width: 1400px) {
+    .rubros-cards-grid    { grid-template-columns: repeat(3,1fr); }
+    .charts-row           { grid-template-columns: 1fr; }
+    .ranking-analisis-wrap{ grid-template-columns: 1fr; }
+    .analisis-tablas-row  { grid-template-columns: 1fr; }
+}
+@media (max-width: 1100px) {
+    .rubros-cards-grid    { grid-template-columns: repeat(2,1fr); }
+}
+@media (max-width: 720px) {
+    .rubros-cards-grid    { grid-template-columns: 1fr; }
+    .tab-btn              { padding: 8px 12px 10px; font-size: .78rem; }
+    .analisis-content     { padding: 10px; }
+}

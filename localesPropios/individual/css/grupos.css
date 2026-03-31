@@ -1,0 +1,376 @@
+/* ============================================================
+   GRUPOS TAB — Extensión del Dashboard Sales XL
+   Hereda variables CSS del dashboard principal
+   ============================================================ */
+
+/* ── LAYOUT GENERAL ─────────────────────────────── */
+.grupos-content {
+    padding       : 16px 20px;
+    display       : flex;
+    flex-direction: column;
+    gap           : 16px;
+    max-width     : 1400px;
+    margin        : 0 auto;
+}
+
+/* ── VERSUS TOOLBAR ──────────────────────────────── */
+.versus-toolbar {
+    display    : flex;
+    align-items: center;
+    gap        : 10px;
+    padding    : 10px 16px;
+    background : var(--bg-card2);
+    border-bottom: 1px solid var(--border);
+    flex-wrap  : wrap;
+}
+
+.versus-toolbar-label {
+    font-size     : .75rem;
+    color         : var(--text-3);
+    font-weight   : 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    white-space   : nowrap;
+}
+
+.versus-suc-a-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size  : .95rem;
+    color      : var(--accent2);
+    white-space: nowrap;
+}
+
+.versus-vs-sep {
+    font-family   : var(--font-display);
+    font-size     : .72rem;
+    font-weight   : 700;
+    color         : var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.versus-suc-select {
+    font-family : var(--font-display);
+    font-size   : .85rem;
+    padding     : 5px 10px;
+    border-radius: 5px;
+    border      : 1px solid var(--border);
+    background  : var(--bg-card);
+    color       : var(--text-1);
+    cursor      : pointer;
+    font-weight : 600;
+    min-width   : 160px;
+}
+
+/* ── VERSUS TABLE ────────────────────────────────── */
+.versus-table {
+    width          : 100%;
+    border-collapse: collapse;
+    font-size      : .85rem;
+}
+
+.versus-table thead th {
+    background    : var(--bg-card2);
+    padding       : 10px 16px;
+    font-weight   : 700;
+    font-family   : var(--font-display);
+    font-size     : .88rem;
+    letter-spacing: .4px;
+    border-bottom : 2px solid var(--border);
+    border-left   : 1px solid var(--border);
+}
+.versus-table thead th:first-child { border-left: none; }
+
+.versus-th-kpi  { color: var(--text-3); text-align: left;   min-width: 180px; }
+.versus-th-a    { color: var(--accent2); text-align: right; min-width: 150px; }
+.versus-th-diff { color: var(--text-3); text-align: center; width: 110px; font-size: .7rem; }
+.versus-th-b    { color: var(--text-1); text-align: left;   min-width: 150px; }
+
+/* Alineado de celdas del cuerpo: espeja el encabezado */
+.versus-table tbody td:nth-child(2) { text-align: right; }
+.versus-table tbody td:nth-child(3) { text-align: center; }
+.versus-table tbody td:nth-child(4) { text-align: left; }
+
+.versus-table tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition   : background var(--transition);
+}
+.versus-table tbody tr:hover { background: var(--bg-card2); }
+
+.versus-table tbody td {
+    padding    : 9px 16px;
+    border-left: 1px solid var(--border);
+}
+.versus-table tbody td:first-child { border-left: none; }
+
+.versus-kpi-label {
+    font-weight   : 600;
+    color         : var(--text-2);
+    text-transform: uppercase;
+    font-size     : .72rem;
+    letter-spacing: .6px;
+    white-space   : nowrap;
+}
+
+/* Valores: A y B (el td padre controla la alineación) */
+.versus-val-a,
+.versus-val-b {
+    font-family: var(--font-display);
+    font-size  : 1.05rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color      : var(--text-1);
+}
+
+.versus-val-a.win, .versus-val-b.win {
+    color      : var(--pos);
+    font-weight: 700;
+}
+.versus-val-a.lose, .versus-val-b.lose {
+    color: var(--neg);
+}
+
+/* Badge de diferencia */
+.versus-diff-cell { text-align: center; white-space: nowrap; }
+
+.versus-badge {
+    display      : inline-block;
+    padding      : 2px 9px;
+    border-radius: 10px;
+    font-size    : .72rem;
+    font-weight  : 700;
+    font-family  : var(--font-display);
+    letter-spacing: .3px;
+}
+.versus-badge.a-wins {
+    background: rgba(0,168,120,.12);
+    color     : var(--pos);
+}
+.versus-badge.b-wins {
+    background: rgba(220,38,38,.10);
+    color     : var(--neg);
+}
+.versus-badge.tie {
+    background: rgba(107,114,128,.1);
+    color     : var(--text-3);
+}
+
+/* Sin sucursales en el grupo */
+.versus-empty {
+    padding       : 32px;
+    text-align    : center;
+    color         : var(--text-3);
+    font-size     : .88rem;
+}
+
+/* ── SORT INDICATORS (ambas tablas) ─────────────── */
+.grupos-tabla thead th,
+.rubros-pivot-tabla thead th {
+    cursor     : pointer;
+    user-select: none;
+}
+.grupos-tabla thead th:hover,
+.rubros-pivot-tabla thead th:hover { background: #e0e4f2; }
+
+.grupos-tabla thead th.sort-asc::after,
+.rubros-pivot-tabla thead th.sort-asc::after  { content: ' ▲'; font-size: .65rem; }
+.grupos-tabla thead th.sort-desc::after,
+.rubros-pivot-tabla thead th.sort-desc::after { content: ' ▼'; font-size: .65rem; }
+
+/* La primera columna vacía del pivot no es sortable */
+.rubros-pivot-tabla thead th:first-child {
+    cursor: default;
+    pointer-events: none;
+}
+
+/* ── DESGLOSE GRUPOS TABLA ───────────────────────── */
+.grupos-tabla {
+    width          : 100%;
+    border-collapse: collapse;
+    font-size      : .78rem;
+}
+
+.grupos-tabla thead th {
+    background    : var(--bg-card2);
+    color         : var(--text-2);
+    font-weight   : 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    padding       : 8px 12px;
+    white-space   : nowrap;
+    position      : sticky;
+    top           : 0;
+    z-index       : 5;
+    border-bottom : 2px solid var(--border);
+    border-left   : 1px solid var(--border);
+}
+.grupos-tabla thead th:first-child { border-left: none; }
+
+.grupos-tabla .tr-grupo td {
+    background  : #e8ecf6;
+    font-weight : 700;
+    font-size   : .82rem;
+    color       : var(--text-1);
+    padding     : 8px 12px;
+    border-bottom: 1px solid var(--border);
+    border-left : 1px solid var(--border);
+}
+.grupos-tabla .tr-grupo td:first-child { border-left: none; }
+
+.grupos-tabla .tr-suc td {
+    background  : var(--bg-card);
+    color       : var(--text-2);
+    padding     : 6px 12px;
+    border-bottom: 1px solid #f0f2f7;
+    border-left : 1px solid var(--border);
+}
+.grupos-tabla .tr-suc td:first-child {
+    border-left: none;
+    font-weight: 600;
+    color      : var(--text-1);
+    white-space: nowrap;
+}
+
+/* Resaltar la sucursal actual con estrella */
+.grupos-tabla .tr-suc.is-current td {
+    background: rgba(37,99,235,.04);
+}
+.grupos-tabla .tr-suc.is-current td:first-child::after {
+    content   : '\00a0★';
+    color     : var(--accent);
+    font-size : .7rem;
+}
+
+.grupos-tabla .tr-total-grupo td {
+    background : #d1d8f0;
+    font-weight: 700;
+    padding    : 7px 12px;
+    border-top : 1px solid var(--border);
+    border-left: 1px solid var(--border);
+    font-size  : .8rem;
+}
+.grupos-tabla .tr-total-grupo td:first-child { border-left: none; }
+
+.grupos-tabla .tr-total-general td {
+    background : #c3cce8;
+    font-weight: 700;
+    padding    : 8px 12px;
+    border-top : 2px solid var(--accent2);
+    border-left: 1px solid var(--border);
+    font-size  : .82rem;
+}
+.grupos-tabla .tr-total-general td:first-child { border-left: none; }
+
+.grupos-tabla td.num {
+    text-align           : right;
+    font-variant-numeric : tabular-nums;
+    white-space          : nowrap;
+}
+
+/* ── PIVOT RUBROS ────────────────────────────────── */
+.rubros-pivot-wrap {
+    overflow-x: auto;
+    max-height : 500px;
+    overflow-y : auto;
+}
+
+.rubros-pivot-tabla {
+    width          : 100%;
+    border-collapse: collapse;
+    font-size      : .78rem;
+}
+
+.rubros-pivot-tabla thead th {
+    background    : var(--bg-card2);
+    color         : var(--text-2);
+    font-weight   : 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    padding       : 8px 10px;
+    white-space   : nowrap;
+    position      : sticky;
+    top           : 0;
+    z-index       : 5;
+    border-bottom : 2px solid var(--border);
+    border-left   : 1px solid var(--border);
+    text-align    : right;
+}
+.rubros-pivot-tabla thead th:first-child,
+.rubros-pivot-tabla thead th:nth-child(2) {
+    text-align: left;
+    border-left: none;
+}
+.rubros-pivot-tabla thead th:nth-child(2) {
+    border-left: 1px solid var(--border);
+}
+
+.rubros-pivot-tabla .tr-grupo-piv td {
+    background  : #e8ecf6;
+    font-weight : 700;
+    font-size   : .82rem;
+    color       : var(--text-1);
+    padding     : 7px 10px;
+    border-bottom: 1px solid var(--border);
+    border-left : 1px solid var(--border);
+}
+.rubros-pivot-tabla .tr-grupo-piv td:first-child { border-left: none; }
+
+.rubros-pivot-tabla .tr-suc-piv td {
+    background  : var(--bg-card);
+    color       : var(--text-2);
+    padding     : 5px 10px;
+    border-bottom: 1px solid #f0f2f7;
+    border-left : 1px solid var(--border);
+}
+.rubros-pivot-tabla .tr-suc-piv td:first-child { border-left: none; }
+.rubros-pivot-tabla .tr-suc-piv td:nth-child(2) {
+    font-weight: 600;
+    color      : var(--text-1);
+    white-space: nowrap;
+}
+
+.rubros-pivot-tabla .tr-suc-piv.is-current td {
+    background: rgba(37,99,235,.04);
+}
+.rubros-pivot-tabla .tr-suc-piv.is-current td:nth-child(2)::after {
+    content  : '\00a0★';
+    color    : var(--accent);
+    font-size: .7rem;
+}
+
+.rubros-pivot-tabla .tr-total-piv td {
+    background : #d1d8f0;
+    font-weight: 700;
+    padding    : 7px 10px;
+    border-top : 1px solid var(--border);
+    border-left: 1px solid var(--border);
+    font-size  : .8rem;
+}
+.rubros-pivot-tabla .tr-total-piv td:first-child { border-left: none; }
+
+.rubros-pivot-tabla td.num-pct {
+    text-align           : right;
+    font-variant-numeric : tabular-nums;
+    white-space          : nowrap;
+}
+
+/* Heatmap de intensidad por columna (normalizado al máximo de cada rubro) */
+.rubros-pivot-tabla td.heat-1 { background: rgba(37,99,235,.10); }
+.rubros-pivot-tabla td.heat-2 { background: rgba(37,99,235,.20); }
+.rubros-pivot-tabla td.heat-3 { background: rgba(37,99,235,.32); }
+.rubros-pivot-tabla td.heat-4 { background: rgba(37,99,235,.46); }
+.rubros-pivot-tabla td.heat-5 { background: rgba(37,99,235,.62); color: #fff; font-weight: 700; }
+
+/* ── RESPONSIVE ──────────────────────────────────── */
+@media (max-width: 1400px) {
+    .versus-th-a, .versus-th-b { min-width: 110px; }
+}
+@media (max-width: 900px) {
+    .versus-table { font-size: .78rem; }
+    .versus-val-a, .versus-val-b { font-size: .9rem; }
+}
+@media (max-width: 720px) {
+    .grupos-content { padding: 10px; }
+    .versus-toolbar { gap: 6px; }
+}
