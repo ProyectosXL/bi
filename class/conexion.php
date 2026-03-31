@@ -1,192 +1,186 @@
 <?php
+if (!class_exists('Conexion')) {
+    class Conexion
+    {
 
-class Conexion{
-    
-    // --- CORRECCIÓN: Declaración de variables para PHP 8.2 ---
-    public $envVars;
-    public $host_central;
-    public $database_central;
-    public $host_locales;
-    public $host_apps;
-    public $database_locales;
-    public $database_tangobis;
-    public $database_apps;
-    public $user;
-    public $pass;
-    public $pass_locales;
-    public $character;
-    public $env;
-    public $prefix;
-    public $database_uy;
-    public $database_sucUy;
-    // --------------------------------------------------------
-    
-    public function __construct(){
+        private $envVars;
+        private $host_central;
+        private $database_central;
+        private $database_uy;
+        private $database_tangobis;
+        private $database_suc_uy;
+        private $host_apps;
+        private $database_power;
+        private $database_power_uy;
+        private $database_apps;
+        private $host_locales;
+        private $database_locales;
+        private $user;
+        private $pass;
+        private $pass_locales;
+        private $character;
+        private $env;
+        private $prefix;
 
-        require_once(__DIR__.'/classEnv.php');
+        function __construct()
+        {
+            require_once(__DIR__ . '/classEnv.php');
 
-        $vars = new DotEnv(__DIR__ . '/../../.env');
-        $this->envVars = $vars->listVars();
-        
-        $this->host_central = $this->envVars['HOST_CENTRAL'];
-        $this->database_central = $this->envVars['DATABASE_CENTRAL'];
-        $this->host_locales = $this->envVars['HOST_LOCALES'];
-        $this->host_apps = $this->envVars['HOST_APPS'];
-        $this->database_locales = $this->envVars['DATABASE_LOCALES'];
-        $this->database_tangobis = $this->envVars['DATABASE_TANGOBIS'];
-        $this->database_apps = $this->envVars['DATABASE_APPS'];
-        $this->user = $this->envVars['USER'];
-        $this->pass = $this->envVars['PASS'];
-        $this->pass_locales = $this->envVars['PASS_LOCALES'];
-        $this->character = $this->envVars['CHARACTER'];
-        $this->env = $this->envVars['ENV'];
-        $this->prefix = ($this->env == 'DEV') ? '[LAKERBIS].locales_lakers.dbo.' : '';
-        $this->database_uy = $this->envVars['DATABASE_UY'];
-        $this->database_sucUy = $this->envVars['DATABASE_SUC_UY'];
+            $vars = new DotEnv(__DIR__ . '/../../.env');
+            $this->envVars = $vars->listVars();
 
-    }
-
-    private function servidor($nameServer) {
-        
-        if($nameServer == 'central'){
-            return array($this->host_central, $this->database_central);
-        }elseif($nameServer == 'locales'){
-            return array($this->host_locales, $this->database_locales);
-        }elseif($nameServer == 'tangoBis'){
-            return array($this->host_locales, $this->database_tangobis);
-        }elseif($nameServer == 'uy'){
-            return array($this->host_central, $this->database_uy);
-        }elseif($nameServer == 'suc_uy'){
-            return array($this->host_locales, $this->database_sucUy);
-        }elseif($nameServer == 'apps'){
-            return array($this->host_apps, $this->database_apps);
-        }else{
-            return array($_SESSION['conexion_dns'], $_SESSION['base_nombre']);
+            $this->host_central = $this->envVars['HOST_CENTRAL'];
+            $this->database_central = $this->envVars['DATABASE_CENTRAL'];
+            $this->database_uy = $this->envVars['DATABASE_UY'];
+            $this->database_tangobis = $this->envVars['DATABASE_TANGOBIS'];
+            $this->database_suc_uy = $this->envVars['DATABASE_SUC_UY'];
+            $this->host_apps = $this->envVars['HOST_APPS'];
+            $this->database_power = $this->envVars['DATABASE_POWER'];
+            $this->database_power_franquicias = $this->envVars['DATABASE_POWER_FRANQUICIAS'];
+            $this->database_power_uy = $this->envVars['DATABASE_POWER_UY'];
+            $this->database_apps = $this->envVars['DATABASE_APPS'];
+            $this->host_locales = $this->envVars['HOST_LOCALES'];
+            $this->database_locales = $this->envVars['DATABASE_LOCALES'];
+            $this->user = $this->envVars['USER'];
+            $this->pass = $this->envVars['PASS'];
+            $this->pass_locales = $this->envVars['PASS_LOCALES'];
+            $this->character = $this->envVars['CHARACTER'];
+            $this->env = $this->envVars['ENV'];
+            $this->prefix = ($this->env == 'DEV') ? '[XL-LAKERBIS].locales_lakers.dbo.' : '';
         }
 
-    }
+        private function servidor($nameServer)
+        {
 
-    public function setearDnsBaseName($nroSucursal) {
+            if ($nameServer == 'central') {
+                return array($this->host_central, $this->database_central);
+            } elseif ($nameServer == 'locales') {
+                return array($this->host_locales, $this->database_locales);
+            } elseif ($nameServer == 'uy') {
+                return array($this->host_central, $this->database_uy);
+            } elseif ($nameServer == 'tangobis') {
+                return array($this->host_central, $this->database_tangobis);
+            } elseif ($nameServer == 'suc_uy') {
+                return array($this->host_central, $this->database_suc_uy);
+            } elseif ($nameServer == 'apps') {
+                return array($this->host_apps, $this->database_apps);
+            } elseif ($nameServer == 'power') {
+                return array($this->host_apps, $this->database_power);
+            } elseif ($nameServer == 'power_uy') {
+                return array($this->host_apps, $this->database_power_uy);
+            } elseif ($nameServer == 'power_franquicias') {
+                return array($this->host_apps, $this->database_power_franquicias);
+            } else {
+                // Solo usar sesión si no se especifica servidor o si se especifica uno no reconocido
+                if (session_status() === PHP_SESSION_NONE) {
+                    session_start();
+                }
 
-        // La consulta ahora incluye USUARIO_DNS y CLAVE_DNS
-        $sql = "SELECT CONEXION_DNS, BASE_NOMBRE, USUARIO_DNS, CLAVE_DNS
-                FROM [XL-LAKERBIS].locales_lakers.dbo.SUCURSALES_LAKERS 
-                WHERE NRO_SUC_MADRE IS NULL 
-                AND NRO_SUCURSAL = ?";
+                // Verificar que las variables de sesión existen
+                if (!isset($_SESSION['conexion_dns']) || !isset($_SESSION['base_nombre'])) {
+                    // Si no existen, usar central por defecto
+                    error_log("Variables de sesión no definidas, usando central por defecto");
+                    return array($this->host_central, $this->database_central);
+                }
 
-        $conn = $this->conectar('central');
-
-        if (!$conn) {
-            // En un entorno de producción, es mejor registrar el error que detener la ejecución.
-            error_log("Error de conexión a la base de datos central en setearDnsBaseName.");
-            return false;
-        }
-
-        $params = array($nroSucursal);
-        $stmt = sqlsrv_query($conn, $sql, $params);
-
-        if ($stmt === false) {
-            error_log("Error en la consulta de setearDnsBaseName: " . print_r(sqlsrv_errors(), true));
-            return false;
-        }
-
-        if ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-            // Guardamos los 4 valores en la sesión para ser usados por el método conectar()
-            $_SESSION['conexion_dns'] = $row['CONEXION_DNS'];
-            $_SESSION['base_nombre'] = $row['BASE_NOMBRE'];
-            $_SESSION['usuario_dns'] = $row['USUARIO_DNS']; // Puede ser NULL
-            $_SESSION['clave_dns'] = $row['CLAVE_DNS'];     // Puede ser NULL
-            return true;
-        } else {
-            // No se encontró configuración para esta sucursal
-            return false;
-        }
-    }
-
-    // REEMPLAZA este método en Class/conexion.php
-    public function conectar($nameServer = null) {
-        try {
-        $serverDB = $this->servidor($nameServer);
-
-        // --- LÓGICA DE CREDENCIALES DINÁMICAS ---
-
-        $usuario_final = $this->user;
-        $clave_final = $this->pass; 
-
-        // Si es una conexión a una sucursal local (sin nombre de servidor específico)
-        if (empty($nameServer)) {
-            // Usamos las credenciales de la sesión SI existen y NO están vacías.
-            // Si son NULL o vacías en la BD, se usarán los valores por defecto del .env.
-            if (isset($_SESSION['usuario_dns']) && !empty($_SESSION['usuario_dns'])) {
-                $usuario_final = $_SESSION['usuario_dns'];
+                return array($_SESSION['conexion_dns'], $_SESSION['base_nombre']);
             }
-            if (isset($_SESSION['clave_dns']) && !empty($_SESSION['clave_dns'])) {
-                $clave_final = $_SESSION['clave_dns'];
-            }
-        } 
-        elseif ($nameServer == 'locales' || $nameServer == 'tangoBis' || $nameServer == "suc_uy") {
-            $clave_final = $this->pass_locales; 
+
         }
-        
-        // --- FIN DE LA LÓGICA ---
 
-        $params = array( 
-            "Database" => $serverDB[1], 
-            "UID" => $usuario_final, 
-            "PWD" => $clave_final, 
-            "CharacterSet" => $this->character
-        );
+        public function conectar($nameServer = null)
+        {
+            try {
 
-        $cid = sqlsrv_connect($serverDB[0], $params);
+                $serverDB = $this->servidor($nameServer);
 
-        return $cid;
-        } catch (PDOException $e) {
-            // Es mejor registrar el error que mostrarlo en pantalla.
-            error_log("PDOException en conectar(): " . $e->getMessage());
-            return false;
+                error_log("Intentando conectar a: " . $serverDB[0] . " - " . $serverDB[1]);
+
+                if ($this->env == 'PROD' && (strtolower($serverDB[0]) == strtolower('XL-LAKERBIS'))) {
+                    $pass = $this->pass_locales;
+                } else {
+                    $pass = $this->pass;
+                }
+
+                $params = array(
+                    "Database" => $serverDB[1],
+                    "UID" => $this->user,
+                    "PWD" => $pass,
+                    "CharacterSet" => $this->character
+                );
+
+                // Log de parámetros de conexión (sin contraseña)
+                $params_log = $params;
+                $params_log['PWD'] = '***hidden***';
+                error_log("Parámetros de conexión: " . print_r($params_log, true));
+
+                $cid = sqlsrv_connect($serverDB[0], $params);
+
+                if (!$cid) {
+                    $errors = sqlsrv_errors();
+                    error_log("Error de conexión SQL Server: " . print_r($errors, true));
+                    return false;
+                }
+
+                error_log("Conexión exitosa a: " . $serverDB[0] . " - " . $serverDB[1]);
+
+                // Iniciar sesión si no está iniciada
+                if (session_status() === PHP_SESSION_NONE) {
+                    session_start();
+                }
+
+                // este cid va a cambiar mil veces
+                $_SESSION['cid'] = $cid;
+                return $cid;
+
+            } catch (PDOException $e) {
+                echo $e->getMessage();
+            }
+        }
+
+        private function buscarLocal($nameLocal)
+        {
+
+            $prefix = ($this->env == 'DEV') ? '[XL-LAKERBIS].locales_lakers.dbo.' : '';
+
+            if ($this->env == 'DEV') {
+                $database = $this->database_central;
+                $pass = $this->pass;
+            } else {
+                $database = $this->database_locales;
+                $pass = $this->pass_locales;
+            }
+
+            $sql = "select * from " . $prefix . " sucursales_lakers where cod_client = '$nameLocal'";
+
+            $params = array(
+                "Database" => $this->database_central,
+                "UID" => $this->user,
+                "PWD" => $this->pass,
+                "CharacterSet" => $this->character
+            );
+
+            $cid = sqlsrv_connect($this->host_central, $params);
+
+            $stmt = sqlsrv_query($cid, $sql);
+
+            try {
+
+                // $next_result = sqlsrv_next_result($stmt);
+
+                while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+
+                    $v[] = $row;
+
+                }
+
+                return $v[0];
+
+            } catch (\Throwable $th) {
+
+                print_r($th);
+
+            }
         }
     }
-
-    private function buscarLocal($nameLocal){
-
-        $prefix = ($this->env == 'DEV') ? '[XL-LAKERBIS].locales_lakers.dbo.' : '';
-
-        if($this->env == 'DEV'){
-            $database = $this->database_central;
-            $pass = $this->pass;
-        } else {
-            $database = $this->database_locales;
-            $pass = $this->pass_locales;
-        }
-
-        $sql = "select * from ".$prefix."sucursales_lakers where cod_client = '$nameLocal'";
-
-        $params = array( 
-            "Database" => $database, 
-            "UID" => $this->user, 
-            "PWD" => $pass, 
-            "CharacterSet" => $this->character
-        );
-
-        $cid = sqlsrv_connect($this->host_central, $params);
-
-        $stmt = sqlsrv_query($cid, $sql);
-
-        try {
-
-            while ($row = sqlsrv_fetch_array($stmt,SQLSRV_FETCH_ASSOC)) {
-
-                $v[] = $row;
-
-            }
-    
-            return $v[0];
-
-        } catch (\Throwable $th) {
-
-            print_r($th);
-
-        }
-    }
-    
 }

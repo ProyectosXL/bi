@@ -9,7 +9,7 @@ class GruposDB
 
     public function __construct()
     {
-        require_once $_SERVER['DOCUMENT_ROOT'] . '/comercial/Class/Conexion.php';
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
         $cid        = new Conexion();
         $this->conn = $cid->conectar('power');
     }

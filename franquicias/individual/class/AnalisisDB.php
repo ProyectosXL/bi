@@ -12,7 +12,7 @@ class AnalisisDB
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
         $cid        = new Conexion();
-        $this->conn = $cid->conectar('power');
+        $this->conn = $cid->conectar('power_franquicias');
     }
 
     /* ──────────────────────────────────────────────
@@ -50,7 +50,7 @@ class AnalisisDB
         string $rubro     = '%'
     ): array {
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
         $sfRS = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
@@ -196,7 +196,7 @@ class AnalisisDB
         string $rubro     = '%'
     ): array {
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
         $sfRS = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
@@ -205,7 +205,7 @@ class AnalisisDB
         $sql = "
             SELECT
                 s.COD_VENDED,
-                MAX(s.DESC_VENDEDOR) AS vendedor,
+                s.COD_VENDED AS vendedor,
                 ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                                 THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
@@ -282,7 +282,7 @@ class AnalisisDB
         if (empty($targetRubros)) return [];
 
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
 
@@ -339,7 +339,7 @@ class AnalisisDB
         string $tipo      = 'unidades'
     ): array {
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
         $sfRS = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
@@ -348,7 +348,7 @@ class AnalisisDB
         if ($tipo === 'tickets') {
             // Tickets FAC
             $sfT = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
-            $sfVT = $vendedor !== '%'  ? "AND t.DESC_VENDEDOR = ?" : "";
+            $sfVT = $vendedor !== '%'  ? "AND t.COD_VENDED = ?" : "";
             $suc2 = $nroSucurs !== null ? [$nroSucurs] : [];
             $vend2 = $vendedor !== '%'  ? [$vendedor]  : [];
 
@@ -446,7 +446,7 @@ class AnalisisDB
         string $vendedor  = '%'
     ): array {
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
 
@@ -477,7 +477,7 @@ class AnalisisDB
         string $rubro     = ''
     ): array {
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
 
