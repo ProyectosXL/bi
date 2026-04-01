@@ -1091,10 +1091,11 @@ const Dashboard = (() => {
 
             const selVendedor = document.getElementById('sel-vendedor');
             if (selVendedor && filtrosData.vendedores) {
+                const campoVend = filtrosData.campo_vendedor || 'DESC_VENDEDOR';
                 filtrosData.vendedores.forEach(v => {
                     const opt = document.createElement('option');
-                    opt.value = v.DESC_VENDEDOR;
-                    opt.textContent = v.DESC_VENDEDOR;
+                    opt.value = v[campoVend];
+                    opt.textContent = v[campoVend];
                     selVendedor.appendChild(opt);
                 });
                 selVendedor.addEventListener('change', () => {

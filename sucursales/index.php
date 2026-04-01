@@ -6,9 +6,12 @@
  */
 session_start();
 if (!isset($_SESSION['username'])) {
-    header('Location: ../../sistemas/login.php');
+    header('Location: ../sistemas/login.php');
     exit;
 }
+require_once __DIR__ . '/../class/config.php';
+$config     = getConfig();
+$showGrupos = $config['features']['grupos'];
 date_default_timezone_set('America/Argentina/Buenos_Aires');
 $ultimaAct  = date('d/m/Y H:i:s');
 $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
@@ -19,7 +22,7 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Sales — <?= htmlspecialchars($descLocal) ?></title>
-    <link rel="icon" type="image/jpg" href="../../assets/css/images/icono.jpg">
+    <link rel="icon" type="image/jpg" href="../assets/css/images/icono.jpg">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/analisis.css">
     <link rel="stylesheet" href="css/grupos.css">
@@ -114,9 +117,11 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
         <button class="tab-btn" id="tab-btn-analisis" role="tab" aria-controls="tab-analisis" aria-selected="false">
             <i class="bi bi-graph-up-arrow"></i>&nbsp; Análisis
         </button>
+        <?php if ($showGrupos): ?>
         <button class="tab-btn" id="tab-btn-grupos" role="tab" aria-controls="tab-grupos" aria-selected="false">
             <i class="bi bi-diagram-2-fill"></i>&nbsp; Grupos
         </button>
+        <?php endif; ?>
         <button class="tab-reload-btn" id="btn-reload-tab" title="Recargar pestaña">
             <i class="bi bi-arrow-clockwise"></i>
         </button>
@@ -454,6 +459,7 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
     <!-- /tab-analisis -->
 
     <!-- ══ PESTAÑA: GRUPOS ═══════════════════════════════════════ -->
+    <?php if ($showGrupos): ?>
     <div id="tab-grupos" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-grupos">
         <div class="grupos-content">
 
@@ -526,22 +532,29 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
         </div>
     </div>
     <!-- /tab-grupos -->
+    <?php endif; ?>
 
 </div><!-- /dash-wrap -->
 
 <script src="js/dashboard.js"></script>
 <script src="js/analisis.js"></script>
+<?php if ($showGrupos): ?>
 <script src="js/grupos.js"></script>
+<?php endif; ?>
 <script>
 /**
- * Tab navigation — 3 pestañas: KPIs / Análisis / Grupos
+ * Tab navigation — KPIs / Análisis / Grupos (Grupos solo si showGrupos === true)
  */
 (function () {
+    const SHOW_GRUPOS = <?= $showGrupos ? 'true' : 'false' ?>;
+
     const TABS = [
-        { btn: 'tab-btn-kpis',     pane: 'tab-kpis'     },
-        { btn: 'tab-btn-analisis', pane: 'tab-analisis'  },
-        { btn: 'tab-btn-grupos',   pane: 'tab-grupos'    },
+        { btn: 'tab-btn-kpis',     pane: 'tab-kpis'    },
+        { btn: 'tab-btn-analisis', pane: 'tab-analisis' },
     ];
+    if (SHOW_GRUPOS) {
+        TABS.push({ btn: 'tab-btn-grupos', pane: 'tab-grupos' });
+    }
 
     let analisisLoaded = false;
     let gruposLoaded   = false;
@@ -558,7 +571,7 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
             analisisLoaded = true;
             Analisis.loadAll();
         }
-        if (paneId === 'tab-grupos' && !gruposLoaded) {
+        if (SHOW_GRUPOS && paneId === 'tab-grupos' && !gruposLoaded) {
             gruposLoaded = true;
             Grupos.loadAll();
         }
@@ -576,7 +589,7 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
         if (activePane?.id === 'tab-analisis') {
             Analisis.loadAll();
             analisisLoaded = true;
-        } else if (activePane?.id === 'tab-grupos') {
+        } else if (SHOW_GRUPOS && activePane?.id === 'tab-grupos') {
             Grupos.loadAll();
             gruposLoaded = true;
         }
@@ -594,7 +607,7 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
         } else if (activePane.id === 'tab-analisis') {
             analisisLoaded = true;
             Analisis.loadAll().finally(stop);
-        } else if (activePane.id === 'tab-grupos') {
+        } else if (SHOW_GRUPOS && activePane.id === 'tab-grupos') {
             gruposLoaded = true;
             Grupos.loadAll().finally(stop);
         } else {

@@ -2,17 +2,22 @@
 /**
  * AnalisisDB
  * Acceso a datos para la pestaña de Análisis avanzado.
- * Extiende la conectividad de DashboardDB.
+ * La base de datos y el campo de vendedor se resuelven desde config.php
+ * según $_SESSION['tipo'] (LOCAL_PROPIO / LOCAL_PROPIO_UY / FRANQUICIA).
  */
 class AnalisisDB
 {
     private $conn;
+    private $campoVendedor;
 
     public function __construct()
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
+        $config = getConfig();
         $cid        = new Conexion();
-        $this->conn = $cid->conectar('power_franquicias');
+        $this->conn = $cid->conectar($config['db']);
+        $this->campoVendedor = $config['campo_vendedor'];
     }
 
     /* ──────────────────────────────────────────────
@@ -49,8 +54,9 @@ class AnalisisDB
         string $vendedor  = '%',
         string $rubro     = '%'
     ): array {
+        $cv   = $this->campoVendedor;
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
         $sfRS = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
@@ -195,17 +201,23 @@ class AnalisisDB
         string $vendedor  = '%',
         string $rubro     = '%'
     ): array {
+        $cv   = $this->campoVendedor;
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
         $sfRS = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
         $rub  = $rubro     !== '%'  ? [$rubro]     : [];
 
+        // Etiqueta del vendedor: nombre completo si está disponible, código en caso contrario
+        $selectVendLabel = $cv === 'DESC_VENDEDOR'
+            ? "MAX(s.DESC_VENDEDOR) AS vendedor"
+            : "s.COD_VENDED AS vendedor";
+
         $sql = "
             SELECT
                 s.COD_VENDED,
-                s.COD_VENDED AS vendedor,
+                {$selectVendLabel},
                 ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                                 THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
@@ -221,7 +233,7 @@ class AnalisisDB
 
     public function mergeVendedores(array $actual, array $previo): array
     {
-        // Relacionar por COD_VENDED (igual que la tabla maestra en Power BI)
+        // Relacionar por COD_VENDED
         $prevIdx = [];
         foreach ($previo as $row) {
             $prevIdx[$row['COD_VENDED']] = $row;
@@ -281,8 +293,9 @@ class AnalisisDB
     ): array {
         if (empty($targetRubros)) return [];
 
+        $cv   = $this->campoVendedor;
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
 
@@ -338,8 +351,9 @@ class AnalisisDB
         string $rubro     = '%',
         string $tipo      = 'unidades'
     ): array {
+        $cv   = $this->campoVendedor;
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
         $sfRS = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
@@ -347,10 +361,10 @@ class AnalisisDB
 
         if ($tipo === 'tickets') {
             // Tickets FAC
-            $sfT = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
-            $sfVT = $vendedor !== '%'  ? "AND t.COD_VENDED = ?" : "";
-            $suc2 = $nroSucurs !== null ? [$nroSucurs] : [];
-            $vend2 = $vendedor !== '%'  ? [$vendedor]  : [];
+            $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
+            $sfVT = $vendedor  !== '%'  ? "AND t.{$cv} = ?" : "";
+            $suc2  = $nroSucurs !== null ? [$nroSucurs] : [];
+            $vend2 = $vendedor  !== '%'  ? [$vendedor]  : [];
 
             $sqlMaxYear = "
                 SELECT MAX(YEAR(CAST(t.FECHA AS DATE))) AS max_year
@@ -423,7 +437,7 @@ class AnalisisDB
         $seriesOut = [];
         foreach ($series as $y => $meses) {
             $seriesOut[] = [
-                'anio'   => $y,
+                'anio'    => $y,
                 'valores' => array_values($meses),
             ];
         }
@@ -436,7 +450,7 @@ class AnalisisDB
     }
 
     /* ──────────────────────────────────────────────
-     *  RANKING RUBROS (reutilizado desde AnalisisDB)
+     *  RANKING RUBROS
      * ────────────────────────────────────────────── */
 
     public function getRankingRubros(
@@ -445,8 +459,9 @@ class AnalisisDB
         ?int   $nroSucurs = null,
         string $vendedor  = '%'
     ): array {
+        $cv   = $this->campoVendedor;
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
 
@@ -476,8 +491,9 @@ class AnalisisDB
         string $vendedor  = '%',
         string $rubro     = ''
     ): array {
+        $cv   = $this->campoVendedor;
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor  !== '%'  ? "AND s.COD_VENDED = ?" : "";
+        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
 

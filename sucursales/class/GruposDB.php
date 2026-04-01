@@ -10,8 +10,10 @@ class GruposDB
     public function __construct()
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
+        $config     = getConfig();
         $cid        = new Conexion();
-        $this->conn = $cid->conectar('power');
+        $this->conn = $cid->conectar($config['db']);
     }
 
     private function query(string $sql, array $params = []): array

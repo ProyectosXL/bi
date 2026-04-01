@@ -2,18 +2,25 @@
 /**
  * DashboardDB
  * Acceso a datos para el dashboard de ventas.
- * Servidor: apps → $this->cid->conectar('apps')
+ * La base de datos y el campo de vendedor se resuelven desde config.php
+ * según $_SESSION['tipo'] (LOCAL_PROPIO / LOCAL_PROPIO_UY / FRANQUICIA).
  */
 class DashboardDB
 {
     private $cid;
     private $conn;
+    private $campoVendedor;
+    private $tablaObjetivos;
 
     public function __construct()
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
-        $this->cid  = new Conexion();
-        $this->conn = $this->cid->conectar('power');
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
+        $config = getConfig();
+        $this->cid            = new Conexion();
+        $this->conn           = $this->cid->conectar($config['db']);
+        $this->campoVendedor  = $config['campo_vendedor'];
+        $this->tablaObjetivos = $config['tabla_objetivos'];
     }
 
     /* ──────────────────────────────────────────────
@@ -136,11 +143,12 @@ class DashboardDB
      */
     public function getKPIs(string $desde, string $hasta, ?int $nroSucurs = null, string $vendedor = '%', string $rubro = '%'): array
     {
+        $cv   = $this->campoVendedor;
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
         $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
         $sfO  = $nroSucurs !== null ? "AND o.NRO_SUCURSAL = ?" : "";
-        $sfVS = $vendedor !== '%' ? "AND s.DESC_VENDEDOR = ?" : "";
-        $sfVT = $vendedor !== '%' ? "AND t.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor !== '%' ? "AND s.{$cv} = ?" : "";
+        $sfVT = $vendedor !== '%' ? "AND t.{$cv} = ?" : "";
         $sfRS = $rubro !== '%' ? "AND s.RUBRO = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
@@ -189,7 +197,7 @@ class DashboardDB
         // Objetivo (sin filtro de vendedor/rubro, es a nivel de sucursal)
         $sqlObj = "
             SELECT ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo
-            FROM [SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_FRANQUICIAS o
+            FROM {$this->tablaObjetivos} o
             WHERE CAST(o.FECHA AS DATE) BETWEEN ? AND ?
               {$sfO}
         ";
@@ -218,8 +226,9 @@ class DashboardDB
 
     public function getTicketsProductos(string $desde, string $hasta, ?int $nroSucurs = null, string $vendedor = '%'): array
     {
+        $cv   = $this->campoVendedor;
         $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
-        $sfVT = $vendedor !== '%' ? "AND t.DESC_VENDEDOR = ?" : "";
+        $sfVT = $vendedor !== '%' ? "AND t.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
         $sqlBase = "
@@ -251,8 +260,9 @@ class DashboardDB
 
     public function getIncremental(string $desde, string $hasta, ?int $nroSucurs = null, string $vendedor = '%'): array
     {
+        $cv   = $this->campoVendedor;
         $sfP  = $nroSucurs !== null ? "AND p.NRO_SUCURS = ?" : "";
-        $sfVP = $vendedor !== '%' ? "AND p.DESC_VENDEDOR = ?" : "";
+        $sfVP = $vendedor !== '%' ? "AND p.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
         $sql = "
@@ -280,21 +290,27 @@ class DashboardDB
 
     public function getVendedores(string $desde, string $hasta, ?int $nroSucurs = null, string $vendedor = '%', string $rubro = '%'): array
     {
+        $cv   = $this->campoVendedor;
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
         $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
         $sfP  = $nroSucurs !== null ? "AND p.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor !== '%' ? "AND s.DESC_VENDEDOR = ?" : "";
-        $sfVT = $vendedor !== '%' ? "AND t.DESC_VENDEDOR = ?" : "";
-        $sfVP = $vendedor !== '%' ? "AND p.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor !== '%' ? "AND s.{$cv} = ?" : "";
+        $sfVT = $vendedor !== '%' ? "AND t.{$cv} = ?" : "";
+        $sfVP = $vendedor !== '%' ? "AND p.{$cv} = ?" : "";
         $sfRS = $rubro !== '%' ? "AND s.RUBRO = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
         $rub  = $rubro !== '%' ? [$rubro] : [];
+
+        // Incluir DESC_VENDEDOR en SELECT y GROUP BY solo cuando es el campo de vendedor
+        $selectDescVend  = $cv === 'DESC_VENDEDOR' ? "s.DESC_VENDEDOR," : "";
+        $groupByDescVend = $cv === 'DESC_VENDEDOR' ? ", s.DESC_VENDEDOR" : "";
+
         // Facturación, unidades y cambios por vendedor
         $sql = "
             SELECT
                 s.COD_VENDED,
-                s.DESC_VENDEDOR,
+                {$selectDescVend}
                 ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                             THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                 ISNULL(SUM(CASE WHEN s.CANTIDAD > 0
@@ -307,7 +323,7 @@ class DashboardDB
             FROM BI_SALES_SUCURSALES s
             WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
               {$sfS} {$sfVS} {$sfRS}
-            GROUP BY s.COD_VENDED, s.DESC_VENDEDOR
+            GROUP BY s.COD_VENDED{$groupByDescVend}
         ";
         $ventas = $this->query($sql, array_merge([$desde, $hasta], $suc, $vend, $rub));
 
@@ -364,8 +380,14 @@ class DashboardDB
             $unidades = (float)$v['unidades'];
             $unidadesPos = (float)$v['unidades_positivas'];
             $cambios = (float)$v['cambios'];
+
+            // Etiqueta del vendedor según el campo configurado
+            $labelVendedor = $cv === 'DESC_VENDEDOR'
+                ? ($v['DESC_VENDEDOR'] ?? $v['COD_VENDED'])
+                : $v['COD_VENDED'];
+
             $result[] = [
-                'vendedor'        => $v['DESC_VENDEDOR'],
+                'vendedor'        => $labelVendedor,
                 'unidades'        => $unidades,
                 'facturacion'     => (float)$v['facturacion'],
                 'tickets'         => $tickets_,
@@ -387,8 +409,9 @@ class DashboardDB
 
     public function getRubros(string $desde, string $hasta, ?int $nroSucurs = null, string $vendedor = '%'): array
     {
+        $cv   = $this->campoVendedor;
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor !== '%' ? "AND s.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor !== '%' ? "AND s.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
         $sql = "
@@ -408,8 +431,9 @@ class DashboardDB
 
     public function getCategorias(string $desde, string $hasta, ?int $nroSucurs = null, string $rubro = '', string $vendedor = '%'): array
     {
+        $cv   = $this->campoVendedor;
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor !== '%' ? "AND s.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor !== '%' ? "AND s.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
         $sql = "
@@ -434,13 +458,14 @@ class DashboardDB
 
     public function getSerieFacturacion(string $desde, string $hasta, ?int $nroSucurs = null, string $vendedor = '%', string $rubro = '%'): array
     {
+        $cv   = $this->campoVendedor;
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
         $rub  = $rubro !== '%' ? [$rubro] : [];
 
         // Serie principal: facturación, unidades y cambios por fecha
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
-        $sfVS = $vendedor !== '%' ? "AND s.DESC_VENDEDOR = ?" : "";
+        $sfVS = $vendedor !== '%' ? "AND s.{$cv} = ?" : "";
         $sfRS = $rubro !== '%' ? "AND s.RUBRO = ?" : "";
         $sql = "
             SELECT
@@ -459,14 +484,14 @@ class DashboardDB
 
         // Tickets por fecha
         $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
-        $sfVT = $vendedor !== '%' ? "AND t.DESC_VENDEDOR = ?" : "";
+        $sfVT = $vendedor !== '%' ? "AND t.{$cv} = ?" : "";
         $sqlT = "
-            SELECT 
+            SELECT
                 CAST(t.FECHA AS DATE) AS fecha,
                 COUNT(DISTINCT t.N_COMP) AS tickets,
                 ISNULL(SUM(t.IMP_TOTAL_TICKET),0) AS suma_tickets
             FROM BI_SALES_TOTAL_TICKETS t
-            WHERE CAST(t.FECHA AS DATE) BETWEEN ? AND ? 
+            WHERE CAST(t.FECHA AS DATE) BETWEEN ? AND ?
               AND t.T_COMP = 'FAC' {$sfT} {$sfVT}
             GROUP BY CAST(t.FECHA AS DATE)
         ";
@@ -478,9 +503,9 @@ class DashboardDB
 
         // Tickets con 2do y 3er producto por fecha
         $sfTk  = $nroSucurs !== null ? "AND tk.NRO_SUCURS = ?" : "";
-        $sfVTk = $vendedor !== '%' ? "AND tk.DESC_VENDEDOR = ?" : "";
+        $sfVTk = $vendedor !== '%' ? "AND tk.{$cv} = ?" : "";
         $sqlTP = "
-            SELECT 
+            SELECT
                 CAST(tk.FECHA AS DATE) AS fecha,
                 COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 1 THEN tk.N_COMP END) AS tickets_2do,
                 COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 2 THEN tk.N_COMP END) AS tickets_3ro
@@ -497,7 +522,7 @@ class DashboardDB
 
         // Incremental por fecha
         $sfP  = $nroSucurs !== null ? "AND p.NRO_SUCURS = ?" : "";
-        $sfVP = $vendedor !== '%' ? "AND p.DESC_VENDEDOR = ?" : "";
+        $sfVP = $vendedor !== '%' ? "AND p.{$cv} = ?" : "";
         $sqlIncr = "
             SELECT
                 CAST(p.FECHA_MOV AS DATE) AS fecha,
@@ -530,7 +555,7 @@ class DashboardDB
         foreach ($ingresosData as $ig) {
             $ingresosMap[$ig['fecha']->format('Y-m-d')] = (int)$ig['ingresos'];
         }
-        
+
         // Combinar todos los datos
         $result = [];
         foreach ($rows as $row) {
@@ -538,18 +563,18 @@ class DashboardDB
             $tickInfo = $ticketsMap[$fecha] ?? null;
             $prodInfo = $prodMap[$fecha] ?? null;
             $incrInfo = $incrMap[$fecha] ?? null;
-            
+
             $tickets = (int)($tickInfo['tickets'] ?? 0);
             $sumaTickets = (float)($tickInfo['suma_tickets'] ?? 0);
             $tickets2do = (int)($prodInfo['tickets_2do'] ?? 0);
             $tickets3ro = (int)($prodInfo['tickets_3ro'] ?? 0);
             $cambiosIncr = (float)($incrInfo['cambios_incr'] ?? 0);
             $devoluciones = (float)($incrInfo['devoluciones'] ?? 0);
-            
+
             $unidades = (float)$row['unidades'];
             $unidadesPos = (float)$row['unidades_positivas'];
             $cambios = (float)$row['cambios'];
-            
+
             $result[] = [
                 'fecha' => $fecha,
                 'facturacion' => (float)$row['facturacion'],
@@ -565,7 +590,7 @@ class DashboardDB
                 'conversion' => ($ingresosMap[$fecha] ?? 0) > 0 ? $tickets / $ingresosMap[$fecha] : 0,
             ];
         }
-        
+
         return $result;
     }
 
@@ -617,14 +642,19 @@ class DashboardDB
 
     public function getVendedoresFiltro(string $desde, string $hasta, ?int $nroSucurs = null): array
     {
+        $cv  = $this->campoVendedor;
         $sfS = $nroSucurs !== null ? "AND NRO_SUCURS = ?" : "";
         $suc = $nroSucurs !== null ? [$nroSucurs] : [];
+
+        // Incluir DESC_VENDEDOR en el SELECT solo cuando es el campo de vendedor
+        $extraSelect = $cv === 'DESC_VENDEDOR' ? ", DESC_VENDEDOR" : "";
+
         $sql = "
-            SELECT DISTINCT COD_VENDED, DESC_VENDEDOR
+            SELECT DISTINCT COD_VENDED{$extraSelect}
             FROM BI_SALES_SUCURSALES
             WHERE FECHA BETWEEN ? AND ?
               {$sfS}
-            ORDER BY DESC_VENDEDOR
+            ORDER BY {$cv}
         ";
         return $this->query($sql, array_merge([$desde, $hasta], $suc));
     }
