@@ -22,7 +22,7 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Sales — <?= htmlspecialchars($descLocal) ?></title>
-    <link rel="icon" type="image/jpg" href="../assets/css/images/icono.jpg">
+    <link rel="icon" type="image/jpg" href="../images/icono.jpg">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/analisis.css">
     <link rel="stylesheet" href="css/grupos.css">
@@ -612,6 +612,9 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
         loadTab(tab.name).finally(stop);
     }
     btnReload.addEventListener('click', reloadActiveTab);
+
+    // ── Carga inicial: solo KPIs ──────────────────────────────────────
+    loadTab('kpis');
 
 })();
 </script>
