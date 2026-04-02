@@ -109,8 +109,9 @@ class DashboardDB
                 $dias     = (int)$ultimo->format('d');
                 $da = $primero->format('Y-m-d');
                 $ha = $ultimo->format('Y-m-d');
-                $da_p = (clone $primero)->modify('-1 year')->format('Y-m-d');
-                $ha_p = (clone $da_p)->modify('+' . ($dias - 1) . ' days')->format('Y-m-d');
+                $primero_p = (clone $primero)->modify('-1 year');
+                $da_p = $primero_p->format('Y-m-d');
+                $ha_p = (clone $primero_p)->modify('+' . ($dias - 1) . ' days')->format('Y-m-d');
                 return [$da, $ha, $da_p, $ha_p];
 
             case 'año_actual':
@@ -165,40 +166,32 @@ class DashboardDB
                                  AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                             THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
             FROM BI_SALES_SUCURSALES s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfS} {$sfVS} {$sfRS}
         ";
         $row = $this->queryOne($sql, array_merge([$desde, $hasta], $suc, $vend, $rub));
 
-        // Tickets
+        // Tickets + ticket promedio en una sola query
         $sqlT = "
-            SELECT COUNT(DISTINCT t.N_COMP) AS tickets
+            SELECT
+                COUNT(DISTINCT t.N_COMP)           AS tickets,
+                ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS suma_tickets
             FROM BI_SALES_TOTAL_TICKETS t
-            WHERE CAST(t.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND t.T_COMP = 'FAC'
               {$sfT} {$sfVT}
         ";
         $rowT = $this->queryOne($sqlT, array_merge([$desde, $hasta], $suc, $vend));
 
-        // Ticket promedio
-        $sqlTP = "
-            SELECT ISNULL(SUM(t.IMP_TOTAL_TICKET),0) AS suma_tickets
-            FROM BI_SALES_TOTAL_TICKETS t
-            WHERE CAST(t.FECHA AS DATE) BETWEEN ? AND ?
-              AND t.T_COMP = 'FAC'
-              {$sfT} {$sfVT}
-        ";
-        $rowTP = $this->queryOne($sqlTP, array_merge([$desde, $hasta], $suc, $vend));
-
-        $tickets      = (int)($rowT['tickets'] ?? 0);
-        $sumaTickets  = (float)($rowTP['suma_tickets'] ?? 0);
+        $tickets      = (int)($rowT['tickets']      ?? 0);
+        $sumaTickets  = (float)($rowT['suma_tickets'] ?? 0);
         $ticketProm   = $tickets > 0 ? $sumaTickets / $tickets : 0;
 
         // Objetivo (sin filtro de vendedor/rubro, es a nivel de sucursal)
         $sqlObj = "
             SELECT ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo
             FROM {$this->tablaObjetivos} o
-            WHERE CAST(o.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfO}
         ";
         $rowObj = $this->queryOne($sqlObj, array_merge([$desde, $hasta], $suc));
@@ -231,20 +224,19 @@ class DashboardDB
         $sfVT = $vendedor !== '%' ? "AND t.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
-        $sqlBase = "
-            SELECT COUNT(DISTINCT t.N_COMP) AS cnt
+        $sql = "
+            SELECT
+                COUNT(DISTINCT t.N_COMP) AS total,
+                COUNT(DISTINCT CASE WHEN t.CANTIDAD > 1 THEN t.N_COMP END) AS seg,
+                COUNT(DISTINCT CASE WHEN t.CANTIDAD > 2 THEN t.N_COMP END) AS ter
             FROM BI_SALES_TICKETS t
-            WHERE CAST(t.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfT} {$sfVT}
         ";
-        $params = array_merge([$desde, $hasta], $suc, $vend);
-        $total = (int)($this->queryOne($sqlBase, $params)['cnt'] ?? 0);
-
-        $sql2 = $sqlBase . " AND t.CANTIDAD > 1";
-        $seg  = (int)($this->queryOne($sql2, $params)['cnt'] ?? 0);
-
-        $sql3 = $sqlBase . " AND t.CANTIDAD > 2";
-        $ter  = (int)($this->queryOne($sql3, $params)['cnt'] ?? 0);
+        $row   = $this->queryOne($sql, array_merge([$desde, $hasta], $suc, $vend));
+        $total = (int)($row['total'] ?? 0);
+        $seg   = (int)($row['seg']   ?? 0);
+        $ter   = (int)($row['ter']   ?? 0);
 
         return [
             'tickets_2do'      => $seg,
@@ -270,7 +262,7 @@ class DashboardDB
                 ISNULL(SUM(p.CAMBIO), 0)       AS cambios_incr,
                 ISNULL(SUM(p.DEVOLUCIONES), 0) AS devoluciones
             FROM BI_SALES_PORC_INCREMENTAL p
-            WHERE CAST(p.FECHA_MOV AS DATE) BETWEEN ? AND ?
+            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day, 1, CAST(? AS DATE))
               {$sfP} {$sfVP}
         ";
         $row = $this->queryOne($sql, array_merge([$desde, $hasta], $suc, $vend));
@@ -321,7 +313,7 @@ class DashboardDB
                             THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
             FROM BI_SALES_SUCURSALES s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfS} {$sfVS} {$sfRS}
             GROUP BY s.COD_VENDED{$groupByDescVend}
         ";
@@ -337,8 +329,8 @@ class DashboardDB
                 COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 2 THEN t.N_COMP END) AS tickets_3ro
             FROM BI_SALES_TOTAL_TICKETS t
             LEFT JOIN BI_SALES_TICKETS tk ON t.N_COMP = tk.N_COMP
-                AND CAST(tk.FECHA AS DATE) BETWEEN ? AND ?
-            WHERE CAST(t.FECHA AS DATE) BETWEEN ? AND ?
+                AND tk.FECHA >= ? AND tk.FECHA < DATEADD(day, 1, CAST(? AS DATE))
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND t.T_COMP = 'FAC'
               {$sfT} {$sfVT}
             GROUP BY t.COD_VENDED
@@ -356,7 +348,7 @@ class DashboardDB
                 ISNULL(SUM(p.CAMBIO), 0)       AS cambios_incr,
                 ISNULL(SUM(p.DEVOLUCIONES), 0) AS devoluciones
             FROM BI_SALES_PORC_INCREMENTAL p
-            WHERE CAST(p.FECHA_MOV AS DATE) BETWEEN ? AND ?
+            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day, 1, CAST(? AS DATE))
               {$sfP} {$sfVP}
             GROUP BY p.COD_VENDED
         ";
@@ -420,7 +412,7 @@ class DashboardDB
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
             FROM BI_SALES_SUCURSALES s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS}
             GROUP BY s.RUBRO
@@ -442,7 +434,7 @@ class DashboardDB
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
             FROM BI_SALES_SUCURSALES s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND s.RUBRO = ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS}
@@ -475,49 +467,35 @@ class DashboardDB
                 ISNULL(SUM(CASE WHEN s.CANTIDAD > 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades_positivas,
                 ISNULL(SUM(CASE WHEN s.CANTIDAD < 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
             FROM BI_SALES_SUCURSALES s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfS} {$sfVS} {$sfRS}
             GROUP BY CAST(s.FECHA AS DATE)
             ORDER BY 1 ASC
         ";
         $rows = $this->query($sql, array_merge([$desde, $hasta], $suc, $vend, $rub));
 
-        // Tickets por fecha
+        // Tickets por fecha (count, suma, 2do y 3er producto en una sola query con LEFT JOIN)
         $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
         $sfVT = $vendedor !== '%' ? "AND t.{$cv} = ?" : "";
         $sqlT = "
             SELECT
                 CAST(t.FECHA AS DATE) AS fecha,
                 COUNT(DISTINCT t.N_COMP) AS tickets,
-                ISNULL(SUM(t.IMP_TOTAL_TICKET),0) AS suma_tickets
+                ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS suma_tickets,
+                COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 1 THEN t.N_COMP END) AS tickets_2do,
+                COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 2 THEN t.N_COMP END) AS tickets_3ro
             FROM BI_SALES_TOTAL_TICKETS t
-            WHERE CAST(t.FECHA AS DATE) BETWEEN ? AND ?
+            LEFT JOIN BI_SALES_TICKETS tk
+                ON t.N_COMP = tk.N_COMP
+               AND tk.FECHA >= ? AND tk.FECHA < DATEADD(day, 1, CAST(? AS DATE))
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND t.T_COMP = 'FAC' {$sfT} {$sfVT}
             GROUP BY CAST(t.FECHA AS DATE)
         ";
-        $ticketsData = $this->query($sqlT, array_merge([$desde, $hasta], $suc, $vend));
+        $ticketsData = $this->query($sqlT, array_merge([$desde, $hasta, $desde, $hasta], $suc, $vend));
         $ticketsMap = [];
         foreach ($ticketsData as $td) {
             $ticketsMap[$td['fecha']->format('Y-m-d')] = $td;
-        }
-
-        // Tickets con 2do y 3er producto por fecha
-        $sfTk  = $nroSucurs !== null ? "AND tk.NRO_SUCURS = ?" : "";
-        $sfVTk = $vendedor !== '%' ? "AND tk.{$cv} = ?" : "";
-        $sqlTP = "
-            SELECT
-                CAST(tk.FECHA AS DATE) AS fecha,
-                COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 1 THEN tk.N_COMP END) AS tickets_2do,
-                COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 2 THEN tk.N_COMP END) AS tickets_3ro
-            FROM BI_SALES_TICKETS tk
-            WHERE CAST(tk.FECHA AS DATE) BETWEEN ? AND ?
-              {$sfTk} {$sfVTk}
-            GROUP BY CAST(tk.FECHA AS DATE)
-        ";
-        $prodData = $this->query($sqlTP, array_merge([$desde, $hasta], $suc, $vend));
-        $prodMap = [];
-        foreach ($prodData as $pd) {
-            $prodMap[$pd['fecha']->format('Y-m-d')] = $pd;
         }
 
         // Incremental por fecha
@@ -529,7 +507,7 @@ class DashboardDB
                 ISNULL(SUM(p.CAMBIO), 0) AS cambios_incr,
                 ISNULL(SUM(p.DEVOLUCIONES), 0) AS devoluciones
             FROM BI_SALES_PORC_INCREMENTAL p
-            WHERE CAST(p.FECHA_MOV AS DATE) BETWEEN ? AND ?
+            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day, 1, CAST(? AS DATE))
               {$sfP} {$sfVP}
             GROUP BY CAST(p.FECHA_MOV AS DATE)
         ";
@@ -546,7 +524,7 @@ class DashboardDB
                 CAST(ig.FECHA AS DATE) AS fecha,
                 ISNULL(SUM(ig.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES ig
-            WHERE CAST(ig.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE ig.FECHA >= ? AND ig.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfIn}
             GROUP BY CAST(ig.FECHA AS DATE)
         ";
@@ -561,13 +539,12 @@ class DashboardDB
         foreach ($rows as $row) {
             $fecha = $row['fecha']->format('Y-m-d');
             $tickInfo = $ticketsMap[$fecha] ?? null;
-            $prodInfo = $prodMap[$fecha] ?? null;
             $incrInfo = $incrMap[$fecha] ?? null;
 
             $tickets = (int)($tickInfo['tickets'] ?? 0);
             $sumaTickets = (float)($tickInfo['suma_tickets'] ?? 0);
-            $tickets2do = (int)($prodInfo['tickets_2do'] ?? 0);
-            $tickets3ro = (int)($prodInfo['tickets_3ro'] ?? 0);
+            $tickets2do = (int)($tickInfo['tickets_2do'] ?? 0);
+            $tickets3ro = (int)($tickInfo['tickets_3ro'] ?? 0);
             $cambiosIncr = (float)($incrInfo['cambios_incr'] ?? 0);
             $devoluciones = (float)($incrInfo['devoluciones'] ?? 0);
 
@@ -612,7 +589,7 @@ class DashboardDB
         $sqlI = "
             SELECT ISNULL(SUM(i.INGRESOS), 0) AS total_ingresos
             FROM BI_T_INGRESOS_SUCURSALES i
-            WHERE CAST(i.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfI}
         ";
         $rowI = $this->queryOne($sqlI, array_merge([$desde, $hasta], $suc));
@@ -620,7 +597,7 @@ class DashboardDB
         $sqlT = "
             SELECT COUNT(DISTINCT t.N_COMP) AS total_tickets
             FROM BI_SALES_TOTAL_TICKETS t
-            WHERE CAST(t.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND t.T_COMP = 'FAC'
               {$sfT}
         ";

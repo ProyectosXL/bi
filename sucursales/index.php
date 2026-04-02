@@ -543,22 +543,41 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
 <?php endif; ?>
 <script>
 /**
- * Tab navigation — KPIs / Análisis / Grupos (Grupos solo si showGrupos === true)
+ * Tab navigation + orquestador de carga lazy por pestaña.
+ * Única fuente de verdad para decidir cuándo y qué cargar.
  */
 (function () {
     const SHOW_GRUPOS = <?= $showGrupos ? 'true' : 'false' ?>;
 
     const TABS = [
-        { btn: 'tab-btn-kpis',     pane: 'tab-kpis'    },
-        { btn: 'tab-btn-analisis', pane: 'tab-analisis' },
+        { btn: 'tab-btn-kpis',     pane: 'tab-kpis',     name: 'kpis'     },
+        { btn: 'tab-btn-analisis', pane: 'tab-analisis',  name: 'analisis' },
     ];
     if (SHOW_GRUPOS) {
-        TABS.push({ btn: 'tab-btn-grupos', pane: 'tab-grupos' });
+        TABS.push({ btn: 'tab-btn-grupos', pane: 'tab-grupos', name: 'grupos' });
     }
 
-    let analisisLoaded = false;
-    let gruposLoaded   = false;
+    // ── Estado de carga por pestaña ───────────────────────────────────
+    const loaded = { kpis: false, analisis: false, grupos: false };
 
+    // ── Cargadores por pestaña ────────────────────────────────────────
+    const loaders = {
+        kpis    : () => Dashboard.loadAll(),
+        analisis: () => Analisis.loadAll(),
+        grupos  : () => Grupos.loadAll(),
+    };
+
+    /**
+     * Carga una pestaña solo si no fue cargada previamente.
+     * Retorna una Promise que resuelve al terminar la carga.
+     */
+    function loadTab(name) {
+        if (loaded[name]) return Promise.resolve();
+        loaded[name] = true;
+        return loaders[name]?.() ?? Promise.resolve();
+    }
+
+    // ── Activar pestaña + carga lazy ──────────────────────────────────
     function activateTab(paneId) {
         TABS.forEach(t => {
             const active = t.pane === paneId;
@@ -566,55 +585,34 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
             document.getElementById(t.pane).classList.toggle('active', active);
             document.getElementById(t.btn).setAttribute('aria-selected', active ? 'true' : 'false');
         });
-
-        if (paneId === 'tab-analisis' && !analisisLoaded) {
-            analisisLoaded = true;
-            Analisis.loadAll();
-        }
-        if (SHOW_GRUPOS && paneId === 'tab-grupos' && !gruposLoaded) {
-            gruposLoaded = true;
-            Grupos.loadAll();
-        }
+        const tab = TABS.find(t => t.pane === paneId);
+        if (tab) loadTab(tab.name);
     }
 
     TABS.forEach(t => {
         document.getElementById(t.btn).addEventListener('click', () => activateTab(t.pane));
     });
 
-    // Btn Aplicar: forzar recarga en la pestaña activa
+    // ── Btn Aplicar: invalidar caché y recargar solo la pestaña activa ─
     document.getElementById('btn-aplicar').addEventListener('click', () => {
-        analisisLoaded = false;
-        gruposLoaded   = false;
+        Object.keys(loaded).forEach(k => loaded[k] = false);
         const activePane = document.querySelector('.tab-pane.active');
-        if (activePane?.id === 'tab-analisis') {
-            Analisis.loadAll();
-            analisisLoaded = true;
-        } else if (SHOW_GRUPOS && activePane?.id === 'tab-grupos') {
-            Grupos.loadAll();
-            gruposLoaded = true;
-        }
+        const tab = TABS.find(t => t.pane === activePane?.id) ?? TABS[0];
+        loadTab(tab.name);
     });
 
-    // Btn Recargar pestaña activa
+    // ── Btn Recargar pestaña activa ───────────────────────────────────
     const btnReload = document.getElementById('btn-reload-tab');
     function reloadActiveTab() {
         const activePane = document.querySelector('.tab-pane.active');
+        const tab = TABS.find(t => t.pane === activePane?.id) ?? TABS[0];
         btnReload.classList.add('spinning');
         const stop = () => btnReload.classList.remove('spinning');
-
-        if (!activePane || activePane.id === 'tab-kpis') {
-            Dashboard.loadAll().finally(stop);
-        } else if (activePane.id === 'tab-analisis') {
-            analisisLoaded = true;
-            Analisis.loadAll().finally(stop);
-        } else if (SHOW_GRUPOS && activePane.id === 'tab-grupos') {
-            gruposLoaded = true;
-            Grupos.loadAll().finally(stop);
-        } else {
-            stop();
-        }
+        loaded[tab.name] = false;
+        loadTab(tab.name).finally(stop);
     }
     btnReload.addEventListener('click', reloadActiveTab);
+
 })();
 </script>
 <script>

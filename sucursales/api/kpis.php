@@ -13,6 +13,7 @@
 
 session_start();
 ob_start();
+set_time_limit(120);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 

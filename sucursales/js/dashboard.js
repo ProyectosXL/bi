@@ -69,7 +69,8 @@ const Dashboard = (() => {
     }
 
     async function apiFetch(endpoint, extra = {}) {
-        const res  = await fetch(`api/${endpoint}?${buildQS(extra)}`, { signal: _abortController?.signal });
+        const res = await fetch(`api/${endpoint}?${buildQS(extra)}`, { signal: _abortController?.signal });
+        if (!res.ok) throw new Error(`Error ${res.status} (${res.statusText}) en ${endpoint}`);
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || 'Error en API');
         return data;
@@ -907,121 +908,137 @@ const Dashboard = (() => {
         state.loading = true;
         document.body.classList.add('is-loading');
 
+        // Guardar parámetros actuales para drilldown
+        state.currentParams = {
+            periodo: state.periodo,
+            vendedor: state.vendedor,
+            rubro: state.rubro
+        };
+        if (state.periodo === 'custom') {
+            state.currentParams.desde = state.desde;
+            state.currentParams.hasta = state.hasta;
+        }
+
         try {
-            // Guardar parámetros actuales para drilldown
-            state.currentParams = {
-                periodo: state.periodo,
-                vendedor: state.vendedor,
-                rubro: state.rubro
-            };
-            if (state.periodo === 'custom') {
-                state.currentParams.desde = state.desde;
-                state.currentParams.hasta = state.hasta;
+            // ── Bloque 1: KPIs principales (summary cards + sparklines) ──────
+            let kpisActual = null;
+            try {
+                const kpisData = await apiFetch('kpis.php');
+                kpisActual = kpisData.actual;
+
+                const act   = kpisData.actual;
+                const prev  = kpisData.previo;
+                const var_  = kpisData.variacion;
+                const bench = kpisData.benchmark;
+                const per   = kpisData.periodo;
+
+                /* ── Header ── */
+                document.getElementById('periodo-label').textContent =
+                    `${per.desde_act.split('-').reverse().join('/')} - ${per.hasta_act.split('-').reverse().join('/')} (${per.dias_act}d)`;
+                document.getElementById('periodo-previo-label').textContent =
+                    `vs ${per.desde_prev.split('-').reverse().join('/')} - ${per.hasta_prev.split('-').reverse().join('/')} (${per.dias_prev}d)`;
+                document.getElementById('ultima-actualizacion').textContent =
+                    new Date().toLocaleString('es-AR');
+
+                /* ── KPI Summary ── */
+                setEl('fact-act',   fmt.money(act.facturacion));
+                setEl('fact-prev',  fmt.money(prev.facturacion));
+                setEl('fact-var',   fmt.varPct(var_.facturacion), var_.facturacion);
+                setEl('obj-act',    fmt.money(act.objetivo));
+                setEl('obj-total',  fmt.money(act.objetivo_total));
+                setEl('obj-var',    fmt.varPct(var_.objetivo), var_.objetivo);
+                setEl('unid-act',   fmt.num(act.unidades));
+                setEl('unid-prev',  fmt.num(prev.unidades));
+                setEl('unid-var',   fmt.varPct(var_.unidades), var_.unidades);
+                setEl('tickets-act',   fmt.num(act.tickets));
+                setEl('tickets-prev',  fmt.num(prev.tickets));
+                setEl('tickets-var',   fmt.varPct(var_.tickets), var_.tickets);
+                setEl('tickets-bench', fmt.varPct(bench.tickets_var));
+                setEl('conv-act',      fmt.pct(act.conversion));
+                setEl('conv-prev',     fmt.pct(prev.conversion));
+                setEl('conv-var',      fmt.varPct(var_.conversion), var_.conversion);
+                setEl('conv-ingresos', fmt.num(act.ingresos));
+
+                /* ── KPI Cards métricas ── */
+                const cards = [
+                    { id:'card-t2do',      val: fmt.pct(act.porc_2do),         var: var_.porc_2do,         bench: fmt.pct(bench.porc_2do),          spark: 'spark-t2do' },
+                    { id:'card-cambios',   val: fmt.pct(act.porc_cambios),     var: var_.porc_cambios,     bench: fmt.pct(bench.porc_cambios),      spark: 'spark-cambios' },
+                    { id:'card-tprom',     val: fmt.money(act.ticket_promedio),var: var_.ticket_promedio,  bench: fmt.money(bench.ticket_promedio), spark: 'spark-tprom' },
+                    { id:'card-t3ro',      val: fmt.pct(act.porc_3ro),         var: var_.porc_3ro,         bench: fmt.pct(bench.porc_3ro),          spark: 'spark-t3ro' },
+                    { id:'card-incr',      val: fmt.pct(act.porc_incremental), var: var_.porc_incremental, bench: fmt.pct(bench.porc_incremental),  spark: 'spark-incr' },
+                ];
+                cards.forEach(c => {
+                    setEl(c.id + '-val',   c.val);
+                    const varEl = document.getElementById(c.id + '-var');
+                    if (varEl) {
+                        varEl.textContent = fmt.varPct(c.var);
+                        varEl.className = 'kpi-var ' + (c.var >= 0 ? 'pos' : 'neg');
+                    }
+                    setEl(c.id + '-bench', c.bench);
+                });
+
+                /* ── Sparklines ── */
+                const serieAct     = kpisData.serie.actual;
+                const serieDates   = serieAct.map(r => r.fecha);
+                const serieFacturacion = serieAct.map(r => r.facturacion);
+                const serieUnidades    = serieAct.map(r => r.unidades);
+                const serieTickets     = serieAct.map(r => r.tickets);
+                const serieT2do        = serieAct.map(r => r.porc_2do);
+                const serieTprom       = serieAct.map(r => r.ticket_promedio);
+                const serieCambios     = serieAct.map(r => r.porc_cambios);
+                const serieT3ro        = serieAct.map(r => r.porc_3ro);
+                const serieIncr        = serieAct.map(r => r.porc_incremental);
+                const serieConv        = serieAct.map(r => r.conversion);
+                const serieIngresos    = serieAct.map(r => r.ingresos);
+
+                drawSparkline('spark-fact', serieFacturacion, serieDates, '#00a878', fmt.money);
+                drawSparkline('spark-unid', serieUnidades, serieDates, '#f59e0b', fmt.num);
+                drawSparkline('spark-tickets-main', serieTickets, serieDates, '#8b5cf6', fmt.num);
+                drawSparkline('spark-conv', serieConv, serieDates, '#ec4899', fmt.pct, [
+                    { values: serieIngresos, color: '#38bdf8', label: 'Ingresos', formatFn: fmt.num },
+                    { values: serieTickets,  color: '#8b5cf6', label: 'Tickets',  formatFn: fmt.num, hideStats: true },
+                ]);
+                drawSparkline('spark-t2do',    serieT2do, serieDates, '#60a5fa', fmt.pct);
+                drawSparkline('spark-cambios', serieCambios, serieDates, '#fb923c', fmt.pct);
+                drawSparkline('spark-tprom',   serieTprom, serieDates, '#a78bfa', fmt.money);
+                drawSparkline('spark-t3ro',    serieT3ro, serieDates, '#34d399', fmt.pct);
+                drawSparkline('spark-incr',    serieIncr, serieDates, '#f472b6', fmt.pct);
+
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                console.error('Dashboard KPIs error:', err);
+                showToast('Error al cargar KPIs: ' + err.message, 'error');
             }
-            
-            const [kpisData, vendsData, rubrosData] = await Promise.all([
-                apiFetch('kpis.php'),
-                apiFetch('vendedores.php'),
-                apiFetch('rubros.php'),
+
+            // ── Bloque 2: Tabla vendedores + Rubros/Donuts (paralelo, independiente) ──
+            await Promise.all([
+                (async () => {
+                    try {
+                        const vendsData = await apiFetch('vendedores.php');
+                        renderVendedores(vendsData.vendedores, kpisActual);
+                        setupTableSorting();
+                    } catch (err) {
+                        if (err.name === 'AbortError') return;
+                        console.error('Dashboard vendedores error:', err);
+                        showToast('Error al cargar tabla de vendedores: ' + err.message, 'error');
+                        const tbody = document.querySelector('#tabla-vendedores tbody');
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--neg)">Error al cargar</td></tr>';
+                    }
+                })(),
+                (async () => {
+                    try {
+                        const rubrosData = await apiFetch('rubros.php');
+                        renderRubros(rubrosData.rubros);
+                        DonutCharts.create('donut-unidades-wrap', '% Participación Unidades por Rubro', 'unidades', rubrosData);
+                        DonutCharts.create('donut-facturacion-wrap', '% Participación $ por Rubro', 'facturacion', rubrosData);
+                    } catch (err) {
+                        if (err.name === 'AbortError') return;
+                        console.error('Dashboard rubros error:', err);
+                        showToast('Error al cargar rubros: ' + err.message, 'error');
+                    }
+                })(),
             ]);
 
-            const act  = kpisData.actual;
-            const prev = kpisData.previo;
-            const var_ = kpisData.variacion;
-            const bench = kpisData.benchmark;
-            const per  = kpisData.periodo;
-
-            /* ── Header ── */
-            document.getElementById('periodo-label').textContent =
-                `${per.desde_act.split('-').reverse().join('/')} - ${per.hasta_act.split('-').reverse().join('/')} (${per.dias_act}d)`;
-            document.getElementById('periodo-previo-label').textContent =
-                `vs ${per.desde_prev.split('-').reverse().join('/')} - ${per.hasta_prev.split('-').reverse().join('/')} (${per.dias_prev}d)`;
-            document.getElementById('ultima-actualizacion').textContent =
-                new Date().toLocaleString('es-AR');
-
-            /* ── KPI Summary ── */
-            setEl('fact-act',   fmt.money(act.facturacion));
-            setEl('fact-prev',  fmt.money(prev.facturacion));
-            setEl('fact-var',   fmt.varPct(var_.facturacion), var_.facturacion);
-            setEl('obj-act',    fmt.money(act.objetivo));
-            setEl('obj-total',  fmt.money(act.objetivo_total));
-            setEl('obj-var',    fmt.varPct(var_.objetivo), var_.objetivo);
-            setEl('unid-act',   fmt.num(act.unidades));
-            setEl('unid-prev',  fmt.num(prev.unidades));
-            setEl('unid-var',   fmt.varPct(var_.unidades), var_.unidades);
-            setEl('tickets-act',   fmt.num(act.tickets));
-            setEl('tickets-prev',  fmt.num(prev.tickets));
-            setEl('tickets-var',   fmt.varPct(var_.tickets), var_.tickets);
-            setEl('tickets-bench', fmt.varPct(bench.tickets_var));
-            setEl('conv-act',      fmt.pct(act.conversion));
-            setEl('conv-prev',     fmt.pct(prev.conversion));
-            setEl('conv-var',      fmt.varPct(var_.conversion), var_.conversion);
-            setEl('conv-ingresos', fmt.num(act.ingresos));
-
-            /* ── KPI Cards métricas ── */
-            const cards = [
-                { id:'card-t2do',      val: fmt.pct(act.porc_2do),         var: var_.porc_2do,         bench: fmt.pct(bench.porc_2do),          spark: 'spark-t2do' },
-                { id:'card-cambios',   val: fmt.pct(act.porc_cambios),     var: var_.porc_cambios,     bench: fmt.pct(bench.porc_cambios),      spark: 'spark-cambios' },
-                { id:'card-tprom',     val: fmt.money(act.ticket_promedio),var: var_.ticket_promedio,  bench: fmt.money(bench.ticket_promedio), spark: 'spark-tprom' },
-                { id:'card-t3ro',      val: fmt.pct(act.porc_3ro),         var: var_.porc_3ro,         bench: fmt.pct(bench.porc_3ro),          spark: 'spark-t3ro' },
-                { id:'card-incr',      val: fmt.pct(act.porc_incremental), var: var_.porc_incremental, bench: fmt.pct(bench.porc_incremental),  spark: 'spark-incr' },
-            ];
-            cards.forEach(c => {
-                setEl(c.id + '-val',   c.val);
-                const varEl = document.getElementById(c.id + '-var');
-                if (varEl) {
-                    varEl.textContent = fmt.varPct(c.var);
-                    varEl.className = 'kpi-var ' + (c.var >= 0 ? 'pos' : 'neg');
-                }
-                setEl(c.id + '-bench', c.bench);
-            });
-
-            /* ── Sparklines ── */
-            const serieAct  = kpisData.serie.actual;
-            const serieDates = serieAct.map(r => r.fecha);
-            const serieFacturacion = serieAct.map(r => r.facturacion);
-            const serieUnidades = serieAct.map(r => r.unidades);
-            const serieTickets = serieAct.map(r => r.tickets);
-            const serieT2do = serieAct.map(r => r.porc_2do);
-            const serieTprom = serieAct.map(r => r.ticket_promedio);
-            const serieCambios = serieAct.map(r => r.porc_cambios);
-            const serieT3ro = serieAct.map(r => r.porc_3ro);
-            const serieIncr = serieAct.map(r => r.porc_incremental);
-            
-            const serieConv    = serieAct.map(r => r.conversion);
-            const serieIngresos = serieAct.map(r => r.ingresos);
-            
-            // Main KPIs sparklines
-            drawSparkline('spark-fact', serieFacturacion, serieDates, '#00a878', fmt.money);
-            drawSparkline('spark-unid', serieUnidades, serieDates, '#f59e0b', fmt.num);
-            drawSparkline('spark-tickets-main', serieTickets, serieDates, '#8b5cf6', fmt.num);
-            drawSparkline('spark-conv', serieConv, serieDates, '#ec4899', fmt.pct, [
-                { values: serieIngresos, color: '#38bdf8', label: 'Ingresos', formatFn: fmt.num },
-                { values: serieTickets,  color: '#8b5cf6', label: 'Tickets',  formatFn: fmt.num, hideStats: true },
-            ]);
-            
-            // Secondary KPIs sparklines
-            drawSparkline('spark-t2do',    serieT2do, serieDates, '#60a5fa', fmt.pct);
-            drawSparkline('spark-cambios', serieCambios, serieDates, '#fb923c', fmt.pct);
-            drawSparkline('spark-tprom',   serieTprom, serieDates, '#a78bfa', fmt.money);
-            drawSparkline('spark-t3ro',    serieT3ro, serieDates, '#34d399', fmt.pct);
-            drawSparkline('spark-incr',    serieIncr, serieDates, '#f472b6', fmt.pct);
-
-            /* ── Vendedores ── */
-            renderVendedores(vendsData.vendedores, act);
-            setupTableSorting();
-
-            /* ── Rubros ── */
-            renderRubros(rubrosData.rubros);
-
-            /* ── Donut charts ── */
-            DonutCharts.create('donut-unidades-wrap', '% Participación Unidades por Rubro', 'unidades', rubrosData);
-            DonutCharts.create('donut-facturacion-wrap', '% Participación $ por Rubro', 'facturacion', rubrosData);
-
-        } catch (err) {
-            if (err.name === 'AbortError') return; // request supersedido, ignorar
-            console.error('Dashboard error:', err);
-            showToast('Error al cargar datos: ' + err.message, 'error');
         } finally {
             state.loading = false;
             document.body.classList.remove('is-loading');
@@ -1119,20 +1136,11 @@ const Dashboard = (() => {
             console.error('Error cargando filtros:', err);
         }
 
-        // Botón Aplicar — dispara la carga
-        const btnAplicar = document.getElementById('btn-aplicar');
-        if (btnAplicar) {
-            btnAplicar.addEventListener('click', () => loadAll());
-        }
-
         // Inicializar estado desde valores actuales del DOM (para modo custom)
         state.desde     = document.getElementById('input-desde')?.value     || '';
         state.hasta     = document.getElementById('input-hasta')?.value     || '';
         state.compDesde = document.getElementById('input-comp-desde')?.value || '';
         state.compHasta = document.getElementById('input-comp-hasta')?.value || '';
-
-        // Carga inicial
-        loadAll();
     }
 
     return { init, loadAll, state, fmt };

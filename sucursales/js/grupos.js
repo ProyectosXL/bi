@@ -72,7 +72,8 @@ const Grupos = (() => {
     }
 
     async function apiFetch(action, extra = {}) {
-        const res  = await fetch(`api/grupos.php?action=${action}&${buildQS(extra)}`);
+        const res = await fetch(`api/grupos.php?action=${action}&${buildQS(extra)}`);
+        if (!res.ok) throw new Error(`Error ${res.status} (${res.statusText}) en grupos/${action}`);
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || 'Error en API grupos');
         return data;
@@ -103,12 +104,9 @@ const Grupos = (() => {
                 return;
             }
 
-            // 3) Cargar las tres secciones en paralelo
-            await Promise.all([
-                loadVersus(_selectedNroB),
-                loadDesglose(),
-                loadRubrosPivot(),
-            ]);
+            // 3) Versus primero, luego tabla y pivot en paralelo
+            await loadVersus(_selectedNroB);
+            await Promise.all([loadDesglose(), loadRubrosPivot()]);
         } catch (err) {
             console.error('Grupos error:', err);
             showToast('Error al cargar datos de grupos: ' + err.message);

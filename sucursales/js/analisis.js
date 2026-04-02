@@ -58,7 +58,8 @@ const Analisis = (() => {
     }
 
     async function apiFetch(action, extra = {}) {
-        const res  = await fetch(`api/analisis.php?action=${action}&${buildQS(extra)}`);
+        const res = await fetch(`api/analisis.php?action=${action}&${buildQS(extra)}`);
+        if (!res.ok) throw new Error(`Error ${res.status} (${res.statusText}) en analisis/${action}`);
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || 'Error en API análisis');
         return data;
@@ -69,25 +70,73 @@ const Analisis = (() => {
         setLoading(true);
 
         try {
-            const [jerarquiaData, vendsData, cardsData, evUnidData, evTickData, rankingData] = await Promise.all([
-                apiFetch('jerarquia'),
-                apiFetch('vendedores'),
-                apiFetch('cards_rubros'),
-                apiFetch('evolucion_unidades'),
-                apiFetch('evolucion_tickets'),
-                apiFetch('ranking_rubros'),
+            // ── Bloque 1: Cards de rubros + Ranking (resumen visual) ─────────
+            await Promise.all([
+                (async () => {
+                    try {
+                        const data = await apiFetch('cards_rubros');
+                        renderCardsRubros(data.cards);
+                    } catch (err) {
+                        console.error('Análisis cards_rubros error:', err);
+                        const grid = document.getElementById('analisis-rubros-cards');
+                        if (grid) grid.innerHTML = '<div class="analisis-loading" style="display:flex;color:var(--neg)">Error al cargar</div>';
+                    }
+                })(),
+                (async () => {
+                    try {
+                        const data = await apiFetch('ranking_rubros');
+                        renderRankingRubros(data);
+                    } catch (err) {
+                        console.error('Análisis ranking_rubros error:', err);
+                        showToastAnalisis('Error al cargar ranking: ' + err.message);
+                    }
+                })(),
             ]);
 
-            renderCardsRubros(cardsData.cards);
-            renderRankingRubros(rankingData);
-            renderJerarquia(jerarquiaData.jerarquia, jerarquiaData.periodo);
-            renderVendedoresAnalisis(vendsData.vendedores);
-            renderEvolucion('chart-evolucion-unidades', evUnidData.evolucion, 'Unidades por Mes', false);
-            renderEvolucion('chart-evolucion-tickets',  evTickData.evolucion, 'Tickets por Mes', false);
+            // ── Bloque 2: Tablas (jerarquía + vendedores) ────────────────────
+            await Promise.all([
+                (async () => {
+                    try {
+                        const data = await apiFetch('jerarquia');
+                        renderJerarquia(data.jerarquia, data.periodo);
+                    } catch (err) {
+                        console.error('Análisis jerarquia error:', err);
+                        const tbody = document.querySelector('#tabla-jerarquia tbody');
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--neg)">Error al cargar</td></tr>';
+                    }
+                })(),
+                (async () => {
+                    try {
+                        const data = await apiFetch('vendedores');
+                        renderVendedoresAnalisis(data.vendedores);
+                    } catch (err) {
+                        console.error('Análisis vendedores error:', err);
+                        const tbody = document.querySelector('#tabla-vendedores-analisis tbody');
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--neg)">Error al cargar</td></tr>';
+                    }
+                })(),
+            ]);
 
-        } catch (err) {
-            console.error('Análisis error:', err);
-            showToastAnalisis('Error al cargar datos de análisis: ' + err.message);
+            // ── Bloque 3: Gráficos de evolución (más pesados, al final) ──────
+            await Promise.all([
+                (async () => {
+                    try {
+                        const data = await apiFetch('evolucion_unidades');
+                        renderEvolucion('chart-evolucion-unidades', data.evolucion, 'Unidades por Mes', false);
+                    } catch (err) {
+                        console.error('Análisis evolucion_unidades error:', err);
+                    }
+                })(),
+                (async () => {
+                    try {
+                        const data = await apiFetch('evolucion_tickets');
+                        renderEvolucion('chart-evolucion-tickets', data.evolucion, 'Tickets por Mes', false);
+                    } catch (err) {
+                        console.error('Análisis evolucion_tickets error:', err);
+                    }
+                })(),
+            ]);
+
         } finally {
             setLoading(false);
         }
