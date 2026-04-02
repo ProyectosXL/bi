@@ -21,7 +21,7 @@ function getConfig(): array
         case 'FRANQUICIA':
             return [
                 'db'              => 'power_franquicias',
-                'campo_vendedor'  => 'COD_VENDED',
+                'campo_vendedor'  => 'DESC_VENDEDOR',
                 'tabla_objetivos' => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_FRANQUICIAS',
                 'features'        => ['grupos' => false],
             ];

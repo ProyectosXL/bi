@@ -358,36 +358,59 @@ class DashboardDB
             $incrMap[$i['COD_VENDED']] = $i;
         }
 
-        $result = [];
+        // Agrupar en PHP por nombre de vendedor para consolidar códigos duplicados.
+        // Si una persona fue dada de alta con dos COD_VENDED distintos, sus
+        // métricas de ventas e incremental se suman bajo un único nombre.
+        $agg = [];
         foreach ($ventas as $v) {
-            $cod      = $v['COD_VENDED'];
-            $ticks    = $tickMap[$cod] ?? [];
-            $inc      = $incrMap[$cod] ?? [];
-            $tickets_ = (int)($ticks['tickets'] ?? 0);
-            $sumaT    = (float)($ticks['suma_ticket'] ?? 0);
-            $t2       = (int)($ticks['tickets_2do'] ?? 0);
-            $t3       = (int)($ticks['tickets_3ro'] ?? 0);
-            $cambI    = (float)($inc['cambios_incr'] ?? 0);
-            $devol    = (float)($inc['devoluciones'] ?? 0);
-            $unidades = (float)$v['unidades'];
-            $unidadesPos = (float)$v['unidades_positivas'];
-            $cambios = (float)$v['cambios'];
+            $cod  = $v['COD_VENDED'];
+            $key  = $cv === 'DESC_VENDEDOR'
+                ? ($v['DESC_VENDEDOR'] ?? $cod)
+                : $cod;
 
-            // Etiqueta del vendedor según el campo configurado
-            $labelVendedor = $cv === 'DESC_VENDEDOR'
-                ? ($v['DESC_VENDEDOR'] ?? $v['COD_VENDED'])
-                : $v['COD_VENDED'];
+            if (!isset($agg[$key])) {
+                $agg[$key] = [
+                    'label'             => $key,
+                    'unidades'          => 0.0,
+                    'unidades_positivas'=> 0.0,
+                    'cambios'           => 0.0,
+                    'facturacion'       => 0.0,
+                    '_codes'            => [],
+                ];
+            }
+            $agg[$key]['unidades']           += (float)$v['unidades'];
+            $agg[$key]['unidades_positivas'] += (float)$v['unidades_positivas'];
+            $agg[$key]['cambios']            += (float)$v['cambios'];
+            $agg[$key]['facturacion']        += (float)$v['facturacion'];
+            $agg[$key]['_codes'][]            = $cod;
+        }
+
+        $result = [];
+        foreach ($agg as $key => $a) {
+            // Sumar tickets e incremental de todos los códigos del mismo vendedor
+            $tickets_ = 0; $sumaT = 0.0; $t2 = 0; $t3 = 0;
+            $cambI = 0.0; $devol = 0.0;
+            foreach ($a['_codes'] as $cod) {
+                $ticks  = $tickMap[$cod]  ?? [];
+                $inc    = $incrMap[$cod]  ?? [];
+                $tickets_ += (int)($ticks['tickets']    ?? 0);
+                $sumaT    += (float)($ticks['suma_ticket'] ?? 0);
+                $t2       += (int)($ticks['tickets_2do']  ?? 0);
+                $t3       += (int)($ticks['tickets_3ro']  ?? 0);
+                $cambI    += (float)($inc['cambios_incr']  ?? 0);
+                $devol    += (float)($inc['devoluciones']  ?? 0);
+            }
 
             $result[] = [
-                'vendedor'        => $labelVendedor,
-                'unidades'        => $unidades,
-                'facturacion'     => (float)$v['facturacion'],
-                'tickets'         => $tickets_,
-                'ticket_promedio' => $tickets_ > 0 ? $sumaT / $tickets_ : 0,
-                'porc_2do'        => $tickets_ > 0 ? $t2 / $tickets_ : 0,
-                'porc_3ro'        => $tickets_ > 0 ? $t3 / $tickets_ : 0,
-                'porc_cambios'    => $unidadesPos > 0 ? $cambios / $unidadesPos : 0,
-                'porc_incremental'=> $devol != 0 ? ($cambI - $devol) / $devol : 0,
+                'vendedor'         => $a['label'],
+                'unidades'         => $a['unidades'],
+                'facturacion'      => $a['facturacion'],
+                'tickets'          => $tickets_,
+                'ticket_promedio'  => $tickets_ > 0 ? $sumaT / $tickets_ : 0,
+                'porc_2do'         => $tickets_ > 0 ? $t2 / $tickets_ : 0,
+                'porc_3ro'         => $tickets_ > 0 ? $t3 / $tickets_ : 0,
+                'porc_cambios'     => $a['unidades_positivas'] > 0 ? $a['cambios'] / $a['unidades_positivas'] : 0,
+                'porc_incremental' => $devol != 0 ? ($cambI - $devol) / $devol : 0,
             ];
         }
 
@@ -617,23 +640,33 @@ class DashboardDB
      *  FILTROS DISPONIBLES
      * ────────────────────────────────────────────── */
 
-    public function getVendedoresFiltro(string $desde, string $hasta, ?int $nroSucurs = null): array
+    public function getVendedoresFiltro(?string $desde = null, ?string $hasta = null, ?int $nroSucurs = null): array
     {
         $cv  = $this->campoVendedor;
-        $sfS = $nroSucurs !== null ? "AND NRO_SUCURS = ?" : "";
-        $suc = $nroSucurs !== null ? [$nroSucurs] : [];
+        $params = [];
+        $where  = [];
 
-        // Incluir DESC_VENDEDOR en el SELECT solo cuando es el campo de vendedor
-        $extraSelect = $cv === 'DESC_VENDEDOR' ? ", DESC_VENDEDOR" : "";
+        if ($desde !== null && $hasta !== null) {
+            $where[]  = "FECHA BETWEEN ? AND ?";
+            $params[] = $desde;
+            $params[] = $hasta;
+        }
+        if ($nroSucurs !== null) {
+            $where[]  = "NRO_SUCURS = ?";
+            $params[] = $nroSucurs;
+        }
 
+        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        // Deduplicar por el campo usado como valor del filtro (nombre o código).
+        // Si hay dos códigos para el mismo nombre, aparece una sola opción.
         $sql = "
-            SELECT DISTINCT COD_VENDED{$extraSelect}
+            SELECT DISTINCT {$cv}
             FROM BI_SALES_SUCURSALES
-            WHERE FECHA BETWEEN ? AND ?
-              {$sfS}
+            {$whereClause}
             ORDER BY {$cv}
         ";
-        return $this->query($sql, array_merge([$desde, $hasta], $suc));
+        return $this->query($sql, $params);
     }
 
     public function getRubrosFiltro(string $desde, string $hasta, ?int $nroSucurs = null): array

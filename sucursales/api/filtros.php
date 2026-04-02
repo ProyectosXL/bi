@@ -24,7 +24,7 @@ try {
     echo json_encode([
         'ok'             => true,
         'campo_vendedor' => $config['campo_vendedor'],
-        'vendedores'     => $db->getVendedoresFiltro($desde_act, $hasta_act, $nroSucurs),
+        'vendedores'     => $db->getVendedoresFiltro(null, null, $nroSucurs),
         'rubros'         => $db->getRubrosFiltro($desde_act, $hasta_act, $nroSucurs),
     ], JSON_UNESCAPED_UNICODE);
 
