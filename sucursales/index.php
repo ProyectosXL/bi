@@ -233,28 +233,6 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
 
                 <div class="kpi-card">
                     <div class="kpi-card-header">
-                        <span class="kpi-title">Tickets 2do. Producto</span>
-                        <div><span class="kpi-bench-label">Benchmark</span><span class="kpi-bench-val" id="card-t2do-bench">—</span></div>
-                    </div>
-                    <div class="kpi-card-body">
-                        <div><div class="kpi-val" id="card-t2do-val">—</div><div class="kpi-var" id="card-t2do-var">—</div></div>
-                        <div class="kpi-spark"><canvas id="spark-t2do" width="90" height="36"></canvas></div>
-                    </div>
-                </div>
-
-                <div class="kpi-card">
-                    <div class="kpi-card-header">
-                        <span class="kpi-title">% Cambios</span>
-                        <div><span class="kpi-bench-label">Benchmark</span><span class="kpi-bench-val" id="card-cambios-bench">—</span></div>
-                    </div>
-                    <div class="kpi-card-body">
-                        <div><div class="kpi-val" id="card-cambios-val">—</div><div class="kpi-var" id="card-cambios-var">—</div></div>
-                        <div class="kpi-spark"><canvas id="spark-cambios" width="90" height="36"></canvas></div>
-                    </div>
-                </div>
-
-                <div class="kpi-card">
-                    <div class="kpi-card-header">
                         <span class="kpi-title">Ticket Promedio</span>
                         <div><span class="kpi-bench-label">Benchmark</span><span class="kpi-bench-val" id="card-tprom-bench">—</span></div>
                     </div>
@@ -266,12 +244,34 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
 
                 <div class="kpi-card">
                     <div class="kpi-card-header">
+                        <span class="kpi-title">Tickets 2do. Producto</span>
+                        <div><span class="kpi-bench-label">Benchmark</span><span class="kpi-bench-val" id="card-t2do-bench">—</span></div>
+                    </div>
+                    <div class="kpi-card-body">
+                        <div><div class="kpi-val" id="card-t2do-val">—</div><div class="kpi-var" id="card-t2do-var">—</div></div>
+                        <div class="kpi-spark"><canvas id="spark-t2do" width="90" height="36"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-card-header">
                         <span class="kpi-title">Tickets 3er. Producto</span>
                         <div><span class="kpi-bench-label">Benchmark</span><span class="kpi-bench-val" id="card-t3ro-bench">—</span></div>
                     </div>
                     <div class="kpi-card-body">
                         <div><div class="kpi-val" id="card-t3ro-val">—</div><div class="kpi-var" id="card-t3ro-var">—</div></div>
                         <div class="kpi-spark"><canvas id="spark-t3ro" width="90" height="36"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-card-header">
+                        <span class="kpi-title">% Cambios</span>
+                        <div><span class="kpi-bench-label">Benchmark</span><span class="kpi-bench-val" id="card-cambios-bench">—</span></div>
+                    </div>
+                    <div class="kpi-card-body">
+                        <div><div class="kpi-val" id="card-cambios-val">—</div><div class="kpi-var" id="card-cambios-var">—</div></div>
+                        <div class="kpi-spark"><canvas id="spark-cambios" width="90" height="36"></canvas></div>
                     </div>
                 </div>
 
