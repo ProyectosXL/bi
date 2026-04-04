@@ -56,82 +56,8 @@ class DashboardDB
 
     public static function calcularPeriodo(string $tipo): array
     {
-        $tz    = new DateTimeZone('America/Argentina/Buenos_Aires');
-        $hoy   = new DateTime('today', $tz);
-        $ayer  = (clone $hoy)->modify('-1 day');
-
-        switch ($tipo) {
-            case 'ayer':
-                $da = $dp = $ayer->format('Y-m-d');
-                $ha = $dp;
-                $hp = (clone $ayer)->modify('-1 day')->format('Y-m-d');
-                return [$da, $ha, $hp, $hp];
-
-            case '7':
-                $da = (clone $ayer)->modify('-6 days')->format('Y-m-d');
-                $ha = $ayer->format('Y-m-d');
-                $hp = (clone $ayer)->modify('-7 days')->format('Y-m-d');
-                $dp = (clone $ayer)->modify('-13 days')->format('Y-m-d');
-                return [$da, $ha, $dp, $hp];
-
-            case '30':
-                $da = (clone $ayer)->modify('-29 days')->format('Y-m-d');
-                $ha = $ayer->format('Y-m-d');
-                $hp = (clone $ayer)->modify('-30 days')->format('Y-m-d');
-                $dp = (clone $ayer)->modify('-59 days')->format('Y-m-d');
-                return [$da, $ha, $dp, $hp];
-
-            case '90':
-                $da = (clone $ayer)->modify('-89 days')->format('Y-m-d');
-                $ha = $ayer->format('Y-m-d');
-                $hp = (clone $ayer)->modify('-90 days')->format('Y-m-d');
-                $dp = (clone $ayer)->modify('-179 days')->format('Y-m-d');
-                return [$da, $ha, $dp, $hp];
-
-            case '180':
-                $da = (clone $ayer)->modify('-179 days')->format('Y-m-d');
-                $ha = $ayer->format('Y-m-d');
-                $hp = (clone $ayer)->modify('-180 days')->format('Y-m-d');
-                $dp = (clone $ayer)->modify('-359 days')->format('Y-m-d');
-                return [$da, $ha, $dp, $hp];
-
-            case 'mes_actual':
-                $da = (clone $hoy)->modify('first day of this month')->format('Y-m-d');
-                $ha = $ayer->format('Y-m-d');
-                // mismo mes año anterior hasta misma cantidad de días
-                $da_p = (clone $hoy)->modify('first day of this month')->modify('-1 year')->format('Y-m-d');
-                $ha_p = (clone $ayer)->modify('-1 year')->format('Y-m-d');
-                return [$da, $ha, $da_p, $ha_p];
-
-            case 'mes_pasado':
-                $primero  = (clone $hoy)->modify('first day of last month');
-                $ultimo   = (clone $hoy)->modify('last day of last month');
-                $dias     = (int)$ultimo->format('d');
-                $da = $primero->format('Y-m-d');
-                $ha = $ultimo->format('Y-m-d');
-                $primero_p = (clone $primero)->modify('-1 year');
-                $da_p = $primero_p->format('Y-m-d');
-                $ha_p = (clone $primero_p)->modify('+' . ($dias - 1) . ' days')->format('Y-m-d');
-                return [$da, $ha, $da_p, $ha_p];
-
-            case 'año_actual':
-                $da   = (clone $hoy)->modify('first day of january this year')->format('Y-m-d');
-                $ha   = $ayer->format('Y-m-d');
-                $da_p = (clone $hoy)->modify('first day of january last year')->format('Y-m-d');
-                $ha_p = (clone $ayer)->modify('-1 year')->format('Y-m-d');
-                return [$da, $ha, $da_p, $ha_p];
-
-            case 'año_pasado':
-                $da   = (clone $hoy)->modify('first day of january last year')->format('Y-m-d');
-                $ha   = (clone $hoy)->modify('last day of december last year')->format('Y-m-d');
-                $da_p = (clone $hoy)->modify('first day of january')->modify('-2 years')->format('Y-m-d');
-                $ha_p = (clone $hoy)->modify('last day of december')->modify('-2 years')->format('Y-m-d');
-                return [$da, $ha, $da_p, $ha_p];
-
-            default:
-                // custom: espera desde|hasta
-                return [];
-        }
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/PeriodHelper.php';
+        return PeriodHelper::calcularPeriodo($tipo);
     }
 
     /* ──────────────────────────────────────────────

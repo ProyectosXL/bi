@@ -1,0 +1,53 @@
+/* ============================================================
+   /bi/global/css/cadena.css
+   Estilos de la pestaña Cadena (tabla horizontal por sucursal).
+   ============================================================ */
+
+.cadena-table {
+    width           : max-content;
+    min-width       : 100%;
+    border-collapse : collapse;
+    font-size       : .80rem;
+}
+
+.cadena-table th {
+    background     : var(--bg-header);
+    color          : rgba(255,255,255,.9);
+    padding        : 8px 10px;
+    text-align     : left;
+    font-family    : var(--font-display);
+    font-weight    : 600;
+    letter-spacing : .4px;
+    font-size      : .78rem;
+    white-space    : nowrap;
+    user-select    : none;
+    position       : sticky;
+    top            : 0;
+    z-index        : 2;
+}
+.cadena-table th:hover { background: var(--bg-header2); }
+
+/* Primera columna sticky */
+.cadena-table th:first-child,
+.cadena-table td:first-child {
+    position   : sticky;
+    left       : 0;
+    z-index    : 3;
+    background : var(--bg-header);
+    color      : rgba(255,255,255,.95);
+    font-weight: 700;
+    min-width  : 80px;
+}
+.cadena-table td:first-child {
+    background: var(--bg-card2);
+    color     : var(--text-1);
+    font-weight: 600;
+    border-right: 2px solid var(--border);
+}
+
+.cadena-table td {
+    padding      : 6px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space  : nowrap;
+}
+.cadena-table tr:hover td { filter: brightness(0.97); }

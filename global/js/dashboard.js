@@ -1,0 +1,915 @@
+/**
+ * /bi/global/js/dashboard.js
+ * Módulo de KPIs para el dashboard global (GERENCIA/SUPERVISIÓN).
+ * Expone: Dashboard.loadAll(), Dashboard.loadFilters(), Dashboard.getParams()
+ */
+
+const Dashboard = (() => {
+
+    /* ── Referencias al DOM ──────────────────── */
+    const $ = id => document.getElementById(id);
+
+    /* ── Formato (usa BIUtils si está disponible, o local) ── */
+    const fmt = (typeof BIUtils !== 'undefined') ? BIUtils.fmt : (() => {
+        const f = n => n === null || n === undefined ? '—' : n;
+        return {
+            money  : (n, d=0) => f(n) === '—' ? '—' : '$\u00A0' + Number(n).toLocaleString('es-AR', {minimumFractionDigits:d,maximumFractionDigits:d}),
+            moneyK : n => {
+                if (n === null || n === undefined) return '—';
+                if (Math.abs(n) >= 1_000_000) return '$\u00A0' + (n/1_000_000).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
+                if (Math.abs(n) >= 1_000)     return '$\u00A0' + (n/1_000).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0})+'K';
+                return '$\u00A0' + Number(n).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0});
+            },
+            pct    : (n, d=1) => n===null||n===undefined ? '—' : (n*100).toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d})+'\u00A0%',
+            varPct : (n, d=1) => { if(n===null||n===undefined) return '—'; const s=n>=0?'+':''; return s+(n*100).toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d})+'\u00A0%'; },
+            num    : (n, d=0) => n===null||n===undefined ? '—' : Number(n).toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d}),
+        };
+    })();
+
+    /* ── Leer parámetros del DOM ─────────────── */
+    function getParams(extra = {}) {
+        const p = {
+            origen    : ($('sel-origen')?.value      ?? 'argentina'),
+            periodo   : ($('sel-periodo')?.value     ?? 'mes_actual'),
+            vendedor  : ($('sel-vendedor')?.value    ?? '%'),
+            rubro     : ($('sel-rubro')?.value       ?? '%'),
+            sucursal  : ($('sel-sucursal')?.value    ?? ''),
+            grupo     : ($('sel-grupo')?.value       ?? ''),
+            tipo_tienda: ($('sel-tipo-tienda')?.value ?? ''),
+            ...extra
+        };
+        if (p.periodo === 'custom') {
+            p.desde     = $('input-desde')?.value     ?? '';
+            p.hasta     = $('input-hasta')?.value     ?? '';
+            p.comp_mode = document.querySelector('input[name="comp-mode"]:checked')?.value ?? 'year_ago';
+            if (p.comp_mode === 'custom') {
+                p.desde_comp = $('input-comp-desde')?.value ?? '';
+                p.hasta_comp = $('input-comp-hasta')?.value ?? '';
+            }
+        }
+        // Limpiar vacíos para no enviar param vacío
+        ['sucursal','grupo','tipo_tienda'].forEach(k => { if (!p[k]) delete p[k]; });
+        return p;
+    }
+
+    function buildQS(extra = {}) {
+        return new URLSearchParams(getParams(extra)).toString();
+    }
+
+    async function apiFetch(endpoint, extra = {}) {
+        const res = await fetch(`/bi/global/api/${endpoint}?${buildQS(extra)}`);
+        if (!res.ok) throw new Error(`Error ${res.status} en ${endpoint}`);
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || `Error en ${endpoint}`);
+        return data;
+    }
+
+    /* ── SparkCharts ─────────────────────────── */
+    const charts = {};
+
+    function sparkLine(canvasId, values, color = '#00a878', prevValues = null) {
+        const canvas = $(canvasId);
+        if (!canvas) return;
+        if (charts[canvasId]) { charts[canvasId].destroy(); delete charts[canvasId]; }
+
+        const datasets = [{
+            data            : values,
+            borderColor     : color,
+            borderWidth     : 1.5,
+            pointRadius     : 0,
+            tension         : 0.3,
+            fill            : true,
+            backgroundColor : color.replace(')', ',.12)').replace('rgb', 'rgba'),
+        }];
+        if (prevValues?.length) {
+            datasets.push({
+                data: prevValues,
+                borderColor: 'rgba(150,160,180,.35)',
+                borderWidth: 1,
+                borderDash : [3,3],
+                pointRadius: 0,
+                tension    : 0.3,
+                fill       : false,
+            });
+        }
+
+        charts[canvasId] = new Chart(canvas, {
+            type: 'line',
+            data: { labels: values.map((_, i) => i), datasets },
+            options: {
+                responsive: false,
+                animation : { duration: 300 },
+                plugins   : { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
+                scales    : { x: { display: false }, y: { display: false } },
+                elements  : { line: { capBezierPoints: false } },
+            }
+        });
+    }
+
+    /* ── DonutManager: donuts con drilldown ─── */
+    const DonutManager = (() => {
+        const _charts  = {};
+        const _cache   = {};   // wrapperId → { originalRows, dataKey }
+        const _state   = {};   // wrapperId → { level: 1|2 }
+        const COLORS   = ['#2563eb','#16a34a','#dc2626','#f59e0b','#7c3aed',
+                          '#0891b2','#ea580c','#84cc16','#db2777','#64748b',
+                          '#059669','#b91c1c','#d97706','#4f46e5','#0284c7'];
+
+        function _renderChart(wrapperId, rows, labelKey, dataKey, isDrilldown) {
+            const wrap = $(wrapperId);
+            if (!wrap) return;
+
+            // Destruir chart previo
+            if (_charts[wrapperId]) { _charts[wrapperId].destroy(); delete _charts[wrapperId]; }
+
+            // Canvas
+            let cw = wrap.querySelector('.donut-chart-wrapper');
+            if (!cw) { cw = document.createElement('div'); cw.className = 'donut-chart-wrapper'; wrap.appendChild(cw); }
+            cw.innerHTML = '';
+            const canvas = document.createElement('canvas');
+            cw.appendChild(canvas);
+
+            // Ordenar por dataKey descendente
+            const sortedRows = [...rows].sort((a, b) => (b[dataKey] ?? 0) - (a[dataKey] ?? 0));
+            const labels = sortedRows.map(r => r[labelKey]);
+            const data   = sortedRows.map(r => r[dataKey] ?? 0);
+            const total  = data.reduce((s, v) => s + v, 0) || 1;
+            const isFact = dataKey === 'facturacion';
+
+            _charts[wrapperId] = new Chart(canvas, {
+                type: 'doughnut',
+                data: { labels, datasets: [{ data, backgroundColor: COLORS, borderWidth: 2, borderColor: '#fff' }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '55%',
+                    animation: { duration: 350 },
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            color: '#fff',
+                            anchor: 'center',
+                            align: 'center',
+                            font: { weight: 'bold', size: 10 },
+                            formatter: (v) => {
+                                const p = v / total * 100;
+                                return p >= 5 ? p.toFixed(1) + '%' : '';
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#ffffff',
+                            titleColor: '#1a2340',
+                            bodyColor: '#1a2340',
+                            borderColor: '#e2e6f0',
+                            borderWidth: 1,
+                            padding: 10,
+                            callbacks: {
+                                title: items => items[0].label,
+                                label: ctx => {
+                                    const v = ctx.parsed;
+                                    const p = (v / total * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                                    return isFact
+                                        ? ` $${v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${p}%)`
+                                        : ` ${v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${p}%)`;
+                                }
+                            }
+                        }
+                    },
+                    onClick: isDrilldown ? undefined : (evt, elems) => {
+                        if (!elems.length || _state[wrapperId]?.level !== 1) return;
+                        const rubro = labels[elems[0].index];
+                        _drilldown(wrapperId, dataKey, rubro);
+                    },
+                },
+            });
+
+            // Leyenda
+            let leg = wrap.querySelector('.donut-legend');
+            if (!leg) { leg = document.createElement('div'); leg.className = 'donut-legend'; wrap.appendChild(leg); }
+            leg.innerHTML = sortedRows.map((r, i) => {
+                const v   = r[dataKey] ?? 0;
+                const p   = (v / total * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                const fv  = isFact
+                    ? '$' + v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                    : v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                return `<div class="donut-legend-item">
+                    <span class="donut-legend-color" style="background:${COLORS[i % COLORS.length]}"></span>
+                    <span class="donut-legend-label">${r[labelKey]}</span>
+                    <span class="donut-legend-value">${fv} (${p}%)</span>
+                </div>`;
+            }).join('');
+        }
+
+        async function _drilldown(wrapperId, dataKey, rubroName) {
+            _state[wrapperId] = { level: 2 };
+            const wrap = $(wrapperId);
+            if (!wrap) return;
+
+            // Mostrar breadcrumb y actualizar título
+            const bc = wrap.querySelector('.donut-breadcrumb');
+            if (bc) bc.style.display = 'block';
+            const titleEl = wrap.querySelector('.donut-title');
+            if (titleEl) {
+                const label = dataKey === 'facturacion'
+                    ? `% Participación $ por categoría — ${rubroName}`
+                    : `% Participación Unid. por categoría — ${rubroName}`;
+                titleEl.textContent = label;
+            }
+
+            // Caché
+            const ck = `${wrapperId}_${rubroName}`;
+            if (_cache[ck]) {
+                _renderChart(wrapperId, _cache[ck], 'CATEGORIA', dataKey, true);
+                return;
+            }
+
+            const cw = wrap.querySelector('.donut-chart-wrapper');
+            if (cw) cw.innerHTML = '<div class="analisis-loading" style="padding:20px"><i class="bi bi-arrow-repeat"></i> Cargando</div>';
+
+            try {
+                const qs  = Dashboard.buildQS({ action: 'ranking_categorias', rubro_filter: rubroName });
+                const res = await fetch(`/bi/global/api/analisis.php?${qs}`);
+                const d   = await res.json();
+                const rows = d.categorias ?? [];
+                _cache[ck] = rows;
+                _renderChart(wrapperId, rows, 'CATEGORIA', dataKey, true);
+            } catch(e) {
+                create(wrapperId, _cache[wrapperId]?.dataKey ?? dataKey, _cache[wrapperId]?.originalRows ?? []);
+            }
+        }
+
+        function create(wrapperId, dataKey, rows, title) {
+            const wrap = $(wrapperId);
+            if (!wrap) return;
+            if (!rows.length) {
+                wrap.innerHTML = '<div style="color:var(--text-3);font-size:.82rem;padding:20px">Sin datos</div>';
+                return;
+            }
+
+            _state[wrapperId] = { level: 1 };
+            _cache[wrapperId] = { originalRows: rows, dataKey, originalTitle: title ?? '' };
+            wrap.innerHTML = '';
+
+            // Breadcrumb (oculto)
+            const bc = document.createElement('div');
+            bc.className = 'donut-breadcrumb';
+            bc.style.display = 'none';
+            bc.innerHTML = '<button class="btn-volver">← Volver</button>';
+            bc.querySelector('.btn-volver').addEventListener('click', () => {
+                _state[wrapperId] = { level: 1 };
+                bc.style.display = 'none';
+                const titleEl = wrap.querySelector('.donut-title');
+                if (titleEl) titleEl.textContent = _cache[wrapperId].originalTitle;
+                _renderChart(wrapperId, rows, 'RUBRO', dataKey, false);
+            });
+            wrap.appendChild(bc);
+
+            // Título
+            const titleEl = document.createElement('div');
+            titleEl.className = 'donut-title';
+            titleEl.textContent = title ?? '';
+            wrap.appendChild(titleEl);
+
+            _renderChart(wrapperId, rows, 'RUBRO', dataKey, false);
+        }
+
+        function reset() {
+            Object.keys(_charts).forEach(id => { if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; } });
+            Object.keys(_cache).forEach(k => delete _cache[k]);
+            Object.keys(_state).forEach(k => delete _state[k]);
+        }
+
+        return { create, reset };
+    })();
+
+    /* ── SparkModal ──────────────────────────── */
+    const SparkModal = (() => {
+        const registry = {};
+        let _modalChart = null;
+
+        function register(canvasId, values, dates, color, formatFn, title) {
+            registry[canvasId] = { values, dates, color, formatFn, title };
+        }
+
+        function open(canvasId) {
+            const entry = registry[canvasId];
+            if (!entry) return;
+            const { values, dates, color, formatFn, title } = entry;
+
+            const max = Math.max(...values), min = Math.min(...values);
+            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+            const last = values[values.length - 1];
+            const first = values[0];
+            const trend = first !== 0 ? (last - first) / Math.abs(first) : 0;
+            const maxIdx = values.indexOf(max);
+            const minIdx = values.indexOf(min);
+            const fmtDate = ds => ds ? new Date(ds + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '';
+
+            const trendSign = trend >= 0 ? '+' : '';
+            const trendCls  = trend >= 0 ? 'pos' : 'neg';
+
+            const root = $('spark-modal-root');
+            root.innerHTML = `
+                <div class="spark-modal-overlay" id="spark-overlay">
+                    <div class="spark-modal">
+                        <div class="spark-modal-header">
+                            <span class="spark-modal-title">${title}</span>
+                            <button class="spark-modal-close" id="spark-modal-close-btn"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="spark-modal-stats">
+                            <div class="spark-modal-stat">
+                                <span class="spark-modal-stat-label">Último</span>
+                                <span class="spark-modal-stat-val">${formatFn(last)}</span>
+                                <span class="stat-date">${fmtDate(dates[dates.length - 1])}</span>
+                            </div>
+                            <div class="spark-modal-stat">
+                                <span class="spark-modal-stat-label">Promedio</span>
+                                <span class="spark-modal-stat-val">${formatFn(avg)}</span>
+                            </div>
+                            <div class="spark-modal-stat">
+                                <span class="spark-modal-stat-label">Máximo</span>
+                                <span class="spark-modal-stat-val">${formatFn(max)}</span>
+                                <span class="stat-date">${fmtDate(dates[maxIdx])}</span>
+                            </div>
+                            <div class="spark-modal-stat">
+                                <span class="spark-modal-stat-label">Mínimo</span>
+                                <span class="spark-modal-stat-val">${formatFn(min)}</span>
+                                <span class="stat-date">${fmtDate(dates[minIdx])}</span>
+                            </div>
+                            <div class="spark-modal-stat">
+                                <span class="spark-modal-stat-label">Tendencia</span>
+                                <span class="trend-badge ${trendCls}">${trendSign}${(trend * 100).toFixed(1)} %</span>
+                            </div>
+                        </div>
+                        <div class="spark-modal-chart-wrap">
+                            <canvas id="spark-modal-canvas"></canvas>
+                        </div>
+                    </div>
+                </div>`;
+
+            $('spark-modal-close-btn').addEventListener('click', close);
+            $('spark-overlay').addEventListener('click', e => { if (e.target.id === 'spark-overlay') close(); });
+
+            if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+            _modalChart = new Chart($('spark-modal-canvas'), {
+                type: 'line',
+                data: {
+                    labels  : dates.map(d => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : ''),
+                    datasets: [{ data: values, borderColor: color, borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true, backgroundColor: color.replace(')', ',.08)').replace('rgb', 'rgba') }]
+                },
+                options: {
+                    responsive: true,
+                    plugins   : { legend: { display: false }, datalabels: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + formatFn(ctx.parsed.y) } } },
+                    scales    : { x: { ticks: { maxRotation: 45, font: { size: 10 } } }, y: { ticks: { callback: v => formatFn(v), font: { size: 10 } } } },
+                }
+            });
+        }
+
+        function close() {
+            if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+            const root = $('spark-modal-root');
+            if (root) root.innerHTML = '';
+        }
+
+        return { register, open };
+    })();
+
+    /* ── Expandir sparklines ─────────────────── */
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('.spark-expand-btn');
+        if (!btn) return;
+        const id = btn.dataset.spark;
+        if (id) SparkModal.open(id);
+    });
+
+    /* ── Etiqueta período ────────────────────── */
+    function updatePeriodLabel(per) {
+        const fmtDate = s => {
+            const [y, m, d] = s.split('-');
+            return `${d}/${m}/${y}`;
+        };
+        const lab  = $('periodo-label');
+        const prev = $('periodo-previo-label');
+        if (lab)  lab.textContent  = `${fmtDate(per.desde_act)} — ${fmtDate(per.hasta_act)}`;
+        if (prev) prev.textContent = `(vs ${fmtDate(per.desde_prev)} — ${fmtDate(per.hasta_prev)})`;
+    }
+
+    /* ── Tabla Facturación vs Objetivos ──────── */
+    let _tablaSucRows = null;
+    let _tablaSucSort = { col: 'facturacion', asc: false };
+
+    const TABLA_SUC_COLS = [
+        { key: 'nombre',         label: 'Sucursal',       sortKey: 'nombre',          align: 'left'  },
+        { key: 'facturacion',    label: 'Facturación',    sortKey: 'facturacion',      align: 'right' },
+        { key: 'var_facturacion',label: 'Var.Fact.',       sortKey: 'var_facturacion',  align: 'right' },
+        { key: 'objetivo_total', label: 'Objetivo Total',  sortKey: 'objetivo_total',   align: 'right' },
+        { key: 'objetivo_fecha', label: 'Objetivo a Fecha',sortKey: 'objetivo_fecha',   align: 'right' },
+        { key: 'desvio',         label: 'Desvío',          sortKey: 'desvio',           align: 'right' },
+    ];
+
+    function renderTablaSucursales(rows) {
+        if (rows) _tablaSucRows = rows;
+        const allRows = _tablaSucRows;
+
+        const table = document.getElementById('tabla-sucursales');
+        const tbody = table?.querySelector('tbody');
+        if (!tbody) return;
+        if (!allRows?.length) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3)">Sin datos</td></tr>`;
+            return;
+        }
+
+        const iconVar = (v) => {
+            if (v === null || v === undefined) return '—';
+            const cls  = v >= 0 ? 'pos' : 'neg';
+            const icon = v >= 0 ? '▲' : '▼';
+            return `<span class="${cls}">${icon}\u00A0${(Math.abs(v) * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>`;
+        };
+
+        // Ordenar
+        const { col, asc } = _tablaSucSort;
+        const sorted = [...allRows].sort((a, b) => {
+            const av = col === 'nombre' ? (a.nombre ?? '') : (a[col] ?? -Infinity);
+            const bv = col === 'nombre' ? (b.nombre ?? '') : (b[col] ?? -Infinity);
+            if (av < bv) return asc ? -1 : 1;
+            if (av > bv) return asc ? 1 : -1;
+            return 0;
+        });
+
+        const dataRows = sorted.map(r => `<tr>
+            <td>${r.nombre ?? ('Suc. ' + r.nro_sucurs)}</td>
+            <td style="text-align:right">${fmt.money(r.facturacion)}</td>
+            <td style="text-align:right">${iconVar(r.var_facturacion)}</td>
+            <td style="text-align:right">${r.objetivo_total ? fmt.money(r.objetivo_total) : '—'}</td>
+            <td style="text-align:right">${r.objetivo_fecha ? fmt.money(r.objetivo_fecha) : '—'}</td>
+            <td style="text-align:right">${iconVar(r.desvio)}</td>
+        </tr>`).join('');
+
+        // Fila de totales
+        const totFact   = allRows.reduce((s, r) => s + (r.facturacion     ?? 0), 0);
+        const totObjF   = allRows.reduce((s, r) => s + (r.objetivo_fecha  ?? 0), 0);
+        const totObjT   = allRows.reduce((s, r) => s + (r.objetivo_total  ?? 0), 0);
+        const totDesv   = totObjF > 0 ? (totFact - totObjF) / totObjF : null;
+        const totalsRow = `<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--surface-1)">
+            <td>TOTAL</td>
+            <td style="text-align:right">${fmt.money(totFact)}</td>
+            <td style="text-align:right">—</td>
+            <td style="text-align:right">${totObjT ? fmt.money(totObjT) : '—'}</td>
+            <td style="text-align:right">${totObjF ? fmt.money(totObjF) : '—'}</td>
+            <td style="text-align:right">${iconVar(totDesv)}</td>
+        </tr>`;
+
+        tbody.innerHTML = dataRows + totalsRow;
+
+        // Headers con sort
+        const ths = table.querySelectorAll('thead th');
+        TABLA_SUC_COLS.forEach((colDef, i) => {
+            const th = ths[i];
+            if (!th) return;
+            const arrow = col === colDef.sortKey ? (asc ? ' ▲' : ' ▼') : ' ⇅';
+            th.innerHTML = colDef.label + `<span style="opacity:.5;font-size:.7rem">${arrow}</span>`;
+            th.style.cursor = 'pointer';
+            th.style.userSelect = 'none';
+            th.onclick = () => {
+                if (_tablaSucSort.col === colDef.sortKey) {
+                    _tablaSucSort.asc = !_tablaSucSort.asc;
+                } else {
+                    _tablaSucSort.col = colDef.sortKey;
+                    _tablaSucSort.asc = colDef.sortKey === 'nombre';
+                }
+                renderTablaSucursales();
+            };
+        });
+    }
+
+    /* ── Medios de Pago ─────────────────────── */
+    const MediosPago = (() => {
+        let _mpChart = null;
+        const COLORS = ['#2563eb','#00a878','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16','#ef4444'];
+
+        function renderMPChart(labels, values, isDrilldown) {
+            const wrap = $('medios-pago-wrap');
+            if (!wrap) return;
+            const total = values.reduce((s, v) => s + v, 0) || 1;
+
+            if (_mpChart) { _mpChart.destroy(); _mpChart = null; }
+            wrap.innerHTML = '';
+
+            if (isDrilldown) {
+                const btn = document.createElement('button');
+                btn.className = 'btn-volver-ranking';
+                btn.style.cssText = 'margin-bottom:6px;display:block';
+                btn.textContent = '← Medios de Pago';
+                btn.addEventListener('click', loadMediosPago);
+                wrap.appendChild(btn);
+            }
+
+            // Canvas centrado
+            const canvasWrap = document.createElement('div');
+            canvasWrap.style.cssText = 'width:100%;max-width:180px;height:180px;position:relative;margin:0 auto';
+            const canvas = document.createElement('canvas');
+            canvasWrap.appendChild(canvas);
+            wrap.appendChild(canvasWrap);
+
+            _mpChart = new Chart(canvas, {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [{
+                        data           : values,
+                        backgroundColor: COLORS.map(c => c + 'dd'),
+                        borderColor    : '#fff',
+                        borderWidth    : 2,
+                        hoverOffset    : 6,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '55%',
+                    onClick: isDrilldown ? undefined : (evt, elems) => {
+                        if (!elems.length) return;
+                        if (labels[elems[0].index] === 'TARJETA') loadCuotasTarjeta();
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            color: '#fff',
+                            anchor: 'center',
+                            align: 'center',
+                            font: { weight: 'bold', size: 10 },
+                            formatter: (v) => {
+                                const p = v / total * 100;
+                                return p >= 6 ? p.toFixed(1) + '%' : '';
+                            },
+                        },
+                        tooltip: {
+                            backgroundColor: '#ffffff',
+                            titleColor: '#1a2340',
+                            bodyColor: '#1a2340',
+                            borderColor: '#e2e6f0',
+                            borderWidth: 1,
+                            callbacks: { label: ctx => ` ${fmt.money(ctx.parsed)} (${(ctx.parsed / total * 100).toFixed(1)} %)` }
+                        },
+                    },
+                },
+            });
+
+            // Leyenda debajo del gráfico
+            const legendDiv = document.createElement('div');
+            legendDiv.style.cssText = 'margin-top:8px;font-size:.72rem;display:flex;flex-direction:column;gap:3px;overflow-y:auto;max-height:110px';
+            legendDiv.innerHTML = labels.map((lbl, i) => {
+                const v   = values[i] ?? 0;
+                const pct = (v / total * 100).toFixed(1);
+                const cur = !isDrilldown && lbl === 'TARJETA' ? 'pointer' : 'default';
+                return `<div style="display:flex;align-items:center;gap:5px;cursor:${cur}" data-mp-idx="${i}">
+                    <span style="width:8px;height:8px;border-radius:50%;background:${COLORS[i % COLORS.length]};flex-shrink:0"></span>
+                    <span style="flex:1;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lbl}</span>
+                    <span style="font-weight:600;color:var(--text-1);flex-shrink:0">${pct}\u00A0%</span>
+                </div>`;
+            }).join('');
+            wrap.appendChild(legendDiv);
+
+            // Click en leyenda TARJETA
+            if (!isDrilldown) {
+                legendDiv.querySelectorAll('[data-mp-idx]').forEach(el => {
+                    const idx = parseInt(el.dataset.mpIdx);
+                    if (labels[idx] === 'TARJETA') el.addEventListener('click', loadCuotasTarjeta);
+                });
+            }
+        }
+
+        async function loadMediosPago() {
+            const wrap = $('medios-pago-wrap');
+            if (wrap) wrap.innerHTML = '<div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>';
+            try {
+                const d = await apiFetch('medios_pago.php');
+                if (!d.medios?.length) {
+                    if (wrap) wrap.innerHTML = '<div style="padding:16px;color:var(--text-3);font-size:.85rem">Sin datos</div>';
+                    return;
+                }
+                renderMPChart(
+                    d.medios.map(m => m.MEDIO_DE_PAGO || 'Sin especificar'),
+                    d.medios.map(m => m.facturacion),
+                    false
+                );
+            } catch(e) {
+                if (wrap) wrap.innerHTML = `<div style="padding:16px;color:var(--neg);font-size:.85rem"><i class="bi bi-exclamation-triangle"></i> ${e.message}</div>`;
+            }
+        }
+
+        async function loadCuotasTarjeta() {
+            const wrap = $('medios-pago-wrap');
+            if (wrap) wrap.innerHTML = '<div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>';
+            try {
+                const d = await apiFetch('medios_pago.php', { action: 'cuotas' });
+                if (!d.cuotas?.length) { loadMediosPago(); return; }
+                const total = d.cuotas.reduce((s, c) => s + c.facturacion, 0) || 1;
+                renderMPChart(
+                    d.cuotas.map(c => c.CUOTAS == 1 ? '1 cuota' : (c.CUOTAS + ' cuotas')),
+                    d.cuotas.map(c => c.facturacion),
+                    true
+                );
+            } catch(e) { loadMediosPago(); }
+        }
+
+        return { loadAll: loadMediosPago };
+    })();
+
+    /* ── Donuts ──────────────────────────────── */
+    let _lastAnalisisData = null;
+
+    async function loadDonuts() {
+        try {
+            const d = await apiFetch('analisis.php', { action: 'ranking_rubros' });
+            _lastAnalisisData = d;
+            renderDonuts(d);
+        } catch(_) { /* donuts son opcionales */ }
+    }
+
+    function renderDonuts(d) {
+        if (!d?.rubros?.length) return;
+        const rubros = d.rubros.slice(0, 12);
+        DonutManager.reset();
+        DonutManager.create('donut-unidades-wrap',    'unidades',    rubros, '% Participación Unidades por Rubro');
+        DonutManager.create('donut-facturacion-wrap', 'facturacion', rubros, '% Participación $ por Rubro');
+    }
+
+    /* ── Mapa de nombres de sucursales (compartido con otros módulos) ── */
+    const _sucNombres = {};   // nro_sucurs (int) → nombre
+
+    function getSucNombre(nro) {
+        return _sucNombres[+nro] ?? ('Suc. ' + nro);
+    }
+
+    /* ── Custom searchable select ───────────── */
+    function initSearchableSelect(selId) {
+        const sel = $(selId);
+        if (!sel || sel._ssInit) return;
+        sel._ssInit = true;
+        sel.style.display = 'none';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'ss-wrap';
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+
+        // Botón visible (reemplaza el select)
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ss-btn';
+        btn.innerHTML = `<span class="ss-txt">${sel.options[0]?.text ?? ''}</span><span class="ss-arrow">▾</span>`;
+        wrap.insertBefore(btn, sel);
+
+        // Panel con búsqueda + lista
+        const panel = document.createElement('div');
+        panel.className = 'ss-panel';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'ss-input';
+        input.placeholder = 'Buscar...';
+        const list = document.createElement('div');
+        list.className = 'ss-list';
+        panel.appendChild(input);
+        panel.appendChild(list);
+        wrap.appendChild(panel);
+
+        function buildList(q) {
+            const opts = Array.from(sel.options);
+            const filtered = q
+                ? opts.filter(o => o.text.toLowerCase().includes(q.toLowerCase()))
+                : opts;
+            list.innerHTML = '';
+            filtered.forEach(opt => {
+                const item = document.createElement('div');
+                item.className = 'ss-item' + (opt.value === sel.value ? ' ss-selected' : '');
+                item.textContent = opt.text;
+                item.addEventListener('click', () => {
+                    sel.value = opt.value;
+                    btn.querySelector('.ss-txt').textContent = opt.text;
+                    wrap.classList.remove('open');
+                    input.value = '';
+                });
+                list.appendChild(item);
+            });
+        }
+
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const opening = !wrap.classList.contains('open');
+            // Cerrar todos
+            document.querySelectorAll('.ss-wrap.open').forEach(w => w.classList.remove('open'));
+            if (opening) {
+                wrap.classList.add('open');
+                buildList('');
+                input.value = '';
+                input.focus();
+            }
+        });
+
+        input.addEventListener('input', () => buildList(input.value.trim()));
+        input.addEventListener('click', e => e.stopPropagation());
+
+        document.addEventListener('click', () => {
+            if (wrap.classList.contains('open')) wrap.classList.remove('open');
+        });
+
+        // Sincronizar texto del botón desde el valor actual del select
+        sel._ssSync = () => {
+            const opt = Array.from(sel.options).find(o => o.value === sel.value);
+            btn.querySelector('.ss-txt').textContent = opt?.text ?? '';
+        };
+    }
+
+    function syncSearchableSelect(selId) {
+        const sel = $(selId);
+        if (sel?._ssSync) sel._ssSync();
+    }
+
+    /* ── Cargar filtros dependientes ─────────── */
+    async function loadFilters() {
+        try {
+            const p   = getParams();
+            const qs  = new URLSearchParams({ origen: p.origen, periodo: p.periodo }).toString();
+            const res = await fetch(`/bi/global/api/filtros.php?${qs}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.ok) return;
+
+            // allValue: el valor del option "Todos" — '' para sucursal/grupo/tipo (PHP usa null),
+            //           '%' para vendedor/rubro (PHP usa LIKE '%' = sin filtro)
+            const fill = (selId, items, valKey, labelKey, allLabel = 'Todos', allValue = '') => {
+                const sel = $(selId);
+                if (!sel) return;
+                const cur = sel.value;
+                sel.innerHTML = `<option value="${allValue}">${allLabel}</option>` +
+                    items.map(it => `<option value="${it[valKey]}"${String(it[valKey]) === cur ? ' selected' : ''}>${it[labelKey] ?? it[valKey]}</option>`).join('');
+            };
+
+            // Poblar mapa de nombres
+            (data.sucursales ?? []).forEach(s => {
+                _sucNombres[+s.NRO_SUCURS] = s.DESC_SUCURSAL ?? ('Suc. ' + s.NRO_SUCURS);
+            });
+
+            fill('sel-sucursal',    data.sucursales   ?? [], 'NRO_SUCURS',   'DESC_SUCURSAL', 'Todas',  '');
+            fill('sel-grupo',       data.grupos       ?? [], 'GRUPO',        'GRUPO',          'Todos',  '');
+            fill('sel-tipo-tienda', data.tipos_tienda ?? [], 'TIPO_TIENDA',  'TIPO_TIENDA',   'Todos',  '');
+            fill('sel-vendedor',    data.vendedores   ?? [], 'DESC_VENDEDOR','DESC_VENDEDOR',  'Todos',  '%');
+            fill('sel-rubro',       data.rubros       ?? [], 'RUBRO',        'RUBRO',          'Todos',  '%');
+
+            // Inicializar custom selects (solo la primera vez) y sincronizar texto
+            ['sel-sucursal', 'sel-vendedor', 'sel-rubro'].forEach(id => {
+                initSearchableSelect(id);
+                syncSearchableSelect(id);
+            });
+
+        } catch(_) { /* filtros no críticos */ }
+    }
+
+    /* ── KPIs ────────────────────────────────── */
+    function renderKPIs(d) {
+        const a = d.actual, p = d.previo, v = d.variacion;
+
+        // Ventas
+        setText('fact-act',  fmt.moneyK(a.facturacion));
+        setVar ('fact-var',  v.facturacion);
+        setText('fact-prev', fmt.moneyK(p.facturacion));
+
+        // Objetivo
+        setText('obj-act',   fmt.moneyK(a.objetivo));
+        setVar ('obj-var',   v.objetivo);
+        setText('obj-total', fmt.moneyK(a.objetivo_total));
+
+        // Unidades
+        setText('unid-act',  fmt.num(a.unidades));
+        setVar ('unid-var',  v.unidades);
+        setText('unid-prev', fmt.num(p.unidades));
+
+        // Tickets
+        setText('tickets-act',  fmt.num(a.tickets));
+        setVar ('tickets-var',  v.tickets);
+        setText('tickets-prev', fmt.num(p.tickets));
+
+        // Conversión
+        setText('conv-act',     fmt.pct(a.conversion));
+        setVar ('conv-var',     v.conversion);
+        setText('conv-prev',    fmt.pct(p.conversion));
+        setText('conv-ingresos', fmt.num(a.ingresos));
+
+        // KPI cards
+        setText('card-tprom-val',  fmt.money(a.ticket_promedio));
+        setKpiVar('card-tprom-var',  v.ticket_promedio);
+        setText('card-tprom-prev', fmt.money(p.ticket_promedio));
+
+        setText('card-tp2do-val', fmt.money(a.ticket_promedio_2do));
+        setKpiVar('card-tp2do-var', v.ticket_promedio_2do);
+        setText('card-tp2do-prev', fmt.money(p.ticket_promedio_2do));
+
+        setText('card-t2do-val', fmt.pct(a.porc_2do));
+        setVarDiff('card-t2do-var', v.porc_2do);
+        setText('card-t2do-prev', fmt.pct(p.porc_2do));
+
+        setText('card-t3ro-val', fmt.pct(a.porc_3ro));
+        setVarDiff('card-t3ro-var', v.porc_3ro);
+        setText('card-t3ro-prev', fmt.pct(p.porc_3ro));
+
+        setText('card-cambios-val', fmt.pct(a.porc_cambios));
+        setVarDiff('card-cambios-var', v.porc_cambios, true);
+        setText('card-cambios-prev', fmt.pct(p.porc_cambios));
+
+        setText('card-incr-val', fmt.pct(a.porc_incremental));
+        setVarDiff('card-incr-var', v.porc_incremental);
+        setText('card-incr-prev', fmt.pct(p.porc_incremental));
+
+        // Mails KPI
+        setText('card-mails-val', fmt.num(a.mails ?? 0));
+        setKpiVar('card-mails-var', v.mails ?? 0);
+        setText('card-mails-prev', fmt.num(p.mails ?? 0));
+
+        // Sparklines
+        if (d.serie?.actual?.length) {
+            const sa = d.serie.actual;
+            const sp = d.serie.previo ?? [];
+            const dates = sa.map(x => x.fecha);
+            const vFact = sa.map(x => x.facturacion ?? 0);
+            const vPFact = sp.map(x => x.facturacion ?? 0);
+            const vUnid = sa.map(x => x.unidades ?? 0);
+            const vTick = sa.map(x => x.tickets ?? 0);
+            const vTProm = sa.map(x => x.ticket_promedio ?? 0);
+            const vT2do  = sa.map(x => x.porc_2do ?? 0);
+            const vT3ro  = sa.map(x => x.porc_3ro ?? 0);
+            const vCamb  = sa.map(x => x.porc_cambios ?? 0);
+            const vIncr  = sa.map(x => x.porc_incremental ?? 0);
+            const vConv  = sa.map(x => x.conversion ?? 0);
+
+            sparkLine('spark-fact',          vFact,  '#00a878', vPFact);
+            sparkLine('spark-unid',          vUnid,  '#f59e0b');
+            sparkLine('spark-tickets-main',  vTick,  '#8b5cf6');
+            sparkLine('spark-conv',          vConv,  '#ec4899');
+            sparkLine('spark-tprom',         vTProm, '#2563eb');
+            sparkLine('spark-t2do',          vT2do,  '#14b8a6');
+            sparkLine('spark-t3ro',          vT3ro,  '#6366f1');
+            sparkLine('spark-cambios',       vCamb,  '#f97316');
+            sparkLine('spark-incr',          vIncr,  '#22c55e');
+
+            SparkModal.register('spark-fact',  vFact,  dates, '#00a878', fmt.moneyK, 'Facturación diaria');
+            SparkModal.register('spark-unid',  vUnid,  dates, '#f59e0b', fmt.num,    'Unidades diarias');
+            SparkModal.register('spark-tickets-main', vTick, dates, '#8b5cf6', fmt.num, 'Tickets diarios');
+            SparkModal.register('spark-conv',  vConv,  dates, '#ec4899', n => fmt.pct(n), 'Conversión diaria');
+            SparkModal.register('spark-tprom', vTProm, dates, '#2563eb', fmt.money, 'Ticket Promedio');
+            SparkModal.register('spark-t2do',  vT2do,  dates, '#14b8a6', n => fmt.pct(n), '% Tickets 2do Producto');
+            SparkModal.register('spark-t3ro',  vT3ro,  dates, '#6366f1', n => fmt.pct(n), '% Tickets 3er Producto');
+            SparkModal.register('spark-cambios', vCamb, dates, '#f97316', n => fmt.pct(n), '% Cambios');
+            SparkModal.register('spark-incr',  vIncr,  dates, '#22c55e', n => fmt.pct(n), '% Incremental');
+        }
+    }
+
+    /* ── DOM helpers ─────────────────────────── */
+    function setText(id, text) { const el = $(id); if (el) el.textContent = text; }
+    function setVar(id, ratio) {
+        const el = $(id);
+        if (!el) return;
+        el.textContent = fmt.varPct(ratio);
+        el.className   = 'summary-var ' + (ratio >= 0 ? 'pos' : 'neg');
+    }
+    function setKpiVar(id, ratio) {
+        const el = $(id);
+        if (!el) return;
+        const sign = ratio >= 0 ? '+' : '';
+        el.textContent = sign + (ratio * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '\u00A0%';
+        el.className   = 'kpi-var ' + (ratio >= 0 ? 'pos' : 'neg');
+    }
+    function setVarDiff(id, diff, inverse = false) {
+        const el = $(id);
+        if (!el) return;
+        const sign = diff >= 0 ? '+' : '';
+        el.textContent = sign + (diff * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '\u00A0pp';
+        const good = inverse ? diff <= 0 : diff >= 0;
+        el.className   = 'kpi-var ' + (good ? 'pos' : 'neg');
+    }
+
+    /* ── Loading state ───────────────────────── */
+    function setLoading(on) {
+        document.body.classList.toggle('is-loading', on);
+    }
+
+    /* ── API principal ───────────────────────── */
+    async function loadAll() {
+        setLoading(true);
+        try {
+            const d = await apiFetch('kpis.php');
+            updatePeriodLabel(d.periodo);
+            renderKPIs(d);
+            renderTablaSucursales(d.tabla_sucursales);
+            // Async — no bloquean
+            loadDonuts();
+            MediosPago.loadAll();
+        } catch(e) {
+            console.error('[Dashboard]', e);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return { loadAll, loadFilters, getParams, buildQS, getSucNombre };
+})();

@@ -1,0 +1,60 @@
+/* ============================================================
+   /bi/global/css/vendedoras.css
+   Estilos de la pestaña Vendedoras.
+   ============================================================ */
+
+/* ── Versus ──────────────────────────────────────────────── */
+.versus-names {
+    display        : flex;
+    justify-content: space-between;
+    align-items    : center;
+    padding        : 10px 16px;
+    font-family    : var(--font-display);
+    font-size      : 1.05rem;
+    color          : var(--text-1);
+    border-bottom  : 1px solid var(--border);
+    gap            : 10px;
+}
+
+.versus-tabla {
+    width          : 100%;
+    border-collapse: collapse;
+    font-size      : .84rem;
+}
+
+.versus-tabla td {
+    padding      : 7px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+.versus-label-a {
+    text-align : right;
+    width      : 35%;
+    font-family: var(--font-display);
+    font-size  : .95rem;
+    font-weight: 600;
+    color      : var(--text-2);
+}
+.versus-label-b {
+    text-align : left;
+    width      : 35%;
+    font-family: var(--font-display);
+    font-size  : .95rem;
+    font-weight: 600;
+    color      : var(--text-2);
+}
+.versus-metric {
+    text-align    : center;
+    width         : 30%;
+    font-size     : .72rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color         : var(--text-3);
+    font-weight   : 600;
+}
+
+.versus-win {
+    color      : var(--pos);
+    font-weight: 700;
+}

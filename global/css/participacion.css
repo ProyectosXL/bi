@@ -1,0 +1,50 @@
+/* ============================================================
+   /bi/global/css/participacion.css
+   Estilos de la pestaña Participación (pivot sucursal × rubro).
+   ============================================================ */
+
+.participacion-tabla {
+    width           : max-content;
+    min-width       : 100%;
+    border-collapse : collapse;
+    font-size       : .79rem;
+}
+
+.participacion-tabla th {
+    background     : var(--bg-header);
+    color          : rgba(255,255,255,.9);
+    padding        : 7px 10px;
+    font-family    : var(--font-display);
+    font-weight    : 600;
+    letter-spacing : .3px;
+    white-space    : nowrap;
+    position       : sticky;
+    top            : 0;
+    z-index        : 2;
+}
+
+/* Primera columna sticky (nombre sucursal) */
+.participacion-tabla th:first-child,
+.participacion-tabla td:first-child {
+    position     : sticky;
+    left         : 0;
+    z-index      : 3;
+    background   : var(--bg-header);
+    color        : rgba(255,255,255,.95);
+    min-width    : 180px;
+    white-space  : nowrap;
+    border-right : 2px solid var(--border);
+}
+.participacion-tabla td:first-child {
+    background : var(--bg-card2);
+    color      : var(--text-1);
+}
+
+.participacion-tabla td {
+    padding      : 5px 8px;
+    border-bottom: 1px solid var(--border);
+    white-space  : nowrap;
+    vertical-align: middle;
+}
+
+.participacion-tabla tr:hover td { filter: brightness(0.96); }

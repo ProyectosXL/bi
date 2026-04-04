@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/xampp/htdocs/bi/sucursales/js/*.js /c/xampp/htdocs/bi/sucursales/css/*.css)",
+      "Bash(ls /c/xampp/htdocs/bi/*.php)",
+      "Bash(php -l /c/xampp/htdocs/bi/class/Filters.php)",
+      "Bash(php -l /c/xampp/htdocs/bi/class/PeriodHelper.php)",
+      "Bash(php -l /c/xampp/htdocs/bi/class/config.php)",
+      "Bash(php -l /c/xampp/htdocs/bi/sucursales/class/DashboardDB.php)",
+      "Bash(php -l /c/xampp/htdocs/bi/global/class/GlobalDashboardDB.php)",
+      "Bash(/c/xampp/php/php.exe -l /c/xampp/htdocs/bi/class/Filters.php)",
+      "Bash(/c/xampp/php/php.exe -l /c/xampp/htdocs/bi/class/PeriodHelper.php)",
+      "Bash(/c/xampp/php/php.exe -l /c/xampp/htdocs/bi/class/config.php)",
+      "Bash(/c/xampp/php/php.exe -l /c/xampp/htdocs/bi/sucursales/class/DashboardDB.php)",
+      "Bash(/c/xampp/php/php.exe -l /c/xampp/htdocs/bi/global/class/GlobalDashboardDB.php)"
+    ]
+  }
+}

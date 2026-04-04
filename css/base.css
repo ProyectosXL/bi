@@ -1,0 +1,91 @@
+/* ============================================================
+   /bi/css/base.css
+   Variables, reset y estilos base compartidos por todos los tableros.
+   Importar como primer hoja en cualquier tablero nuevo:
+     @import url('/bi/css/base.css');
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@300;400;500;600&display=swap');
+
+/* ── Variables de diseño ─────────────────────────────────── */
+:root {
+    --bg-base    : #f0f2f7;
+    --bg-card    : #ffffff;
+    --bg-card2   : #f7f8fc;
+    --bg-header  : #1a2340;
+    --bg-header2 : #243060;
+    --accent     : #00a878;
+    --accent2    : #2563eb;
+    --accent3    : #f59e0b;
+    --text-1     : #1a2340;
+    --text-2     : #4b5674;
+    --text-3     : #8e96ae;
+    --pos        : #16a34a;
+    --neg        : #dc2626;
+    --border     : #e2e6f0;
+    --shadow     : 0 2px 12px rgba(26,35,64,0.08);
+    --radius     : 10px;
+    --radius-sm  : 6px;
+    --font-display: 'Barlow Condensed', sans-serif;
+    --font-body  : 'Barlow', sans-serif;
+    --transition : .18s ease;
+}
+
+/* ── Reset mínimo ────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+
+body {
+    background : var(--bg-base);
+    color      : var(--text-1);
+    font-family: var(--font-body);
+    font-weight: 400;
+    min-height : 100vh;
+    overflow-x : hidden;
+}
+
+/* ── Loading bar (progresivo, en body.is-loading) ────────── */
+#loading-bar {
+    position      : fixed;
+    top           : 0;
+    left          : -60%;
+    height        : 3px;
+    width         : 45%;
+    background    : linear-gradient(90deg, transparent, var(--accent), #60a5fa, var(--accent), transparent);
+    z-index       : 10000;
+    border-radius : 2px;
+    opacity       : 0;
+    pointer-events: none;
+    transition    : opacity .15s ease;
+}
+body.is-loading #loading-bar {
+    opacity  : 1;
+    animation: loading-slide 1.5s ease-in-out infinite;
+}
+@keyframes loading-slide {
+    0%   { left: -60%; }
+    100% { left: 120%; }
+}
+body.is-loading .toolbar {
+    pointer-events: none;
+    opacity       : 0.7;
+    transition    : opacity .2s;
+}
+
+/* ── Loader inline (BIUtils.dom.setLoading) ──────────────── */
+.bi-loader {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+    padding    : 20px;
+    color      : var(--text-3);
+    font-size  : .85rem;
+}
+.bi-loader i { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Colores semánticos de variación ─────────────────────── */
+.pos, .cell-pos { color: var(--pos); }
+.neg, .cell-neg { color: var(--neg); }
+td.cell-pos { background: rgba(22,163,74,.08); }
+td.cell-neg { background: rgba(220,38,38,.08); }
