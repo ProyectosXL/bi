@@ -197,32 +197,31 @@ const Analisis = (() => {
         });
     }
 
-    /* ── Render: jerarquía (tree format) ─────── */
-    // mergeJerarquias → [{label, totals:{unidades,unidades_prev,...}, rubros:[{label,totals,categorias:[...]}]}]
+    /* -- Render: jerarquia progresiva (DESTINO -> RUBRO -> CATEGORIA) -- */
     function renderJerarquia(tree) {
-        const tbody = document.querySelector('#tabla-jerarquia tbody');
+        const tbody = document.querySelector("#tabla-jerarquia tbody");
         if (!tbody) return;
         if (!tree?.length) {
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text-3)">Sin datos</td></tr>`;
             return;
         }
 
-        let html = '';
-        tree.forEach(dest => {
+        let html = "";
+        tree.forEach((dest, di) => {
             const dt = dest.totals ?? {};
-            const varD = dt.var_unidades;
-            html += `<tr class="row-destino" data-dest="${encodeURIComponent(dest.label)}">
-                <td><strong>${dest.label}</strong></td>
+            html += `<tr class="row-destino jer-expandable" data-di="${di}" style="cursor:pointer">
+                <td><span class="jer-icon">▶</span> <strong>${dest.label}</strong></td>
                 <td style="text-align:right">${numFmt(dt.unidades)}</td>
                 <td style="text-align:right">${numFmt(dt.unidades_prev)}</td>
-                <td style="text-align:right">${varFmt(varD)}</td>
+                <td style="text-align:right">${varFmt(dt.var_unidades)}</td>
                 <td style="text-align:right">${moneyFmt(dt.facturacion)}</td>
             </tr>`;
 
-            (dest.rubros ?? []).forEach(rub => {
+            (dest.rubros ?? []).forEach((rub, ri) => {
                 const rt = rub.totals ?? {};
-                html += `<tr class="row-rubro sub-${encodeURIComponent(dest.label)}" style="display:none">
-                    <td style="padding-left:20px"><strong>${rub.label}</strong></td>
+                const hasCats = (rub.categorias ?? []).length > 0;
+                html += `<tr class="row-rubro jer-expandable" data-di="${di}" data-ri="${ri}" style="display:none;cursor:${hasCats ? "pointer" : "default"}">
+                    <td style="padding-left:22px"><span class="jer-icon">${hasCats ? '▶' : '\u00a0'}</span> <strong>${rub.label}</strong></td>
                     <td style="text-align:right">${numFmt(rt.unidades)}</td>
                     <td style="text-align:right">${numFmt(rt.unidades_prev)}</td>
                     <td style="text-align:right">${varFmt(rt.var_unidades)}</td>
@@ -230,8 +229,8 @@ const Analisis = (() => {
                 </tr>`;
 
                 (rub.categorias ?? []).forEach(cat => {
-                    html += `<tr class="row-cat sub-${encodeURIComponent(dest.label)}" style="display:none">
-                        <td style="padding-left:40px">${cat.label ?? '—'}</td>
+                    html += `<tr class="row-cat" data-di="${di}" data-ri="${ri}" style="display:none">
+                        <td style="padding-left:44px;color:var(--text-2)">${cat.label ?? '—'}</td>
                         <td style="text-align:right">${numFmt(cat.unidades)}</td>
                         <td style="text-align:right">${numFmt(cat.unidades_prev)}</td>
                         <td style="text-align:right">${varFmt(cat.var_unidades)}</td>
@@ -243,13 +242,39 @@ const Analisis = (() => {
 
         tbody.innerHTML = html;
 
-        tbody.querySelectorAll('.row-destino').forEach(tr => {
-            tr.addEventListener('click', () => {
-                const key  = tr.dataset.dest;
-                const subs = tbody.querySelectorAll(`.sub-${key}`);
-                const open = !tr.classList.contains('expanded');
-                tr.classList.toggle('expanded', open);
-                subs.forEach(s => s.style.display = open ? '' : 'none');
+        // Clic en DESTINO -> expande/colapsa solo sus RUBROS
+        tbody.querySelectorAll(".row-destino").forEach(tr => {
+            tr.addEventListener("click", () => {
+                const di   = tr.dataset.di;
+                const open = !tr.classList.contains("expanded");
+                tr.classList.toggle("expanded", open);
+                const icon = tr.querySelector(".jer-icon");
+                if (icon) icon.textContent = open ? '▼' : '▶';
+                tbody.querySelectorAll(".row-rubro[data-di=\"" + di + "\"]").forEach(rr => {
+                    rr.style.display = open ? "" : "none";
+                    if (!open) {
+                        rr.classList.remove("expanded");
+                        const ri2 = rr.dataset.ri;
+                        const rIcon = rr.querySelector(".jer-icon");
+                        if (rIcon) rIcon.textContent = '▶';
+                        tbody.querySelectorAll(".row-cat[data-di=\"" + di + "\"][data-ri=\"" + ri2 + "\"]").forEach(c => c.style.display = "none");
+                    }
+                });
+            });
+        });
+
+        // Clic en RUBRO -> expande/colapsa solo sus CATEGORIAS
+        tbody.querySelectorAll(".row-rubro").forEach(tr => {
+            tr.addEventListener("click", e => {
+                e.stopPropagation();
+                const di   = tr.dataset.di, ri = tr.dataset.ri;
+                const cats = tbody.querySelectorAll(".row-cat[data-di=\"" + di + "\"][data-ri=\"" + ri + "\"]");
+                if (!cats.length) return;
+                const open = !tr.classList.contains("expanded");
+                tr.classList.toggle("expanded", open);
+                const icon = tr.querySelector(".jer-icon");
+                if (icon) icon.textContent = open ? '▼' : '▶';
+                cats.forEach(c => c.style.display = open ? "" : "none");
             });
         });
     }

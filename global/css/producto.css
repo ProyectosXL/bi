@@ -1,0 +1,168 @@
+/* ============================================================
+   /bi/global/css/producto.css
+   Estilos de la pestaña Producto.
+   ============================================================ */
+
+/* ── Layout principal ──────────────────────────────────── */
+.producto-top {
+    display: grid;
+    grid-template-columns: minmax(0, 58%) minmax(0, 42%);
+    gap: 16px;
+    align-items: start;
+}
+
+/* Contenedor interno de ambas tablas con scroll horizontal propio */
+.prod-table-scroll {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 420px;
+}
+
+/* Fila inferior: 3 columnas — sucursales | top categorías | donut */
+.producto-mid {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr) 320px;
+    gap: 16px;
+    align-items: start;
+    margin-top: 16px;
+}
+
+/* ── Filtro de categoría local ──────────────────────────── */
+.producto-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    background: var(--surface-1, #f4f6fb);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    font-size: .82rem;
+}
+.producto-filter-bar label { font-weight: 500; color: var(--text-2); }
+.producto-filter-bar select,
+.producto-filter-bar input {
+    padding: 4px 10px;
+    font-size: .82rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-1);
+}
+.producto-filter-bar button {
+    padding: 4px 14px;
+    font-size: .82rem;
+    background: var(--accent, #2563eb);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+/* ── Árbol RUBRO → CATEGORÍA ────────────────────────────── */
+.prod-tree-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .80rem;
+}
+.prod-tree-table th {
+    background: var(--accent2, #2563eb);
+    color: #fff;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.prod-tree-table th:not(:first-child) { text-align: right; }
+.prod-tree-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.prod-tree-table td:not(:first-child) { text-align: right; }
+
+/* Encabezados ordenables */
+.prod-th-sort {
+    cursor: pointer;
+    user-select: none;
+}
+.prod-tree-table thead .prod-th-sort:hover,
+.prod-color-table thead .prod-th-sort:hover {
+    background: var(--bg-header2, #243060);
+}
+.prod-sort-icon {
+    margin-left: 3px;
+    font-size: .60rem;
+    opacity: .55;
+    vertical-align: middle;
+}
+.prod-sort-active { opacity: 1 !important; }
+
+.prod-row-rubro {
+    cursor: pointer;
+    background: var(--surface-1, #f7f9fc);
+    font-weight: 600;
+}
+.prod-row-rubro:hover { background: #eef2ff; }
+.prod-row-rubro .jer-icon { font-size: .70rem; margin-right: 4px; color: var(--accent, #2563eb); }
+
+.prod-row-cat {
+    background: var(--bg-card);
+    color: var(--text-2);
+    font-size: .78rem;
+}
+.prod-row-cat:hover { background: #f5f7ff; }
+
+/* ── Tabla de colores ───────────────────────────────────── */
+.prod-color-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .80rem;
+}
+.prod-color-table th {
+    background: var(--accent2, #2563eb);
+    color: #fff;
+    padding: 6px 8px;
+    font-weight: 600;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.prod-color-table th:not(:first-child) { text-align: right; }
+.prod-color-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.prod-color-table td:not(:first-child) { text-align: right; }
+.prod-color-table tbody tr:hover td { background: #f5f7ff; }
+
+/* ── Top 10 categorías (ranking bars) ───────────────────── */
+.prod-top-wrap { padding: 8px 12px; }
+
+/* ── Wrap de gráficos ──────────────────────────────────── */
+.prod-chart-wrap {
+    position: relative;
+    width: 100%;
+}
+
+/* ── Fila de totales ───────────────────────────────────── */
+.prod-row-total td {
+    font-weight: 700;
+    background: var(--surface-1, #f0f4ff);
+    border-top: 2px solid var(--accent, #2563eb);
+    color: var(--text-1);
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+}
+.prod-row-total td:not(:first-child) { text-align: right; }
+
+/* ── Variaciones en tabla ──────────────────────────────── */
+.prod-var-pos { color: #16a34a; font-weight: 600; }
+.prod-var-neg { color: #dc2626; font-weight: 600; }
+
+/* ── Loading state ─────────────────────────────────────── */
+.prod-loading {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-3);
+    font-size: .85rem;
+}

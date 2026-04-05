@@ -33,6 +33,7 @@ $ultimaAct = date('d/m/Y H:i:s');
     <link rel="stylesheet" href="/bi/global/css/cadena.css">
     <link rel="stylesheet" href="/bi/global/css/participacion.css">
     <link rel="stylesheet" href="/bi/global/css/vendedoras.css">
+    <link rel="stylesheet" href="/bi/global/css/producto.css">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Chart.js 4.x + DataLabels Plugin -->
@@ -149,6 +150,9 @@ $ultimaAct = date('d/m/Y H:i:s');
         </button>
         <button class="tab-btn" id="tab-btn-analisis" role="tab" aria-controls="tab-analisis" aria-selected="false">
             <i class="bi bi-graph-up-arrow"></i>&nbsp; Análisis
+        </button>
+        <button class="tab-btn" id="tab-btn-producto" role="tab" aria-controls="tab-producto" aria-selected="false">
+            <i class="bi bi-box-seam"></i>&nbsp; Producto
         </button>
         <button class="tab-btn" id="tab-btn-cadena" role="tab" aria-controls="tab-cadena" aria-selected="false">
             <i class="bi bi-diagram-3"></i>&nbsp; Cadena
@@ -540,6 +544,85 @@ $ultimaAct = date('d/m/Y H:i:s');
     </div>
     <!-- /tab-analisis -->
 
+    <!-- ══ PESTAÑA: PRODUCTO ════════════════════════════════════════════ -->
+    <div id="tab-producto" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-producto">
+        <div class="dash-content">
+
+            <!-- Filtro local de categoría -->
+            <div class="producto-filter-bar">
+                <label for="sel-prod-categoria">Categoría</label>
+                <select id="sel-prod-categoria">
+                    <option value="">Todas</option>
+                </select>
+                <button id="btn-prod-aplicar"><i class="bi bi-check2"></i> Aplicar</button>
+            </div>
+
+            <!-- Fila superior: Rubros/Categorías + Colores -->
+            <div class="producto-top">
+
+                <!-- Árbol RUBRO → CATEGORÍA -->
+                <div class="analisis-card" style="margin:0;min-width:0">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-diagram-2"></i> Rubro / Categoría
+                    </div>
+                    <div class="prod-table-scroll" id="prod-rubros-wrap">
+                        <div class="prod-loading"><i class="bi bi-arrow-repeat"></i> Cargando…</div>
+                    </div>
+                </div>
+
+                <!-- Tabla de colores -->
+                <div class="analisis-card" style="margin:0;min-width:0">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-palette"></i> Colores
+                    </div>
+                    <div class="prod-table-scroll" id="prod-colores-wrap">
+                        <div class="prod-loading"><i class="bi bi-arrow-repeat"></i> Cargando…</div>
+                    </div>
+                </div>
+
+            </div>
+            <!-- /producto-top -->
+
+            <!-- Fila inferior: Sucursales | Top Categorías | Donut colores -->
+            <div class="producto-mid">
+
+                <!-- Col 1: Ranking sucursales -->
+                <div class="analisis-card" style="margin:0">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-building"></i> Unidades por Sucursal
+                    </div>
+                    <div id="prod-suc-wrap" style="padding:10px 14px;max-height:480px;overflow-y:auto">
+                        <div class="prod-loading"><i class="bi bi-arrow-repeat"></i> Cargando…</div>
+                    </div>
+                </div>
+
+                <!-- Col 2: Top 10 categorías -->
+                <div class="analisis-card" style="margin:0">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-bar-chart-steps"></i> Top Categorías
+                    </div>
+                    <div id="prod-top-wrap" class="prod-top-wrap">
+                        <div class="prod-loading"><i class="bi bi-arrow-repeat"></i> Cargando…</div>
+                    </div>
+                </div>
+
+                <!-- Col 3: Donut colores -->
+                <div class="analisis-card" style="margin:0">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-pie-chart"></i> Participación Colores
+                    </div>
+                    <div class="prod-chart-wrap" style="height:260px;padding:10px">
+                        <canvas id="prod-donut-colores"></canvas>
+                    </div>
+                </div>
+
+            </div>
+            <!-- /producto-mid -->
+
+        </div>
+    </div>
+    <!-- /tab-producto -->
+
     <!-- ══ PESTAÑA: CADENA ══════════════════════════════════════════════ -->
     <div id="tab-cadena" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-cadena">
         <div class="dash-content">
@@ -663,6 +746,7 @@ $ultimaAct = date('d/m/Y H:i:s');
 <!-- Tab JS -->
 <script src="/bi/global/js/dashboard.js"></script>
 <script src="/bi/global/js/analisis.js"></script>
+<script src="/bi/global/js/producto.js"></script>
 <script src="/bi/global/js/cadena.js"></script>
 <script src="/bi/global/js/participacion.js"></script>
 <script src="/bi/global/js/vendedoras.js"></script>
@@ -677,16 +761,18 @@ $ultimaAct = date('d/m/Y H:i:s');
     const TABS = [
         { btn: 'tab-btn-kpis',          pane: 'tab-kpis',          name: 'kpis'          },
         { btn: 'tab-btn-analisis',       pane: 'tab-analisis',       name: 'analisis'      },
+        { btn: 'tab-btn-producto',       pane: 'tab-producto',       name: 'producto'      },
         { btn: 'tab-btn-cadena',         pane: 'tab-cadena',         name: 'cadena'        },
         { btn: 'tab-btn-participacion',  pane: 'tab-participacion',  name: 'participacion' },
         { btn: 'tab-btn-vendedoras',     pane: 'tab-vendedoras',     name: 'vendedoras'    },
     ];
 
-    const loaded = { kpis: false, analisis: false, cadena: false, participacion: false, vendedoras: false };
+    const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false };
 
     const loaders = {
         kpis         : () => Dashboard.loadAll(),
         analisis     : () => Analisis.loadAll(),
+        producto     : () => Producto.loadAll(),
         cadena       : () => Cadena.loadAll(),
         participacion: () => Participacion.loadAll(),
         vendedoras   : () => Vendedoras.loadAll(),

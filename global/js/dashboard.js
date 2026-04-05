@@ -67,7 +67,9 @@ const Dashboard = (() => {
     /* ── SparkCharts ─────────────────────────── */
     const charts = {};
 
-    function sparkLine(canvasId, values, color = '#00a878', prevValues = null) {
+    const _DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+    function sparkLine(canvasId, values, color = '#00a878', prevValues = null, dates = null) {
         const canvas = $(canvasId);
         if (!canvas) return;
         if (charts[canvasId]) { charts[canvasId].destroy(); delete charts[canvasId]; }
@@ -93,15 +95,48 @@ const Dashboard = (() => {
             });
         }
 
+        // Formatear etiquetas de fechas si están disponibles
+        const labels = dates
+            ? dates.map(d => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '')
+            : values.map((_, i) => i);
+
         charts[canvasId] = new Chart(canvas, {
             type: 'line',
-            data: { labels: values.map((_, i) => i), datasets },
+            data: { labels, datasets },
             options: {
                 responsive: false,
                 animation : { duration: 300 },
-                plugins   : { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
-                scales    : { x: { display: false }, y: { display: false } },
-                elements  : { line: { capBezierPoints: false } },
+                plugins   : {
+                    legend    : { display: false },
+                    datalabels: { display: false },
+                    tooltip   : dates ? {
+                        enabled        : true,
+                        backgroundColor: '#1a2340',
+                        titleColor     : 'rgba(255,255,255,.65)',
+                        bodyColor      : '#ffffff',
+                        padding        : 8,
+                        cornerRadius   : 6,
+                        displayColors  : false,
+                        callbacks: {
+                            title: items => {
+                                const ds = dates[items[0].dataIndex];
+                                if (!ds) return '';
+                                const d = new Date(ds + 'T00:00:00');
+                                const dia = _DIAS[d.getDay()];
+                                const fecha = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                return `${dia} ${fecha}`;
+                            },
+                            label: ctx => {
+                                // Usar el formatFn del SparkModal si está registrado (late binding)
+                                const reg = typeof SparkModal !== 'undefined' ? SparkModal._registry?.[canvasId] : null;
+                                const v   = ctx.parsed.y;
+                                return reg ? reg.formatFn(v) : String(v);
+                            },
+                        }
+                    } : { enabled: false },
+                },
+                scales  : { x: { display: false }, y: { display: false } },
+                elements: { line: { capBezierPoints: false } },
             }
         });
     }
@@ -299,14 +334,14 @@ const Dashboard = (() => {
             const max = Math.max(...values), min = Math.min(...values);
             const avg = values.reduce((a, b) => a + b, 0) / values.length;
             const last = values[values.length - 1];
-            const first = values[0];
-            const trend = first !== 0 ? (last - first) / Math.abs(first) : 0;
+            const trend = avg !== 0 ? (last - avg) / Math.abs(avg) : 0;
             const maxIdx = values.indexOf(max);
             const minIdx = values.indexOf(min);
             const fmtDate = ds => ds ? new Date(ds + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '';
 
             const trendSign = trend >= 0 ? '+' : '';
             const trendCls  = trend >= 0 ? 'pos' : 'neg';
+            const trendTitle = `Último: ${formatFn(last)} | Promedio: ${formatFn(avg)} | Var: ${trendSign}${(trend*100).toFixed(1)}%`;
 
             const root = $('spark-modal-root');
             root.innerHTML = `
@@ -338,7 +373,8 @@ const Dashboard = (() => {
                             </div>
                             <div class="spark-modal-stat">
                                 <span class="spark-modal-stat-label">Tendencia</span>
-                                <span class="trend-badge ${trendCls}">${trendSign}${(trend * 100).toFixed(1)} %</span>
+                                <span class="trend-badge ${trendCls}" title="${trendTitle}">${trendSign}${(trend * 100).toFixed(1)} %</span>
+                                <span class="stat-date" style="font-size:.68rem;color:var(--text-3)">vs promedio período</span>
                             </div>
                         </div>
                         <div class="spark-modal-chart-wrap">
@@ -371,7 +407,7 @@ const Dashboard = (() => {
             if (root) root.innerHTML = '';
         }
 
-        return { register, open };
+        return { register, open, _registry: registry };
     })();
 
     /* ── Expandir sparklines ─────────────────── */
@@ -842,15 +878,15 @@ const Dashboard = (() => {
             const vIncr  = sa.map(x => x.porc_incremental ?? 0);
             const vConv  = sa.map(x => x.conversion ?? 0);
 
-            sparkLine('spark-fact',          vFact,  '#00a878', vPFact);
-            sparkLine('spark-unid',          vUnid,  '#f59e0b');
-            sparkLine('spark-tickets-main',  vTick,  '#8b5cf6');
-            sparkLine('spark-conv',          vConv,  '#ec4899');
-            sparkLine('spark-tprom',         vTProm, '#2563eb');
-            sparkLine('spark-t2do',          vT2do,  '#14b8a6');
-            sparkLine('spark-t3ro',          vT3ro,  '#6366f1');
-            sparkLine('spark-cambios',       vCamb,  '#f97316');
-            sparkLine('spark-incr',          vIncr,  '#22c55e');
+            sparkLine('spark-fact',          vFact,  '#00a878', vPFact, dates);
+            sparkLine('spark-unid',          vUnid,  '#f59e0b', null,   dates);
+            sparkLine('spark-tickets-main',  vTick,  '#8b5cf6', null,   dates);
+            sparkLine('spark-conv',          vConv,  '#ec4899', null,   dates);
+            sparkLine('spark-tprom',         vTProm, '#2563eb', null,   dates);
+            sparkLine('spark-t2do',          vT2do,  '#14b8a6', null,   dates);
+            sparkLine('spark-t3ro',          vT3ro,  '#6366f1', null,   dates);
+            sparkLine('spark-cambios',       vCamb,  '#f97316', null,   dates);
+            sparkLine('spark-incr',          vIncr,  '#22c55e', null,   dates);
 
             SparkModal.register('spark-fact',  vFact,  dates, '#00a878', fmt.moneyK, 'Facturación diaria');
             SparkModal.register('spark-unid',  vUnid,  dates, '#f59e0b', fmt.num,    'Unidades diarias');
@@ -911,5 +947,5 @@ const Dashboard = (() => {
         }
     }
 
-    return { loadAll, loadFilters, getParams, buildQS, getSucNombre };
+    return { loadAll, loadFilters, getParams, buildQS, getSucNombre, initSearchableSelect, syncSearchableSelect };
 })();

@@ -74,14 +74,9 @@ try {
     // Mails
     $mails_act  = $db->getMails($desde_act,  $hasta_act,  $sucursal, $grupo, $tipoTienda);
 
-    // Objetivo total del mes
-    $obj_total = $kpi_act['objetivo'];
-    if ($periodo === 'mes_actual') {
-        $primerDia = date('Y-m-01');
-        $ultimoDia = date('Y-m-t');
-        $kpi_total = $db->getKPIs($primerDia, $ultimoDia, $sucursal, '%', '%', $grupo, $tipoTienda);
-        $obj_total = $kpi_total['objetivo'];
-    }
+    // Fechas del mes completo que contiene $desde_act
+    $primerDiaMes = date('Y-m-01', strtotime($desde_act));
+    $ultimoDiaMes = date('Y-m-t',  strtotime($desde_act));
 
     // ── Período previo ──────────────────────────────
     $kpi_prev  = $db->getKPIs($desde_prev, $hasta_prev, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
@@ -110,8 +105,6 @@ try {
     }
 
     // ── Tabla Facturación vs Objetivos por sucursal ─
-    $primerDiaMes = date('Y-m-01');
-    $ultimoDiaMes = date('Y-m-t');
     $factPorSuc = $db->getFacturacionPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda);
     $objPorSuc  = $db->getObjetivosPorSucursal($desde_act, $hasta_act, $primerDiaMes, $ultimoDiaMes, $grupo, $tipoTienda);
 
@@ -141,6 +134,15 @@ try {
     }
     usort($tablaSucursales, fn($a, $b) => $b['facturacion'] <=> $a['facturacion']);
 
+    // KPI objetivo (pro-rated a la fecha) y objetivo_total (mes completo):
+    // ambos restringidos a sucursales con ventas — mismo scope que la tabla
+    $obj_fecha_kpi = 0;
+    $obj_total     = 0;
+    foreach (array_keys($factPorSuc) as $nro) {
+        $obj_fecha_kpi += $objPorSuc[$nro]['objetivo_fecha'] ?? 0;
+        $obj_total     += $objPorSuc[$nro]['objetivo_total'] ?? 0;
+    }
+
     $var = fn($act, $prev) => $prev != 0 ? ($act - $prev) / $prev : ($act > 0 ? 1 : 0);
     $dias_act  = (new DateTime($desde_act))->diff(new DateTime($hasta_act))->days + 1;
     $dias_prev = (new DateTime($desde_prev))->diff(new DateTime($hasta_prev))->days + 1;
@@ -163,7 +165,7 @@ try {
             'tickets'            => $kpi_act['tickets'],
             'ticket_promedio'    => $kpi_act['ticket_promedio'],
             'porc_cambios'       => $kpi_act['porc_cambios'],
-            'objetivo'           => $kpi_act['objetivo'],
+            'objetivo'           => $obj_fecha_kpi,
             'objetivo_total'     => $obj_total,
             'porc_2do'           => $tick_act['porc_2do'],
             'porc_3ro'           => $tick_act['porc_3ro'],
@@ -194,7 +196,7 @@ try {
             'unidades'           => $var($kpi_act['unidades'],           $kpi_prev['unidades']),
             'tickets'            => $var($kpi_act['tickets'],            $kpi_prev['tickets']),
             'ticket_promedio'    => $var($kpi_act['ticket_promedio'],    $kpi_prev['ticket_promedio']),
-            'objetivo'           => $kpi_act['objetivo'] != 0 ? ($kpi_act['facturacion'] - $kpi_act['objetivo']) / $kpi_act['objetivo'] : 0,
+            'objetivo'           => $obj_fecha_kpi != 0 ? ($kpi_act['facturacion'] - $obj_fecha_kpi) / $obj_fecha_kpi : 0,
             'porc_2do'           => $tick_act['porc_2do'] - $tick_prev['porc_2do'],
             'porc_3ro'           => $tick_act['porc_3ro'] - $tick_prev['porc_3ro'],
             'porc_cambios'       => $kpi_act['porc_cambios'] - $kpi_prev['porc_cambios'],

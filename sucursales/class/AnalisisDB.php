@@ -514,6 +514,204 @@ class AnalisisDB
     }
 
     /* ──────────────────────────────────────────────
+     *  PRODUCTO — RUBRO → CATEGORÍA
+     * ────────────────────────────────────────────── */
+
+    public function getRubrosProducto(
+        string $desde, string $hasta,
+        ?int $nroSucurs = null, string $vendedor = '%',
+        string $rubro = '%', string $categoria = '%'
+    ): array {
+        $cv   = $this->campoVendedor;
+        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        $sfV  = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
+        $sfR  = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
+        $sfC  = $categoria !== '%'  ? "AND s.CATEGORIA = ?" : "";
+        $pS   = $nroSucurs !== null ? [$nroSucurs] : [];
+        $pV   = $vendedor  !== '%'  ? [$vendedor]  : [];
+        $pR   = $rubro     !== '%'  ? [$rubro]     : [];
+        $pC   = $categoria !== '%'  ? [$categoria] : [];
+
+        return $this->query("
+            SELECT
+                s.RUBRO,
+                ISNULL(s.CATEGORIA, 'SIN CATEGORÍA') AS CATEGORIA,
+                ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
+                ISNULL(SUM(s.IMPORTE),  0) AS facturacion
+            FROM BI_SALES_SUCURSALES s
+            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+              AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+              {$sfS} {$sfV} {$sfR} {$sfC}
+            GROUP BY s.RUBRO, ISNULL(s.CATEGORIA, 'SIN CATEGORÍA')
+            ORDER BY s.RUBRO, ISNULL(s.CATEGORIA, 'SIN CATEGORÍA')
+        ", array_merge([$desde, $hasta], $pS, $pV, $pR, $pC));
+    }
+
+    public function getColoresProducto(
+        string $desde, string $hasta,
+        ?int $nroSucurs = null, string $vendedor = '%',
+        string $rubro = '%', string $categoria = '%'
+    ): array {
+        $cv   = $this->campoVendedor;
+        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        $sfV  = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
+        $sfR  = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
+        $sfC  = $categoria !== '%'  ? "AND s.CATEGORIA = ?" : "";
+        $pS   = $nroSucurs !== null ? [$nroSucurs] : [];
+        $pV   = $vendedor  !== '%'  ? [$vendedor]  : [];
+        $pR   = $rubro     !== '%'  ? [$rubro]     : [];
+        $pC   = $categoria !== '%'  ? [$categoria] : [];
+
+        try {
+            return $this->query("
+                SELECT
+                    ISNULL(s.COLOR, 'SIN COLOR') AS COLOR,
+                    ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
+                    ISNULL(SUM(s.IMPORTE),  0) AS facturacion
+                FROM BI_SALES_SUCURSALES s
+                WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+                  AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+                  {$sfS} {$sfV} {$sfR} {$sfC}
+                GROUP BY ISNULL(s.COLOR, 'SIN COLOR')
+                ORDER BY unidades DESC
+            ", array_merge([$desde, $hasta], $pS, $pV, $pR, $pC));
+        } catch (\Throwable $_) {
+            return [];   // COLOR column may not exist in all origins
+        }
+    }
+
+    public function getSucursalesProducto(
+        string $desde, string $hasta,
+        string $vendedor = '%', string $rubro = '%', string $categoria = '%'
+    ): array {
+        $cv  = $this->campoVendedor;
+        $sfV = $vendedor  !== '%' ? "AND s.{$cv} = ?" : "";
+        $sfR = $rubro     !== '%' ? "AND s.RUBRO = ?" : "";
+        $sfC = $categoria !== '%' ? "AND s.CATEGORIA = ?" : "";
+        $pV  = $vendedor  !== '%' ? [$vendedor]  : [];
+        $pR  = $rubro     !== '%' ? [$rubro]     : [];
+        $pC  = $categoria !== '%' ? [$categoria] : [];
+
+        return $this->query("
+            SELECT
+                s.NRO_SUCURS,
+                ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
+                ISNULL(SUM(s.IMPORTE),  0) AS facturacion
+            FROM BI_SALES_SUCURSALES s
+            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+              AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+              {$sfV} {$sfR} {$sfC}
+            GROUP BY s.NRO_SUCURS
+            ORDER BY unidades DESC
+        ", array_merge([$desde, $hasta], $pV, $pR, $pC));
+    }
+
+    public function getTopCategoriasProducto(
+        string $desde, string $hasta,
+        ?int $nroSucurs = null, string $vendedor = '%', string $rubro = '%'
+    ): array {
+        $cv  = $this->campoVendedor;
+        $sfS = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        $sfV = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
+        $sfR = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
+        $pS  = $nroSucurs !== null ? [$nroSucurs] : [];
+        $pV  = $vendedor  !== '%'  ? [$vendedor]  : [];
+        $pR  = $rubro     !== '%'  ? [$rubro]     : [];
+
+        return $this->query("
+            SELECT TOP 10
+                s.RUBRO,
+                ISNULL(s.CATEGORIA, 'SIN CATEGORÍA') AS CATEGORIA,
+                ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
+                ISNULL(SUM(s.IMPORTE),  0) AS facturacion
+            FROM BI_SALES_SUCURSALES s
+            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+              AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+              {$sfS} {$sfV} {$sfR}
+            GROUP BY s.RUBRO, ISNULL(s.CATEGORIA, 'SIN CATEGORÍA')
+            ORDER BY unidades DESC
+        ", array_merge([$desde, $hasta], $pS, $pV, $pR));
+    }
+
+    /* ──────────────────────────────────────────────
+     *  PRODUCTO — STOCK
+     * ────────────────────────────────────────────── */
+
+    /**
+     * Stock de locales/franquicias agrupado por RUBRO + CATEGORIA.
+     * Usa BI_STOCK_FRANQUICIAS para tipo FRANQUICIA, BI_STOCK_LOCALES para el resto.
+     */
+    public function getStockLocalesProducto(
+        string $rubro = '%', string $categoria = '%'
+    ): array {
+        $tipo  = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
+        $tabla = ($tipo === 'FRANQUICIA') ? 'BI_STOCK_FRANQUICIAS' : 'BI_STOCK_LOCALES';
+        $sfR   = $rubro     !== '%' ? "AND ISNULL(RUBRO,'SIN RUBRO') = ?" : "";
+        $sfC   = $categoria !== '%' ? "AND ISNULL(CATEGORIA,'SIN CATEGORÍA') = ?" : "";
+        $pR    = $rubro     !== '%' ? [$rubro]     : [];
+        $pC    = $categoria !== '%' ? [$categoria] : [];
+        try {
+            return $this->query("
+                SELECT
+                    ISNULL(RUBRO, 'SIN RUBRO')          AS RUBRO,
+                    ISNULL(CATEGORIA, 'SIN CATEGORÍA')  AS CATEGORIA,
+                    ISNULL(SUM(CANT_STOCK), 0)          AS stock_local
+                FROM {$tabla}
+                WHERE 1=1 {$sfR} {$sfC}
+                GROUP BY ISNULL(RUBRO,'SIN RUBRO'), ISNULL(CATEGORIA,'SIN CATEGORÍA')
+            ", array_merge($pR, $pC));
+        } catch (\Throwable $e) { return []; }
+    }
+
+    /**
+     * Stock central agrupado por RUBRO + CATEGORIA (usa STOCK_DISPONIBLE).
+     */
+    public function getStockCentralProducto(
+        string $rubro = '%', string $categoria = '%'
+    ): array {
+        $sfR = $rubro     !== '%' ? "AND ISNULL(RUBRO,'SIN RUBRO') = ?" : "";
+        $sfC = $categoria !== '%' ? "AND ISNULL(CATEGORIA,'SIN CATEGORÍA') = ?" : "";
+        $pR  = $rubro     !== '%' ? [$rubro]     : [];
+        $pC  = $categoria !== '%' ? [$categoria] : [];
+        try {
+            return $this->query("
+                SELECT
+                    ISNULL(RUBRO, 'SIN RUBRO')          AS RUBRO,
+                    ISNULL(CATEGORIA, 'SIN CATEGORÍA')  AS CATEGORIA,
+                    ISNULL(SUM(STOCK_DISPONIBLE), 0)    AS stock_central
+                FROM BI_STOCK_CENTRAL
+                WHERE 1=1 {$sfR} {$sfC}
+                GROUP BY ISNULL(RUBRO,'SIN RUBRO'), ISNULL(CATEGORIA,'SIN CATEGORÍA')
+            ", array_merge($pR, $pC));
+        } catch (\Throwable $e) { return []; }
+    }
+
+    /**
+     * Stock de locales/franquicias agrupado por COLOR.
+     */
+    public function getStockLocalesColores(
+        string $rubro = '%', string $categoria = '%'
+    ): array {
+        $tipo  = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
+        $tabla = ($tipo === 'FRANQUICIA') ? 'BI_STOCK_FRANQUICIAS' : 'BI_STOCK_LOCALES';
+        $sfR   = $rubro     !== '%' ? "AND ISNULL(RUBRO,'SIN RUBRO') = ?" : "";
+        $sfC   = $categoria !== '%' ? "AND ISNULL(CATEGORIA,'SIN CATEGORÍA') = ?" : "";
+        $pR    = $rubro     !== '%' ? [$rubro]     : [];
+        $pC    = $categoria !== '%' ? [$categoria] : [];
+        try {
+            return $this->query("
+                SELECT
+                    ISNULL(COLOR, 'SIN COLOR') AS COLOR,
+                    ISNULL(SUM(CANT_STOCK), 0) AS stock_local
+                FROM {$tabla}
+                WHERE 1=1 {$sfR} {$sfC}
+                GROUP BY ISNULL(COLOR, 'SIN COLOR')
+                ORDER BY stock_local DESC
+            ", array_merge($pR, $pC));
+        } catch (\Throwable $e) { return []; }
+    }
+
+    /* ──────────────────────────────────────────────
      *  PRIVADOS
      * ────────────────────────────────────────────── */
 
