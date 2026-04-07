@@ -270,7 +270,13 @@ class GlobalDashboardDB
             FROM BI_SALES_TOTAL_TICKETS t
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND t.T_COMP = 'FAC' {$sfT}
-        ", array_merge([$desde, $hasta], $pT));
+              AND CAST(t.FECHA AS DATE) IN (
+                  SELECT DISTINCT CAST(i2.FECHA AS DATE)
+                  FROM BI_T_INGRESOS_SUCURSALES i2
+                  WHERE i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                  {$sfI}
+              )
+        ", array_merge([$desde, $hasta], $pT, [$desde, $hasta], $pI));
 
         $ingresos = (int)($rowI['total_ingresos'] ?? 0);
         $tickets  = (int)($rowT['total_tickets']  ?? 0);
@@ -292,48 +298,139 @@ class GlobalDashboardDB
         ?string $grupo = null, ?string $tipoTienda = null
     ): array {
         $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
-        [$sfS, $pS] = Filters::build($fp, 's', $this->campoVendedor, $this->origen, true, true);
-        [$sfT, $pT] = Filters::build($fp, 't', $this->campoVendedor, $this->origen, true, false);
+        [$sfS,  $pS]  = Filters::build($fp, 's',  $this->campoVendedor, $this->origen, true,  true);
+        [$sfT,  $pT]  = Filters::build($fp, 't',  $this->campoVendedor, $this->origen, true,  false);
+        [$sfTk, $pTk] = Filters::build($fp, 'tk', $this->campoVendedor, $this->origen, true,  false);
+        [$sfP,  $pP]  = Filters::build($fp, 'p',  $this->campoVendedor, $this->origen, false, false);
+        [$sfI,  $pI]  = Filters::build($fp, 'ig', $this->campoVendedor, $this->origen, false, false);
 
+        // Ventas: facturación, unidades, unidades positivas y cambios por día
         $rows = $this->query("
             SELECT
                 CAST(s.FECHA AS DATE) AS fecha,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion,
-                ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades
+                ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
+                ISNULL(SUM(CASE WHEN s.CANTIDAD > 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades_positivas,
+                ISNULL(SUM(CASE WHEN s.CANTIDAD < 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
             FROM BI_SALES_SUCURSALES s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS}
             GROUP BY CAST(s.FECHA AS DATE)
             ORDER BY 1 ASC
         ", array_merge([$desde, $hasta], $pS));
 
+        // Tickets con 2do y 3er producto vía LEFT JOIN
         $tickRows = $this->query("
             SELECT
                 CAST(t.FECHA AS DATE) AS fecha,
                 COUNT(DISTINCT t.N_COMP) AS tickets,
-                ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS suma_tickets
+                ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS suma_tickets,
+                COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 1 THEN t.N_COMP END) AS tickets_2do,
+                COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 2 THEN t.N_COMP END) AS tickets_3ro
             FROM BI_SALES_TOTAL_TICKETS t
+            LEFT JOIN BI_SALES_TICKETS tk
+                ON t.N_COMP = tk.N_COMP
+               AND tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE))
+               {$sfTk}
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND t.T_COMP = 'FAC' {$sfT}
             GROUP BY CAST(t.FECHA AS DATE)
-        ", array_merge([$desde, $hasta], $pT));
+        ", array_merge([$desde, $hasta], $pTk, [$desde, $hasta], $pT));
 
         $tickMap = [];
         foreach ($tickRows as $tr) {
             $tickMap[$tr['fecha']->format('Y-m-d')] = $tr;
         }
 
+        // T. Prom. 2do Producto por día
+        [$sfTk2, $pTk2] = Filters::build($fp, 'tk2', $this->campoVendedor, $this->origen, true,  false);
+        [$sfTt2, $pTt2] = Filters::build($fp, 'tt2', $this->campoVendedor, $this->origen, true,  false);
+
+        $tp2Rows = $this->query("
+            SELECT
+                CAST(tt2.FECHA AS DATE) AS fecha,
+                COUNT(DISTINCT tt2.N_COMP) AS tickets_con_2do,
+                ISNULL(SUM(tt2.IMP_TOTAL_TICKET), 0) AS facturacion_con_2do
+            FROM BI_SALES_TOTAL_TICKETS tt2
+            INNER JOIN (
+                SELECT DISTINCT N_COMP
+                FROM BI_SALES_TICKETS tk2
+                WHERE tk2.FECHA >= ? AND tk2.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                  {$sfTk2}
+                  AND tk2.CANTIDAD > 1
+            ) t2 ON t2.N_COMP = tt2.N_COMP
+            WHERE tt2.FECHA >= ? AND tt2.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND tt2.T_COMP = 'FAC' {$sfTt2}
+            GROUP BY CAST(tt2.FECHA AS DATE)
+        ", array_merge([$desde, $hasta], $pTk2, [$desde, $hasta], $pTt2));
+
+        $tp2Map = [];
+        foreach ($tp2Rows as $tr) {
+            $tp2Map[$tr['fecha']->format('Y-m-d')] = $tr;
+        }
+
+        // Incremental por día
+        $incrRows = $this->query("
+            SELECT
+                CAST(p.FECHA_MOV AS DATE) AS fecha,
+                ISNULL(SUM(p.CAMBIO), 0) AS cambios_incr,
+                ISNULL(SUM(p.DEVOLUCIONES), 0) AS devoluciones
+            FROM BI_SALES_PORC_INCREMENTAL p
+            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day,1,CAST(? AS DATE)) {$sfP}
+            GROUP BY CAST(p.FECHA_MOV AS DATE)
+        ", array_merge([$desde, $hasta], $pP));
+
+        $incrMap = [];
+        foreach ($incrRows as $ir) {
+            $incrMap[$ir['fecha']->format('Y-m-d')] = $ir;
+        }
+
+        // Ingresos por día
+        $ingRows = $this->query("
+            SELECT
+                CAST(ig.FECHA AS DATE) AS fecha,
+                ISNULL(SUM(ig.INGRESOS), 0) AS ingresos
+            FROM BI_T_INGRESOS_SUCURSALES ig
+            WHERE ig.FECHA >= ? AND ig.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfI}
+            GROUP BY CAST(ig.FECHA AS DATE)
+        ", array_merge([$desde, $hasta], $pI));
+
+        $ingMap = [];
+        foreach ($ingRows as $ig) {
+            $ingMap[$ig['fecha']->format('Y-m-d')] = (int)$ig['ingresos'];
+        }
+
         $result = [];
         foreach ($rows as $row) {
-            $fecha    = $row['fecha']->format('Y-m-d');
-            $tickInfo = $tickMap[$fecha] ?? null;
-            $tickets  = (int)($tickInfo['tickets']      ?? 0);
-            $sumaT    = (float)($tickInfo['suma_tickets'] ?? 0);
+            $fecha       = $row['fecha']->format('Y-m-d');
+            $tickInfo    = $tickMap[$fecha]  ?? null;
+            $tp2Info     = $tp2Map[$fecha]   ?? null;
+            $incrInfo    = $incrMap[$fecha]  ?? null;
+
+            $tickets     = (int)($tickInfo['tickets']      ?? 0);
+            $sumaT       = (float)($tickInfo['suma_tickets'] ?? 0);
+            $t2do        = (int)($tickInfo['tickets_2do']  ?? 0);
+            $t3ro        = (int)($tickInfo['tickets_3ro']  ?? 0);
+            $tp2Cnt      = (int)($tp2Info['tickets_con_2do']      ?? 0);
+            $tp2Fact     = (float)($tp2Info['facturacion_con_2do'] ?? 0);
+            $cambiosIncr = (float)($incrInfo['cambios_incr']   ?? 0);
+            $devoluciones= (float)($incrInfo['devoluciones']   ?? 0);
+            $unidadesPos = (float)$row['unidades_positivas'];
+            $cambios     = (float)$row['cambios'];
+            $ingresos    = $ingMap[$fecha] ?? 0;
+
             $result[] = [
-                'fecha'           => $fecha,
-                'facturacion'     => (float)$row['facturacion'],
-                'unidades'        => (float)$row['unidades'],
-                'tickets'         => $tickets,
-                'ticket_promedio' => $tickets > 0 ? $sumaT / $tickets : 0,
+                'fecha'               => $fecha,
+                'facturacion'         => (float)$row['facturacion'],
+                'unidades'            => (float)$row['unidades'],
+                'tickets'             => $tickets,
+                'ticket_promedio'     => $tickets > 0 ? $sumaT / $tickets : 0,
+                'ticket_promedio_2do' => $tp2Cnt > 0 ? $tp2Fact / $tp2Cnt : 0,
+                'porc_2do'            => $tickets > 0 ? $t2do / $tickets : 0,
+                'porc_3ro'            => $tickets > 0 ? $t3ro / $tickets : 0,
+                'porc_cambios'        => $unidadesPos > 0 ? $cambios / $unidadesPos : 0,
+                'porc_incremental'    => $devoluciones != 0 ? ($cambiosIncr - $devoluciones) / $devoluciones : 0,
+                'ingresos'            => $ingresos,
+                'conversion'          => $ingresos > 0 ? $tickets / $ingresos : 0,
             ];
         }
         return $result;

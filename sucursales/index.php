@@ -166,6 +166,9 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
                                 <div class="summary-prev-value" id="obj-total">—</div>
                             </div>
                         </div>
+                        <div class="summary-sparkline obj-sparkline">
+                            <canvas id="spark-obj" width="180" height="38"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -229,6 +232,22 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
             </div>
 
             <!-- ── KPI GRID ───────────────────────────────────────── -->
+            <?php
+                $tipoLocal = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
+                $benchDesc = match($tipoLocal) {
+                    'FRANQUICIA'      => 'El benchmark refleja el promedio de toda la red de franquicias para el mismo período seleccionado',
+                    'LOCAL_PROPIO_UY' => 'El benchmark refleja el promedio de todos los locales propios de Uruguay para el mismo período seleccionado',
+                    default           => 'El benchmark refleja el promedio de todos los locales propios de Argentina para el mismo período seleccionado',
+                };
+            ?>
+            <div class="kpi-grid-header">
+                <span class="kpi-section-label">KPIs de Performance</span>
+                <button class="info-btn"
+                    data-info-title="Benchmark"
+                    data-info-tips="<?= htmlspecialchars($benchDesc) ?>|Sirve como referencia para saber si tu sucursal está por encima o por debajo del promedio de la red|La variación muestra el cambio respecto al mismo período del año anterior">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </div>
             <div class="kpi-grid">
 
                 <div class="kpi-card">

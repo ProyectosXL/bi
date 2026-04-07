@@ -521,6 +521,38 @@ class DashboardDB
     }
 
     /* ──────────────────────────────────────────────
+     *  SERIE OBJETIVO DIARIO
+     * ────────────────────────────────────────────── */
+
+    /**
+     * Objetivo diario del período, como mapa fecha → importe.
+     */
+    public function getSerieObjetivo(string $desde, string $hasta, ?int $nroSucurs = null): array
+    {
+        $sfO    = $nroSucurs !== null ? "AND o.NRO_SUCURSAL = ?" : "";
+        $params = [$desde, $hasta];
+        if ($nroSucurs !== null) $params[] = $nroSucurs;
+
+        $sql = "
+            SELECT
+                CAST(o.FECHA AS DATE) AS fecha,
+                ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo
+            FROM {$this->tablaObjetivos} o
+            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day, 1, CAST(? AS DATE))
+              {$sfO}
+            GROUP BY CAST(o.FECHA AS DATE)
+            ORDER BY 1 ASC
+        ";
+
+        $rows   = $this->query($sql, $params);
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['fecha']->format('Y-m-d')] = (float)$row['objetivo'];
+        }
+        return $result;
+    }
+
+    /* ──────────────────────────────────────────────
      *  CONVERSIÓN (Tickets / Ingresos)
      * ────────────────────────────────────────────── */
 
@@ -549,8 +581,14 @@ class DashboardDB
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND t.T_COMP = 'FAC'
               {$sfT}
+              AND CAST(t.FECHA AS DATE) IN (
+                  SELECT DISTINCT CAST(i2.FECHA AS DATE)
+                  FROM BI_T_INGRESOS_SUCURSALES i2
+                  WHERE i2.FECHA >= ? AND i2.FECHA < DATEADD(day, 1, CAST(? AS DATE))
+                  {$sfI}
+              )
         ";
-        $rowT = $this->queryOne($sqlT, array_merge([$desde, $hasta], $suc));
+        $rowT = $this->queryOne($sqlT, array_merge([$desde, $hasta], $suc, [$desde, $hasta], $suc));
 
         $ingresos = (int)($rowI['total_ingresos'] ?? 0);
         $tickets  = (int)($rowT['total_tickets']  ?? 0);

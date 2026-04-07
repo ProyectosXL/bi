@@ -49,7 +49,7 @@ $ultimaAct = date('d/m/Y H:i:s');
     <header class="topbar">
         <div class="logo-box">XL</div>
         <div>
-            <div class="topbar-title">SALES DASHBOARD — <?= htmlspecialchars($descLabel) ?></div>
+            <div class="topbar-title">DASHBOARD SALES GLOBAL — <?= htmlspecialchars($descLabel) ?></div>
             <div class="topbar-sub">
                 <span id="periodo-label">—</span> <span id="periodo-previo-label"></span>
             </div>
@@ -269,14 +269,22 @@ $ultimaAct = date('d/m/Y H:i:s');
             <!-- /summary-row -->
 
             <!-- ── KPI GRID ───────────────────────────────────────── -->
+            <div class="kpi-grid-header">
+                <span class="kpi-section-label">KPIs de Performance</span>
+                <button class="info-btn"
+                    data-info-title="KPIs de Performance"
+                    data-info-tips="El Benchmark refleja el promedio de toda la cadena para el mismo período seleccionado|Sirve como referencia para saber si el conjunto está por encima o por debajo de la media|La variación muestra el cambio respecto al período anterior seleccionado|Pasá el cursor sobre la variación para ver el valor del período anterior|Los gráficos muestran la evolución diaria del indicador — hacé clic en el ícono para ampliar">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </div>
             <div class="kpi-grid">
 
                 <div class="kpi-card">
                     <div class="kpi-card-header">
                         <span class="kpi-title">Ticket Promedio</span>
                         <div class="kpi-bench">
-                            <span class="kpi-bench-label">Per. previo</span>
-                            <span class="kpi-bench-val" id="card-tprom-prev">—</span>
+                            <span class="kpi-bench-label">Benchmark</span>
+                            <span class="kpi-bench-val" id="card-tprom-bench">—</span>
                         </div>
                     </div>
                     <div class="kpi-card-body">
@@ -289,13 +297,13 @@ $ultimaAct = date('d/m/Y H:i:s');
                     <div class="kpi-card-header">
                         <span class="kpi-title">T. Prom. 2do Prod.</span>
                         <div class="kpi-bench">
-                            <span class="kpi-bench-label">Per. previo</span>
-                            <span class="kpi-bench-val" id="card-tp2do-prev">—</span>
+                            <span class="kpi-bench-label">Benchmark</span>
+                            <span class="kpi-bench-val" id="card-tp2do-bench">—</span>
                         </div>
                     </div>
                     <div class="kpi-card-body">
                         <div><div class="kpi-val" id="card-tp2do-val">—</div><div class="kpi-var" id="card-tp2do-var">—</div></div>
-                        <div class="kpi-spark"></div>
+                        <div class="kpi-spark"><canvas id="spark-tp2do" width="90" height="36"></canvas><button class="spark-expand-btn" data-spark="spark-tp2do" title="Ver detalle"><i class="bi bi-arrows-angle-expand"></i></button></div>
                     </div>
                 </div>
 
@@ -303,8 +311,8 @@ $ultimaAct = date('d/m/Y H:i:s');
                     <div class="kpi-card-header">
                         <span class="kpi-title">Tickets 2do. Producto</span>
                         <div class="kpi-bench">
-                            <span class="kpi-bench-label">Per. previo</span>
-                            <span class="kpi-bench-val" id="card-t2do-prev">—</span>
+                            <span class="kpi-bench-label">Benchmark</span>
+                            <span class="kpi-bench-val" id="card-t2do-bench">—</span>
                         </div>
                     </div>
                     <div class="kpi-card-body">
@@ -317,8 +325,8 @@ $ultimaAct = date('d/m/Y H:i:s');
                     <div class="kpi-card-header">
                         <span class="kpi-title">Tickets 3er. Producto</span>
                         <div class="kpi-bench">
-                            <span class="kpi-bench-label">Per. previo</span>
-                            <span class="kpi-bench-val" id="card-t3ro-prev">—</span>
+                            <span class="kpi-bench-label">Benchmark</span>
+                            <span class="kpi-bench-val" id="card-t3ro-bench">—</span>
                         </div>
                     </div>
                     <div class="kpi-card-body">
@@ -331,8 +339,8 @@ $ultimaAct = date('d/m/Y H:i:s');
                     <div class="kpi-card-header">
                         <span class="kpi-title">% Cambios</span>
                         <div class="kpi-bench">
-                            <span class="kpi-bench-label">Per. previo</span>
-                            <span class="kpi-bench-val" id="card-cambios-prev">—</span>
+                            <span class="kpi-bench-label">Benchmark</span>
+                            <span class="kpi-bench-val" id="card-cambios-bench">—</span>
                         </div>
                     </div>
                     <div class="kpi-card-body">
@@ -345,27 +353,13 @@ $ultimaAct = date('d/m/Y H:i:s');
                     <div class="kpi-card-header">
                         <span class="kpi-title">% Incremental</span>
                         <div class="kpi-bench">
-                            <span class="kpi-bench-label">Per. previo</span>
-                            <span class="kpi-bench-val" id="card-incr-prev">—</span>
+                            <span class="kpi-bench-label">Benchmark</span>
+                            <span class="kpi-bench-val" id="card-incr-bench">—</span>
                         </div>
                     </div>
                     <div class="kpi-card-body">
                         <div><div class="kpi-val" id="card-incr-val">—</div><div class="kpi-var" id="card-incr-var">—</div></div>
                         <div class="kpi-spark"><canvas id="spark-incr" width="90" height="36"></canvas><button class="spark-expand-btn" data-spark="spark-incr" title="Ver detalle"><i class="bi bi-arrows-angle-expand"></i></button></div>
-                    </div>
-                </div>
-
-                <div class="kpi-card">
-                    <div class="kpi-card-header">
-                        <span class="kpi-title">Mails / Tickets</span>
-                        <div class="kpi-bench">
-                            <span class="kpi-bench-label">Per. previo</span>
-                            <span class="kpi-bench-val" id="card-mails-prev">—</span>
-                        </div>
-                    </div>
-                    <div class="kpi-card-body">
-                        <div><div class="kpi-val" id="card-mails-val">—</div><div class="kpi-var" id="card-mails-var">—</div></div>
-                        <div class="kpi-spark"></div>
                     </div>
                 </div>
 

@@ -67,7 +67,8 @@ const Dashboard = (() => {
     /* ── SparkCharts ─────────────────────────── */
     const charts = {};
 
-    const _DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    const _DIAS     = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    const _DIAS_ABR = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
     function sparkLine(canvasId, values, color = '#00a878', prevValues = null, dates = null) {
         const canvas = $(canvasId);
@@ -387,16 +388,37 @@ const Dashboard = (() => {
             $('spark-overlay').addEventListener('click', e => { if (e.target.id === 'spark-overlay') close(); });
 
             if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+            const modalLabels = dates.map(d => {
+                if (!d) return '';
+                const dt = new Date(d + 'T00:00:00');
+                return _DIAS_ABR[dt.getDay()] + ' ' + String(dt.getDate()).padStart(2, '0');
+            });
             _modalChart = new Chart($('spark-modal-canvas'), {
                 type: 'line',
                 data: {
-                    labels  : dates.map(d => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : ''),
+                    labels  : modalLabels,
                     datasets: [{ data: values, borderColor: color, borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true, backgroundColor: color.replace(')', ',.08)').replace('rgb', 'rgba') }]
                 },
                 options: {
                     responsive: true,
-                    plugins   : { legend: { display: false }, datalabels: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + formatFn(ctx.parsed.y) } } },
-                    scales    : { x: { ticks: { maxRotation: 45, font: { size: 10 } } }, y: { ticks: { callback: v => formatFn(v), font: { size: 10 } } } },
+                    plugins   : {
+                        legend    : { display: false },
+                        datalabels: { display: false },
+                        tooltip   : {
+                            backgroundColor: '#1a2340',
+                            titleColor     : '#9ba8c8',
+                            bodyColor      : '#ffffff',
+                            padding        : 8,
+                            callbacks: {
+                                title: items => {
+                                    const d = new Date(dates[items[0].dataIndex] + 'T00:00:00');
+                                    return d.toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+                                },
+                                label: ctx => ' ' + formatFn(ctx.parsed.y),
+                            },
+                        },
+                    },
+                    scales    : { x: { ticks: { maxRotation: 45, font: { size: 10 }, color: '#9ba8c8' } }, y: { ticks: { callback: v => formatFn(v), font: { size: 10 } } } },
                 }
             });
         }
@@ -804,7 +826,7 @@ const Dashboard = (() => {
 
     /* ── KPIs ────────────────────────────────── */
     function renderKPIs(d) {
-        const a = d.actual, p = d.previo, v = d.variacion;
+        const a = d.actual, p = d.previo, v = d.variacion, b = d.benchmark ?? {};
 
         // Ventas
         setText('fact-act',  fmt.moneyK(a.facturacion));
@@ -833,45 +855,41 @@ const Dashboard = (() => {
         setText('conv-ingresos', fmt.num(a.ingresos));
 
         // KPI cards
-        setText('card-tprom-val',  fmt.money(a.ticket_promedio));
-        setKpiVar('card-tprom-var',  v.ticket_promedio);
-        setText('card-tprom-prev', fmt.money(p.ticket_promedio));
+        setText('card-tprom-val',   fmt.money(a.ticket_promedio));
+        setKpiVar('card-tprom-var', v.ticket_promedio,     fmt.money(p.ticket_promedio),     fmt.money(a.ticket_promedio));
+        setText('card-tprom-bench', fmt.money(b.ticket_promedio));
 
-        setText('card-tp2do-val', fmt.money(a.ticket_promedio_2do));
-        setKpiVar('card-tp2do-var', v.ticket_promedio_2do);
-        setText('card-tp2do-prev', fmt.money(p.ticket_promedio_2do));
+        setText('card-tp2do-val',   fmt.money(a.ticket_promedio_2do));
+        setKpiVar('card-tp2do-var', v.ticket_promedio_2do, fmt.money(p.ticket_promedio_2do), fmt.money(a.ticket_promedio_2do));
+        setText('card-tp2do-bench', fmt.money(b.ticket_promedio_2do));
 
-        setText('card-t2do-val', fmt.pct(a.porc_2do));
-        setVarDiff('card-t2do-var', v.porc_2do);
-        setText('card-t2do-prev', fmt.pct(p.porc_2do));
+        setText('card-t2do-val',    fmt.pct(a.porc_2do));
+        setVarDiff('card-t2do-var', v.porc_2do,         false, fmt.pct(p.porc_2do),         fmt.pct(a.porc_2do));
+        setText('card-t2do-bench',  fmt.pct(b.porc_2do));
 
-        setText('card-t3ro-val', fmt.pct(a.porc_3ro));
-        setVarDiff('card-t3ro-var', v.porc_3ro);
-        setText('card-t3ro-prev', fmt.pct(p.porc_3ro));
+        setText('card-t3ro-val',    fmt.pct(a.porc_3ro));
+        setVarDiff('card-t3ro-var', v.porc_3ro,         false, fmt.pct(p.porc_3ro),         fmt.pct(a.porc_3ro));
+        setText('card-t3ro-bench',  fmt.pct(b.porc_3ro));
 
-        setText('card-cambios-val', fmt.pct(a.porc_cambios));
-        setVarDiff('card-cambios-var', v.porc_cambios, true);
-        setText('card-cambios-prev', fmt.pct(p.porc_cambios));
+        setText('card-cambios-val',    fmt.pct(a.porc_cambios));
+        setVarDiff('card-cambios-var', v.porc_cambios,   true,  fmt.pct(p.porc_cambios),     fmt.pct(a.porc_cambios));
+        setText('card-cambios-bench',  fmt.pct(b.porc_cambios));
 
-        setText('card-incr-val', fmt.pct(a.porc_incremental));
-        setVarDiff('card-incr-var', v.porc_incremental);
-        setText('card-incr-prev', fmt.pct(p.porc_incremental));
-
-        // Mails KPI
-        setText('card-mails-val', fmt.num(a.mails ?? 0));
-        setKpiVar('card-mails-var', v.mails ?? 0);
-        setText('card-mails-prev', fmt.num(p.mails ?? 0));
+        setText('card-incr-val',    fmt.pct(a.porc_incremental));
+        setVarDiff('card-incr-var', v.porc_incremental, false, fmt.pct(p.porc_incremental),  fmt.pct(a.porc_incremental));
+        setText('card-incr-bench',  fmt.pct(b.porc_incremental));
 
         // Sparklines
         if (d.serie?.actual?.length) {
             const sa = d.serie.actual;
             const sp = d.serie.previo ?? [];
             const dates = sa.map(x => x.fecha);
-            const vFact = sa.map(x => x.facturacion ?? 0);
+            const vFact  = sa.map(x => x.facturacion ?? 0);
             const vPFact = sp.map(x => x.facturacion ?? 0);
-            const vUnid = sa.map(x => x.unidades ?? 0);
-            const vTick = sa.map(x => x.tickets ?? 0);
+            const vUnid  = sa.map(x => x.unidades ?? 0);
+            const vTick  = sa.map(x => x.tickets ?? 0);
             const vTProm = sa.map(x => x.ticket_promedio ?? 0);
+            const vTp2do = sa.map(x => x.ticket_promedio_2do ?? 0);
             const vT2do  = sa.map(x => x.porc_2do ?? 0);
             const vT3ro  = sa.map(x => x.porc_3ro ?? 0);
             const vCamb  = sa.map(x => x.porc_cambios ?? 0);
@@ -883,6 +901,7 @@ const Dashboard = (() => {
             sparkLine('spark-tickets-main',  vTick,  '#8b5cf6', null,   dates);
             sparkLine('spark-conv',          vConv,  '#ec4899', null,   dates);
             sparkLine('spark-tprom',         vTProm, '#2563eb', null,   dates);
+            sparkLine('spark-tp2do',         vTp2do, '#a855f7', null,   dates);
             sparkLine('spark-t2do',          vT2do,  '#14b8a6', null,   dates);
             sparkLine('spark-t3ro',          vT3ro,  '#6366f1', null,   dates);
             sparkLine('spark-cambios',       vCamb,  '#f97316', null,   dates);
@@ -893,6 +912,7 @@ const Dashboard = (() => {
             SparkModal.register('spark-tickets-main', vTick, dates, '#8b5cf6', fmt.num, 'Tickets diarios');
             SparkModal.register('spark-conv',  vConv,  dates, '#ec4899', n => fmt.pct(n), 'Conversión diaria');
             SparkModal.register('spark-tprom', vTProm, dates, '#2563eb', fmt.money, 'Ticket Promedio');
+            SparkModal.register('spark-tp2do', vTp2do, dates, '#a855f7', fmt.money, 'T. Prom. 2do Producto');
             SparkModal.register('spark-t2do',  vT2do,  dates, '#14b8a6', n => fmt.pct(n), '% Tickets 2do Producto');
             SparkModal.register('spark-t3ro',  vT3ro,  dates, '#6366f1', n => fmt.pct(n), '% Tickets 3er Producto');
             SparkModal.register('spark-cambios', vCamb, dates, '#f97316', n => fmt.pct(n), '% Cambios');
@@ -908,20 +928,24 @@ const Dashboard = (() => {
         el.textContent = fmt.varPct(ratio);
         el.className   = 'summary-var ' + (ratio >= 0 ? 'pos' : 'neg');
     }
-    function setKpiVar(id, ratio) {
+    function setKpiVar(id, ratio, prevText = null, actualText = null) {
         const el = $(id);
         if (!el) return;
         const sign = ratio >= 0 ? '+' : '';
         el.textContent = sign + (ratio * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '\u00A0%';
         el.className   = 'kpi-var ' + (ratio >= 0 ? 'pos' : 'neg');
+        if (prevText   !== null) el.dataset.prev   = prevText;
+        if (actualText !== null) el.dataset.actual = actualText;
     }
-    function setVarDiff(id, diff, inverse = false) {
+    function setVarDiff(id, diff, inverse = false, prevText = null, actualText = null) {
         const el = $(id);
         if (!el) return;
         const sign = diff >= 0 ? '+' : '';
         el.textContent = sign + (diff * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '\u00A0pp';
         const good = inverse ? diff <= 0 : diff >= 0;
         el.className   = 'kpi-var ' + (good ? 'pos' : 'neg');
+        if (prevText   !== null) el.dataset.prev   = prevText;
+        if (actualText !== null) el.dataset.actual = actualText;
     }
 
     /* ── Loading state ───────────────────────── */
@@ -948,4 +972,39 @@ const Dashboard = (() => {
     }
 
     return { loadAll, loadFilters, getParams, buildQS, getSucNombre, initSearchableSelect, syncSearchableSelect };
+})();
+
+/* ── Tooltip período previo en KPI vars ── */
+(function () {
+    const tt = document.createElement('div');
+    tt.className = 'sparkline-tooltip';
+    tt.style.display = 'none';
+    document.body.appendChild(tt);
+
+    document.addEventListener('mouseover', function (e) {
+        const el = e.target.closest('.kpi-var[data-prev]');
+        if (!el) return;
+        if (el.dataset.actual) {
+            const varCls = el.classList.contains('pos') ? 'pos' : 'neg';
+            tt.innerHTML =
+                '<div style="font-size:.68rem;color:#9ba8c8;margin-bottom:5px;font-weight:600">Período anterior</div>' +
+                '<div class="tooltip-row"><span>Actual</span><strong>' + el.dataset.actual + '</strong></div>' +
+                '<div class="tooltip-row"><span>Anterior</span><strong>' + el.dataset.prev + '</strong></div>' +
+                '<div class="tooltip-row"><span>Variación</span><strong class="' + varCls + '">' + el.textContent.trim() + '</strong></div>';
+        } else {
+            tt.innerHTML = '<span class="tooltip-date">Período previo</span><span class="tooltip-value">' + el.dataset.prev + '</span>';
+        }
+        tt.style.display = 'block';
+    });
+    document.addEventListener('mousemove', function (e) {
+        if (tt.style.display === 'none') return;
+        const x = e.clientX + 12;
+        const y = e.clientY - 36;
+        tt.style.left = Math.min(x, window.innerWidth - tt.offsetWidth - 8) + 'px';
+        tt.style.top  = (y < 8 ? e.clientY + 12 : y) + 'px';
+    });
+    document.addEventListener('mouseout', function (e) {
+        if (!e.target.closest('.kpi-var[data-prev]')) return;
+        tt.style.display = 'none';
+    });
 })();

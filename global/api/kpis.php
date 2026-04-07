@@ -85,6 +85,12 @@ try {
     $incr_prev = $db->getIncremental($desde_prev, $hasta_prev, $sucursal, $vendedor, $grupo, $tipoTienda);
     $mails_prev = $db->getMails($desde_prev, $hasta_prev, $sucursal, $grupo, $tipoTienda);
 
+    // ── Benchmark (cadena completa sin filtros de sucursal/grupo/tipoTienda) ──
+    $bench_kpi  = $db->getKPIs($desde_act, $hasta_act, null, '%', '%', null, null);
+    $bench_tick = $db->getTicketsProductos($desde_act, $hasta_act, null, '%', null, null);
+    $bench_tp2  = $db->getTicketPromedio2do($desde_act, $hasta_act, null, '%', null, null);
+    $bench_incr = $db->getIncremental($desde_act, $hasta_act, null, '%', null, null);
+
     // ── Conversión (puede no existir para todos los orígenes) ──────
     $noConv = ['ingresos' => 0, 'tickets' => 0, 'conversion' => 0];
     try {
@@ -204,6 +210,14 @@ try {
             'conversion'         => $var($conv_act['conversion'], $conv_prev['conversion']),
             'ticket_promedio_2do' => $var($tp2_act['ticket_promedio_2do'], $tp2_prev['ticket_promedio_2do']),
             'mails'              => $var($mails_act['mails'], $mails_prev['mails']),
+        ],
+        'benchmark' => [
+            'ticket_promedio'     => $bench_kpi['ticket_promedio'],
+            'ticket_promedio_2do' => $bench_tp2['ticket_promedio_2do'],
+            'porc_2do'            => $bench_tick['porc_2do'],
+            'porc_3ro'            => $bench_tick['porc_3ro'],
+            'porc_cambios'        => $bench_kpi['porc_cambios'],
+            'porc_incremental'    => $bench_incr['porc_incremental'],
         ],
         'serie' => [
             'actual' => $serie_act,

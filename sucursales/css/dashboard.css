@@ -369,6 +369,13 @@ body.is-loading .toolbar {
 .summary-sparkline canvas {
     display: block;
 }
+.obj-sparkline {
+    width      : 100%;
+    margin-top : 8px;
+}
+.obj-sparkline canvas {
+    width : 100%;
+}
 
 /* ── Botón expandir sparkline ────────────── */
 .spark-expand-btn {
@@ -586,6 +593,30 @@ body.is-loading .toolbar {
     line-height: 1;
     margin-top : 8px;
 }
+.kpi-var[data-prev] { cursor: default; }
+
+.kpi-grid-header {
+    display        : flex;
+    align-items    : center;
+    justify-content: space-between;
+    margin-bottom  : 6px;
+    padding        : 0 2px;
+}
+.kpi-grid-header .info-btn {
+    color: var(--text-3);
+}
+.kpi-grid-header .info-btn:hover,
+.kpi-grid-header .info-btn.active {
+    color     : var(--text-1);
+    background: rgba(26,35,64,.1);
+}
+.kpi-section-label {
+    font-size     : .68rem;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color         : var(--text-3);
+    font-weight   : 600;
+}
 
 canvas { display: block; }
 
@@ -722,6 +753,12 @@ canvas { display: block; }
     border-top : 2px solid var(--border);
     font-weight: 700;
     background : var(--bg-card2);
+}
+.tr-promedio td {
+    border-top : 1px solid var(--border);
+    background : var(--bg-card2);
+    color      : var(--text-2);
+    font-style : italic;
 }
 
 .cell-green  { background-color: #3CB371; color: #fff; font-weight: 600; }

@@ -78,6 +78,25 @@ try {
     $serie_act  = $db->getSerieFacturacion($desde_act, $hasta_act, $nroSucurs, $vendedor, $rubro);
     $serie_prev = $db->getSerieFacturacion($desde_prev, $hasta_prev, $nroSucurs, $vendedor, $rubro);
 
+    // ── Serie cumplimiento objetivo diario acumulado ──
+    $obj_diario  = $db->getSerieObjetivo($desde_act, $hasta_act, $nroSucurs);
+    $fact_map    = array_column($serie_act, 'facturacion', 'fecha');
+    $cum_fact    = 0.0;
+    $cum_obj     = 0.0;
+    $serie_cumpl = [];
+    $cursor      = new DateTime($desde_act);
+    $end         = new DateTime($hasta_act);
+    while ($cursor <= $end) {
+        $f = $cursor->format('Y-m-d');
+        $cum_fact += (float)($fact_map[$f]   ?? 0);
+        $cum_obj  += (float)($obj_diario[$f] ?? 0);
+        $serie_cumpl[] = [
+            'fecha'        => $f,
+            'cumplimiento' => $cum_obj > 0 ? ($cum_fact - $cum_obj) / $cum_obj : 0,
+        ];
+        $cursor->modify('+1 day');
+    }
+
     // ── Helpers ─────────────────────────────────────
     $var = fn($act, $prev) => $prev != 0 ? ($act - $prev) / $prev : ($act > 0 ? 1 : 0);
     $dias_act  = (new DateTime($desde_act))->diff(new DateTime($hasta_act))->days + 1;
@@ -143,8 +162,9 @@ try {
             'porc_incremental' => $bench_incr['porc_incremental'],
         ],
         'serie' => [
-            'actual'  => $serie_act,
-            'previo'  => $serie_prev,
+            'actual'     => $serie_act,
+            'previo'     => $serie_prev,
+            'cumplimiento' => $serie_cumpl,
         ],
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 

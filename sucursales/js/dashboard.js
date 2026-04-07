@@ -42,11 +42,20 @@ const Dashboard = (() => {
         /** 27,7 % */
         pct: (n, dec = 1) => (n === null || n === undefined) ? '—'
             : (n * 100).toLocaleString('es-AR', {minimumFractionDigits:dec, maximumFractionDigits:dec}) + '\u00A0%',
+        /** 27,7 pp */
+        pp: (n, dec = 1) => (n === null || n === undefined) ? '—'
+            : (n * 100).toLocaleString('es-AR', {minimumFractionDigits:dec, maximumFractionDigits:dec}) + '\u00A0pp',
         /** +8,2 % o -8,2 % */
         varPct: (n, dec = 1) => {
             if (n === null || n === undefined) return '—';
             const sign = n >= 0 ? '+' : '';
             return sign + (n * 100).toLocaleString('es-AR', {minimumFractionDigits:dec, maximumFractionDigits:dec}) + '\u00A0%';
+        },
+        /** +3,2 pp o -3,2 pp */
+        varPp: (n, dec = 1) => {
+            if (n === null || n === undefined) return '—';
+            const sign = n >= 0 ? '+' : '';
+            return sign + (n * 100).toLocaleString('es-AR', {minimumFractionDigits:dec, maximumFractionDigits:dec}) + '\u00A0pp';
         },
         /** 1.118 */
         num: (n, dec = 0) => (n === null || n === undefined) ? '—'
@@ -170,7 +179,12 @@ const Dashboard = (() => {
 
             // ── Construir datasets ──
             if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
-            const labels = dates.map(d => new Date(d + 'T00:00:00').toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' }));
+            const _ABR = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+            const labels = dates.map(d => {
+                if (!d) return '';
+                const dt = new Date(d + 'T00:00:00');
+                return _ABR[dt.getDay()] + ' ' + String(dt.getDate()).padStart(2, '0');
+            });
 
             const datasets = [
                 {
@@ -300,6 +314,7 @@ const Dashboard = (() => {
             'spark-fact'         : 'Ventas',
             'spark-unid'         : 'Unidades',
             'spark-tickets-main' : 'Tickets',
+            'spark-obj'          : 'Cumplimiento Objetivo',
             'spark-t2do'         : 'Tickets 2do. Producto',
             'spark-cambios'      : '% Cambios',
             'spark-tprom'        : 'Ticket Promedio',
@@ -399,6 +414,145 @@ const Dashboard = (() => {
         };
     }
 
+    /* ── Sparkline bi-color cumplimiento objetivo ── */
+    function drawSparklineObj(canvasId, values, dates) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !values?.length) return;
+
+        const C_POS = '#16a34a';
+        const C_NEG = '#dc2626';
+
+        SparkModal.register(canvasId, values, dates, C_POS, fmt.varPct, 'Cumplimiento Objetivo');
+
+        // Botón expandir
+        const wrap = canvas.parentElement;
+        if (wrap && !wrap.querySelector('.spark-expand-btn')) {
+            wrap.style.position = 'relative';
+            const btn = document.createElement('button');
+            btn.className = 'spark-expand-btn';
+            btn.title = 'Ver gráfico ampliado';
+            btn.innerHTML = '<i class="bi bi-arrows-fullscreen"></i>';
+            btn.addEventListener('click', (e) => { e.stopPropagation(); SparkModal.open(canvasId); });
+            wrap.appendChild(btn);
+        }
+
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+
+        // Escala — siempre incluir 0
+        const min   = Math.min(...values, 0);
+        const max   = Math.max(...values, 0);
+        const range = max - min || 1;
+        const toY   = v => H - ((v - min) / range) * (H - 4) - 2;
+        const toX   = i => values.length > 1 ? (i / (values.length - 1)) * W : W / 2;
+
+        const pts   = values.map((v, i) => ({ x: toX(i), y: toY(v), value: v, date: dates?.[i] || '' }));
+        const zeroY = toY(0);
+
+        // ── Relleno positivo (verde, clip sobre línea cero) ──
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, 0, W, zeroY); ctx.clip();
+        const gPos = ctx.createLinearGradient(0, 0, 0, zeroY);
+        gPos.addColorStop(0, C_POS + '55'); gPos.addColorStop(1, C_POS + '00');
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, zeroY);
+        pts.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.lineTo(pts[pts.length - 1].x, zeroY);
+        ctx.closePath();
+        ctx.fillStyle = gPos; ctx.fill();
+        ctx.restore();
+
+        // ── Relleno negativo (rojo, clip bajo línea cero) ──
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, zeroY, W, H - zeroY); ctx.clip();
+        const gNeg = ctx.createLinearGradient(0, zeroY, 0, H);
+        gNeg.addColorStop(0, C_NEG + '00'); gNeg.addColorStop(1, C_NEG + '55');
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, zeroY);
+        pts.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.lineTo(pts[pts.length - 1].x, zeroY);
+        ctx.closePath();
+        ctx.fillStyle = gNeg; ctx.fill();
+        ctx.restore();
+
+        // ── Línea base en cero ──
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(0, zeroY); ctx.lineTo(W, zeroY);
+        ctx.strokeStyle = 'rgba(100,120,160,0.45)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // ── Línea bi-color (maneja cruce por cero) ──
+        ctx.lineWidth = 2;
+        ctx.lineJoin  = 'round';
+        for (let i = 0; i < pts.length - 1; i++) {
+            const p1 = pts[i], p2 = pts[i + 1];
+            const v1 = values[i], v2 = values[i + 1];
+            if ((v1 >= 0) === (v2 >= 0)) {
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+                ctx.strokeStyle = v1 >= 0 ? C_POS : C_NEG;
+                ctx.stroke();
+            } else {
+                const t    = Math.abs(v1) / (Math.abs(v1) + Math.abs(v2));
+                const xMid = p1.x + t * (p2.x - p1.x);
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y); ctx.lineTo(xMid, zeroY);
+                ctx.strokeStyle = v1 >= 0 ? C_POS : C_NEG; ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(xMid, zeroY); ctx.lineTo(p2.x, p2.y);
+                ctx.strokeStyle = v2 >= 0 ? C_POS : C_NEG; ctx.stroke();
+            }
+        }
+
+        // ── Punto final destacado ──
+        const last      = pts[pts.length - 1];
+        const lastColor = values[values.length - 1] >= 0 ? C_POS : C_NEG;
+        ctx.beginPath();
+        ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle   = lastColor; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+
+        // ── Tooltip ──
+        let tt = document.getElementById('sparkline-tooltip-' + canvasId);
+        if (!tt) {
+            tt = document.createElement('div');
+            tt.id = 'sparkline-tooltip-' + canvasId;
+            tt.className = 'sparkline-tooltip';
+            tt.style.display = 'none';
+            document.body.appendChild(tt);
+        }
+
+        canvas.onmousemove = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x    = e.clientX - rect.left;
+            let closest = pts[0], minDist = Math.abs(x - pts[0].x);
+            pts.forEach(p => { const d = Math.abs(x - p.x); if (d < minDist) { minDist = d; closest = p; } });
+            if (minDist < 20) {
+                const d       = closest.date ? new Date(closest.date + 'T00:00:00') : null;
+                const fecha   = d ? d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+                const diaSem  = d ? d.toLocaleDateString('es-AR', { weekday: 'long' }) : '';
+                const sign    = closest.value >= 0 ? '+' : '';
+                const cumplStr = sign + (closest.value * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %';
+                const valColor = closest.value >= 0 ? '#4ade80' : '#f87171';
+                tt.innerHTML =
+                    `<span class="tooltip-date">${fecha} · ${diaSem}</span>` +
+                    `<span class="tooltip-value" style="color:${valColor}">${cumplStr}</span>`;
+                tt.style.display = 'block';
+                tt.style.left    = (e.clientX + 10) + 'px';
+                tt.style.top     = (e.clientY - 50) + 'px';
+            } else {
+                tt.style.display = 'none';
+            }
+        };
+        canvas.onmouseleave = () => { tt.style.display = 'none'; };
+    }
+
     /* ── Renderizado de KPI card ─────────────────── */
     function setKpiCard(id, { valor, previo, variacion, benchmark, labelValor, labelBench, formatValor, formatVar }) {
         const el = document.getElementById(id);
@@ -465,12 +619,21 @@ const Dashboard = (() => {
         // Fila total
         const trTot = document.createElement('tr');
         trTot.className = 'tr-total';
+        const tprom  = kpiSucursal ? `<strong>${fmt.money(kpiSucursal.ticket_promedio)}</strong>` : '';
+        const t2do   = kpiSucursal ? `<strong>${fmt.pct(kpiSucursal.porc_2do)}</strong>`         : '';
+        const t3ro   = kpiSucursal ? `<strong>${fmt.pct(kpiSucursal.porc_3ro)}</strong>`         : '';
+        const tcamb  = kpiSucursal ? `<strong>${fmt.pct(kpiSucursal.porc_cambios)}</strong>`     : '';
+        const tincr  = kpiSucursal ? `<strong>${fmt.pct(kpiSucursal.porc_incremental)}</strong>` : '';
         trTot.innerHTML = `
             <td><strong>Total</strong></td>
             <td class="td-num"><strong>${fmt.num(tot.unidades)}</strong></td>
             <td class="td-num"><strong>${fmt.money(tot.facturacion)}</strong></td>
             <td class="td-num"><strong>${fmt.num(tot.tickets)}</strong></td>
-            <td colspan="5"></td>
+            <td class="td-num">${tprom}</td>
+            <td class="td-num">${t2do}</td>
+            <td class="td-num">${t3ro}</td>
+            <td class="td-num">${tcamb}</td>
+            <td class="td-num">${tincr}</td>
         `;
         tbody.appendChild(trTot);
     }
@@ -961,18 +1124,20 @@ const Dashboard = (() => {
 
                 /* ── KPI Cards métricas ── */
                 const cards = [
-                    { id:'card-t2do',      val: fmt.pct(act.porc_2do),         var: var_.porc_2do,         bench: fmt.pct(bench.porc_2do),          spark: 'spark-t2do' },
-                    { id:'card-cambios',   val: fmt.pct(act.porc_cambios),     var: var_.porc_cambios,     bench: fmt.pct(bench.porc_cambios),      spark: 'spark-cambios' },
-                    { id:'card-tprom',     val: fmt.money(act.ticket_promedio),var: var_.ticket_promedio,  bench: fmt.money(bench.ticket_promedio), spark: 'spark-tprom' },
-                    { id:'card-t3ro',      val: fmt.pct(act.porc_3ro),         var: var_.porc_3ro,         bench: fmt.pct(bench.porc_3ro),          spark: 'spark-t3ro' },
-                    { id:'card-incr',      val: fmt.pct(act.porc_incremental), var: var_.porc_incremental, bench: fmt.pct(bench.porc_incremental),  spark: 'spark-incr' },
+                    { id:'card-t2do',    val: fmt.pct(act.porc_2do),          prevVal: fmt.pct(prev.porc_2do),          varFn: fmt.varPp,  var: var_.porc_2do,         bench: fmt.pct(bench.porc_2do),          spark: 'spark-t2do' },
+                    { id:'card-cambios', val: fmt.pct(act.porc_cambios),      prevVal: fmt.pct(prev.porc_cambios),      varFn: fmt.varPp,  var: var_.porc_cambios,     bench: fmt.pct(bench.porc_cambios),      spark: 'spark-cambios' },
+                    { id:'card-tprom',   val: fmt.money(act.ticket_promedio),prevVal: fmt.money(prev.ticket_promedio),varFn: fmt.varPct, var: var_.ticket_promedio,  bench: fmt.money(bench.ticket_promedio),spark: 'spark-tprom' },
+                    { id:'card-t3ro',    val: fmt.pct(act.porc_3ro),          prevVal: fmt.pct(prev.porc_3ro),          varFn: fmt.varPp,  var: var_.porc_3ro,         bench: fmt.pct(bench.porc_3ro),          spark: 'spark-t3ro' },
+                    { id:'card-incr',    val: fmt.pct(act.porc_incremental),  prevVal: fmt.pct(prev.porc_incremental),  varFn: fmt.varPp,  var: var_.porc_incremental, bench: fmt.pct(bench.porc_incremental),  spark: 'spark-incr' },
                 ];
                 cards.forEach(c => {
                     setEl(c.id + '-val',   c.val);
                     const varEl = document.getElementById(c.id + '-var');
                     if (varEl) {
-                        varEl.textContent = fmt.varPct(c.var);
+                        varEl.textContent = c.varFn(c.var);
                         varEl.className = 'kpi-var ' + (c.var >= 0 ? 'pos' : 'neg');
+                        varEl.dataset.prev   = c.prevVal;
+                        varEl.dataset.actual = c.val;
                     }
                     setEl(c.id + '-bench', c.bench);
                 });
@@ -991,9 +1156,14 @@ const Dashboard = (() => {
                 const serieConv        = serieAct.map(r => r.conversion);
                 const serieIngresos    = serieAct.map(r => r.ingresos);
 
+                const serieCumpl      = (kpisData.serie.cumplimiento || []);
+                const serieCumplVals  = serieCumpl.map(r => r.cumplimiento);
+                const serieCumplDates = serieCumpl.map(r => r.fecha);
+
                 drawSparkline('spark-fact', serieFacturacion, serieDates, '#00a878', fmt.money);
                 drawSparkline('spark-unid', serieUnidades, serieDates, '#f59e0b', fmt.num);
                 drawSparkline('spark-tickets-main', serieTickets, serieDates, '#8b5cf6', fmt.num);
+                drawSparklineObj('spark-obj', serieCumplVals, serieCumplDates);
                 drawSparkline('spark-conv', serieConv, serieDates, '#ec4899', fmt.pct, [
                     { values: serieIngresos, color: '#38bdf8', label: 'Ingresos', formatFn: fmt.num },
                     { values: serieTickets,  color: '#8b5cf6', label: 'Tickets',  formatFn: fmt.num, hideStats: true },
@@ -1147,3 +1317,38 @@ const Dashboard = (() => {
 })();
 
 document.addEventListener('DOMContentLoaded', () => Dashboard.init());
+
+/* ── Tooltip período previo en KPI vars ── */
+(function () {
+    const tt = document.createElement('div');
+    tt.className = 'sparkline-tooltip';
+    tt.style.display = 'none';
+    document.body.appendChild(tt);
+
+    document.addEventListener('mouseover', function (e) {
+        const el = e.target.closest('.kpi-var[data-prev]');
+        if (!el) return;
+        if (el.dataset.actual) {
+            const varCls = el.classList.contains('pos') ? 'pos' : 'neg';
+            tt.innerHTML =
+                '<div style="font-size:.68rem;color:#9ba8c8;margin-bottom:5px;font-weight:600">Período anterior</div>' +
+                '<div class="tooltip-row"><span>Actual</span><strong>' + el.dataset.actual + '</strong></div>' +
+                '<div class="tooltip-row"><span>Anterior</span><strong>' + el.dataset.prev + '</strong></div>' +
+                '<div class="tooltip-row"><span>Variación</span><strong class="' + varCls + '">' + el.textContent.trim() + '</strong></div>';
+        } else {
+            tt.innerHTML = '<span class="tooltip-date">Período previo</span><span class="tooltip-value">' + el.dataset.prev + '</span>';
+        }
+        tt.style.display = 'block';
+    });
+    document.addEventListener('mousemove', function (e) {
+        if (tt.style.display === 'none') return;
+        const x = e.clientX + 12;
+        const y = e.clientY - 36;
+        tt.style.left = Math.min(x, window.innerWidth - tt.offsetWidth - 8) + 'px';
+        tt.style.top  = (y < 8 ? e.clientY + 12 : y) + 'px';
+    });
+    document.addEventListener('mouseout', function (e) {
+        if (!e.target.closest('.kpi-var[data-prev]')) return;
+        tt.style.display = 'none';
+    });
+})();
