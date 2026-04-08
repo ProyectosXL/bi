@@ -34,6 +34,7 @@ $ultimaAct = date('d/m/Y H:i:s');
     <link rel="stylesheet" href="/bi/global/css/participacion.css">
     <link rel="stylesheet" href="/bi/global/css/vendedoras.css">
     <link rel="stylesheet" href="/bi/global/css/producto.css">
+    <link rel="stylesheet" href="/bi/global/css/ranking.css">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Chart.js 4.x + DataLabels Plugin -->
@@ -162,6 +163,9 @@ $ultimaAct = date('d/m/Y H:i:s');
         </button>
         <button class="tab-btn" id="tab-btn-vendedoras" role="tab" aria-controls="tab-vendedoras" aria-selected="false">
             <i class="bi bi-people-fill"></i>&nbsp; Vendedoras
+        </button>
+        <button class="tab-btn" id="tab-btn-ranking" role="tab" aria-controls="tab-ranking" aria-selected="false">
+            <i class="bi bi-trophy"></i>&nbsp; Ranking
         </button>
         <button class="tab-reload-btn" id="btn-reload-tab" title="Recargar pestaña">
             <i class="bi bi-arrow-clockwise"></i>
@@ -733,6 +737,149 @@ $ultimaAct = date('d/m/Y H:i:s');
     </div>
     <!-- /tab-vendedoras -->
 
+    <!-- ══ PESTAÑA: RANKING ══════════════════════════════════════════════ -->
+    <div id="tab-ranking" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-ranking">
+        <main class="dash-content">
+
+            <div class="ranking-toolbar">
+                <h2 class="section-title"><i class="bi bi-trophy" style="color:#eab308"></i>&nbsp; Ranking de Sucursales</h2>
+            </div>
+
+            <!-- Tabla + sidebar -->
+            <div class="ranking-main-layout">
+
+                <!-- Tabla principal -->
+                <div class="ranking-table-wrap" id="ranking-table-wrap">
+                    <table class="ranking-table" id="ranking-table">
+                        <thead>
+                            <tr>
+                                <th data-col="rank">#</th>
+                                <th data-col="nombre">Sucursal</th>
+                                <th data-col="score">Score</th>
+                                <th data-col="facturacion">Ventas</th>
+                                <th data-col="cumplimiento">Cumpl. Obj.</th>
+                                <th data-col="var_fact">Var. Ventas</th>
+                                <th data-col="ticket_promedio">T. Promedio</th>
+                                <th data-col="porc_2do">% 2do</th>
+                                <th data-col="porc_3ro">% 3er</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-3)">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Cómo se calcula (sidebar) -->
+                <div class="ranking-info-box">
+                    <h4><i class="bi bi-info-circle"></i>&nbsp; ¿Cómo se calcula?</h4>
+
+                    <p class="rk-info-lead">El score mide qué tan bien le fue a una sucursal <strong>en comparación con el promedio de toda la cadena</strong>. No importa si las ventas fueron altas o bajas en términos absolutos — lo que importa es si la sucursal estuvo por encima o por debajo del promedio en cada indicador.</p>
+
+                    <div class="rk-steps">
+                        <div class="rk-step">
+                            <span class="rk-step-num">1</span>
+                            <div>
+                                <strong>Se calculan 10 KPIs</strong> por sucursal (ventas, tickets, ticket promedio, etc.) y se obtiene el promedio de la cadena para cada uno.
+                            </div>
+                        </div>
+                        <div class="rk-step">
+                            <span class="rk-step-num">2</span>
+                            <div>
+                                <strong>Se normaliza</strong> cada KPI dividiendo el valor de la sucursal por el promedio. Si el resultado es 1.0, está en el promedio; 1.2 significa 20% mejor; 0.8 significa 20% peor.
+                            </div>
+                        </div>
+                        <div class="rk-step">
+                            <span class="rk-step-num">3</span>
+                            <div>
+                                <strong>Se pondera</strong> cada KPI según su importancia y se suman. El resultado se multiplica por 100.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rk-example">
+                        <div class="rk-example-title"><i class="bi bi-calculator"></i> Ejemplo simplificado</div>
+                        <p style="font-size:.72rem;color:#7b8fc0;margin:0 0 8px">Supongamos que una sucursal tiene ticket promedio de <strong style="color:#c9d4f0">$8.000</strong> cuando el promedio de la cadena es <strong style="color:#c9d4f0">$6.000</strong>:</p>
+                        <div class="rk-example-calc">
+                            <div class="rk-calc-row">
+                                <span>Valor sucursal</span><strong>$8.000</strong>
+                            </div>
+                            <div class="rk-calc-row">
+                                <span>Promedio cadena</span><strong>$6.000</strong>
+                            </div>
+                            <div class="rk-calc-row">
+                                <span>Ratio</span><strong>8.000 ÷ 6.000 = <span style="color:#22c55e">1.33</span></strong>
+                            </div>
+                            <div class="rk-calc-row">
+                                <span>Peso del KPI</span><strong>10%</strong>
+                            </div>
+                            <div class="rk-calc-row rk-calc-result">
+                                <span>Aporte al score</span><strong>1.33 × 10 = <span style="color:#22c55e">13.3 pts</span></strong>
+                            </div>
+                        </div>
+                        <p style="font-size:.71rem;color:#7b8fc0;margin:8px 0 0">Si todos los KPIs estuvieran en el promedio exacto (ratio = 1.0), el score sería <strong style="color:#c9d4f0">100</strong>. Estar por encima sube el score, por debajo lo baja.</p>
+                    </div>
+
+                    <div class="rk-legend">
+                        <div class="rk-legend-item"><span class="rk-dot dot-green"></span><strong>≥ 110</strong> — Por encima del promedio</div>
+                        <div class="rk-legend-item"><span class="rk-dot dot-yellow"></span><strong>95 – 110</strong> — En línea con el promedio</div>
+                        <div class="rk-legend-item"><span class="rk-dot dot-red"></span><strong>&lt; 95</strong> — Por debajo del promedio</div>
+                    </div>
+
+                    <details class="rk-weights-detail">
+                        <summary>Ver pesos por KPI</summary>
+                        <table class="weight-table">
+                            <thead><tr><th>KPI</th><th>Peso</th></tr></thead>
+                            <tbody>
+                                <tr><td>Cumpl. Objetivo</td><td>30%</td></tr>
+                                <tr><td>Var. Ventas</td><td>15%</td></tr>
+                                <tr><td>Ticket Promedio</td><td>10%</td></tr>
+                                <tr><td>Unidades</td><td>10%</td></tr>
+                                <tr><td>% 2do Producto</td><td>10%</td></tr>
+                                <tr><td>Tickets</td><td>5%</td></tr>
+                                <tr><td>T.P. 2do Prod.</td><td>5%</td></tr>
+                                <tr><td>% 3er Producto</td><td>5%</td></tr>
+                                <tr><td>% Cambios ↓</td><td>5%</td></tr>
+                                <tr><td>% Incremental</td><td>5%</td></tr>
+                            </tbody>
+                        </table>
+                        <p style="font-size:.70rem;color:#8e96ae;margin-top:6px">↓ en % Cambios significa que <em>menos cambios = mejor</em>.</p>
+                    </details>
+
+                    <p style="margin-top:10px;font-size:.72rem;color:#8e96ae">Hacé clic en una fila para ver el detalle de cada KPI.</p>
+                </div>
+
+            </div><!-- /ranking-main-layout -->
+
+        </main>
+    </div>
+    <!-- /tab-ranking -->
+
+    <!-- Modal de detalle de sucursal -->
+    <div id="ranking-modal-overlay" class="ranking-modal-overlay" style="display:none">
+        <div class="ranking-modal">
+            <button class="ranking-modal-close" id="ranking-modal-close" title="Cerrar">&times;</button>
+            <div class="ranking-modal-title">—</div>
+            <div class="ranking-modal-subtitle">—</div>
+            <div class="modal-score-display">
+                <div>
+                    <div class="modal-score-number">—</div>
+                    <div class="modal-score-label">Score (100 = promedio)</div>
+                </div>
+                <div class="modal-score-rank">
+                    <div class="rank-num">—</div>
+                    <div class="rank-label">Posición</div>
+                </div>
+            </div>
+            <div class="contrib-chart-wrap">
+                <div class="contrib-chart-title">Contribución por KPI</div>
+                <canvas id="contrib-chart" height="220"></canvas>
+            </div>
+            <div class="contrib-chart-title" style="margin-bottom:10px">Detalle por KPI</div>
+            <div class="kpi-detail-grid"></div>
+        </div>
+    </div>
+
 </div><!-- /dash-wrap -->
 
 <!-- Shared BIUtils -->
@@ -744,6 +891,7 @@ $ultimaAct = date('d/m/Y H:i:s');
 <script src="/bi/global/js/cadena.js"></script>
 <script src="/bi/global/js/participacion.js"></script>
 <script src="/bi/global/js/vendedoras.js"></script>
+<script src="/bi/global/js/ranking.js"></script>
 
 <script>
 /**
@@ -759,9 +907,10 @@ $ultimaAct = date('d/m/Y H:i:s');
         { btn: 'tab-btn-cadena',         pane: 'tab-cadena',         name: 'cadena'        },
         { btn: 'tab-btn-participacion',  pane: 'tab-participacion',  name: 'participacion' },
         { btn: 'tab-btn-vendedoras',     pane: 'tab-vendedoras',     name: 'vendedoras'    },
+        { btn: 'tab-btn-ranking',        pane: 'tab-ranking',        name: 'ranking'       },
     ];
 
-    const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false };
+    const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false };
 
     const loaders = {
         kpis         : () => Dashboard.loadAll(),
@@ -770,6 +919,7 @@ $ultimaAct = date('d/m/Y H:i:s');
         cadena       : () => Cadena.loadAll(),
         participacion: () => Participacion.loadAll(),
         vendedoras   : () => Vendedoras.loadAll(),
+        ranking      : () => Ranking.loadAll(),
     };
 
     function loadTab(name) {

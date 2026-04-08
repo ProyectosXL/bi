@@ -563,9 +563,10 @@ class DashboardDB
      */
     public function getConversion(string $desde, string $hasta, ?int $nroSucurs = null): array
     {
-        $sfI = $nroSucurs !== null ? "AND i.NRO_SUCURS = ?" : "";
-        $sfT = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
-        $suc = $nroSucurs !== null ? [$nroSucurs] : [];
+        $sfI  = $nroSucurs !== null ? "AND i.NRO_SUCURS = ?" : "";
+        $sfI2 = $nroSucurs !== null ? "AND i2.NRO_SUCURS = ?" : "";
+        $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
+        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
 
         $sqlI = "
             SELECT ISNULL(SUM(i.INGRESOS), 0) AS total_ingresos
@@ -585,7 +586,7 @@ class DashboardDB
                   SELECT DISTINCT CAST(i2.FECHA AS DATE)
                   FROM BI_T_INGRESOS_SUCURSALES i2
                   WHERE i2.FECHA >= ? AND i2.FECHA < DATEADD(day, 1, CAST(? AS DATE))
-                  {$sfI}
+                  {$sfI2}
               )
         ";
         $rowT = $this->queryOne($sqlT, array_merge([$desde, $hasta], $suc, [$desde, $hasta], $suc));
@@ -603,6 +604,19 @@ class DashboardDB
     /* ──────────────────────────────────────────────
      *  FILTROS DISPONIBLES
      * ────────────────────────────────────────────── */
+
+    /* ──────────────────────────────────────────────
+     *  ÚLTIMA FECHA CON DATOS
+     * ────────────────────────────────────────────── */
+
+    public function getUltimaFecha(?int $nroSucurs = null): string
+    {
+        $sf     = $nroSucurs !== null ? "WHERE NRO_SUCURS = ?" : "";
+        $params = $nroSucurs !== null ? [$nroSucurs] : [];
+        $sql    = "SELECT MAX(CAST(FECHA AS DATE)) AS ultima_fecha FROM BI_SALES_SUCURSALES {$sf}";
+        $row    = $this->queryOne($sql, $params);
+        return ($row && $row['ultima_fecha']) ? $row['ultima_fecha']->format('Y-m-d') : '';
+    }
 
     public function getVendedoresFiltro(?string $desde = null, ?string $hasta = null, ?int $nroSucurs = null): array
     {

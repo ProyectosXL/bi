@@ -70,6 +70,9 @@ try {
     $bench_tick = $db->getTicketsProductos($desde_act, $hasta_act);
     $bench_incr = $db->getIncremental($desde_act, $hasta_act);
 
+    // ── Última fecha con datos ───────────────────────────────────────
+    $ultima_fecha = $db->getUltimaFecha($nroSucurs);
+
     // ── Conversión (ingresos físicos vs tickets) ─────────────────────
     $conv_act  = $db->getConversion($desde_act, $hasta_act, $nroSucurs);
     $conv_prev = $db->getConversion($desde_prev, $hasta_prev, $nroSucurs);
@@ -104,7 +107,8 @@ try {
 
     ob_clean();
     echo json_encode([
-        'ok'      => true,
+        'ok'           => true,
+        'ultima_fecha' => $ultima_fecha,
         'periodo' => [
             'tipo'        => $periodo,
             'desde_act'   => $desde_act,

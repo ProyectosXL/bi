@@ -596,6 +596,265 @@ class GlobalDashboardDB
      *  MAILS (tickets con email válido)
      * ────────────────────────────────────────────── */
 
+    /* ──────────────────────────────────────────────
+     *  SCORING POR SUCURSAL
+     * ────────────────────────────────────────────── */
+
+    public function getScorePorSucursal(
+        string $desde_act,  string $hasta_act,
+        string $desde_prev, string $hasta_prev,
+        string $primerDiaMes, string $ultimoDiaMes,
+        ?string $grupo = null, ?string $tipoTienda = null
+    ): array {
+        $fp  = $this->fp(null, '%', '%', $grupo, $tipoTienda);
+        [$sfS,  $pS]  = Filters::build($fp, 's',  $this->campoVendedor, $this->origen, false, false);
+        [$sfT,  $pT]  = Filters::build($fp, 't',  $this->campoVendedor, $this->origen, false, false);
+        [$sfTk, $pTk] = Filters::build($fp, 'tk', $this->campoVendedor, $this->origen, false, false);
+        [$sfTt, $pTt] = Filters::build($fp, 'tt', $this->campoVendedor, $this->origen, false, false);
+        [$sfP,  $pP]  = Filters::build($fp, 'p',  $this->campoVendedor, $this->origen, false, false);
+
+        // 1. Facturación + tickets + ticket_promedio (actual)
+        $kpiRows = $this->query("
+            SELECT
+                t.NRO_SUCURS,
+                COUNT(DISTINCT t.N_COMP)              AS tickets,
+                ISNULL(SUM(t.IMP_TOTAL_TICKET), 0)   AS facturacion
+            FROM BI_SALES_TOTAL_TICKETS t
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND t.T_COMP = 'FAC' {$sfT}
+            GROUP BY t.NRO_SUCURS
+        ", array_merge([$desde_act, $hasta_act], $pT));
+
+        // 2. Unidades + cambios por sucursal (para porc_cambios)
+        $unidRows = $this->query("
+            SELECT
+                s.NRO_SUCURS,
+                ISNULL(SUM(CASE WHEN s.CANTIDAD > 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+                                THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
+                ISNULL(SUM(CASE WHEN s.CANTIDAD > 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+                                THEN s.CANTIDAD ELSE 0 END), 0) AS unidades_positivas,
+                ISNULL(SUM(CASE WHEN s.CANTIDAD < 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+                                THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
+            FROM BI_SALES_SUCURSALES s
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS}
+            GROUP BY s.NRO_SUCURS
+        ", array_merge([$desde_act, $hasta_act], $pS));
+
+        // 3. % 2do y 3er producto por sucursal
+        $tickRows = $this->query("
+            SELECT
+                tk.NRO_SUCURS,
+                COUNT(DISTINCT tk.N_COMP)                                   AS total_tickets,
+                COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 1 THEN tk.N_COMP END) AS tickets_2do,
+                COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 2 THEN tk.N_COMP END) AS tickets_3ro
+            FROM BI_SALES_TICKETS tk
+            WHERE tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfTk}
+            GROUP BY tk.NRO_SUCURS
+        ", array_merge([$desde_act, $hasta_act], $pTk));
+
+        // 4. Ticket promedio 2do producto por sucursal
+        $tp2Rows = $this->query("
+            SELECT
+                tt.NRO_SUCURS,
+                COUNT(DISTINCT tt.N_COMP)               AS tickets_con_2do,
+                ISNULL(SUM(tt.IMP_TOTAL_TICKET), 0)     AS facturacion_con_2do
+            FROM BI_SALES_TOTAL_TICKETS tt
+            INNER JOIN (
+                SELECT DISTINCT tk.N_COMP
+                FROM BI_SALES_TICKETS tk
+                WHERE tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                  {$sfTk}
+                  AND tk.CANTIDAD > 1
+            ) t2 ON t2.N_COMP = tt.N_COMP
+            WHERE tt.FECHA >= ? AND tt.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND tt.T_COMP = 'FAC' {$sfTt}
+            GROUP BY tt.NRO_SUCURS
+        ", array_merge([$desde_act, $hasta_act], $pTk, [$desde_act, $hasta_act], $pTt));
+
+        // 5. % Incremental por sucursal
+        $incrRows = $this->query("
+            SELECT
+                p.NRO_SUCURS,
+                ISNULL(SUM(p.CAMBIO), 0)        AS cambios_incr,
+                ISNULL(SUM(p.DEVOLUCIONES), 0)  AS devoluciones
+            FROM BI_SALES_PORC_INCREMENTAL p
+            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day,1,CAST(? AS DATE)) {$sfP}
+            GROUP BY p.NRO_SUCURS
+        ", array_merge([$desde_act, $hasta_act], $pP));
+
+        // 6. Facturación período previo (para var_fact)
+        $prevRows = $this->query("
+            SELECT
+                t.NRO_SUCURS,
+                ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS facturacion_prev
+            FROM BI_SALES_TOTAL_TICKETS t
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND t.T_COMP = 'FAC' {$sfT}
+            GROUP BY t.NRO_SUCURS
+        ", array_merge([$desde_prev, $hasta_prev], $pT));
+
+        // 7. Objetivos pro-rated
+        $objPorSuc = $this->getObjetivosPorSucursal(
+            $desde_act, $hasta_act, $primerDiaMes, $ultimoDiaMes, $grupo, $tipoTienda
+        );
+
+        // ── Combinar en array indexado por NRO_SUCURS ──────────────────────
+        $byNro = [];
+        foreach ($kpiRows as $r) {
+            $nro = (int)$r['NRO_SUCURS'];
+            $byNro[$nro] = [
+                'nro_sucurs'          => $nro,
+                'facturacion'         => (float)($r['facturacion'] ?? 0),
+                'tickets'             => (int)($r['tickets']       ?? 0),
+                'ticket_promedio'     => 0.0,
+                'unidades'            => 0.0,
+                'porc_2do'            => 0.0,
+                'porc_3ro'            => 0.0,
+                'porc_cambios'        => 0.0,
+                'porc_incremental'    => 0.0,
+                'ticket_promedio_2do' => 0.0,
+                'var_fact'            => 0.0,
+                'cumplimiento'        => 1.0,
+                'objetivo_fecha'      => 0.0,
+            ];
+        }
+
+        foreach ($unidRows as $r) {
+            $nro = (int)$r['NRO_SUCURS'];
+            if (!isset($byNro[$nro])) continue;
+            $unidPos = (float)($r['unidades_positivas'] ?? 0);
+            $cambios = (float)($r['cambios']            ?? 0);
+            $byNro[$nro]['unidades']     = (float)($r['unidades'] ?? 0);
+            $byNro[$nro]['porc_cambios'] = $unidPos > 0 ? $cambios / $unidPos : 0.0;
+        }
+
+        foreach ($tickRows as $r) {
+            $nro = (int)$r['NRO_SUCURS'];
+            if (!isset($byNro[$nro])) continue;
+            $tot = (int)($r['total_tickets'] ?? 0);
+            $byNro[$nro]['porc_2do'] = $tot > 0 ? (int)$r['tickets_2do'] / $tot : 0.0;
+            $byNro[$nro]['porc_3ro'] = $tot > 0 ? (int)$r['tickets_3ro'] / $tot : 0.0;
+        }
+
+        foreach ($tp2Rows as $r) {
+            $nro  = (int)$r['NRO_SUCURS'];
+            if (!isset($byNro[$nro])) continue;
+            $cant = (int)($r['tickets_con_2do']     ?? 0);
+            $fact = (float)($r['facturacion_con_2do'] ?? 0);
+            $byNro[$nro]['ticket_promedio_2do'] = $cant > 0 ? $fact / $cant : 0.0;
+        }
+
+        foreach ($incrRows as $r) {
+            $nro  = (int)$r['NRO_SUCURS'];
+            if (!isset($byNro[$nro])) continue;
+            $camb = (float)($r['cambios_incr']  ?? 0);
+            $devol = (float)($r['devoluciones'] ?? 0);
+            $byNro[$nro]['porc_incremental'] = $devol != 0 ? ($camb - $devol) / $devol : 0.0;
+        }
+
+        foreach ($prevRows as $r) {
+            $nro  = (int)$r['NRO_SUCURS'];
+            if (!isset($byNro[$nro])) continue;
+            $prev = (float)$r['facturacion_prev'];
+            $act  = $byNro[$nro]['facturacion'];
+            $byNro[$nro]['var_fact'] = $prev != 0 ? ($act - $prev) / $prev : ($act > 0 ? 1.0 : 0.0);
+        }
+
+        foreach ($objPorSuc as $nro => $o) {
+            if (!isset($byNro[$nro])) continue;
+            $obj = (float)$o['objetivo_fecha'];
+            $act = $byNro[$nro]['facturacion'];
+            $byNro[$nro]['objetivo_fecha'] = $obj;
+            $byNro[$nro]['cumplimiento']   = $obj > 0 ? $act / $obj : ($act > 0 ? 1.0 : 0.0);
+        }
+
+        // ticket_promedio
+        foreach ($byNro as $nro => &$s) {
+            $s['ticket_promedio'] = $s['tickets'] > 0 ? $s['facturacion'] / $s['tickets'] : 0.0;
+        }
+        unset($s);
+
+        // ── Scoring ────────────────────────────────────────────────────────
+        $weights = [
+            'cumplimiento'        => 0.30,
+            'var_fact'            => 0.15,
+            'ticket_promedio'     => 0.10,
+            'unidades'            => 0.10,
+            'porc_2do'            => 0.10,
+            'tickets'             => 0.05,
+            'ticket_promedio_2do' => 0.05,
+            'porc_3ro'            => 0.05,
+            'porc_cambios'        => 0.05,
+            'porc_incremental'    => 0.05,
+        ];
+        $types = [
+            'cumplimiento'        => 'normal',
+            'var_fact'            => 'index',
+            'ticket_promedio'     => 'normal',
+            'unidades'            => 'normal',
+            'porc_2do'            => 'normal',
+            'tickets'             => 'normal',
+            'ticket_promedio_2do' => 'normal',
+            'porc_3ro'            => 'normal',
+            'porc_cambios'        => 'inverse',
+            'porc_incremental'    => 'index',
+        ];
+
+        $sucList = array_values($byNro);
+        $cnt = count($sucList);
+        if ($cnt === 0) return [];
+
+        // Averages across all sucursales
+        $avgs = [];
+        foreach (array_keys($weights) as $kpi) {
+            $sum = 0.0;
+            foreach ($sucList as $s) { $sum += (float)($s[$kpi] ?? 0); }
+            $avgs[$kpi] = $cnt > 0 ? $sum / $cnt : 0.0;
+        }
+
+        $normalize = function(string $type, float $val, float $avg): float {
+            if ($type === 'inverse') {
+                return max(0.1, min(3.0, $val != 0 ? $avg / $val : ($avg >= 0 ? 3.0 : 0.1)));
+            } elseif ($type === 'index') {
+                $denom = 1.0 + $avg;
+                return max(0.1, min(3.0, $denom != 0 ? (1.0 + $val) / $denom : 1.0));
+            } else { // normal
+                return max(0.1, min(3.0, $avg != 0 ? $val / $avg : ($val > 0 ? 3.0 : 0.1)));
+            }
+        };
+
+        $result = [];
+        foreach ($sucList as $suc) {
+            $score   = 0.0;
+            $detalle = [];
+            foreach ($weights as $kpi => $w) {
+                $nv    = $normalize($types[$kpi], (float)$suc[$kpi], $avgs[$kpi]);
+                $contrib = $nv * $w;
+                $score  += $contrib;
+                $detalle[$kpi] = [
+                    'valor'    => round((float)$suc[$kpi], 6),
+                    'promedio' => round($avgs[$kpi],        6),
+                    'norm'     => round($nv,                4),
+                    'peso'     => $w,
+                    'contrib'  => round($contrib * 100, 2),
+                ];
+            }
+            $suc['score']   = round($score * 100, 2);
+            $suc['detalle'] = $detalle;
+            $result[]       = $suc;
+        }
+
+        usort($result, fn($a, $b) => $b['score'] <=> $a['score']);
+        foreach ($result as $i => &$s) { $s['rank'] = $i + 1; }
+        unset($s);
+
+        return $result;
+    }
+
+    /* ──────────────────────────────────────────────
+     *  MAILS (tickets con email válido)
+     * ────────────────────────────────────────────── */
+
     public function getMails(
         string $desde, string $hasta,
         ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null

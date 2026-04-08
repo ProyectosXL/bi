@@ -13,7 +13,7 @@ require_once __DIR__ . '/../class/config.php';
 $config     = getConfig();
 $showGrupos = $config['features']['grupos'];
 date_default_timezone_set('America/Argentina/Buenos_Aires');
-$ultimaAct  = date('d/m/Y H:i:s');
+$ultimaAct  = '—';
 $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
 ?>
 <!DOCTYPE html>
@@ -47,7 +47,7 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
             </div>
         </div>
         <div class="topbar-meta">
-            Última actualización<br>
+            Última fecha datos<br>
             <strong id="ultima-actualizacion"><?= $ultimaAct ?></strong>
         </div>
     </header>
@@ -94,10 +94,19 @@ $descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
             </div>
         </div>
 
-        <label for="sel-vendedor">Vendedor</label>
-        <select id="sel-vendedor">
-            <option value="%">Todos</option>
-        </select>
+        <label>Vendedor</label>
+        <div class="vendedor-dropdown" id="vendedor-dropdown">
+            <button class="vendedor-btn" id="vendedor-btn" type="button">
+                <span id="vendedor-label">Todos</span>
+                <i class="bi bi-chevron-down vendedor-chevron"></i>
+            </button>
+            <div class="vendedor-panel" id="vendedor-panel" hidden>
+                <input type="text" class="vendedor-search" id="vendedor-search" placeholder="Buscar vendedor...">
+                <ul class="vendedor-list" id="vendedor-list">
+                    <li class="vendedor-opt active" data-value="%">Todos</li>
+                </ul>
+            </div>
+        </div>
 
         <label for="sel-rubro">Rubro</label>
         <select id="sel-rubro">

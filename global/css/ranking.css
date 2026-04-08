@@ -1,0 +1,577 @@
+/* ═══════════════════════════════════════════════════════
+   Ranking Tab — Global Dashboard
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Toolbar ──────────────────────────────────────────── */
+.ranking-toolbar {
+    display        : flex;
+    align-items    : center;
+    justify-content: space-between;
+    gap            : 12px;
+    margin-bottom  : 14px;
+    flex-wrap      : wrap;
+}
+
+.ranking-toolbar .section-title {
+    font-family   : var(--font-display);
+    font-size     : 1.05rem;
+    font-weight   : 700;
+    color         : var(--text-1);
+    margin        : 0;
+    letter-spacing: .3px;
+}
+
+/* ── Layout tabla + sidebar ───────────────────────────── */
+.ranking-main-layout {
+    display              : grid;
+    grid-template-columns: minmax(0, 1400px) 320px;
+    gap                  : 14px;
+    align-items          : start;
+}
+
+/* ── Tabla ────────────────────────────────────────────── */
+.ranking-table-wrap {
+    overflow-x   : auto;
+    border-radius: var(--radius);
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    box-shadow   : var(--shadow);
+    max-width    : 1400px;
+}
+
+.ranking-table {
+    width           : 100%;
+    border-collapse : collapse;
+    font-size       : .82rem;
+    color           : var(--text-1);
+}
+
+.ranking-table thead th {
+    padding        : 10px 14px;
+    text-align     : left;
+    font-family    : var(--font-display);
+    font-size      : .75rem;
+    font-weight    : 700;
+    text-transform : uppercase;
+    letter-spacing : .06em;
+    color          : #fff;
+    background     : var(--bg-header);
+    border-bottom  : 1px solid var(--border);
+    white-space    : nowrap;
+    cursor         : pointer;
+    user-select    : none;
+    transition     : background .15s;
+}
+
+.ranking-table thead th:first-child { border-radius: var(--radius) 0 0 0; }
+.ranking-table thead th:last-child  { border-radius: 0 var(--radius) 0 0; }
+.ranking-table thead th:hover       { background: var(--bg-header2); }
+
+.ranking-table thead th.sort-asc::after  { content: ' ▲'; font-size: .65rem; }
+.ranking-table thead th.sort-desc::after { content: ' ▼'; font-size: .65rem; }
+
+.ranking-table tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition   : background .12s;
+    cursor       : pointer;
+}
+
+.ranking-table tbody tr:last-child { border-bottom: none; }
+.ranking-table tbody tr:nth-child(even) { background: var(--bg-card2); }
+.ranking-table tbody tr:hover { background: #eef2ff; }
+
+.ranking-table td {
+    padding       : 9px 14px;
+    white-space   : nowrap;
+    vertical-align: middle;
+    color         : var(--text-1);
+}
+
+/* Sucursal name — legible, bold */
+.ranking-table td.td-nombre {
+    font-weight: 700;
+    color      : var(--text-1);
+}
+
+/* ── Rank badge ───────────────────────────────────────── */
+.rank-badge {
+    display        : inline-flex;
+    align-items    : center;
+    justify-content: center;
+    width          : 26px;
+    height         : 26px;
+    border-radius  : 50%;
+    font-size      : .75rem;
+    font-weight    : 700;
+    background     : var(--bg-card2);
+    color          : var(--text-2);
+    border         : 1px solid var(--border);
+}
+
+.rank-badge.rank-1 { background: #fef9c3; color: #78350f; border-color: #fde68a; }
+.rank-badge.rank-2 { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+.rank-badge.rank-3 { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+
+/* ── Score pill ───────────────────────────────────────── */
+.score-pill {
+    display      : inline-flex;
+    align-items  : center;
+    padding      : 3px 10px;
+    border-radius: 20px;
+    font-size    : .80rem;
+    font-weight  : 700;
+    border       : 1px solid transparent;
+    white-space  : nowrap;
+}
+
+.score-pill.score-high { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+.score-pill.score-mid  { background: #fef9c3; color: #92400e; border-color: #fde68a; }
+.score-pill.score-low  { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+
+/* ── Mini bar ─────────────────────────────────────────── */
+.mini-bar-wrap {
+    display    : flex;
+    align-items: center;
+    gap        : 7px;
+}
+
+.mini-bar {
+    flex         : 1;
+    height       : 6px;
+    border-radius: 3px;
+    background   : var(--border);
+    min-width    : 50px;
+    max-width    : 90px;
+    overflow     : hidden;
+}
+
+.mini-bar-fill {
+    height       : 100%;
+    border-radius: 3px;
+    transition   : width .4s ease;
+}
+
+.score-gauge-wrap {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+}
+
+/* ── Color utilities ──────────────────────────────────── */
+.text-green  { color: var(--pos, #16a34a) !important; font-weight: 600; }
+.text-yellow { color: #b45309 !important; font-weight: 600; }
+.text-red    { color: var(--neg, #dc2626) !important; font-weight: 600; }
+
+/* ── Sidebar "Cómo se calcula" ────────────────────────── */
+.ranking-info-box {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    padding      : 14px 16px;
+    position     : sticky;
+    top          : 8px;
+    display      : flex;
+    flex-direction: column;
+    gap          : 12px;
+}
+
+.ranking-info-box h4 {
+    font-family: var(--font-display);
+    font-size  : .90rem;
+    font-weight: 700;
+    color      : var(--text-1);
+    margin     : 0;
+    display    : flex;
+    align-items: center;
+    gap        : 5px;
+}
+
+.rk-info-lead {
+    font-size  : .74rem;
+    color      : var(--text-2);
+    line-height: 1.55;
+    margin     : 0;
+}
+
+/* Steps */
+.rk-steps {
+    display       : flex;
+    flex-direction: column;
+    gap           : 8px;
+}
+
+.rk-step {
+    display    : flex;
+    gap        : 9px;
+    align-items: flex-start;
+    font-size  : .73rem;
+    color      : var(--text-2);
+    line-height: 1.5;
+}
+
+.rk-step-num {
+    flex-shrink    : 0;
+    width          : 20px;
+    height         : 20px;
+    border-radius  : 50%;
+    background     : var(--accent2);
+    color          : #fff;
+    font-size      : .68rem;
+    font-weight    : 700;
+    display        : flex;
+    align-items    : center;
+    justify-content: center;
+    margin-top     : 1px;
+}
+
+/* Example box */
+.rk-example {
+    background   : #f0f4ff;
+    border       : 1px solid #c7d4f8;
+    border-radius: var(--radius-sm);
+    padding      : 10px 12px;
+}
+
+.rk-example-title {
+    font-family  : var(--font-display);
+    font-size    : .75rem;
+    font-weight  : 700;
+    color        : var(--accent2);
+    margin-bottom: 7px;
+    display      : flex;
+    align-items  : center;
+    gap          : 5px;
+}
+
+.rk-example-calc {
+    background   : #fff;
+    border       : 1px solid #dde6ff;
+    border-radius: 4px;
+    overflow     : hidden;
+}
+
+.rk-calc-row {
+    display        : flex;
+    justify-content: space-between;
+    align-items    : center;
+    padding        : 4px 9px;
+    font-size      : .72rem;
+    color          : var(--text-2);
+    border-bottom  : 1px solid #f0f4ff;
+}
+
+.rk-calc-row:last-child { border-bottom: none; }
+
+.rk-calc-row strong {
+    color      : var(--text-1);
+    font-weight: 600;
+}
+
+.rk-calc-result {
+    background: #f0f4ff;
+    font-weight: 600;
+}
+
+/* Legend */
+.rk-legend {
+    display       : flex;
+    flex-direction: column;
+    gap           : 5px;
+}
+
+.rk-legend-item {
+    display    : flex;
+    align-items: center;
+    gap        : 7px;
+    font-size  : .73rem;
+    color      : var(--text-2);
+}
+
+.rk-dot {
+    width        : 10px;
+    height       : 10px;
+    border-radius: 50%;
+    flex-shrink  : 0;
+}
+
+.dot-green  { background: #16a34a; }
+.dot-yellow { background: #b45309; }
+.dot-red    { background: #dc2626; }
+
+/* Collapsible weights */
+.rk-weights-detail {
+    border-top : 1px solid var(--border);
+    padding-top: 10px;
+}
+
+.rk-weights-detail summary {
+    font-size  : .74rem;
+    font-weight: 600;
+    color      : var(--text-2);
+    cursor     : pointer;
+    user-select: none;
+    list-style : none;
+    display    : flex;
+    align-items: center;
+    gap        : 5px;
+}
+
+.rk-weights-detail summary::before {
+    content    : '▶';
+    font-size  : .55rem;
+    transition : transform .15s;
+    color      : var(--text-3);
+}
+
+.rk-weights-detail[open] summary::before { transform: rotate(90deg); }
+
+.weight-table {
+    width          : 100%;
+    border-collapse: collapse;
+    font-size      : .73rem;
+    margin-top     : 8px;
+}
+
+.weight-table th {
+    text-align    : left;
+    color         : var(--text-3);
+    font-weight   : 700;
+    padding       : 4px 6px 4px 0;
+    border-bottom : 1px solid var(--border);
+    font-family   : var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.weight-table td {
+    padding      : 4px 6px 4px 0;
+    color        : var(--text-2);
+    border-bottom: 1px solid var(--bg-card2);
+}
+
+.weight-table td:last-child {
+    text-align : right;
+    font-weight: 700;
+    color      : var(--text-1);
+}
+
+/* ── Loading / empty states ───────────────────────────── */
+.ranking-loading,
+.ranking-empty {
+    text-align: center;
+    padding   : 48px 24px;
+    color     : var(--text-3);
+    font-size : .85rem;
+}
+
+.ranking-loading .spinner {
+    display         : inline-block;
+    width           : 28px;
+    height          : 28px;
+    border          : 3px solid var(--border);
+    border-top-color: var(--accent2);
+    border-radius   : 50%;
+    animation       : rk-spin .7s linear infinite;
+    margin-bottom   : 10px;
+}
+
+@keyframes rk-spin { to { transform: rotate(360deg); } }
+
+/* ── Modal overlay ────────────────────────────────────── */
+.ranking-modal-overlay {
+    position       : fixed;
+    inset          : 0;
+    background     : rgba(8,14,36,.82);
+    z-index        : 2000;
+    display        : flex;
+    align-items    : center;
+    justify-content: center;
+    padding        : 20px;
+    animation      : rk-fade .18s ease;
+}
+
+@keyframes rk-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── Modal (dark) ─────────────────────────────────────── */
+.ranking-modal {
+    background   : #0f1b3d;
+    border       : 1px solid rgba(255,255,255,.10);
+    border-radius: var(--radius);
+    padding      : 24px 26px;
+    width        : 100%;
+    max-width    : 800px;
+    max-height   : 92vh;
+    overflow-y   : auto;
+    position     : relative;
+    box-shadow   : 0 20px 60px rgba(0,0,0,.55);
+    animation    : rk-slide .2s ease;
+}
+
+@keyframes rk-slide {
+    from { transform: translateY(14px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+.ranking-modal-close {
+    position       : absolute;
+    top            : 14px;
+    right          : 14px;
+    background     : rgba(255,255,255,.08);
+    border         : 1px solid rgba(255,255,255,.12);
+    color          : #9ba8c8;
+    width          : 28px;
+    height         : 28px;
+    border-radius  : 50%;
+    font-size      : 1rem;
+    cursor         : pointer;
+    display        : flex;
+    align-items    : center;
+    justify-content: center;
+    transition     : background .15s, color .15s;
+    line-height    : 1;
+}
+
+.ranking-modal-close:hover {
+    background  : rgba(255,255,255,.18);
+    color       : #fff;
+    border-color: rgba(255,255,255,.25);
+}
+
+.ranking-modal-title {
+    font-family: var(--font-display);
+    font-size  : 1.2rem;
+    font-weight: 700;
+    color      : #e0e8ff;
+    margin     : 0 34px 2px 0;
+}
+
+.ranking-modal-subtitle {
+    font-size: .76rem;
+    color    : #7b8fc0;
+    margin   : 0 0 18px;
+}
+
+/* Score display (dark) */
+.modal-score-display {
+    display      : flex;
+    align-items  : center;
+    gap          : 16px;
+    margin-bottom: 20px;
+    padding      : 14px 16px;
+    background   : rgba(255,255,255,.04);
+    border-radius: var(--radius-sm);
+    border       : 1px solid rgba(255,255,255,.07);
+}
+
+.modal-score-number {
+    font-family: var(--font-display);
+    font-size  : 2.4rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.modal-score-label {
+    font-size     : .70rem;
+    color         : #7b8fc0;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-top    : 3px;
+}
+
+.modal-score-rank {
+    margin-left: auto;
+    text-align : right;
+}
+
+.modal-score-rank .rank-num {
+    font-family: var(--font-display);
+    font-size  : 1.6rem;
+    font-weight: 800;
+    color      : #c9d4f0;
+}
+
+.modal-score-rank .rank-label {
+    font-size     : .68rem;
+    color         : #7b8fc0;
+    text-transform: uppercase;
+}
+
+/* Contrib chart */
+.contrib-chart-wrap { margin-bottom: 18px; }
+
+.contrib-chart-title {
+    font-family   : var(--font-display);
+    font-size     : .73rem;
+    font-weight   : 700;
+    color         : #7b8fc0;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-bottom : 10px;
+}
+
+/* KPI detail grid (dark) */
+.kpi-detail-grid {
+    display              : grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap                  : 10px;
+}
+
+.kpi-detail-card {
+    background   : rgba(255,255,255,.04);
+    border       : 1px solid rgba(255,255,255,.08);
+    border-radius: var(--radius-sm);
+    padding      : 10px 12px;
+}
+
+.kpi-detail-name {
+    font-family   : var(--font-display);
+    font-size     : .70rem;
+    font-weight   : 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color         : #7b8fc0;
+    margin-bottom : 6px;
+}
+
+.kpi-detail-row {
+    display        : flex;
+    justify-content: space-between;
+    align-items    : center;
+    font-size      : .74rem;
+    color          : #9ba8c8;
+    margin-bottom  : 2px;
+}
+
+.kpi-detail-row strong {
+    color      : #c9d4f0;
+    font-weight: 600;
+}
+
+.kpi-detail-contrib {
+    margin-top : 6px;
+    display    : flex;
+    align-items: center;
+    gap        : 6px;
+}
+
+.contrib-bar {
+    flex         : 1;
+    height       : 5px;
+    border-radius: 3px;
+    background   : rgba(255,255,255,.08);
+    overflow     : hidden;
+}
+
+.contrib-bar-fill {
+    height       : 100%;
+    border-radius: 3px;
+    transition   : width .4s ease;
+}
+
+.contrib-val {
+    font-size  : .70rem;
+    font-weight: 700;
+    min-width  : 28px;
+    text-align : right;
+}

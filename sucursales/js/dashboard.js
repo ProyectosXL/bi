@@ -1101,7 +1101,9 @@ const Dashboard = (() => {
                 document.getElementById('periodo-previo-label').textContent =
                     `vs ${per.desde_prev.split('-').reverse().join('/')} - ${per.hasta_prev.split('-').reverse().join('/')} (${per.dias_prev}d)`;
                 document.getElementById('ultima-actualizacion').textContent =
-                    new Date().toLocaleString('es-AR');
+                    kpisData.ultima_fecha
+                        ? kpisData.ultima_fecha.split('-').reverse().join('/')
+                        : new Date().toLocaleDateString('es-AR');
 
                 /* ── KPI Summary ── */
                 setEl('fact-act',   fmt.money(act.facturacion));
@@ -1276,18 +1278,67 @@ const Dashboard = (() => {
         try {
             const filtrosData = await apiFetch('filtros.php');
 
-            const selVendedor = document.getElementById('sel-vendedor');
-            if (selVendedor && filtrosData.vendedores) {
+            const vendedorList = document.getElementById('vendedor-list');
+            const vendedorBtn  = document.getElementById('vendedor-btn');
+            const vendedorPanel = document.getElementById('vendedor-panel');
+            const vendedorSearch = document.getElementById('vendedor-search');
+            const vendedorLabel = document.getElementById('vendedor-label');
+
+            if (vendedorList && filtrosData.vendedores) {
                 const campoVend = filtrosData.campo_vendedor || 'DESC_VENDEDOR';
+
+                // Poblar lista
                 filtrosData.vendedores.forEach(v => {
-                    const opt = document.createElement('option');
-                    opt.value = v[campoVend];
-                    opt.textContent = v[campoVend];
-                    selVendedor.appendChild(opt);
+                    const li = document.createElement('li');
+                    li.className = 'vendedor-opt';
+                    li.dataset.value = v[campoVend];
+                    li.textContent = v[campoVend];
+                    vendedorList.appendChild(li);
                 });
-                selVendedor.addEventListener('change', () => {
-                    state.vendedor = selVendedor.value;
+
+                // Seleccionar opción
+                function selectVendedor(value, label) {
+                    state.vendedor = value;
+                    vendedorLabel.textContent = label;
+                    vendedorPanel.hidden = true;
+                    vendedorBtn.classList.remove('open');
+                    vendedorSearch.value = '';
+                    vendedorList.querySelectorAll('.vendedor-opt').forEach(li => {
+                        li.classList.toggle('active', li.dataset.value === value);
+                        li.hidden = false;
+                    });
+                }
+
+                vendedorList.addEventListener('click', e => {
+                    const li = e.target.closest('.vendedor-opt');
+                    if (li) selectVendedor(li.dataset.value, li.textContent);
                 });
+
+                // Búsqueda
+                vendedorSearch.addEventListener('input', () => {
+                    const q = vendedorSearch.value.toLowerCase();
+                    vendedorList.querySelectorAll('.vendedor-opt').forEach(li => {
+                        li.hidden = q && !li.textContent.toLowerCase().includes(q);
+                    });
+                });
+
+                // Abrir/cerrar
+                vendedorBtn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const open = !vendedorPanel.hidden;
+                    vendedorPanel.hidden = open;
+                    vendedorBtn.classList.toggle('open', !open);
+                    if (!open) { vendedorSearch.focus(); vendedorSearch.select(); }
+                });
+
+                // Cerrar al hacer click fuera
+                document.addEventListener('click', () => {
+                    if (!vendedorPanel.hidden) {
+                        vendedorPanel.hidden = true;
+                        vendedorBtn.classList.remove('open');
+                    }
+                });
+                vendedorPanel.addEventListener('click', e => e.stopPropagation());
             }
 
             const selRubro = document.getElementById('sel-rubro');

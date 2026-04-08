@@ -316,10 +316,10 @@ body.is-loading .toolbar {
 }
 .summary-prev-value {
     font-family: var(--font-display);
-    font-size: 1.4rem;
+    font-size  : 1.4rem;
     font-weight: 600;
-    color: var(--text-2);
-    margin-top: 2px;
+    color      : var(--text-2);
+    margin-top : 2px;
 }
 .summary-prev { font-size: .75rem; color: var(--text-3); margin-top: 1px; }
 .summary-bench { font-size: .68rem; color: var(--text-2); margin-top: 3px; font-weight: 500; }
@@ -1240,13 +1240,105 @@ body.is-loading .donut-container::after {
     z-index      : 5;
 }
 
-/* ── RESPONSIVE ────────────────────────────────────── */
-@media (max-width: 1600px) {
-    .summary-row  { grid-template-columns: repeat(3,1fr); }
+/* ── VENDEDOR SEARCHABLE DROPDOWN ──────────────────── */
+.vendedor-dropdown { position: relative; }
+
+.vendedor-btn {
+    background   : rgba(255,255,255,.12);
+    border       : 1px solid rgba(255,255,255,.2);
+    color        : #ffffff;
+    border-radius: var(--radius-sm);
+    padding      : 5px 10px;
+    font-family  : var(--font-body);
+    font-size    : .82rem;
+    cursor       : pointer;
+    display      : flex;
+    align-items  : center;
+    gap          : 8px;
+    min-width    : 130px;
+    transition   : border-color var(--transition), background var(--transition);
+    white-space  : nowrap;
 }
+.vendedor-btn:hover,
+.vendedor-btn.open { border-color: var(--accent); background: rgba(255,255,255,.2); }
+
+.vendedor-chevron {
+    margin-left: auto;
+    font-size  : .7rem;
+    transition : transform .15s;
+    flex-shrink: 0;
+}
+.vendedor-btn.open .vendedor-chevron { transform: rotate(180deg); }
+
+.vendedor-panel {
+    position     : absolute;
+    top          : calc(100% + 4px);
+    left         : 0;
+    background   : #fff;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow   : 0 8px 24px rgba(0,0,0,.18);
+    z-index      : 500;
+    min-width    : 200px;
+    max-width    : 280px;
+    overflow     : hidden;
+}
+
+.vendedor-search {
+    width        : 100%;
+    border       : none;
+    border-bottom: 1px solid var(--border);
+    padding      : 8px 10px;
+    font-family  : var(--font-body);
+    font-size    : .82rem;
+    color        : var(--text-1);
+    outline      : none;
+    background   : var(--bg-card2);
+}
+.vendedor-search::placeholder { color: var(--text-3); }
+
+.vendedor-list {
+    list-style : none;
+    max-height : 220px;
+    overflow-y : auto;
+    padding    : 4px 0;
+}
+
+.vendedor-opt {
+    padding        : 6px 12px;
+    font-size      : .82rem;
+    color          : var(--text-1);
+    cursor         : pointer;
+    transition     : background .1s;
+    white-space    : nowrap;
+    overflow       : hidden;
+    text-overflow  : ellipsis;
+}
+.vendedor-opt:hover              { background: var(--bg-card2); }
+.vendedor-opt.active             { color: var(--accent); font-weight: 600; }
+
+/* ── RESPONSIVE ────────────────────────────────────── */
+
+/* Notebook 15" (~1366–1600px): mantener 5 columnas, achicar contenido */
+@media (max-width: 1600px) {
+    .summary-card   { padding: 10px 12px; min-height: 95px; gap: 10px; }
+    .summary-icon   { font-size: 1.7rem; }
+    .summary-value  { font-size: 1.6rem; }
+    .summary-var    { font-size: 1rem; }
+    .summary-prev-value { font-size: 1.05rem; }
+    .summary-sparkline canvas { width: 90px !important; }
+}
+
 @media (max-width: 1400px) {
     .summary-row  { grid-template-columns: repeat(3,1fr); }
     .kpi-grid     { grid-template-columns: repeat(3,1fr); }
+    /* Con 3 columnas hay más espacio: restaurar tamaños */
+    .summary-card   { padding: 14px 16px; min-height: 115px; gap: 14px; }
+    .summary-icon   { font-size: 2.2rem; }
+    .summary-value  { font-size: 2.2rem; }
+    .summary-var    { font-size: 1.3rem; }
+    .summary-prev-value { font-size: 1.4rem; }
+    .summary-sparkline canvas { width: 120px !important; }
 }
 @media (max-width: 1100px) {
     .summary-row  { grid-template-columns: repeat(2,1fr); }
