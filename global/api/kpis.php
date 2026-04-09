@@ -102,13 +102,31 @@ try {
     }
 
     // ── Serie para sparklines (no crítica — no cancela el resto) ───
+    $serie_act  = [];
+    $serie_prev = [];
+    $serie_cumpl = [];
     try {
         $serie_act  = $db->getSerieFacturacion($desde_act,  $hasta_act,  $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
         $serie_prev = $db->getSerieFacturacion($desde_prev, $hasta_prev, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
-    } catch (Throwable $_) {
-        $serie_act  = [];
-        $serie_prev = [];
-    }
+
+        // Serie cumplimiento acumulado vs objetivo diario
+        $obj_diario = $db->getSerieObjetivo($desde_act, $hasta_act, $grupo, $tipoTienda);
+        $fact_map   = array_column($serie_act, 'facturacion', 'fecha');
+        $cum_fact   = 0.0;
+        $cum_obj    = 0.0;
+        $cursor     = new DateTime($desde_act);
+        $end        = new DateTime($hasta_act);
+        while ($cursor <= $end) {
+            $f         = $cursor->format('Y-m-d');
+            $cum_fact += (float)($fact_map[$f]   ?? 0);
+            $cum_obj  += (float)($obj_diario[$f] ?? 0);
+            $serie_cumpl[] = [
+                'fecha'        => $f,
+                'cumplimiento' => $cum_obj > 0 ? ($cum_fact - $cum_obj) / $cum_obj : 0,
+            ];
+            $cursor->modify('+1 day');
+        }
+    } catch (Throwable $_) {}
 
     // ── Tabla Facturación vs Objetivos por sucursal ─
     $factPorSuc = $db->getFacturacionPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda);
@@ -220,8 +238,9 @@ try {
             'porc_incremental'    => $bench_incr['porc_incremental'],
         ],
         'serie' => [
-            'actual' => $serie_act,
-            'previo' => $serie_prev,
+            'actual'       => $serie_act,
+            'previo'       => $serie_prev,
+            'cumplimiento' => $serie_cumpl,
         ],
         'tabla_sucursales' => $tablaSucursales,
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

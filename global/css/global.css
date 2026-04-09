@@ -4,6 +4,33 @@
    Requiere base.css y components.css ya cargados.
    ============================================================ */
 
+/* ── Origen toggle en topbar ─────────────────────────────── */
+.origen-toggle {
+    display      : flex;
+    align-items  : center;
+    gap          : 2px;
+    background   : rgba(0,0,0,.25);
+    border-radius: var(--radius-sm);
+    padding      : 3px;
+    margin-left  : 16px;
+    flex-shrink  : 0;
+}
+.origen-btn {
+    background   : transparent;
+    border       : none;
+    color        : rgba(255,255,255,.65);
+    font-family  : var(--font-body);
+    font-size    : .78rem;
+    font-weight  : 500;
+    padding      : 4px 12px;
+    border-radius: var(--radius-sm);
+    cursor       : pointer;
+    transition   : background var(--transition), color var(--transition);
+    white-space  : nowrap;
+}
+.origen-btn:hover              { background: rgba(255,255,255,.12); color: #fff; }
+.origen-btn.active             { background: var(--accent); color: #fff; font-weight: 600; }
+
 /* ── Filtros solo Argentina ──────────────────────────────── */
 .ar-only-wrap {
     display: inline-flex;
@@ -343,12 +370,20 @@
 .kpi-spark:hover { opacity: 1; }
 .kpi-spark canvas { display: block; }
 
-/* ── BOTTOM SECTION ────────────────────────────────────── */
+/* ── BOTTOM SECTION (tabla + ranking) ─────────────────── */
 .bottom-section {
-    display: grid;
+    display              : grid;
     grid-template-columns: minmax(0,820px) 1fr;
-    gap: 12px;
-    align-items: start;
+    gap                  : 12px;
+    align-items          : start;
+}
+
+/* ── DONUTS ROW (participación + medios pago) ──────────── */
+.donuts-row {
+    display              : grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap                  : 12px;
+    align-items          : start;
 }
 
 .table-card {
@@ -403,12 +438,28 @@
 
 .donut-container {
     display        : flex;
-    flex-direction : column;
-    align-items    : stretch;
-    padding        : 8px 10px;
+    flex-direction : row;
+    align-items    : flex-start;
+    padding        : 10px 12px;
+    gap            : 12px;
     min-height     : 300px;
 }
-.donut-container canvas { max-height: 180px; }
+.donut-chart-wrapper {
+    width     : 200px;
+    flex-shrink: 0;
+    height    : 260px;
+    position  : relative;
+}
+.donut-container canvas { max-height: 260px; }
+
+/* ── Sparkline objetivo cumplimiento ───────────────────── */
+.obj-sparkline {
+    width    : 100%;
+    margin-top: 8px;
+}
+.obj-sparkline canvas {
+    width : 100%;
+}
 
 /* ── ANÁLISIS layout extras ────────────────────────────── */
 .analisis-content { flex: 1; }
@@ -433,7 +484,7 @@
 
 .rubros-cards-grid {
     display              : grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(5, 1fr);
     gap                  : 10px;
 }
 
@@ -759,15 +810,12 @@
     align-items : center;
     gap         : 8px;
 }
-.donut-chart-wrapper {
-    height   : 200px;
-    width    : 100%;
-    position : relative;
-}
 .donut-legend {
-    max-height : 130px;
+    flex       : 1;
+    min-width  : 0;
     overflow-y : auto;
-    margin-top : 6px;
+    max-height : 260px;
+    padding-top: 4px;
 }
 .donut-legend-item {
     display     : flex;

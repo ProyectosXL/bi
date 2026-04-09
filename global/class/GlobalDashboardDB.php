@@ -270,13 +270,14 @@ class GlobalDashboardDB
             FROM BI_SALES_TOTAL_TICKETS t
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND t.T_COMP = 'FAC' {$sfT}
-              AND CAST(t.FECHA AS DATE) IN (
-                  SELECT DISTINCT CAST(i2.FECHA AS DATE)
+              AND EXISTS (
+                  SELECT 1
                   FROM BI_T_INGRESOS_SUCURSALES i2
-                  WHERE i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
-                  {$sfI}
+                  WHERE i2.NRO_SUCURS = t.NRO_SUCURS
+                    AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
+                    AND i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
               )
-        ", array_merge([$desde, $hasta], $pT, [$desde, $hasta], $pI));
+        ", array_merge([$desde, $hasta], $pT, [$desde, $hasta]));
 
         $ingresos = (int)($rowI['total_ingresos'] ?? 0);
         $tickets  = (int)($rowT['total_tickets']  ?? 0);
@@ -432,6 +433,30 @@ class GlobalDashboardDB
                 'ingresos'            => $ingresos,
                 'conversion'          => $ingresos > 0 ? $tickets / $ingresos : 0,
             ];
+        }
+        return $result;
+    }
+
+    /* ──────────────────────────────────────────────
+     *  SERIE DIARIA OBJETIVO
+     * ────────────────────────────────────────────── */
+
+    public function getSerieObjetivo(
+        string $desde, string $hasta,
+        ?string $grupo = null, ?string $tipoTienda = null
+    ): array {
+        $fp = $this->fp(null, '%', '%', $grupo, $tipoTienda);
+        [$sfO, $pO] = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURSAL');
+        $rows = $this->query("
+            SELECT CAST(o.FECHA AS DATE) AS fecha, ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo
+            FROM {$this->tablaObjetivos} o
+            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO}
+            GROUP BY CAST(o.FECHA AS DATE)
+            ORDER BY 1 ASC
+        ", array_merge([$desde, $hasta], $pO));
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['fecha']->format('Y-m-d')] = (float)$row['objetivo'];
         }
         return $result;
     }

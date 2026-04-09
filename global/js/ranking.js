@@ -28,7 +28,7 @@ const Ranking = (() => {
     /* ── Leer parámetros del DOM ──────────────────────────── */
     function buildQS() {
         const p = {
-            origen     : ($('sel-origen')?.value     ?? 'argentina'),
+            origen     : (document.querySelector('.origen-btn.active')?.dataset.origen ?? 'argentina'),
             periodo    : ($('sel-periodo')?.value    ?? 'mes_actual'),
             grupo      : ($('sel-grupo')?.value      ?? ''),
             tipo_tienda: ($('sel-tipo-tienda')?.value ?? ''),

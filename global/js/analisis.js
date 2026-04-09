@@ -46,12 +46,22 @@ const Analisis = (() => {
     }
 
     /* ── Render: cards rubros ────────────────── */
+    const RUBROS_CLAVE = [
+        'BILLETERAS DE VINILICO',
+        'CALZADOS',
+        'CAMPERAS',
+        'CARTERAS DE CUERO',
+        'CARTERAS DE VINILICO',
+    ];
+
     function renderCardsRubros(rubros) {
         const wrap = document.getElementById('analisis-rubros-cards');
         if (!wrap) return;
         if (!rubros?.length) { wrap.innerHTML = '<div style="color:var(--text-3);font-size:.85rem">Sin datos</div>'; return; }
-        // Ordenar por unidades descendente, top 10
-        const top = [...rubros].sort((a, b) => (b.unidades ?? 0) - (a.unidades ?? 0)).slice(0, 10);
+        // Mostrar solo los 5 rubros clave en el orden predefinido
+        const top = RUBROS_CLAVE
+            .map(nombre => rubros.find(r => (r.RUBRO ?? r.rubro ?? '') === nombre))
+            .filter(Boolean);
         wrap.innerHTML = top.map(r => {
             const val  = r.unidades ?? 0;
             const prev = r.unidades_prev ?? 0;
@@ -344,6 +354,13 @@ const Analisis = (() => {
         });
     }
 
+    /* ── Carga ranking unidades (usada también desde KPIs tab) ── */
+    async function loadRankingUnidades() {
+        const d = await apiFetch('ranking_rubros');
+        const rubros = d.rubros ?? [];
+        renderRanking('analisis-ranking-unidades', rubros, 'unidades', numFmt);
+    }
+
     /* ── Carga principal ─────────────────────── */
     async function loadAll() {
         document.body.classList.add('is-loading');
@@ -374,5 +391,5 @@ const Analisis = (() => {
         }
     }
 
-    return { loadAll };
+    return { loadAll, loadRankingUnidades };
 })();

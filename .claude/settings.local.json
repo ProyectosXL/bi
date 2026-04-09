@@ -12,7 +12,12 @@
       "Bash(/c/xampp/php/php.exe -l /c/xampp/htdocs/bi/class/PeriodHelper.php)",
       "Bash(/c/xampp/php/php.exe -l /c/xampp/htdocs/bi/class/config.php)",
       "Bash(/c/xampp/php/php.exe -l /c/xampp/htdocs/bi/sucursales/class/DashboardDB.php)",
-      "Bash(/c/xampp/php/php.exe -l /c/xampp/htdocs/bi/global/class/GlobalDashboardDB.php)"
+      "Bash(/c/xampp/php/php.exe -l /c/xampp/htdocs/bi/global/class/GlobalDashboardDB.php)",
+      "Bash(php -l v:/bi/global/api/kpis.php)",
+      "Bash(php -l v:/bi/global/class/GlobalDashboardDB.php)",
+      "Bash(php -l v:/bi/global/index.php)",
+      "Bash(python3 -c ':*)",
+      "Bash(node -e ':*)"
     ]
   }
 }

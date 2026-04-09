@@ -342,73 +342,151 @@ const Dashboard = (() => {
         const min = Math.min(...values);
         const max = Math.max(...values);
         const range = max - min || 1;
+        const n = values.length;
         const pts = values.map((v, i) => ({
-            x: (i / (values.length - 1)) * W,
-            y: H - ((v - min) / range) * (H - 4) - 2,
+            x: n > 1 ? (i / (n - 1)) * W : W / 2,
+            y: H - ((v - min) / range) * (H - 6) - 3,
             value: v,
             date: dates?.[i] || ''
         }));
-        
-        // área rellena
-        const grad = ctx.createLinearGradient(0, 0, 0, H);
-        grad.addColorStop(0, color + '55');
-        grad.addColorStop(1, color + '00');
+
+        // ── Área con degradado vertical (más opaco arriba, transparente abajo) ──
+        const areaGrad = ctx.createLinearGradient(0, 0, 0, H);
+        areaGrad.addColorStop(0,   color + '40');
+        areaGrad.addColorStop(0.6, color + '18');
+        areaGrad.addColorStop(1,   color + '00');
         ctx.beginPath();
         ctx.moveTo(pts[0].x, H);
-        pts.forEach(p => ctx.lineTo(p.x, p.y));
-        ctx.lineTo(pts[pts.length-1].x, H);
+        for (let i = 0; i < n - 1; i++) {
+            const cpx = (pts[i].x + pts[i+1].x) / 2;
+            ctx.bezierCurveTo(cpx, pts[i].y, cpx, pts[i+1].y, pts[i+1].x, pts[i+1].y);
+        }
+        ctx.lineTo(pts[n-1].x, H);
         ctx.closePath();
-        ctx.fillStyle = grad;
+        ctx.fillStyle = areaGrad;
         ctx.fill();
-        
-        // línea
+
+        // ── Línea con degradado horizontal (inicio más tenue → final más intenso) ──
+        const lineGrad = ctx.createLinearGradient(0, 0, W, 0);
+        lineGrad.addColorStop(0,   color + '66');
+        lineGrad.addColorStop(0.5, color + 'bb');
+        lineGrad.addColorStop(1,   color);
         ctx.beginPath();
-        pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 0; i < n - 1; i++) {
+            const cpx = (pts[i].x + pts[i+1].x) / 2;
+            ctx.bezierCurveTo(cpx, pts[i].y, cpx, pts[i+1].y, pts[i+1].x, pts[i+1].y);
+        }
+        ctx.strokeStyle = lineGrad;
+        ctx.lineWidth   = 2;
+        ctx.lineJoin    = 'round';
         ctx.stroke();
-        
-        // Agregar interactividad con tooltip
+
+        // ── Puntos intermedios (pequeños, relleno blanco + borde color) ──
+        pts.slice(0, -1).forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+            ctx.fillStyle   = '#fff';
+            ctx.fill();
+            ctx.strokeStyle = color + 'aa';
+            ctx.lineWidth   = 1.5;
+            ctx.stroke();
+        });
+
+        // ── Último punto destacado (más grande, color sólido) ──
+        const last = pts[n - 1];
+        ctx.beginPath();
+        ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle   = color;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth   = 1.5;
+        ctx.stroke();
+
+        // ── Tooltip interactivo con highlight del punto más cercano ──
+        let hoveredIdx = -1;
         let tooltip = document.getElementById('sparkline-tooltip-' + canvasId);
         if (!tooltip) {
             tooltip = document.createElement('div');
-            tooltip.id = 'sparkline-tooltip-' + canvasId;
+            tooltip.id        = 'sparkline-tooltip-' + canvasId;
             tooltip.className = 'sparkline-tooltip';
             tooltip.style.display = 'none';
             document.body.appendChild(tooltip);
         }
-        
-        // Evento de mouse
+
+        function redrawHighlight(idx) {
+            ctx.clearRect(0, 0, W, H);
+
+            // re-área
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, H);
+            for (let i = 0; i < n - 1; i++) {
+                const cpx = (pts[i].x + pts[i+1].x) / 2;
+                ctx.bezierCurveTo(cpx, pts[i].y, cpx, pts[i+1].y, pts[i+1].x, pts[i+1].y);
+            }
+            ctx.lineTo(pts[n-1].x, H);
+            ctx.closePath();
+            ctx.fillStyle = areaGrad;
+            ctx.fill();
+
+            // re-línea
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 0; i < n - 1; i++) {
+                const cpx = (pts[i].x + pts[i+1].x) / 2;
+                ctx.bezierCurveTo(cpx, pts[i].y, cpx, pts[i+1].y, pts[i+1].x, pts[i+1].y);
+            }
+            ctx.strokeStyle = lineGrad;
+            ctx.lineWidth   = 2;
+            ctx.lineJoin    = 'round';
+            ctx.stroke();
+
+            // re-puntos
+            pts.slice(0, -1).forEach((p, i) => {
+                const isHov = i === idx;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, isHov ? 4 : 2, 0, Math.PI * 2);
+                ctx.fillStyle   = isHov ? color : '#fff';
+                ctx.fill();
+                ctx.strokeStyle = isHov ? '#fff' : color + 'aa';
+                ctx.lineWidth   = 1.5;
+                ctx.stroke();
+            });
+
+            // último punto
+            const isLastHov = idx === n - 1;
+            ctx.beginPath();
+            ctx.arc(last.x, last.y, isLastHov ? 5.5 : 4, 0, Math.PI * 2);
+            ctx.fillStyle   = color;
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth   = isLastHov ? 2 : 1.5;
+            ctx.stroke();
+        }
+
         canvas.onmousemove = (e) => {
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            
-            // Encontrar punto más cercano
-            let closest = pts[0];
-            let minDist = Math.abs(x - pts[0].x);
-            pts.forEach(p => {
-                const dist = Math.abs(x - p.x);
-                if (dist < minDist) {
-                    minDist = dist;
-                    closest = p;
-                }
+            const x    = e.clientX - rect.left;
+            let newIdx = 0, minDist = Math.abs(x - pts[0].x);
+            pts.forEach((p, i) => {
+                const d = Math.abs(x - p.x);
+                if (d < minDist) { minDist = d; newIdx = i; }
             });
-            
-            // Mostrar tooltip
-            if (minDist < 20) {
-                const formattedValue = formatFn(closest.value);
-                const formattedDate = closest.date
-                    ? new Date(closest.date + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' })
-                    : '';
-                tooltip.innerHTML = `<span class="tooltip-date">${formattedDate}</span><span class="tooltip-value">${formattedValue}</span>`;
-                tooltip.style.display = 'block';
-                tooltip.style.left = (e.clientX + 10) + 'px';
-                tooltip.style.top = (e.clientY - 40) + 'px';
-            } else {
+            if (minDist > 20) {
                 tooltip.style.display = 'none';
+                if (hoveredIdx !== -1) { hoveredIdx = -1; redrawHighlight(-1); }
+                return;
             }
+            if (newIdx !== hoveredIdx) { hoveredIdx = newIdx; redrawHighlight(newIdx); }
+            const p   = pts[newIdx];
+            const fv  = formatFn(p.value);
+            const fd  = p.date ? new Date(p.date + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '';
+            tooltip.innerHTML     = `<span class="tooltip-date">${fd}</span><span class="tooltip-value">${fv}</span>`;
+            tooltip.style.display = 'block';
+            tooltip.style.left    = (e.clientX + 10) + 'px';
+            tooltip.style.top     = (e.clientY - 40) + 'px';
         };
-        
+
         canvas.onmouseleave = () => {
             tooltip.style.display = 'none';
         };

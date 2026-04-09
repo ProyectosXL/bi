@@ -55,6 +55,11 @@ $ultimaAct = date('d/m/Y H:i:s');
                 <span id="periodo-label">—</span> <span id="periodo-previo-label"></span>
             </div>
         </div>
+        <div class="origen-toggle" id="origen-toggle">
+            <button class="origen-btn active" data-origen="argentina">Argentina</button>
+            <button class="origen-btn" data-origen="uruguay">Uruguay</button>
+            <button class="origen-btn" data-origen="franquicias">Franquicias</button>
+        </div>
         <div class="topbar-meta">
             Última actualización<br>
             <strong id="ultima-actualizacion"><?= $ultimaAct ?></strong>
@@ -63,13 +68,6 @@ $ultimaAct = date('d/m/Y H:i:s');
 
     <!-- ══ TOOLBAR ══════════════════════════════════════════════════════ -->
     <div class="toolbar">
-        <label for="sel-origen">Origen</label>
-        <select id="sel-origen">
-            <option value="argentina" selected>Argentina</option>
-            <option value="uruguay">Uruguay</option>
-            <option value="franquicias">Franquicias</option>
-        </select>
-
         <label for="sel-sucursal">Sucursal</label>
         <select id="sel-sucursal">
             <option value="">Todas</option>
@@ -209,6 +207,9 @@ $ultimaAct = date('d/m/Y H:i:s');
                                 <div class="summary-prev-label">Objetivo Total</div>
                                 <div class="summary-prev-value" id="obj-total">—</div>
                             </div>
+                        </div>
+                        <div class="summary-sparkline obj-sparkline">
+                            <canvas id="spark-obj" width="200" height="38"></canvas>
                         </div>
                     </div>
                 </div>
@@ -370,7 +371,7 @@ $ultimaAct = date('d/m/Y H:i:s');
             </div>
             <!-- /kpi-grid -->
 
-            <!-- ── TABLA FACTURACIÓN VS OBJETIVOS + DONUTS ────────── -->
+            <!-- ── TABLA + RANKING UNIDADES ──────────────────────── -->
             <div class="bottom-section">
 
                 <div class="table-card">
@@ -396,37 +397,51 @@ $ultimaAct = date('d/m/Y H:i:s');
                     </div>
                 </div>
 
-                <div class="donuts-section">
-                    <div class="donut-card">
-                        <div class="donut-card-header">
-                            <i class="bi bi-pie-chart-fill"></i>&nbsp; Participación Unidades
-                            <button class="info-btn"
-                                data-info-title="Participación Unidades"
-                                data-info-tips="Hacé clic en un segmento para ver el detalle|Pasá el cursor sobre cada segmento para ver porcentaje y unidades">
-                                <i class="bi bi-info-circle"></i>
-                            </button>
-                        </div>
-                        <div id="donut-unidades-wrap" class="donut-container"></div>
+                <div class="analisis-card" style="margin:0;min-height:0">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-bar-chart-fill"></i> Ranking Rubros — Unidades
                     </div>
-                    <div class="donut-card">
-                        <div class="donut-card-header">
-                            <i class="bi bi-pie-chart-fill"></i>&nbsp; Participación Facturación
-                            <button class="info-btn"
-                                data-info-title="Participación Facturación"
-                                data-info-tips="Hacé clic en un segmento para ver el detalle|Pasá el cursor sobre cada segmento para ver porcentaje e importe">
-                                <i class="bi bi-info-circle"></i>
-                            </button>
-                        </div>
-                        <div id="donut-facturacion-wrap" class="donut-container"></div>
+                    <div id="analisis-ranking-unidades" style="padding:8px 12px;max-height:380px;overflow-y:auto">
+                        <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
                     </div>
-                    <div class="donut-card">
-                        <div class="donut-card-header">
-                            <i class="bi bi-credit-card-fill"></i>&nbsp; Medio de Pago
-                            <span style="margin-left:6px;font-size:.70rem;opacity:.8;font-weight:400">clic TARJETA → cuotas</span>
-                        </div>
-                        <div id="medios-pago-wrap" class="donut-container" style="flex-direction:column;align-items:stretch;padding:8px">
-                            <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
-                        </div>
+                </div>
+
+            </div>
+
+            <!-- ── DONUTS: PARTICIPACIÓN + MEDIOS DE PAGO ────────── -->
+            <div class="donuts-row">
+
+                <div class="donut-card">
+                    <div class="donut-card-header">
+                        <i class="bi bi-pie-chart-fill"></i>&nbsp; Participación Unidades
+                        <button class="info-btn"
+                            data-info-title="Participación Unidades"
+                            data-info-tips="Hacé clic en un segmento para ver el detalle|Pasá el cursor sobre cada segmento para ver porcentaje y unidades">
+                            <i class="bi bi-info-circle"></i>
+                        </button>
+                    </div>
+                    <div id="donut-unidades-wrap" class="donut-container"></div>
+                </div>
+
+                <div class="donut-card">
+                    <div class="donut-card-header">
+                        <i class="bi bi-pie-chart-fill"></i>&nbsp; Participación Facturación
+                        <button class="info-btn"
+                            data-info-title="Participación Facturación"
+                            data-info-tips="Hacé clic en un segmento para ver el detalle|Pasá el cursor sobre cada segmento para ver porcentaje e importe">
+                            <i class="bi bi-info-circle"></i>
+                        </button>
+                    </div>
+                    <div id="donut-facturacion-wrap" class="donut-container"></div>
+                </div>
+
+                <div class="donut-card">
+                    <div class="donut-card-header">
+                        <i class="bi bi-credit-card-fill"></i>&nbsp; Medio de Pago
+                        <span style="margin-left:6px;font-size:.70rem;opacity:.8;font-weight:400">clic TARJETA → cuotas</span>
+                    </div>
+                    <div id="medios-pago-wrap" class="donut-container" style="flex-direction:row;align-items:stretch;padding:8px">
+                        <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
                     </div>
                 </div>
 
@@ -451,22 +466,12 @@ $ultimaAct = date('d/m/Y H:i:s');
                 </div>
             </div>
 
-            <div class="ranking-analisis-wrap">
-                <div class="analisis-card">
-                    <div class="analisis-section-header">
-                        <i class="bi bi-bar-chart-fill"></i> Ranking Rubros — Unidades
-                    </div>
-                    <div id="analisis-ranking-unidades" style="padding:8px 12px;max-height:300px;overflow-y:auto">
-                        <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
-                    </div>
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-bar-chart-fill"></i> Ranking Rubros — Facturación
                 </div>
-                <div class="analisis-card">
-                    <div class="analisis-section-header">
-                        <i class="bi bi-bar-chart-fill"></i> Ranking Rubros — Facturación
-                    </div>
-                    <div id="analisis-ranking-facturacion" style="padding:8px 12px;max-height:300px;overflow-y:auto">
-                        <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
-                    </div>
+                <div id="analisis-ranking-facturacion" style="padding:8px 12px;max-height:300px;overflow-y:auto">
+                    <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
                 </div>
             </div>
 
@@ -943,17 +948,25 @@ $ultimaAct = date('d/m/Y H:i:s');
         document.getElementById(t.btn).addEventListener('click', () => activateTab(t.pane));
     });
 
-    // Mostrar/ocultar filtros de Argentina
-    const origenSel = document.getElementById('sel-origen');
+    // Origen toggle buttons
     function toggleArFilters() {
-        const isAr = origenSel.value === 'argentina';
-        document.getElementById('grupo-wrap').style.display     = isAr ? '' : 'none';
+        const activeBtn = document.querySelector('.origen-btn.active');
+        const isAr = (activeBtn?.dataset.origen ?? 'argentina') === 'argentina';
+        document.getElementById('grupo-wrap').style.display      = isAr ? '' : 'none';
         document.getElementById('tipo-tienda-wrap').style.display = isAr ? '' : 'none';
     }
-    origenSel.addEventListener('change', () => {
-        toggleArFilters();
-        // Al cambiar origen, recargar filtros dependientes
-        Dashboard.loadFilters();
+    document.querySelectorAll('.origen-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.origen-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            toggleArFilters();
+            Object.keys(loaded).forEach(k => loaded[k] = false);
+            Dashboard.loadFilters().then(() => {
+                const activePane = document.querySelector('.tab-pane.active');
+                const tab = TABS.find(t => t.pane === activePane?.id) ?? TABS[0];
+                loadTab(tab.name);
+            });
+        });
     });
     toggleArFilters();
 

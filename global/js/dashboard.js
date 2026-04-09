@@ -28,8 +28,9 @@ const Dashboard = (() => {
 
     /* ── Leer parámetros del DOM ─────────────── */
     function getParams(extra = {}) {
+        const origenActive = document.querySelector('.origen-btn.active');
         const p = {
-            origen    : ($('sel-origen')?.value      ?? 'argentina'),
+            origen    : (origenActive?.dataset.origen ?? 'argentina'),
             periodo   : ($('sel-periodo')?.value     ?? 'mes_actual'),
             vendedor  : ($('sel-vendedor')?.value    ?? '%'),
             rubro     : ($('sel-rubro')?.value       ?? '%'),
@@ -75,14 +76,60 @@ const Dashboard = (() => {
         if (!canvas) return;
         if (charts[canvasId]) { charts[canvasId].destroy(); delete charts[canvasId]; }
 
+        // Botón expandir (igual que en sucursales)
+        const wrap = canvas.parentElement;
+        if (wrap && !wrap.querySelector('.spark-expand-btn')) {
+            wrap.style.position = 'relative';
+            const btn = document.createElement('button');
+            btn.className = 'spark-expand-btn';
+            btn.dataset.spark = canvasId;
+            btn.title = 'Ver gráfico ampliado';
+            btn.innerHTML = '<i class="bi bi-arrows-angle-expand"></i>';
+            wrap.appendChild(btn);
+        }
+
+        // Dot markers: small for intermediate points, larger for last point
+        const n = values.length;
+        const pointRadii        = values.map((_, i) => i === n - 1 ? 5   : 2.5);
+        const pointBgColors     = values.map((_, i) => i === n - 1 ? color : '#ffffff');
+        const pointBorderColors = values.map((_, i) => i === n - 1 ? '#ffffff' : color + 'aa');
+        const pointHoverRadii   = values.map((_, i) => i === n - 1 ? 7   : 5);
+
+        // Area gradient (vertical): rich at top, transparent at bottom
+        const makeAreaGrad = (c, chartArea) => {
+            if (!chartArea) return color + '20';
+            const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            g.addColorStop(0,   color + '40');
+            g.addColorStop(0.6, color + '18');
+            g.addColorStop(1,   color + '00');
+            return g;
+        };
+
+        // Line gradient (horizontal): fades in left-to-right for tonal variation
+        const makeLineGrad = (c, chartArea) => {
+            if (!chartArea) return color;
+            const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+            g.addColorStop(0,   color + '66');
+            g.addColorStop(0.5, color + 'bb');
+            g.addColorStop(1,   color);
+            return g;
+        };
+
         const datasets = [{
-            data            : values,
-            borderColor     : color,
-            borderWidth     : 1.5,
-            pointRadius     : 0,
-            tension         : 0.3,
-            fill            : true,
-            backgroundColor : color.replace(')', ',.12)').replace('rgb', 'rgba'),
+            data                     : values,
+            borderColor              : ctxObj => makeLineGrad(ctxObj.chart.ctx, ctxObj.chart.chartArea),
+            borderWidth              : 2,
+            tension                  : 0.4,
+            fill                     : true,
+            backgroundColor          : ctxObj => makeAreaGrad(ctxObj.chart.ctx, ctxObj.chart.chartArea),
+            pointRadius              : pointRadii,
+            pointBackgroundColor     : pointBgColors,
+            pointBorderColor         : pointBorderColors,
+            pointBorderWidth         : 1.5,
+            pointHoverRadius         : pointHoverRadii,
+            pointHoverBackgroundColor: color,
+            pointHoverBorderColor    : '#ffffff',
+            pointHoverBorderWidth    : 2,
         }];
         if (prevValues?.length) {
             datasets.push({
@@ -140,6 +187,79 @@ const Dashboard = (() => {
                 elements: { line: { capBezierPoints: false } },
             }
         });
+    }
+
+    /* ── Sparkline bi-color cumplimiento objetivo ─────────── */
+    function drawSparklineObj(canvasId, values, dates) {
+        const canvas = $(canvasId);
+        if (!canvas || !values?.length) return;
+
+        const C_POS = '#16a34a';
+        const C_NEG = '#dc2626';
+        SparkModal.register(canvasId, values, dates, C_POS, fmt.varPct, 'Cumplimiento Objetivo');
+
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+
+        const min   = Math.min(...values, 0);
+        const max   = Math.max(...values, 0);
+        const range = max - min || 1;
+        const toY   = v => H - ((v - min) / range) * (H - 4) - 2;
+        const toX   = i => values.length > 1 ? (i / (values.length - 1)) * W : W / 2;
+        const pts   = values.map((v, i) => ({ x: toX(i), y: toY(v), value: v, date: dates?.[i] || '' }));
+        const zeroY = toY(0);
+
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, 0, W, zeroY); ctx.clip();
+        const gPos = ctx.createLinearGradient(0, 0, 0, zeroY);
+        gPos.addColorStop(0, C_POS + '55'); gPos.addColorStop(1, C_POS + '00');
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, zeroY);
+        pts.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.lineTo(pts[pts.length - 1].x, zeroY);
+        ctx.closePath();
+        ctx.fillStyle = gPos; ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, zeroY, W, H - zeroY); ctx.clip();
+        const gNeg = ctx.createLinearGradient(0, zeroY, 0, H);
+        gNeg.addColorStop(0, C_NEG + '00'); gNeg.addColorStop(1, C_NEG + '55');
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, zeroY);
+        pts.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.lineTo(pts[pts.length - 1].x, zeroY);
+        ctx.closePath();
+        ctx.fillStyle = gNeg; ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.beginPath(); ctx.moveTo(0, zeroY); ctx.lineTo(W, zeroY);
+        ctx.strokeStyle = 'rgba(100,120,160,0.45)'; ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([]);
+        ctx.restore();
+
+        ctx.lineWidth = 2; ctx.lineJoin = 'round';
+        for (let i = 0; i < pts.length - 1; i++) {
+            const p1 = pts[i], p2 = pts[i + 1];
+            const v1 = values[i], v2 = values[i + 1];
+            if ((v1 >= 0) === (v2 >= 0)) {
+                ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+                ctx.strokeStyle = v1 >= 0 ? C_POS : C_NEG; ctx.stroke();
+            } else {
+                const t = Math.abs(v1) / (Math.abs(v1) + Math.abs(v2));
+                const xMid = p1.x + t * (p2.x - p1.x);
+                ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(xMid, zeroY);
+                ctx.strokeStyle = v1 >= 0 ? C_POS : C_NEG; ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(xMid, zeroY); ctx.lineTo(p2.x, p2.y);
+                ctx.strokeStyle = v2 >= 0 ? C_POS : C_NEG; ctx.stroke();
+            }
+        }
+        const last = pts[pts.length - 1];
+        ctx.beginPath(); ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = values[values.length - 1] >= 0 ? C_POS : C_NEG;
+        ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
     }
 
     /* ── DonutManager: donuts con drilldown ─── */
@@ -241,16 +361,9 @@ const Dashboard = (() => {
             const wrap = $(wrapperId);
             if (!wrap) return;
 
-            // Mostrar breadcrumb y actualizar título
-            const bc = wrap.querySelector('.donut-breadcrumb');
-            if (bc) bc.style.display = 'block';
-            const titleEl = wrap.querySelector('.donut-title');
-            if (titleEl) {
-                const label = dataKey === 'facturacion'
-                    ? `% Participación $ por categoría — ${rubroName}`
-                    : `% Participación Unid. por categoría — ${rubroName}`;
-                titleEl.textContent = label;
-            }
+            // Mostrar botón volver
+            const headerEl = wrap.querySelector('.donut-header-row');
+            if (headerEl) headerEl.style.display = 'block';
 
             // Caché
             const ck = `${wrapperId}_${rubroName}`;
@@ -286,25 +399,22 @@ const Dashboard = (() => {
             _cache[wrapperId] = { originalRows: rows, dataKey, originalTitle: title ?? '' };
             wrap.innerHTML = '';
 
-            // Breadcrumb (oculto)
-            const bc = document.createElement('div');
-            bc.className = 'donut-breadcrumb';
-            bc.style.display = 'none';
-            bc.innerHTML = '<button class="btn-volver">← Volver</button>';
-            bc.querySelector('.btn-volver').addEventListener('click', () => {
+            // Breadcrumb: ocupa el ancho completo fuera del flex (absolute-like via wrapper)
+            const headerEl = document.createElement('div');
+            headerEl.className = 'donut-header-row';
+            headerEl.style.cssText = 'position:absolute;top:6px;left:10px;z-index:5;display:none';
+
+            const bc = document.createElement('button');
+            bc.className = 'btn-volver';
+            bc.textContent = '← Volver';
+            bc.addEventListener('click', () => {
                 _state[wrapperId] = { level: 1 };
-                bc.style.display = 'none';
-                const titleEl = wrap.querySelector('.donut-title');
-                if (titleEl) titleEl.textContent = _cache[wrapperId].originalTitle;
+                headerEl.style.display = 'none';
                 _renderChart(wrapperId, rows, 'RUBRO', dataKey, false);
             });
-            wrap.appendChild(bc);
-
-            // Título
-            const titleEl = document.createElement('div');
-            titleEl.className = 'donut-title';
-            titleEl.textContent = title ?? '';
-            wrap.appendChild(titleEl);
+            headerEl.appendChild(bc);
+            wrap.style.position = 'relative';
+            wrap.appendChild(headerEl);
 
             _renderChart(wrapperId, rows, 'RUBRO', dataKey, false);
         }
@@ -393,11 +503,51 @@ const Dashboard = (() => {
                 const dt = new Date(d + 'T00:00:00');
                 return _DIAS_ABR[dt.getDay()] + ' ' + String(dt.getDate()).padStart(2, '0');
             });
+
+            // Dot markers
+            const mn = values.length;
+            const mPointRadii    = values.map((_, i) => i === mn - 1 ? 6   : 3);
+            const mPointBgColors = values.map((_, i) => i === mn - 1 ? color : '#ffffff');
+            const mPointBdColors = values.map((_, i) => i === mn - 1 ? '#ffffff' : color + 'aa');
+            const mPointHover    = values.map((_, i) => i === mn - 1 ? 8   : 5);
+
+            const makeModalAreaGrad = (c, chartArea) => {
+                if (!chartArea) return color + '20';
+                const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                g.addColorStop(0,   color + '50');
+                g.addColorStop(0.6, color + '20');
+                g.addColorStop(1,   color + '00');
+                return g;
+            };
+            const makeModalLineGrad = (c, chartArea) => {
+                if (!chartArea) return color;
+                const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+                g.addColorStop(0,   color + '66');
+                g.addColorStop(0.5, color + 'bb');
+                g.addColorStop(1,   color);
+                return g;
+            };
+
             _modalChart = new Chart($('spark-modal-canvas'), {
                 type: 'line',
                 data: {
                     labels  : modalLabels,
-                    datasets: [{ data: values, borderColor: color, borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true, backgroundColor: color.replace(')', ',.08)').replace('rgb', 'rgba') }]
+                    datasets: [{
+                        data                     : values,
+                        borderColor              : ctxObj => makeModalLineGrad(ctxObj.chart.ctx, ctxObj.chart.chartArea),
+                        borderWidth              : 2,
+                        tension                  : 0.4,
+                        fill                     : true,
+                        backgroundColor          : ctxObj => makeModalAreaGrad(ctxObj.chart.ctx, ctxObj.chart.chartArea),
+                        pointRadius              : mPointRadii,
+                        pointBackgroundColor     : mPointBgColors,
+                        pointBorderColor         : mPointBdColors,
+                        pointBorderWidth         : 1.5,
+                        pointHoverRadius         : mPointHover,
+                        pointHoverBackgroundColor: color,
+                        pointHoverBorderColor    : '#ffffff',
+                        pointHoverBorderWidth    : 2,
+                    }]
                 },
                 options: {
                     responsive: true,
@@ -879,6 +1029,15 @@ const Dashboard = (() => {
         setVarDiff('card-incr-var', v.porc_incremental, false, fmt.pct(p.porc_incremental),  fmt.pct(a.porc_incremental));
         setText('card-incr-bench',  fmt.pct(b.porc_incremental));
 
+        // Sparkline objetivo cumplimiento (mismo estilo que los demás, con expand)
+        if (d.serie?.cumplimiento?.length) {
+            const cumpl      = d.serie.cumplimiento;
+            const cumplVals  = cumpl.map(r => r.cumplimiento);
+            const cumplDates = cumpl.map(r => r.fecha);
+            sparkLine('spark-obj', cumplVals, '#2563eb', null, cumplDates);
+            SparkModal.register('spark-obj', cumplVals, cumplDates, '#2563eb', n => fmt.varPct(n), 'Cumplimiento Objetivo');
+        }
+
         // Sparklines
         if (d.serie?.actual?.length) {
             const sa = d.serie.actual;
@@ -964,6 +1123,7 @@ const Dashboard = (() => {
             // Async — no bloquean
             loadDonuts();
             MediosPago.loadAll();
+            if (typeof Analisis !== 'undefined') Analisis.loadRankingUnidades().catch(e => console.error('[Dashboard] ranking_unidades:', e));
         } catch(e) {
             console.error('[Dashboard]', e);
         } finally {
