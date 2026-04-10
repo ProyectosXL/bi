@@ -10,11 +10,18 @@ if (!isset($_SESSION['username'])) {
 }
 require_once __DIR__ . '/../class/config.php';
 $tipoSesion = $_SESSION['tipo'] ?? '';
-if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION'], true)) {
+if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
     header('Location: ../');
     exit;
 }
-$descLabel = $tipoSesion === 'GERENCIA' ? 'GERENCIA' : 'SUPERVISIÓN';
+$isGrupo         = ($tipoSesion === 'GRUPO');
+$esGrupo         = $isGrupo && !empty($_SESSION['esGrupo']);
+$sucursalesGrupo = $isGrupo ? ($_SESSION['sucursalesGrupo'] ?? []) : [];
+if ($isGrupo) {
+    $descLabel = $_SESSION['descLocal'] ?? 'GRUPO';
+} else {
+    $descLabel = $tipoSesion === 'GERENCIA' ? 'GERENCIA' : 'SUPERVISIÓN';
+}
 date_default_timezone_set('America/Argentina/Buenos_Aires');
 $ultimaAct = date('d/m/Y H:i:s');
 ?>
@@ -56,11 +63,13 @@ $ultimaAct = date('d/m/Y H:i:s');
                 <span id="periodo-label">—</span> <span id="periodo-previo-label"></span>
             </div>
         </div>
+        <?php if (!$isGrupo): ?>
         <div class="origen-toggle" id="origen-toggle">
             <button class="origen-btn active" data-origen="argentina">Argentina</button>
             <button class="origen-btn" data-origen="uruguay">Uruguay</button>
             <button class="origen-btn" data-origen="franquicias">Franquicias</button>
         </div>
+        <?php endif; ?>
         <div class="moneda-toggle" id="moneda-toggle">
             <button class="moneda-btn active" data-moneda="ARS">ARS</button>
             <button class="moneda-btn" data-moneda="USD">USD</button>
@@ -92,6 +101,7 @@ $ultimaAct = date('d/m/Y H:i:s');
             <option value="">Todas</option>
         </select>
 
+        <?php if (!$isGrupo): ?>
         <span class="ar-only-wrap" id="grupo-wrap">
             <label for="sel-grupo">Grupo</label>
             <select id="sel-grupo">
@@ -105,6 +115,7 @@ $ultimaAct = date('d/m/Y H:i:s');
                 <option value="">Todos</option>
             </select>
         </span>
+        <?php endif; ?>
 
         <label for="sel-periodo">Período</label>
         <select id="sel-periodo">
@@ -160,10 +171,12 @@ $ultimaAct = date('d/m/Y H:i:s');
             <i class="bi bi-check2"></i> Aplicar
         </button>
 
+        <?php if (!$isGrupo): ?>
         <label class="comp-radio-label" style="margin-left:8px;white-space:nowrap" id="wrap-solo-activas">
             <input type="checkbox" id="chk-solo-activas">
             Solo activas
         </label>
+        <?php endif; ?>
     </div>
 
     <!-- ══ NAVEGACIÓN DE PESTAÑAS ══════════════════════════════════════ -->
@@ -177,18 +190,22 @@ $ultimaAct = date('d/m/Y H:i:s');
         <button class="tab-btn" id="tab-btn-producto" role="tab" aria-controls="tab-producto" aria-selected="false">
             <i class="bi bi-box-seam"></i>&nbsp; Producto
         </button>
+        <?php if (!$isGrupo || $esGrupo): ?>
         <button class="tab-btn" id="tab-btn-cadena" role="tab" aria-controls="tab-cadena" aria-selected="false">
             <i class="bi bi-diagram-3"></i>&nbsp; Cadena
         </button>
         <button class="tab-btn" id="tab-btn-participacion" role="tab" aria-controls="tab-participacion" aria-selected="false">
             <i class="bi bi-grid-3x3-gap-fill"></i>&nbsp; Participación
         </button>
+        <?php endif; ?>
         <button class="tab-btn" id="tab-btn-vendedoras" role="tab" aria-controls="tab-vendedoras" aria-selected="false">
             <i class="bi bi-people-fill"></i>&nbsp; Vendedoras
         </button>
+        <?php if (!$isGrupo || $esGrupo): ?>
         <button class="tab-btn" id="tab-btn-ranking" role="tab" aria-controls="tab-ranking" aria-selected="false">
             <i class="bi bi-trophy"></i>&nbsp; Ranking
         </button>
+        <?php endif; ?>
         <button class="tab-reload-btn" id="btn-reload-tab" title="Recargar pestaña">
             <i class="bi bi-arrow-clockwise"></i>
         </button>
@@ -949,6 +966,14 @@ foreach ($jsFiles as $f):
 <?php endforeach; ?>
 
 <script>
+window.BI_CONFIG = {
+    isGrupo:         <?= $isGrupo ? 'true' : 'false' ?>,
+    esGrupo:         <?= $esGrupo ? 'true' : 'false' ?>,
+    sucursalesGrupo: <?= json_encode($sucursalesGrupo) ?>
+};
+</script>
+
+<script>
 /**
  * Orquestador: tabs + aplicar + reload.
  * Lee los filtros del DOM y coordina los módulos.
@@ -963,7 +988,7 @@ foreach ($jsFiles as $f):
         { btn: 'tab-btn-participacion',  pane: 'tab-participacion',  name: 'participacion' },
         { btn: 'tab-btn-vendedoras',     pane: 'tab-vendedoras',     name: 'vendedoras'    },
         { btn: 'tab-btn-ranking',        pane: 'tab-ranking',        name: 'ranking'       },
-    ];
+    ].filter(t => document.getElementById(t.btn) !== null);
 
     const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false };
 
@@ -998,12 +1023,14 @@ foreach ($jsFiles as $f):
         document.getElementById(t.btn).addEventListener('click', () => activateTab(t.pane));
     });
 
-    // Origen toggle buttons
+    // Origen toggle buttons (not rendered for GRUPO)
     function toggleArFilters() {
         const activeBtn = document.querySelector('.origen-btn.active');
         const isAr = (activeBtn?.dataset.origen ?? 'argentina') === 'argentina';
-        document.getElementById('grupo-wrap').style.display      = isAr ? '' : 'none';
-        document.getElementById('tipo-tienda-wrap').style.display = isAr ? '' : 'none';
+        const grupoEl     = document.getElementById('grupo-wrap');
+        const tipoTiendaEl = document.getElementById('tipo-tienda-wrap');
+        if (grupoEl)      grupoEl.style.display      = isAr ? '' : 'none';
+        if (tipoTiendaEl) tipoTiendaEl.style.display = isAr ? '' : 'none';
     }
     document.querySelectorAll('.origen-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1076,7 +1103,9 @@ foreach ($jsFiles as $f):
     }
 
     // Carga inicial
-    Dashboard.loadFilters().then(() => loadTab('kpis'));
+    Dashboard.loadFilters()
+        .then(() => loadTab('kpis'))
+        .catch(err => console.error('[Dashboard] Error en carga inicial:', err));
 
 })();
 </script>

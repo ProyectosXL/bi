@@ -19,20 +19,31 @@ try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
 
     if (!isset($_SESSION['username'])) throw new RuntimeException('No autenticado');
-    if (!in_array($_SESSION['tipo'] ?? '', ['GERENCIA', 'SUPERVISION'], true)) {
+    $tipoSesion = $_SESSION['tipo'] ?? '';
+    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'Acceso denegado']);
         exit;
     }
 
-    $origen     = $_GET['origen']      ?? 'argentina';
+    $isGrupo    = ($tipoSesion === 'GRUPO');
+    $origen     = $isGrupo ? 'franquicias' : ($_GET['origen'] ?? 'argentina');
     $periodo    = $_GET['periodo']     ?? 'mes_actual';
     $action     = $_GET['action']      ?? '';
     $sucursal   = isset($_GET['sucursal'])   && $_GET['sucursal']   !== '' ? (int)$_GET['sucursal']   : null;
     $grupo      = isset($_GET['grupo'])      && $_GET['grupo']      !== '' ? $_GET['grupo']      : null;
     $tipoTienda = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
 
-    if ($origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
+    if ($isGrupo || $origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
+
+    // GRUPO: validar sucursal solicitada
+    if ($isGrupo && $sucursal !== null) {
+        if (!in_array($sucursal, $_SESSION['sucursalesGrupo'] ?? [], true)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Sucursal no autorizada']);
+            exit;
+        }
+    }
 
     if ($periodo === 'custom') {
         $desde = (isset($_GET['desde']) && $_GET['desde'] !== '') ? $_GET['desde'] : date('Y-m-01');
@@ -58,6 +69,13 @@ try {
         'rubro'       => '%',
     ];
     [$sfS, $pS] = Filters::build($fp, 's', $cv, $origen, false, false);
+
+    // GRUPO: restringir por sucursales permitidas
+    if ($isGrupo) {
+        [$sfG, $pG] = Filters::sucursalesGrupo($_SESSION['sucursalesGrupo'] ?? [], 's');
+        $sfS .= ' ' . $sfG;
+        $pS   = array_merge($pS, $pG);
+    }
 
     sqlsrv_configure('WarningsReturnAsErrors', 0);
 

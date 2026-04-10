@@ -17,25 +17,37 @@ try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
 
     if (!isset($_SESSION['username'])) throw new RuntimeException('No autenticado');
-    if (!in_array($_SESSION['tipo'] ?? '', ['GERENCIA', 'SUPERVISION'], true)) {
+    $tipoSesion = $_SESSION['tipo'] ?? '';
+    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'Acceso denegado']);
         exit;
     }
 
+    $isGrupo = ($tipoSesion === 'GRUPO');
+
     // Override session tipo para que AnalisisDB use la db del origen seleccionado
-    $origen = $_GET['origen'] ?? 'argentina';
+    $origen = $isGrupo ? 'franquicias' : ($_GET['origen'] ?? 'argentina');
     $origenToTipo = [
         'argentina'   => 'LOCAL_PROPIO',
         'uruguay'     => 'LOCAL_PROPIO_UY',
         'franquicias' => 'FRANQUICIA',
     ];
-    // Inyectar temporalmente el tipo para que getConfig() resuelva la DB correcta
-    $tipoOriginal        = $_SESSION['tipo'];
-    $_SESSION['tipo']    = $origenToTipo[$origen] ?? 'LOCAL_PROPIO';
+    // Inyectar temporalmente el tipo para que AnalisisDB (que usa getConfig()) resuelva la DB correcta.
+    $tipoOriginal     = $_SESSION['tipo'];
+    $_SESSION['tipo'] = $origenToTipo[$origen] ?? 'LOCAL_PROPIO';
     // No filtrar por sucursal (global: null = todas)
     $numsucOriginal      = $_SESSION['numsuc'] ?? null;
     $sucursal = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? (int)$_GET['sucursal'] : null;
+
+    // GRUPO: validar sucursal solicitada
+    if ($isGrupo && $sucursal !== null) {
+        if (!in_array($sucursal, $_SESSION['sucursalesGrupo'] ?? [], true)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Sucursal no autorizada']);
+            exit;
+        }
+    }
     $_SESSION['numsuc']  = $sucursal ?? null; // null = sin filtro
 
     $action   = $_GET['action']   ?? 'ranking_rubros';
@@ -58,6 +70,9 @@ try {
     }
 
     $db = new AnalisisDB();
+    if ($isGrupo && !empty($_SESSION['sucursalesGrupo'])) {
+        $db->setGrupoSucursales($_SESSION['sucursalesGrupo']);
+    }
 
     $response = ['ok' => true];
     switch ($action) {
@@ -107,9 +122,14 @@ try {
             // Usa GlobalDashboardDB para soporte multi-origen, filtros completos y
             // UNION ALL con tablas BK históricas.
             require_once __DIR__ . '/../class/GlobalDashboardDB.php';
-            $grupo_evo      = isset($_GET['grupo'])      && $_GET['grupo']      !== '' ? $_GET['grupo']      : null;
-            $tipoTienda_evo = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+            $grupo_evo      = (!$isGrupo && isset($_GET['grupo'])      && $_GET['grupo']      !== '') ? $_GET['grupo']      : null;
+            $tipoTienda_evo = (!$isGrupo && isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '') ? $_GET['tipo_tienda'] : null;
             $dbGlobal       = new GlobalDashboardDB($origen);
+            // Para GRUPO: $_SESSION['tipo'] fue sobreescrito a 'FRANQUICIA'; inyectar sucursales
+            // explícitamente para que grupoFiltro() funcione sin leer la sesión.
+            if ($isGrupo && !empty($_SESSION['sucursalesGrupo'])) {
+                $dbGlobal->setGrupoSucursales($_SESSION['sucursalesGrupo']);
+            }
             if ($action === 'evolucion_facturacion') {
                 $response['evolucion'] = $dbGlobal->getEvolucionMensualFacturacion(
                     $sucursal, $vendedor, $rubro, $grupo_evo, $tipoTienda_evo

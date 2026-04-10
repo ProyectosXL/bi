@@ -20,22 +20,33 @@ try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
 
     if (!isset($_SESSION['username'])) throw new RuntimeException('No autenticado');
-    if (!in_array($_SESSION['tipo'] ?? '', ['GERENCIA', 'SUPERVISION'], true)) {
+    $tipoSesion = $_SESSION['tipo'] ?? '';
+    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'Acceso denegado']);
         exit;
     }
 
-    $origen     = $_GET['origen']      ?? 'argentina';
+    $isGrupo    = ($tipoSesion === 'GRUPO');
+    $origen     = $isGrupo ? 'franquicias' : ($_GET['origen'] ?? 'argentina');
     $periodo    = $_GET['periodo']     ?? 'mes_actual';
     $rubro      = $_GET['rubro']       ?? '%';
     $sucursal   = isset($_GET['sucursal'])   && $_GET['sucursal']   !== '' ? (int)$_GET['sucursal']   : null;
     $grupo      = isset($_GET['grupo'])      && $_GET['grupo']      !== '' ? $_GET['grupo']      : null;
     $tipoTienda = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
 
-    if ($origen !== 'argentina') {
+    if ($isGrupo || $origen !== 'argentina') {
         $grupo      = null;
         $tipoTienda = null;
+    }
+
+    // GRUPO: validar sucursal solicitada
+    if ($isGrupo && $sucursal !== null) {
+        if (!in_array($sucursal, $_SESSION['sucursalesGrupo'] ?? [], true)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Sucursal no autorizada']);
+            exit;
+        }
     }
 
     if ($periodo === 'custom') {

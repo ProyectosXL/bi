@@ -12,6 +12,7 @@ class ParticipacionDB
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
 
         $cfg = getConfigForOrigen($origen);
         $this->origen = $origen;
@@ -34,6 +35,13 @@ class ParticipacionDB
         }
         sqlsrv_free_stmt($stmt);
         return $rows;
+    }
+
+    private function grupoFiltro(string $alias): array
+    {
+        if (($_SESSION['tipo'] ?? '') !== 'GRUPO') return ['', []];
+        $suc = $_SESSION['sucursalesGrupo'] ?? [];
+        return Filters::sucursalesGrupo($suc, $alias);
     }
 
     /**
@@ -65,6 +73,9 @@ class ParticipacionDB
             $sfG .= " AND s.NRO_SUCURS IN (SELECT sl.NRO_SUCURSAL FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WHERE sl.TIPO_TIENDA = ?)";
             $pG[] = $tipoTienda;
         }
+        [$sfGS, $pGS] = $this->grupoFiltro('s');
+        $sfG .= ' ' . $sfGS;
+        $pG   = array_merge($pG, $pGS);
 
         // Top rubros por facturación global del período
         $topRows = $this->query("

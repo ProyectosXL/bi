@@ -25,19 +25,23 @@ try {
         throw new RuntimeException('No autenticado');
     }
     $tipoSesion = $_SESSION['tipo'] ?? '';
-    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION'], true)) {
+    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'Acceso denegado']);
         exit;
     }
 
-    $origen      = $_GET['origen']  ?? 'argentina';
+    $isGrupo     = ($tipoSesion === 'GRUPO');
+    $origen      = $isGrupo ? 'franquicias' : ($_GET['origen']  ?? 'argentina');
     $periodo     = $_GET['periodo'] ?? 'mes_actual';
     $grupo       = isset($_GET['grupo'])       && $_GET['grupo']       !== '' ? $_GET['grupo']       : null;
     $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
-    $soloActivas = isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
+    $soloActivas = !$isGrupo && isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
-    if ($origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
+    if ($isGrupo || $origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
+
+    // GRUPO: validar sucursal solicitada (score no recibe sucursal, pero score usa getSucursalesLista)
+    // La restricción se aplica en GlobalDashboardDB::grupoFiltro()
 
     if ($periodo === 'custom') {
         $da        = (isset($_GET['desde']) && $_GET['desde'] !== '') ? $_GET['desde'] : date('Y-m-01');
@@ -71,7 +75,10 @@ try {
     // Nombres de sucursales
     $sucNombres = [];
     try {
-        foreach ($db->getSucursalesLista() as $s) {
+        $lista = $isGrupo
+            ? $db->getSucursalesPorIds($_SESSION['sucursalesGrupo'] ?? [])
+            : $db->getSucursalesLista();
+        foreach ($lista as $s) {
             $sucNombres[(int)$s['NRO_SUCURS']] = $s['DESC_SUCURSAL'] ?? ('Suc. ' . $s['NRO_SUCURS']);
         }
     } catch (Throwable $_) {}

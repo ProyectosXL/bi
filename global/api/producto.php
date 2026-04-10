@@ -16,13 +16,15 @@ try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
 
     if (!isset($_SESSION['username'])) throw new RuntimeException('No autenticado');
-    if (!in_array($_SESSION['tipo'] ?? '', ['GERENCIA', 'SUPERVISION'], true)) {
+    $tipoSesion = $_SESSION['tipo'] ?? '';
+    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'Acceso denegado']);
         exit;
     }
 
-    $origen  = $_GET['origen']  ?? 'argentina';
+    $isGrupo = ($tipoSesion === 'GRUPO');
+    $origen  = $isGrupo ? 'franquicias' : ($_GET['origen'] ?? 'argentina');
     $action  = $_GET['action']  ?? 'rubros_categorias';
     $periodo = $_GET['periodo'] ?? 'mes_actual';
 
@@ -36,6 +38,15 @@ try {
     $_SESSION['tipo'] = $origenToTipo[$origen] ?? 'LOCAL_PROPIO';
 
     $sucursalRaw = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? (int)$_GET['sucursal'] : null;
+
+    // GRUPO: validar sucursal solicitada
+    if ($isGrupo && $sucursalRaw !== null) {
+        if (!in_array($sucursalRaw, $_SESSION['sucursalesGrupo'] ?? [], true)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Sucursal no autorizada']);
+            exit;
+        }
+    }
     $numsucOrig  = $_SESSION['numsuc'] ?? null;
     $_SESSION['numsuc'] = $sucursalRaw;
 
@@ -63,7 +74,10 @@ try {
     // Días del período (para cálculo de rotación)
     $diasPeriodo = max(1, (int)round((strtotime($hasta_act) - strtotime($desde_act)) / 86400) + 1);
 
-    $db       = new AnalisisDB();
+    $db = new AnalisisDB();
+    if ($isGrupo && !empty($_SESSION['sucursalesGrupo'])) {
+        $db->setGrupoSucursales($_SESSION['sucursalesGrupo']);
+    }
     $response = ['ok' => true];
 
     switch ($action) {

@@ -11,10 +11,47 @@ class GlobalDashboardDB
     private $conn;
     private string $campoVendedor;
     private string $tablaObjetivos;
-    private string $origen;
-    private bool   $soloActivas = false;
+    private string  $origen;
+    private bool    $soloActivas        = false;
+    private bool    $aplicarFiltroGrupo = true;
+    private ?array  $grupoSucursales    = null; // override explícito para casos que alteran $_SESSION['tipo']
 
-    public function setSoloActivas(bool $v): void { $this->soloActivas = $v; }
+    public function setSoloActivas(bool $v): void      { $this->soloActivas = $v; }
+
+    /**
+     * Cuando se llama con true, las queries de esta instancia NO aplicarán
+     * el filtro de sucursalesGrupo aunque el usuario sea GRUPO.
+     * Usar para instancias de benchmark.
+     */
+    public function setIgnorarFiltroGrupo(bool $ignorar): void
+    {
+        $this->aplicarFiltroGrupo = !$ignorar;
+    }
+
+    /**
+     * Fija explícitamente las sucursales del grupo para esta instancia.
+     * Útil cuando $_SESSION['tipo'] fue temporalmente sobreescrito (ej: analisis.php).
+     */
+    public function setGrupoSucursales(array $sucursales): void
+    {
+        $this->grupoSucursales = array_values($sucursales);
+    }
+
+    /**
+     * Retorna el fragmento WHERE + params para restringir por las sucursales
+     * del perfil GRUPO. Retorna ['', []] cuando no aplica.
+     */
+    private function grupoFiltro(string $alias, string $col = 'NRO_SUCURS'): array
+    {
+        if (!$this->aplicarFiltroGrupo) return ['', []];
+        // Prioridad: sucursales fijadas explícitamente (evita dependencia de $_SESSION['tipo'])
+        if ($this->grupoSucursales !== null) {
+            return Filters::sucursalesGrupo($this->grupoSucursales, $alias, $col);
+        }
+        if (($_SESSION['tipo'] ?? '') !== 'GRUPO') return ['', []];
+        $suc = $_SESSION['sucursalesGrupo'] ?? [];
+        return Filters::sucursalesGrupo($suc, $alias, $col);
+    }
 
     public function __construct(string $origen = 'argentina')
     {
@@ -100,6 +137,11 @@ class GlobalDashboardDB
         // Filtros para objetivos (alias o) — solo sucursal, columna NRO_SUCURSAL
         [$sfO, $pO] = Filters::build($fp, 'o', $cv, $this->origen, false, false, 'NRO_SUCURSAL');
 
+        // Filtro GRUPO (sucursales permitidas)
+        [$sfGS, $pGS] = $this->grupoFiltro('s');
+        [$sfGT, $pGT] = $this->grupoFiltro('t');
+        [$sfGO, $pGO] = $this->grupoFiltro('o', 'NRO_SUCURSAL');
+
         $row = $this->queryOne("
             SELECT
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion,
@@ -112,8 +154,8 @@ class GlobalDashboardDB
                                  AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                             THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
             FROM BI_SALES_SUCURSALES s
-            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS}
-        ", array_merge([$desde, $hasta], $pS));
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
+        ", array_merge([$desde, $hasta], $pS, $pGS));
 
         $rowT = $this->queryOne("
             SELECT
@@ -121,14 +163,14 @@ class GlobalDashboardDB
                 ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS suma_tickets
             FROM BI_SALES_TOTAL_TICKETS t
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND t.T_COMP = 'FAC' {$sfT}
-        ", array_merge([$desde, $hasta], $pT));
+              AND t.T_COMP = 'FAC' {$sfT} {$sfGT}
+        ", array_merge([$desde, $hasta], $pT, $pGT));
 
         $rowObj = $this->queryOne("
             SELECT ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo
             FROM {$this->tablaObjetivos} o
-            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO}
-        ", array_merge([$desde, $hasta], $pO));
+            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO} {$sfGO}
+        ", array_merge([$desde, $hasta], $pO, $pGO));
 
         $tickets    = (int)($rowT['tickets']     ?? 0);
         $sumaT      = (float)($rowT['suma_tickets'] ?? 0);
@@ -158,7 +200,8 @@ class GlobalDashboardDB
         ?string $grupo = null, ?string $tipoTienda = null
     ): array {
         $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda);
-        [$sfT, $pT] = Filters::build($fp, 't', $this->campoVendedor, $this->origen, true, false);
+        [$sfT, $pT]   = Filters::build($fp, 't', $this->campoVendedor, $this->origen, true, false);
+        [$sfGT, $pGT] = $this->grupoFiltro('t');
 
         $row = $this->queryOne("
             SELECT
@@ -166,8 +209,8 @@ class GlobalDashboardDB
                 COUNT(DISTINCT CASE WHEN t.CANTIDAD > 1 THEN t.N_COMP END) AS seg,
                 COUNT(DISTINCT CASE WHEN t.CANTIDAD > 2 THEN t.N_COMP END) AS ter
             FROM BI_SALES_TICKETS t
-            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfT}
-        ", array_merge([$desde, $hasta], $pT));
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfT} {$sfGT}
+        ", array_merge([$desde, $hasta], $pT, $pGT));
 
         $total = (int)($row['total'] ?? 0);
         $seg   = (int)($row['seg']   ?? 0);
@@ -191,8 +234,10 @@ class GlobalDashboardDB
         ?string $grupo = null, ?string $tipoTienda = null
     ): array {
         $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda);
-        [$sfTk, $pTk] = Filters::build($fp, 'tk', $this->campoVendedor, $this->origen, true, false);
-        [$sfTt, $pTt] = Filters::build($fp, 'tt', $this->campoVendedor, $this->origen, true, false);
+        [$sfTk, $pTk]   = Filters::build($fp, 'tk', $this->campoVendedor, $this->origen, true, false);
+        [$sfTt, $pTt]   = Filters::build($fp, 'tt', $this->campoVendedor, $this->origen, true, false);
+        [$sfGTk, $pGTk] = $this->grupoFiltro('tk');
+        [$sfGTt, $pGTt] = $this->grupoFiltro('tt');
 
         $row = $this->queryOne("
             SELECT
@@ -203,12 +248,12 @@ class GlobalDashboardDB
                 SELECT DISTINCT N_COMP
                 FROM BI_SALES_TICKETS tk
                 WHERE tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE))
-                  {$sfTk}
+                  {$sfTk} {$sfGTk}
                   AND tk.CANTIDAD > 1
             ) t2 ON t2.N_COMP = tt.N_COMP
             WHERE tt.FECHA >= ? AND tt.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND tt.T_COMP = 'FAC' {$sfTt}
-        ", array_merge([$desde, $hasta], $pTk, [$desde, $hasta], $pTt));
+              AND tt.T_COMP = 'FAC' {$sfTt} {$sfGTt}
+        ", array_merge([$desde, $hasta], $pTk, $pGTk, [$desde, $hasta], $pTt, $pGTt));
 
         $cant = (int)($row['tickets_con_2do']     ?? 0);
         $fact = (float)($row['facturacion_con_2do'] ?? 0);
@@ -230,15 +275,16 @@ class GlobalDashboardDB
         ?string $grupo = null, ?string $tipoTienda = null
     ): array {
         $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda);
-        [$sfP, $pP] = Filters::build($fp, 'p', $this->campoVendedor, $this->origen, true, false);
+        [$sfP, $pP]   = Filters::build($fp, 'p', $this->campoVendedor, $this->origen, true, false);
+        [$sfGP, $pGP] = $this->grupoFiltro('p');
 
         $row = $this->queryOne("
             SELECT
                 ISNULL(SUM(p.CAMBIO), 0)       AS cambios_incr,
                 ISNULL(SUM(p.DEVOLUCIONES), 0) AS devoluciones
             FROM BI_SALES_PORC_INCREMENTAL p
-            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day,1,CAST(? AS DATE)) {$sfP}
-        ", array_merge([$desde, $hasta], $pP));
+            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day,1,CAST(? AS DATE)) {$sfP} {$sfGP}
+        ", array_merge([$desde, $hasta], $pP, $pGP));
 
         $cambios = (float)($row['cambios_incr']  ?? 0);
         $devol   = (float)($row['devoluciones'] ?? 0);
@@ -260,21 +306,23 @@ class GlobalDashboardDB
         ?string $grupo = null, ?string $tipoTienda = null
     ): array {
         $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda);
-        [$sfI, $pI] = Filters::build($fp, 'i', $this->campoVendedor, $this->origen, false, false);
-        [$sfT, $pT] = Filters::build($fp, 't', $this->campoVendedor, $this->origen, false, false);
+        [$sfI, $pI]   = Filters::build($fp, 'i', $this->campoVendedor, $this->origen, false, false);
+        [$sfT, $pT]   = Filters::build($fp, 't', $this->campoVendedor, $this->origen, false, false);
+        [$sfGI, $pGI] = $this->grupoFiltro('i');
+        [$sfGT, $pGT] = $this->grupoFiltro('t');
 
         $rowI = $this->queryOne("
             SELECT ISNULL(SUM(i.INGRESOS), 0) AS total_ingresos
             FROM BI_T_INGRESOS_SUCURSALES i
             WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND i.INGRESOS > 0 {$sfI}
-        ", array_merge([$desde, $hasta], $pI));
+              AND i.INGRESOS > 0 {$sfI} {$sfGI}
+        ", array_merge([$desde, $hasta], $pI, $pGI));
 
         $rowT = $this->queryOne("
             SELECT COUNT(DISTINCT t.N_COMP) AS total_tickets
             FROM BI_SALES_TOTAL_TICKETS t
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND t.T_COMP = 'FAC' {$sfT}
+              AND t.T_COMP = 'FAC' {$sfT} {$sfGT}
               AND EXISTS (
                   SELECT 1
                   FROM BI_T_INGRESOS_SUCURSALES i2
@@ -283,7 +331,7 @@ class GlobalDashboardDB
                     AND i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
                     AND i2.INGRESOS > 0
               )
-        ", array_merge([$desde, $hasta], $pT, [$desde, $hasta]));
+        ", array_merge([$desde, $hasta], $pT, $pGT, [$desde, $hasta]));
 
         $ingresos = (int)($rowI['total_ingresos'] ?? 0);
         $tickets  = (int)($rowT['total_tickets']  ?? 0);
@@ -311,6 +359,13 @@ class GlobalDashboardDB
         [$sfP,  $pP]  = Filters::build($fp, 'p',  $this->campoVendedor, $this->origen, false, false);
         [$sfI,  $pI]  = Filters::build($fp, 'ig', $this->campoVendedor, $this->origen, false, false);
 
+        // Filtros GRUPO
+        [$sfGS,  $pGS]  = $this->grupoFiltro('s');
+        [$sfGT,  $pGT]  = $this->grupoFiltro('t');
+        [$sfGTk, $pGTk] = $this->grupoFiltro('tk');
+        [$sfGP,  $pGP]  = $this->grupoFiltro('p');
+        [$sfGI,  $pGI]  = $this->grupoFiltro('ig');
+
         // Ventas: facturación, unidades, unidades positivas y cambios por día
         $rows = $this->query("
             SELECT
@@ -320,10 +375,10 @@ class GlobalDashboardDB
                 ISNULL(SUM(CASE WHEN s.CANTIDAD > 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades_positivas,
                 ISNULL(SUM(CASE WHEN s.CANTIDAD < 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
             FROM BI_SALES_SUCURSALES s
-            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS}
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
             GROUP BY CAST(s.FECHA AS DATE)
             ORDER BY 1 ASC
-        ", array_merge([$desde, $hasta], $pS));
+        ", array_merge([$desde, $hasta], $pS, $pGS));
 
         // Tickets con 2do y 3er producto vía LEFT JOIN
         $tickRows = $this->query("
@@ -337,11 +392,11 @@ class GlobalDashboardDB
             LEFT JOIN BI_SALES_TICKETS tk
                 ON t.N_COMP = tk.N_COMP
                AND tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE))
-               {$sfTk}
+               {$sfTk} {$sfGTk}
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND t.T_COMP = 'FAC' {$sfT}
+              AND t.T_COMP = 'FAC' {$sfT} {$sfGT}
             GROUP BY CAST(t.FECHA AS DATE)
-        ", array_merge([$desde, $hasta], $pTk, [$desde, $hasta], $pT));
+        ", array_merge([$desde, $hasta], $pTk, $pGTk, [$desde, $hasta], $pT, $pGT));
 
         // Tickets filtrados por sucursales con ingresos ese día (para conversión correcta)
         $tickConvRows = $this->query("
@@ -350,7 +405,7 @@ class GlobalDashboardDB
                 COUNT(DISTINCT t.N_COMP) AS tickets_conv
             FROM BI_SALES_TOTAL_TICKETS t
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND t.T_COMP = 'FAC' {$sfT}
+              AND t.T_COMP = 'FAC' {$sfT} {$sfGT}
               AND EXISTS (
                   SELECT 1 FROM BI_T_INGRESOS_SUCURSALES i2
                   WHERE i2.NRO_SUCURS = t.NRO_SUCURS
@@ -358,7 +413,7 @@ class GlobalDashboardDB
                     AND i2.INGRESOS > 0
               )
             GROUP BY CAST(t.FECHA AS DATE)
-        ", array_merge([$desde, $hasta], $pT));
+        ", array_merge([$desde, $hasta], $pT, $pGT));
 
         $tickConvMap = [];
         foreach ($tickConvRows as $tr) {
@@ -371,8 +426,10 @@ class GlobalDashboardDB
         }
 
         // T. Prom. 2do Producto por día
-        [$sfTk2, $pTk2] = Filters::build($fp, 'tk2', $this->campoVendedor, $this->origen, true,  false);
-        [$sfTt2, $pTt2] = Filters::build($fp, 'tt2', $this->campoVendedor, $this->origen, true,  false);
+        [$sfTk2,  $pTk2]  = Filters::build($fp, 'tk2', $this->campoVendedor, $this->origen, true, false);
+        [$sfTt2,  $pTt2]  = Filters::build($fp, 'tt2', $this->campoVendedor, $this->origen, true, false);
+        [$sfGTk2, $pGTk2] = $this->grupoFiltro('tk2');
+        [$sfGTt2, $pGTt2] = $this->grupoFiltro('tt2');
 
         $tp2Rows = $this->query("
             SELECT
@@ -384,13 +441,13 @@ class GlobalDashboardDB
                 SELECT DISTINCT N_COMP
                 FROM BI_SALES_TICKETS tk2
                 WHERE tk2.FECHA >= ? AND tk2.FECHA < DATEADD(day,1,CAST(? AS DATE))
-                  {$sfTk2}
+                  {$sfTk2} {$sfGTk2}
                   AND tk2.CANTIDAD > 1
             ) t2 ON t2.N_COMP = tt2.N_COMP
             WHERE tt2.FECHA >= ? AND tt2.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND tt2.T_COMP = 'FAC' {$sfTt2}
+              AND tt2.T_COMP = 'FAC' {$sfTt2} {$sfGTt2}
             GROUP BY CAST(tt2.FECHA AS DATE)
-        ", array_merge([$desde, $hasta], $pTk2, [$desde, $hasta], $pTt2));
+        ", array_merge([$desde, $hasta], $pTk2, $pGTk2, [$desde, $hasta], $pTt2, $pGTt2));
 
         $tp2Map = [];
         foreach ($tp2Rows as $tr) {
@@ -404,9 +461,9 @@ class GlobalDashboardDB
                 ISNULL(SUM(p.CAMBIO), 0) AS cambios_incr,
                 ISNULL(SUM(p.DEVOLUCIONES), 0) AS devoluciones
             FROM BI_SALES_PORC_INCREMENTAL p
-            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day,1,CAST(? AS DATE)) {$sfP}
+            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day,1,CAST(? AS DATE)) {$sfP} {$sfGP}
             GROUP BY CAST(p.FECHA_MOV AS DATE)
-        ", array_merge([$desde, $hasta], $pP));
+        ", array_merge([$desde, $hasta], $pP, $pGP));
 
         $incrMap = [];
         foreach ($incrRows as $ir) {
@@ -420,9 +477,9 @@ class GlobalDashboardDB
                 ISNULL(SUM(ig.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES ig
             WHERE ig.FECHA >= ? AND ig.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND ig.INGRESOS > 0 {$sfI}
+              AND ig.INGRESOS > 0 {$sfI} {$sfGI}
             GROUP BY CAST(ig.FECHA AS DATE)
-        ", array_merge([$desde, $hasta], $pI));
+        ", array_merge([$desde, $hasta], $pI, $pGI));
 
         $ingMap = [];
         foreach ($ingRows as $ig) {
@@ -476,14 +533,15 @@ class GlobalDashboardDB
         ?string $grupo = null, ?string $tipoTienda = null
     ): array {
         $fp = $this->fp(null, '%', '%', $grupo, $tipoTienda);
-        [$sfO, $pO] = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURSAL');
+        [$sfO, $pO]   = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURSAL');
+        [$sfGO, $pGO] = $this->grupoFiltro('o', 'NRO_SUCURSAL');
         $rows = $this->query("
             SELECT CAST(o.FECHA AS DATE) AS fecha, ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo
             FROM {$this->tablaObjetivos} o
-            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO}
+            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO} {$sfGO}
             GROUP BY CAST(o.FECHA AS DATE)
             ORDER BY 1 ASC
-        ", array_merge([$desde, $hasta], $pO));
+        ", array_merge([$desde, $hasta], $pO, $pGO));
         $result = [];
         foreach ($rows as $row) {
             $result[$row['fecha']->format('Y-m-d')] = (float)$row['objetivo'];
@@ -501,21 +559,22 @@ class GlobalDashboardDB
         ?string $grupo = null, ?string $tipoTienda = null
     ): array {
         $fp = $this->fp(null, '%', '%', $grupo, $tipoTienda);
-        [$sfO, $pO] = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURSAL');
+        [$sfO, $pO]   = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURSAL');
+        [$sfGO, $pGO] = $this->grupoFiltro('o', 'NRO_SUCURSAL');
 
         $rowsAct = $this->query("
             SELECT o.NRO_SUCURSAL, ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo_fecha
             FROM {$this->tablaObjetivos} o
-            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO}
+            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO} {$sfGO}
             GROUP BY o.NRO_SUCURSAL
-        ", array_merge([$desde_act, $hasta_act], $pO));
+        ", array_merge([$desde_act, $hasta_act], $pO, $pGO));
 
         $rowsTotal = $this->query("
             SELECT o.NRO_SUCURSAL, ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo_total
             FROM {$this->tablaObjetivos} o
-            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO}
+            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO} {$sfGO}
             GROUP BY o.NRO_SUCURSAL
-        ", array_merge([$desde_total, $hasta_total], $pO));
+        ", array_merge([$desde_total, $hasta_total], $pO, $pGO));
 
         $totalMap = [];
         foreach ($rowsTotal as $r) {
@@ -544,21 +603,22 @@ class GlobalDashboardDB
         ?string $grupo = null, ?string $tipoTienda = null
     ): array {
         $fp = $this->fp(null, '%', '%', $grupo, $tipoTienda);
-        [$sfS, $pS] = Filters::build($fp, 's', $this->campoVendedor, $this->origen, false, false);
+        [$sfS, $pS]   = Filters::build($fp, 's', $this->campoVendedor, $this->origen, false, false);
+        [$sfGS, $pGS] = $this->grupoFiltro('s');
 
         $rowsAct = $this->query("
             SELECT s.NRO_SUCURS, ISNULL(SUM(s.IMPORTE), 0) AS facturacion
             FROM BI_SALES_SUCURSALES s
-            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS}
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
             GROUP BY s.NRO_SUCURS
-        ", array_merge([$desde_act, $hasta_act], $pS));
+        ", array_merge([$desde_act, $hasta_act], $pS, $pGS));
 
         $rowsPrev = $this->query("
             SELECT s.NRO_SUCURS, ISNULL(SUM(s.IMPORTE), 0) AS facturacion
             FROM BI_SALES_SUCURSALES s
-            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS}
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
             GROUP BY s.NRO_SUCURS
-        ", array_merge([$desde_prev, $hasta_prev], $pS));
+        ", array_merge([$desde_prev, $hasta_prev], $pS, $pGS));
 
         $prevMap = [];
         foreach ($rowsPrev as $r) {
@@ -633,9 +693,11 @@ class GlobalDashboardDB
         $cv = $this->campoVendedor;
 
         if ($tipo === 'unidades') {
-            $mainTable = 'BI_SALES_SUCURSALES';
-            $bkTable   = 'BI_SALES_SUCURSALES_BK';
-            [$sfS, $pS] = Filters::build($fp, 's', $cv, $this->origen, true, true);
+            $mainTable    = 'BI_SALES_SUCURSALES';
+            $bkTable      = 'BI_SALES_SUCURSALES_BK';
+            [$sfS, $pS]   = Filters::build($fp, 's', $cv, $this->origen, true, true);
+            [$sfGS, $pGS] = $this->grupoFiltro('s');
+            $sfSAll = $sfS . ' ' . $sfGS;
 
             $hasBK = false;
             try {
@@ -645,25 +707,28 @@ class GlobalDashboardDB
                 $hasBK = ((int)($ck['v'] ?? 0)) === 1;
             } catch (\Throwable $e) { /* tabla BK inexistente */ }
 
+            $pSAll    = array_merge($pS, $pGS);
             $valExpr  = "SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END)";
             $mainSql  = "
                 SELECT YEAR(s.FECHA) AS anio, MONTH(s.FECHA) AS mes, {$valExpr} AS valor
                 FROM {$mainTable} s WITH (NOLOCK)
-                WHERE s.FECHA IS NOT NULL {$sfS}
+                WHERE s.FECHA IS NOT NULL {$sfSAll}
                 GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)";
             $unionSql = $hasBK ? "
                 UNION ALL
                 SELECT YEAR(s.FECHA) AS anio, MONTH(s.FECHA) AS mes, {$valExpr} AS valor
                 FROM {$bkTable} s WITH (NOLOCK)
-                WHERE s.FECHA IS NOT NULL {$sfS}
+                WHERE s.FECHA IS NOT NULL {$sfSAll}
                 GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)" : '';
-            $params = $hasBK ? array_merge($pS, $pS) : $pS;
+            $params = $hasBK ? array_merge($pSAll, $pSAll) : $pSAll;
 
         } else {
             // tickets
-            $mainTable = 'BI_SALES_TOTAL_TICKETS';
-            $bkTable   = 'BI_SALES_TOTAL_TICKETS_BK';
-            [$sfT, $pT] = Filters::build($fp, 't', $cv, $this->origen, true, false);
+            $mainTable    = 'BI_SALES_TOTAL_TICKETS';
+            $bkTable      = 'BI_SALES_TOTAL_TICKETS_BK';
+            [$sfT, $pT]   = Filters::build($fp, 't', $cv, $this->origen, true, false);
+            [$sfGT, $pGT] = $this->grupoFiltro('t');
+            $sfTAll = $sfT . ' ' . $sfGT;
 
             $hasBK = false;
             try {
@@ -673,19 +738,20 @@ class GlobalDashboardDB
                 $hasBK = ((int)($ck['v'] ?? 0)) === 1;
             } catch (\Throwable $e) { /* tabla BK inexistente */ }
 
+            $pTAll    = array_merge($pT, $pGT);
             $valExpr  = "COUNT(DISTINCT t.N_COMP)";
             $mainSql  = "
                 SELECT YEAR(t.FECHA) AS anio, MONTH(t.FECHA) AS mes, {$valExpr} AS valor
                 FROM {$mainTable} t WITH (NOLOCK)
-                WHERE t.T_COMP = 'FAC' AND t.FECHA IS NOT NULL {$sfT}
+                WHERE t.T_COMP = 'FAC' AND t.FECHA IS NOT NULL {$sfTAll}
                 GROUP BY YEAR(t.FECHA), MONTH(t.FECHA)";
             $unionSql = $hasBK ? "
                 UNION ALL
                 SELECT YEAR(t.FECHA) AS anio, MONTH(t.FECHA) AS mes, {$valExpr} AS valor
                 FROM {$bkTable} t WITH (NOLOCK)
-                WHERE t.T_COMP = 'FAC' AND t.FECHA IS NOT NULL {$sfT}
+                WHERE t.T_COMP = 'FAC' AND t.FECHA IS NOT NULL {$sfTAll}
                 GROUP BY YEAR(t.FECHA), MONTH(t.FECHA)" : '';
-            $params = $hasBK ? array_merge($pT, $pT) : $pT;
+            $params = $hasBK ? array_merge($pTAll, $pTAll) : $pTAll;
         }
 
         $rows = $this->query("
@@ -745,19 +811,23 @@ class GlobalDashboardDB
     {
         $cv     = $this->campoVendedor;
         $params = [];
-        $where  = [];
+        $extras = '';
         if ($desde !== null && $hasta !== null) {
-            $where[]  = "FECHA BETWEEN ? AND ?";
+            $extras  .= " AND s.FECHA BETWEEN ? AND ?";
             $params[] = $desde;
             $params[] = $hasta;
         }
         if ($sucursal !== null) {
-            $where[]  = "NRO_SUCURS = ?";
+            $extras  .= " AND s.NRO_SUCURS = ?";
             $params[] = $sucursal;
         }
-        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+        [$sfGrupo, $pGrupo] = $this->grupoFiltro('s');
+        $params = array_merge($params, $pGrupo);
         return $this->query("
-            SELECT DISTINCT {$cv} FROM BI_SALES_SUCURSALES {$whereClause} ORDER BY {$cv}
+            SELECT DISTINCT s.{$cv}
+            FROM BI_SALES_SUCURSALES s
+            WHERE 1=1 {$extras} {$sfGrupo}
+            ORDER BY s.{$cv}
         ", $params);
     }
 
@@ -765,12 +835,13 @@ class GlobalDashboardDB
     {
         $sfS = $sucursal !== null ? "AND NRO_SUCURS = ?" : "";
         $suc = $sucursal !== null ? [$sucursal] : [];
+        [$sfGS, $pGS] = $this->grupoFiltro('s');
         return $this->query("
-            SELECT DISTINCT RUBRO FROM BI_SALES_SUCURSALES
+            SELECT DISTINCT RUBRO FROM BI_SALES_SUCURSALES s
             WHERE FECHA BETWEEN ? AND ?
-              AND RUBRO NOT IN ('CONCEPTO','PACKAGING') {$sfS}
+              AND RUBRO NOT IN ('CONCEPTO','PACKAGING') {$sfS} {$sfGS}
             ORDER BY RUBRO
-        ", array_merge([$desde, $hasta], $suc));
+        ", array_merge([$desde, $hasta], $suc, $pGS));
     }
 
     /* ──────────────────────────────────────────────
@@ -794,6 +865,13 @@ class GlobalDashboardDB
         [$sfTt, $pTt] = Filters::build($fp, 'tt', $this->campoVendedor, $this->origen, false, false);
         [$sfP,  $pP]  = Filters::build($fp, 'p',  $this->campoVendedor, $this->origen, false, false);
 
+        // Filtros GRUPO para scoring
+        [$sfGS,  $pGS]  = $this->grupoFiltro('s');
+        [$sfGT,  $pGT]  = $this->grupoFiltro('t');
+        [$sfGTk, $pGTk] = $this->grupoFiltro('tk');
+        [$sfGTt, $pGTt] = $this->grupoFiltro('tt');
+        [$sfGP,  $pGP]  = $this->grupoFiltro('p');
+
         // 1. Facturación + tickets + ticket_promedio (actual)
         $kpiRows = $this->query("
             SELECT
@@ -802,9 +880,9 @@ class GlobalDashboardDB
                 ISNULL(SUM(t.IMP_TOTAL_TICKET), 0)   AS facturacion
             FROM BI_SALES_TOTAL_TICKETS t
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND t.T_COMP = 'FAC' {$sfT}
+              AND t.T_COMP = 'FAC' {$sfT} {$sfGT}
             GROUP BY t.NRO_SUCURS
-        ", array_merge([$desde_act, $hasta_act], $pT));
+        ", array_merge([$desde_act, $hasta_act], $pT, $pGT));
 
         // 2. Unidades + cambios por sucursal (para porc_cambios)
         $unidRows = $this->query("
@@ -817,9 +895,9 @@ class GlobalDashboardDB
                 ISNULL(SUM(CASE WHEN s.CANTIDAD < 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                                 THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
             FROM BI_SALES_SUCURSALES s
-            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS}
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
             GROUP BY s.NRO_SUCURS
-        ", array_merge([$desde_act, $hasta_act], $pS));
+        ", array_merge([$desde_act, $hasta_act], $pS, $pGS));
 
         // 3. % 2do y 3er producto por sucursal
         $tickRows = $this->query("
@@ -829,9 +907,9 @@ class GlobalDashboardDB
                 COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 1 THEN tk.N_COMP END) AS tickets_2do,
                 COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 2 THEN tk.N_COMP END) AS tickets_3ro
             FROM BI_SALES_TICKETS tk
-            WHERE tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfTk}
+            WHERE tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfTk} {$sfGTk}
             GROUP BY tk.NRO_SUCURS
-        ", array_merge([$desde_act, $hasta_act], $pTk));
+        ", array_merge([$desde_act, $hasta_act], $pTk, $pGTk));
 
         // 4. Ticket promedio 2do producto por sucursal
         $tp2Rows = $this->query("
@@ -844,13 +922,13 @@ class GlobalDashboardDB
                 SELECT DISTINCT tk.N_COMP
                 FROM BI_SALES_TICKETS tk
                 WHERE tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE))
-                  {$sfTk}
+                  {$sfTk} {$sfGTk}
                   AND tk.CANTIDAD > 1
             ) t2 ON t2.N_COMP = tt.N_COMP
             WHERE tt.FECHA >= ? AND tt.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND tt.T_COMP = 'FAC' {$sfTt}
+              AND tt.T_COMP = 'FAC' {$sfTt} {$sfGTt}
             GROUP BY tt.NRO_SUCURS
-        ", array_merge([$desde_act, $hasta_act], $pTk, [$desde_act, $hasta_act], $pTt));
+        ", array_merge([$desde_act, $hasta_act], $pTk, $pGTk, [$desde_act, $hasta_act], $pTt, $pGTt));
 
         // 5. % Incremental por sucursal
         $incrRows = $this->query("
@@ -859,9 +937,9 @@ class GlobalDashboardDB
                 ISNULL(SUM(p.CAMBIO), 0)        AS cambios_incr,
                 ISNULL(SUM(p.DEVOLUCIONES), 0)  AS devoluciones
             FROM BI_SALES_PORC_INCREMENTAL p
-            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day,1,CAST(? AS DATE)) {$sfP}
+            WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day,1,CAST(? AS DATE)) {$sfP} {$sfGP}
             GROUP BY p.NRO_SUCURS
-        ", array_merge([$desde_act, $hasta_act], $pP));
+        ", array_merge([$desde_act, $hasta_act], $pP, $pGP));
 
         // 6. Facturación período previo (para var_fact)
         $prevRows = $this->query("
@@ -870,9 +948,9 @@ class GlobalDashboardDB
                 ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS facturacion_prev
             FROM BI_SALES_TOTAL_TICKETS t
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND t.T_COMP = 'FAC' {$sfT}
+              AND t.T_COMP = 'FAC' {$sfT} {$sfGT}
             GROUP BY t.NRO_SUCURS
-        ", array_merge([$desde_prev, $hasta_prev], $pT));
+        ", array_merge([$desde_prev, $hasta_prev], $pT, $pGT));
 
         // 7. Objetivos pro-rated
         $objPorSuc = $this->getObjetivosPorSucursal(
@@ -1041,7 +1119,8 @@ class GlobalDashboardDB
         ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null
     ): array {
         $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda);
-        [$sfT, $pT] = Filters::build($fp, 't', $this->campoVendedor, $this->origen, false, false);
+        [$sfT, $pT]   = Filters::build($fp, 't', $this->campoVendedor, $this->origen, false, false);
+        [$sfGT, $pGT] = $this->grupoFiltro('t');
 
         $noMails = ['mails' => 0];
         try {
@@ -1051,8 +1130,8 @@ class GlobalDashboardDB
                 WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
                   AND t.T_COMP = 'FAC'
                   AND ISNULL(t.EMAIL, '') <> ''
-                  AND ISNULL(t.EMAIL, '') <> 'invalido' {$sfT}
-            ", array_merge([$desde, $hasta], $pT));
+                  AND ISNULL(t.EMAIL, '') <> 'invalido' {$sfT} {$sfGT}
+            ", array_merge([$desde, $hasta], $pT, $pGT));
             return ['mails' => (int)($row['mails'] ?? 0)];
         } catch (Throwable $_) {
             return $noMails;
@@ -1162,9 +1241,12 @@ class GlobalDashboardDB
         $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
         $cv = $this->campoVendedor;
 
-        $mainTable = 'BI_SALES_SUCURSALES';
-        $bkTable   = 'BI_SALES_SUCURSALES_BK';
-        [$sfS, $pS] = Filters::build($fp, 's', $cv, $this->origen, true, true);
+        $mainTable    = 'BI_SALES_SUCURSALES';
+        $bkTable      = 'BI_SALES_SUCURSALES_BK';
+        [$sfS, $pS]   = Filters::build($fp, 's', $cv, $this->origen, true, true);
+        [$sfGS, $pGS] = $this->grupoFiltro('s');
+        $sfSAll = $sfS . ' ' . $sfGS;
+        $pSAll  = array_merge($pS, $pGS);
 
         $hasBK = false;
         try {
@@ -1178,15 +1260,15 @@ class GlobalDashboardDB
         $mainSql = "
             SELECT YEAR(s.FECHA) AS anio, MONTH(s.FECHA) AS mes, {$valExpr} AS valor
             FROM {$mainTable} s WITH (NOLOCK)
-            WHERE s.FECHA IS NOT NULL {$sfS}
+            WHERE s.FECHA IS NOT NULL {$sfSAll}
             GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)";
         $unionSql = $hasBK ? "
             UNION ALL
             SELECT YEAR(s.FECHA) AS anio, MONTH(s.FECHA) AS mes, {$valExpr} AS valor
             FROM {$bkTable} s WITH (NOLOCK)
-            WHERE s.FECHA IS NOT NULL {$sfS}
+            WHERE s.FECHA IS NOT NULL {$sfSAll}
             GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)" : '';
-        $params = $hasBK ? array_merge($pS, $pS) : $pS;
+        $params = $hasBK ? array_merge($pSAll, $pSAll) : $pSAll;
 
         $rows = $this->query("
             SELECT anio, mes, SUM(valor) AS valor
@@ -1219,5 +1301,45 @@ class GlobalDashboardDB
         }
 
         return ['anios' => $anios, 'meses' => $meses, 'series' => $series];
+    }
+
+    /* ──────────────────────────────────────────────
+     *  SUCURSALES POR IDS  (para perfil GRUPO)
+     * ────────────────────────────────────────────── */
+
+    /**
+     * Devuelve NRO_SUCURS + DESC_SUCURSAL para un listado de IDs.
+     * Usa conexión central porque la conexión principal apunta a power_franquicias.
+     *
+     * @param  int[]  $ids  IDs de NRO_SUCURSAL a resolver
+     * @return array[]      Filas con NRO_SUCURS y DESC_SUCURSAL
+     */
+    public function getSucursalesPorIds(array $ids): array
+    {
+        if (empty($ids)) return [];
+
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
+        $connC = (new Conexion())->conectar('central');
+
+        $ph     = implode(',', array_fill(0, count($ids), '?'));
+        $params = array_values(array_map('intval', $ids));
+
+        sqlsrv_configure('WarningsReturnAsErrors', 0);
+        $stmt = sqlsrv_query($connC,
+            "SELECT sl.NRO_SUCURSAL AS NRO_SUCURS, sl.DESC_SUCURSAL
+             FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
+             WHERE sl.NRO_SUCURSAL IN ({$ph})
+             ORDER BY sl.DESC_SUCURSAL",
+            $params
+        );
+
+        if ($stmt === false) return [];
+
+        $rows = [];
+        while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            $rows[] = $row;
+        }
+        sqlsrv_free_stmt($stmt);
+        return $rows;
     }
 }
