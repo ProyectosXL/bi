@@ -31,10 +31,11 @@ try {
         exit;
     }
 
-    $origen     = $_GET['origen']  ?? 'argentina';
-    $periodo    = $_GET['periodo'] ?? 'mes_actual';
-    $grupo      = isset($_GET['grupo'])       && $_GET['grupo']       !== '' ? $_GET['grupo']       : null;
-    $tipoTienda = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $origen      = $_GET['origen']  ?? 'argentina';
+    $periodo     = $_GET['periodo'] ?? 'mes_actual';
+    $grupo       = isset($_GET['grupo'])       && $_GET['grupo']       !== '' ? $_GET['grupo']       : null;
+    $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $soloActivas = isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
     if ($origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
 
@@ -58,6 +59,7 @@ try {
     $ultimoDiaMes = date('Y-m-t',  strtotime($desde_act));
 
     $db = new GlobalDashboardDB($origen);
+    if ($soloActivas) $db->setSoloActivas(true);
 
     $scores = $db->getScorePorSucursal(
         $desde_act, $hasta_act,
@@ -78,6 +80,7 @@ try {
         $s['nombre'] = $sucNombres[$s['nro_sucurs']] ?? ('Suc. ' . $s['nro_sucurs']);
     }
     unset($s);
+
 
     ob_clean();
     echo json_encode([

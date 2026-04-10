@@ -26,15 +26,15 @@ $ultimaAct = date('d/m/Y H:i:s');
     <title>Sales Dashboard — <?= htmlspecialchars($descLabel) ?></title>
     <link rel="icon" type="image/jpg" href="/bi/images/icono.jpg">
     <!-- Shared base styles -->
-    <link rel="stylesheet" href="/bi/css/base.css">
-    <link rel="stylesheet" href="/bi/css/components.css">
+    <link rel="stylesheet" href="/bi/css/base.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/css/base.css') ?>">
+    <link rel="stylesheet" href="/bi/css/components.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/css/components.css') ?>">
     <!-- Global-specific styles -->
-    <link rel="stylesheet" href="/bi/global/css/global.css">
-    <link rel="stylesheet" href="/bi/global/css/cadena.css">
-    <link rel="stylesheet" href="/bi/global/css/participacion.css">
-    <link rel="stylesheet" href="/bi/global/css/vendedoras.css">
-    <link rel="stylesheet" href="/bi/global/css/producto.css">
-    <link rel="stylesheet" href="/bi/global/css/ranking.css">
+    <link rel="stylesheet" href="/bi/global/css/global.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/global.css') ?>">
+    <link rel="stylesheet" href="/bi/global/css/cadena.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/cadena.css') ?>">
+    <link rel="stylesheet" href="/bi/global/css/participacion.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/participacion.css') ?>">
+    <link rel="stylesheet" href="/bi/global/css/vendedoras.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/vendedoras.css') ?>">
+    <link rel="stylesheet" href="/bi/global/css/producto.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/producto.css') ?>">
+    <link rel="stylesheet" href="/bi/global/css/ranking.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/ranking.css') ?>">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Chart.js 4.x + DataLabels Plugin -->
@@ -44,6 +44,7 @@ $ultimaAct = date('d/m/Y H:i:s');
 <body>
 <div class="dash-wrap">
 <div id="loading-bar"></div>
+<div id="loading-overlay"><div class="loading-spinner"></div></div>
 <div id="spark-modal-root"></div>
 
     <!-- ══ TOPBAR ══════════════════════════════════════════════════════ -->
@@ -59,6 +60,24 @@ $ultimaAct = date('d/m/Y H:i:s');
             <button class="origen-btn active" data-origen="argentina">Argentina</button>
             <button class="origen-btn" data-origen="uruguay">Uruguay</button>
             <button class="origen-btn" data-origen="franquicias">Franquicias</button>
+        </div>
+        <div class="moneda-toggle" id="moneda-toggle">
+            <button class="moneda-btn active" data-moneda="ARS">ARS</button>
+            <button class="moneda-btn" data-moneda="USD">USD</button>
+        </div>
+        <button class="moneda-tcc-label" id="moneda-tcc-label" title="Ver cotizaciones del período" hidden></button>
+        <!-- Modal cotizaciones -->
+        <div class="tcc-modal-overlay" id="tcc-modal-overlay" hidden>
+            <div class="tcc-modal">
+                <div class="tcc-modal-header">
+                    <div>
+                        <span class="tcc-modal-title">Cotizaciones USD — Período</span>
+                        <div class="tcc-modal-subtitle">Último día disponible de cada mes (BCRA)</div>
+                    </div>
+                    <button class="tcc-modal-close" id="tcc-modal-close"><i class="bi bi-x-lg"></i></button>
+                </div>
+                <div class="tcc-modal-body" id="tcc-modal-body"></div>
+            </div>
         </div>
         <div class="topbar-meta">
             Última actualización<br>
@@ -140,6 +159,11 @@ $ultimaAct = date('d/m/Y H:i:s');
         <button id="btn-aplicar" class="btn-aplicar">
             <i class="bi bi-check2"></i> Aplicar
         </button>
+
+        <label class="comp-radio-label" style="margin-left:8px;white-space:nowrap" id="wrap-solo-activas">
+            <input type="checkbox" id="chk-solo-activas">
+            Solo activas
+        </label>
     </div>
 
     <!-- ══ NAVEGACIÓN DE PESTAÑAS ══════════════════════════════════════ -->
@@ -527,18 +551,20 @@ $ultimaAct = date('d/m/Y H:i:s');
             <div class="charts-row">
                 <div class="chart-card">
                     <div class="chart-card-header">
-                        <i class="bi bi-graph-up"></i> Evolución Mensual — Unidades (3 años)
+                        <i class="bi bi-graph-up"></i> <span id="evolucion-titulo">Evolución Mensual — Unidades</span>
+                        <div class="evolucion-metric-switch" id="evolucion-metric-switch">
+                            <button class="evol-btn active" data-evol-metrica="unidades">Unidades</button>
+                            <button class="evol-btn" data-evol-metrica="tickets">Tickets</button>
+                            <button class="evol-btn" data-evol-metrica="facturacion">Facturación</button>
+                        </div>
+                        <button class="tab-reload-btn" data-evolucion-tipo="unidades"
+                                id="evolucion-expand-btn"
+                                title="Ampliar gráfico">
+                            <i class="bi bi-arrows-angle-expand"></i>
+                        </button>
                     </div>
                     <div class="chart-canvas-wrap">
                         <canvas id="chart-evolucion-unidades"></canvas>
-                    </div>
-                </div>
-                <div class="chart-card">
-                    <div class="chart-card-header">
-                        <i class="bi bi-receipt"></i> Evolución Mensual — Tickets (3 años)
-                    </div>
-                    <div class="chart-canvas-wrap">
-                        <canvas id="chart-evolucion-tickets"></canvas>
                     </div>
                 </div>
             </div>
@@ -860,6 +886,20 @@ $ultimaAct = date('d/m/Y H:i:s');
     </div>
     <!-- /tab-ranking -->
 
+    <!-- ══ MODAL EVOLUCIÓN MENSUAL ══════════════════════════════════════ -->
+    <div id="evolucion-modal-overlay" style="display:none" class="spark-modal-overlay">
+        <div class="spark-modal" style="width:min(900px,96vw);max-height:92vh">
+            <div class="spark-modal-header">
+                <span class="spark-modal-title" id="evolucion-modal-title">—</span>
+                <div id="evolucion-modal-anios" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-left:16px"></div>
+                <button class="spark-modal-close" id="evolucion-modal-close"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="spark-modal-chart-wrap" style="min-height:400px">
+                <canvas id="evolucion-modal-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de detalle de sucursal -->
     <div id="ranking-modal-overlay" class="ranking-modal-overlay" style="display:none">
         <div class="ranking-modal">
@@ -887,16 +927,26 @@ $ultimaAct = date('d/m/Y H:i:s');
 
 </div><!-- /dash-wrap -->
 
+<!-- SheetJS (Excel export) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- Shared BIUtils -->
-<script src="/bi/js/utils.js"></script>
-<!-- Tab JS -->
-<script src="/bi/global/js/dashboard.js"></script>
-<script src="/bi/global/js/analisis.js"></script>
-<script src="/bi/global/js/producto.js"></script>
-<script src="/bi/global/js/cadena.js"></script>
-<script src="/bi/global/js/participacion.js"></script>
-<script src="/bi/global/js/vendedoras.js"></script>
-<script src="/bi/global/js/ranking.js"></script>
+<?php
+$jsFiles = [
+    '/bi/js/utils.js',
+    '/bi/global/components/ExcelExporter.js',
+    '/bi/global/js/dashboard.js',
+    '/bi/global/js/analisis.js',
+    '/bi/global/js/producto.js',
+    '/bi/global/js/cadena.js',
+    '/bi/global/js/participacion.js',
+    '/bi/global/js/vendedoras.js',
+    '/bi/global/js/ranking.js',
+];
+foreach ($jsFiles as $f):
+    $v = @filemtime($_SERVER['DOCUMENT_ROOT'] . $f) ?: 1;
+?>
+<script src="<?= $f ?>?v=<?= $v ?>"></script>
+<?php endforeach; ?>
 
 <script>
 /**
@@ -1013,6 +1063,17 @@ $ultimaAct = date('d/m/Y H:i:s');
         loaded[tab.name] = false;
         loadTab(tab.name).finally(() => btnReload.classList.remove('spinning'));
     });
+
+    // Toggle "Solo activas"
+    const chkSoloActivas = document.getElementById('chk-solo-activas');
+    if (chkSoloActivas) {
+        chkSoloActivas.addEventListener('change', () => {
+            Object.keys(loaded).forEach(k => loaded[k] = false);
+            const activePane = document.querySelector('.tab-pane.active');
+            const tab = TABS.find(t => t.pane === activePane?.id) ?? TABS[0];
+            loadTab(tab.name);
+        });
+    }
 
     // Carga inicial
     Dashboard.loadFilters().then(() => loadTab('kpis'));

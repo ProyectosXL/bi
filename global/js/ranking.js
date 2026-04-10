@@ -9,15 +9,19 @@ const Ranking = (() => {
     const $ = id => document.getElementById(id);
 
     /* ── Formato ──────────────────────────────────────────── */
-    const fmt = (typeof BIUtils !== 'undefined') ? BIUtils.fmt : (() => {
+    const fmt = (() => {
         const f = n => (n === null || n === undefined) ? '—' : n;
+        const conv = n => typeof Dashboard !== 'undefined' ? Dashboard.convertir(n) : n;
+        const pfx  = ()  => typeof Dashboard !== 'undefined' ? Dashboard.moneyPrefix() : '$\u00A0';
         return {
-            money  : (n, d = 0) => f(n) === '—' ? '—' : '$\u00A0' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d }),
+            money  : (n, d = 0) => f(n) === '—' ? '—' : pfx() + conv(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d }),
             moneyK : n => {
                 if (n === null || n === undefined) return '—';
-                if (Math.abs(n) >= 1_000_000) return '$\u00A0' + (n / 1_000_000).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'M';
-                if (Math.abs(n) >= 1_000)     return '$\u00A0' + (n / 1_000).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + 'K';
-                return '$\u00A0' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                const v = conv(n);
+                const p = pfx();
+                if (Math.abs(v) >= 1_000_000) return p + (v / 1_000_000).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'M';
+                if (Math.abs(v) >= 1_000)     return p + (v / 1_000).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + 'K';
+                return p + v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
             },
             pct    : (n, d = 1) => (n === null || n === undefined) ? '—' : (n * 100).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d }) + '\u00A0%',
             varPct : (n, d = 1) => { if (n === null || n === undefined) return '—'; const s = n >= 0 ? '+' : ''; return s + (n * 100).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d }) + '\u00A0%'; },
@@ -50,6 +54,35 @@ const Ranking = (() => {
     let _sortCol = 'score';
     let _sortDir = 'desc';
     let _lastData = [];
+
+    /* ── Exportar ranking a Excel ─────────────────────────── */
+    function exportarRanking() {
+        if (!_lastData?.length || typeof ExcelExporter === 'undefined') return;
+        let rows = _lastData;
+        if (typeof Dashboard !== 'undefined' && Dashboard.isSoloActivas?.()) {
+            const ids = Dashboard.getSucursalesActivasIds?.();
+            if (ids?.size) rows = rows.filter(r => ids.has(+r.nro_sucurs));
+        }
+        ExcelExporter.export({
+            title   : 'Ranking de Sucursales',
+            headers : ['#', 'Sucursal', 'Score', 'Ventas', 'Cumpl. Obj.',
+                       'Var. Ventas', 'T. Promedio', '% 2do', '% 3er'],
+            rows    : rows.map(r => [
+                r.rank,
+                r.nombre ?? ('Suc. ' + r.nro_sucurs),
+                r.score  ?? null,
+                r.facturacion != null && typeof Dashboard !== 'undefined'
+                    ? Dashboard.convertir(r.facturacion) : (r.facturacion ?? null),
+                r.detalle?.cumplimiento?.valor ?? null,
+                r.detalle?.var_fact?.valor     ?? null,
+                r.ticket_promedio != null && typeof Dashboard !== 'undefined'
+                    ? Dashboard.convertir(r.ticket_promedio) : (r.ticket_promedio ?? null),
+                r.porc_2do        ?? null,
+                r.porc_3ro        ?? null,
+            ]),
+            filename: 'ranking_sucursales',
+        });
+    }
 
     /* ── KPI meta: etiqueta, formato y tipo de normalización ─ */
     const KPI_META = {
@@ -89,6 +122,12 @@ const Ranking = (() => {
     function renderTable(data) {
         const tbody = document.querySelector('#ranking-table tbody');
         if (!tbody) return;
+
+        // Filtro "solo activas" (client-side)
+        if (typeof Dashboard !== 'undefined' && Dashboard.isSoloActivas?.()) {
+            const ids = Dashboard.getSucursalesActivasIds?.();
+            if (ids?.size) data = data.filter(r => ids.has(+r.nro_sucurs));
+        }
 
         const maxScore = data.length > 0 ? data[0].score : 100;
 
@@ -297,13 +336,13 @@ const Ranking = (() => {
 
     /* ── loadAll ──────────────────────────────────────────── */
     async function loadAll() {
-        const wrap = $('ranking-table-wrap');
         const tbody = document.querySelector('#ranking-table tbody');
         if (!tbody) return;
 
         tbody.innerHTML = `<tr><td colspan="9">
             <div class="ranking-loading"><div class="spinner"></div><br>Calculando ranking…</div>
         </td></tr>`;
+        document.body.classList.add('is-loading');
 
         attachListeners();
 
@@ -313,6 +352,12 @@ const Ranking = (() => {
             if (!data.ok) throw new Error(data.error ?? 'Error en score');
 
             _lastData = data.scores ?? [];
+
+            // Botón de exportación (una sola vez)
+            if (typeof ExcelExporter !== 'undefined') {
+                const headerEl = document.querySelector('.ranking-toolbar');
+                ExcelExporter.addExportButton(headerEl, exportarRanking);
+            }
 
             if (_lastData.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="9">
@@ -327,6 +372,8 @@ const Ranking = (() => {
             tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:#ef4444">
                 Error: ${err.message}
             </td></tr>`;
+        } finally {
+            document.body.classList.remove('is-loading');
         }
     }
 

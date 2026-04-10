@@ -34,13 +34,24 @@ try {
         exit;
     }
 
-    $origen     = $_GET['origen']      ?? 'argentina';
-    $periodo    = $_GET['periodo']     ?? 'mes_actual';
-    $vendedor   = (isset($_GET['vendedor']) && $_GET['vendedor'] !== '') ? $_GET['vendedor'] : '%';
-    $rubro      = (isset($_GET['rubro'])    && $_GET['rubro']    !== '') ? $_GET['rubro']    : '%';
-    $sucursal   = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? (int)$_GET['sucursal'] : null;
-    $grupo      = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
-    $tipoTienda = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    // ── Endpoint auxiliar: cotización dólar ────────
+    if (($_GET['action'] ?? '') === 'cotizacion') {
+        $db  = new GlobalDashboardDB('argentina');
+        $cot = $db->getCotizacionDolar();
+        ob_clean();
+        echo json_encode(['ok' => true, 'tcc' => $cot['tcc'], 'fecha' => $cot['fecha']],
+            JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
+        exit;
+    }
+
+    $origen      = $_GET['origen']      ?? 'argentina';
+    $periodo     = $_GET['periodo']     ?? 'mes_actual';
+    $vendedor    = (isset($_GET['vendedor']) && $_GET['vendedor'] !== '') ? $_GET['vendedor'] : '%';
+    $rubro       = (isset($_GET['rubro'])    && $_GET['rubro']    !== '') ? $_GET['rubro']    : '%';
+    $sucursal    = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? (int)$_GET['sucursal'] : null;
+    $grupo       = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
+    $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $soloActivas = isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
     // Solo argentina soporta grupo/tipoTienda
     if ($origen !== 'argentina') {
@@ -65,6 +76,10 @@ try {
     }
 
     $db = new GlobalDashboardDB($origen);
+    if ($soloActivas) $db->setSoloActivas(true);
+
+    // Cotización dólar (siempre desde argentina, no depende del origen)
+    $cotizacion = (new GlobalDashboardDB('argentina'))->getCotizacionDolar();
 
     // ── Período actual ──────────────────────────────
     $kpi_act  = $db->getKPIs($desde_act, $hasta_act, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
@@ -173,7 +188,8 @@ try {
 
     ob_clean();
     echo json_encode([
-        'ok'      => true,
+        'ok'             => true,
+        'cotizacion_dolar' => $cotizacion,
         'periodo' => [
             'tipo'       => $periodo,
             'desde_act'  => $desde_act,

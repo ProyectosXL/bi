@@ -44,13 +44,14 @@ try {
 
     ob_clean();
     echo json_encode([
-        'ok'             => true,
-        'campo_vendedor' => 'DESC_VENDEDOR',
-        'sucursales'     => $tryCall(fn() => $db->getSucursalesLista()),
-        'grupos'         => $soloArg ? $tryCall(fn() => $db->getGruposLista()) : [],
-        'tipos_tienda'   => $soloArg ? $tryCall(fn() => $db->getTiposTiendaLista()) : [],
-        'vendedores'     => $tryCall(fn() => $db->getVendedoresFiltro($desde_act, $hasta_act, $sucursal)),
-        'rubros'         => $tryCall(fn() => $db->getRubrosFiltro($desde_act, $hasta_act, $sucursal)),
+        'ok'                 => true,
+        'campo_vendedor'     => 'DESC_VENDEDOR',
+        'sucursales'         => $tryCall(fn() => $db->getSucursalesLista()),
+        'grupos'             => $soloArg ? $tryCall(fn() => $db->getGruposLista()) : [],
+        'tipos_tienda'       => $soloArg ? $tryCall(fn() => $db->getTiposTiendaLista()) : [],
+        'vendedores'         => $tryCall(fn() => $db->getVendedoresFiltro($desde_act, $hasta_act, $sucursal)),
+        'rubros'             => $tryCall(fn() => $db->getRubrosFiltro($desde_act, $hasta_act, $sucursal)),
+        'sucursales_activas' => $tryCall(fn() => $db->getSucursalesActivasIds()),
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {

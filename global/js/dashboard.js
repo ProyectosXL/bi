@@ -9,16 +9,55 @@ const Dashboard = (() => {
     /* ── Referencias al DOM ──────────────────── */
     const $ = id => document.getElementById(id);
 
+    /* ── Estado moneda ───────────────────────── */
+    let _cotizaciones = {};   // { "2024-01": 834.15, ... } — TCC último día de cada mes
+    let _tccActual    = 1;    // última TCC disponible, para display en el label
+    let _moneda       = 'ARS';
+    let _lastPeriodo  = null; // d.periodo del último loadAll (desde_act, hasta_act, etc.)
+
+    /**
+     * Retorna la TCC para un mes dado (formato 'YYYY-MM').
+     * Fallback: si no hay dato para ese mes, usa _tccActual.
+     */
+    function getTCCParaMes(mesKey) {
+        return _cotizaciones[mesKey] ?? _tccActual;
+    }
+
+    /**
+     * Convierte un valor monetario usando la TCC del mes al que pertenece la fecha.
+     * @param {number} valor
+     * @param {string} fecha  'YYYY-MM-DD' o 'YYYY-MM'
+     */
+    function convertirConFecha(valor, fecha) {
+        if (_moneda === 'ARS') return valor ?? 0;
+        const mesKey = (fecha ?? '').substring(0, 7);
+        return (valor ?? 0) / getTCCParaMes(mesKey);
+    }
+
+    /**
+     * Conversión sin fecha explícita: usa el mes de inicio del período actual.
+     * Para KPIs escalares (no serie temporal).
+     */
+    function convertir(val) {
+        if (_moneda === 'ARS') return val ?? 0;
+        const mesKey = (_lastPeriodo?.desde_act ?? '').substring(0, 7);
+        return (val ?? 0) / getTCCParaMes(mesKey);
+    }
+
+    function moneyPrefix()  { return _moneda === 'USD' ? 'U$S\u00A0' : '$\u00A0'; }
+
     /* ── Formato (usa BIUtils si está disponible, o local) ── */
-    const fmt = (typeof BIUtils !== 'undefined') ? BIUtils.fmt : (() => {
+    const fmt = (() => {
         const f = n => n === null || n === undefined ? '—' : n;
         return {
-            money  : (n, d=0) => f(n) === '—' ? '—' : '$\u00A0' + Number(n).toLocaleString('es-AR', {minimumFractionDigits:d,maximumFractionDigits:d}),
+            money  : (n, d=0) => f(n) === '—' ? '—' : moneyPrefix() + convertir(n).toLocaleString('es-AR', {minimumFractionDigits:d,maximumFractionDigits:d}),
             moneyK : n => {
                 if (n === null || n === undefined) return '—';
-                if (Math.abs(n) >= 1_000_000) return '$\u00A0' + (n/1_000_000).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
-                if (Math.abs(n) >= 1_000)     return '$\u00A0' + (n/1_000).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0})+'K';
-                return '$\u00A0' + Number(n).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0});
+                const v = convertir(n);
+                const pfx = moneyPrefix();
+                if (Math.abs(v) >= 1_000_000) return pfx + (v/1_000_000).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
+                if (Math.abs(v) >= 1_000)     return pfx + (v/1_000).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0})+'K';
+                return pfx + v.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0});
             },
             pct    : (n, d=1) => n===null||n===undefined ? '—' : (n*100).toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d})+'\u00A0%',
             varPct : (n, d=1) => { if(n===null||n===undefined) return '—'; const s=n>=0?'+':''; return s+(n*100).toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d})+'\u00A0%'; },
@@ -26,17 +65,29 @@ const Dashboard = (() => {
         };
     })();
 
+    /* ── Estado "solo activas" ───────────────── */
+    let _sucursalesActivasIds = new Set();
+
+    function isSoloActivas() {
+        return !!($('chk-solo-activas')?.checked);
+    }
+
+    function getSucursalesActivasIds() {
+        return _sucursalesActivasIds;
+    }
+
     /* ── Leer parámetros del DOM ─────────────── */
     function getParams(extra = {}) {
         const origenActive = document.querySelector('.origen-btn.active');
         const p = {
-            origen    : (origenActive?.dataset.origen ?? 'argentina'),
-            periodo   : ($('sel-periodo')?.value     ?? 'mes_actual'),
-            vendedor  : ($('sel-vendedor')?.value    ?? '%'),
-            rubro     : ($('sel-rubro')?.value       ?? '%'),
-            sucursal  : ($('sel-sucursal')?.value    ?? ''),
-            grupo     : ($('sel-grupo')?.value       ?? ''),
-            tipo_tienda: ($('sel-tipo-tienda')?.value ?? ''),
+            origen      : (origenActive?.dataset.origen ?? 'argentina'),
+            periodo     : ($('sel-periodo')?.value     ?? 'mes_actual'),
+            vendedor    : ($('sel-vendedor')?.value    ?? '%'),
+            rubro       : ($('sel-rubro')?.value       ?? '%'),
+            sucursal    : ($('sel-sucursal')?.value    ?? ''),
+            grupo       : ($('sel-grupo')?.value       ?? ''),
+            tipo_tienda : ($('sel-tipo-tienda')?.value ?? ''),
+            solo_activas: isSoloActivas() ? '1' : '0',
             ...extra
         };
         if (p.periodo === 'custom') {
@@ -602,6 +653,33 @@ const Dashboard = (() => {
         if (prev) prev.textContent = `(vs ${fmtDate(per.desde_prev)} — ${fmtDate(per.hasta_prev)})`;
     }
 
+    /* ── Exportar tabla de sucursales a Excel ─── */
+    function exportarTablaSucursales() {
+        if (!_tablaSucRows?.length || typeof ExcelExporter === 'undefined') return;
+        let rows = _tablaSucRows;
+        if (isSoloActivas() && _sucursalesActivasIds.size) {
+            rows = rows.filter(r => _sucursalesActivasIds.has(+r.nro_sucurs));
+        }
+        const totFact = rows.reduce((s, r) => s + (r.facturacion    ?? 0), 0);
+        const totObjF = rows.reduce((s, r) => s + (r.objetivo_fecha ?? 0), 0);
+        const totObjT = rows.reduce((s, r) => s + (r.objetivo_total ?? 0), 0);
+        const totDesv = totObjF > 0 ? (totFact - totObjF) / totObjF : null;
+        ExcelExporter.export({
+            title     : 'Facturación vs Objetivos por Sucursal',
+            headers   : ['Sucursal', 'Facturación', 'Var. Fact.', 'Objetivo Total', 'Objetivo Fecha', 'Desvío'],
+            rows      : rows.map(r => [
+                r.nombre ?? ('Suc. ' + r.nro_sucurs),
+                r.facturacion    ?? null,
+                r.var_facturacion ?? null,
+                r.objetivo_total  ?? null,
+                r.objetivo_fecha  ?? null,
+                r.desvio          ?? null,
+            ]),
+            totalsRow : ['TOTAL', totFact, null, totObjT, totObjF, totDesv],
+            filename  : 'facturacion_vs_objetivos',
+        });
+    }
+
     /* ── Tabla Facturación vs Objetivos ──────── */
     let _tablaSucRows = null;
     let _tablaSucSort = { col: 'facturacion', asc: false };
@@ -617,11 +695,23 @@ const Dashboard = (() => {
 
     function renderTablaSucursales(rows) {
         if (rows) _tablaSucRows = rows;
-        const allRows = _tablaSucRows;
+
+        // Filtro "solo activas" (client-side)
+        let allRows = _tablaSucRows;
+        if (isSoloActivas() && _sucursalesActivasIds.size) {
+            allRows = (allRows ?? []).filter(r => _sucursalesActivasIds.has(+r.nro_sucurs));
+        }
 
         const table = document.getElementById('tabla-sucursales');
         const tbody = table?.querySelector('tbody');
         if (!tbody) return;
+
+        // Botón de exportación (se agrega una sola vez)
+        if (typeof ExcelExporter !== 'undefined') {
+            const headerEl = table.closest('.table-card')?.querySelector('.table-card-header');
+            ExcelExporter.addExportButton(headerEl, exportarTablaSucursales);
+        }
+
         if (!allRows?.length) {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3)">Sin datos</td></tr>`;
             return;
@@ -959,6 +1049,11 @@ const Dashboard = (() => {
                 _sucNombres[+s.NRO_SUCURS] = s.DESC_SUCURSAL ?? ('Suc. ' + s.NRO_SUCURS);
             });
 
+            // IDs de sucursales activas (para filtro client-side)
+            if (Array.isArray(data.sucursales_activas)) {
+                _sucursalesActivasIds = new Set(data.sucursales_activas.map(Number));
+            }
+
             fill('sel-sucursal',    data.sucursales   ?? [], 'NRO_SUCURS',   'DESC_SUCURSAL', 'Todas',  '');
             fill('sel-grupo',       data.grupos       ?? [], 'GRUPO',        'GRUPO',          'Todos',  '');
             fill('sel-tipo-tienda', data.tipos_tienda ?? [], 'TIPO_TIENDA',  'TIPO_TIENDA',   'Todos',  '');
@@ -1112,11 +1207,130 @@ const Dashboard = (() => {
         document.body.classList.toggle('is-loading', on);
     }
 
+    /* ── Actualizar label TCC ────────────────── */
+    function updateTccLabel() {
+        const el = $('moneda-tcc-label');
+        if (!el) return;
+        if (_moneda !== 'USD') {
+            el.hidden = true;
+            el.textContent = '';
+            return;
+        }
+        // Mostrar TCC del último mes del período actual (no la más reciente global)
+        const mesActual = (_lastPeriodo?.hasta_act ?? '').substring(0, 7);
+        const tccPeriodo = mesActual ? (_cotizaciones[mesActual] ?? _tccActual) : _tccActual;
+        el.hidden = false;
+        el.innerHTML = `1 U$S = $${tccPeriodo.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <i class="bi bi-table" style="font-size:.7rem;opacity:.7;margin-left:3px"></i>`;
+    }
+
+    /* ── Modal cotizaciones mes a mes ────────── */
+    (function () {
+        function openTccModal() {
+            const overlay = $('tcc-modal-overlay');
+            const body    = $('tcc-modal-body');
+            if (!overlay || !body) return;
+
+            const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+            // Ordenar de más reciente a más antiguo (claves son YYYY-MM)
+            const entries = Object.entries(_cotizaciones).sort(([a], [b]) => b.localeCompare(a));
+
+            if (!entries.length) {
+                body.innerHTML = '<p style="color:var(--text-3);text-align:center;padding:20px">Sin datos de cotización para el período.</p>';
+            } else {
+                const mesActual = (_lastPeriodo?.hasta_act ?? '').substring(0, 7);
+
+                // Agrupar por año directamente desde las claves YYYY-MM
+                let html = '';
+                let anioActual = null;
+                entries.forEach(([mk, tcc]) => {
+                    const anio = mk.substring(0, 4);
+                    const mesIdx = parseInt(mk.substring(5, 7), 10) - 1; // 0-based
+                    const label = MESES[mesIdx] + ' ' + anio;
+                    const esActual = mk === mesActual;
+
+                    if (anio !== anioActual) {
+                        if (anioActual !== null) html += '</tbody></table></div>';
+                        html += `<div class="tcc-anio-group"><div class="tcc-anio-label">${anio}</div><table class="tcc-table"><tbody>`;
+                        anioActual = anio;
+                    }
+                    html += `<tr class="${esActual ? 'tcc-row-highlight' : ''}">
+                        <td>${label}</td>
+                        <td>$&nbsp;${tcc.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td>1 U$S</td>
+                    </tr>`;
+                });
+                if (anioActual !== null) html += '</tbody></table></div>';
+                body.innerHTML = html;
+            }
+
+            overlay.hidden = false;
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeTccModal() {
+            const overlay = $('tcc-modal-overlay');
+            if (overlay) overlay.hidden = true;
+            document.body.style.overflow = '';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('moneda-tcc-label')?.addEventListener('click', openTccModal);
+            document.getElementById('tcc-modal-close')?.addEventListener('click', closeTccModal);
+            document.getElementById('tcc-modal-overlay')?.addEventListener('click', e => {
+                if (e.target.id === 'tcc-modal-overlay') closeTccModal();
+            });
+        });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTccModal(); });
+    })();
+
+    /* ── Cargar cotizaciones mensuales ───────── */
+    async function loadCotizaciones(periodo) {
+        try {
+            const qs = new URLSearchParams({
+                desde      : periodo.desde_act  ?? '',
+                hasta      : periodo.hasta_act  ?? '',
+                desde_prev : periodo.desde_prev ?? '',
+                hasta_prev : periodo.hasta_prev ?? '',
+            }).toString();
+            const res  = await fetch(`/bi/global/api/cotizacion.php?${qs}`);
+            const data = await res.json();
+            if (data.ok) {
+                _cotizaciones = data.cotizaciones ?? {};
+                _tccActual    = data.tcc_actual   ?? 1;
+                updateTccLabel();
+            }
+        } catch (e) {
+            console.warn('[Dashboard] loadCotizaciones:', e);
+        }
+    }
+
+    /* ── Moneda toggle ───────────────────────── */
+    let _lastKpiData = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('#moneda-toggle .moneda-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.moneda === _moneda) return;
+                _moneda = btn.dataset.moneda;
+                document.querySelectorAll('#moneda-toggle .moneda-btn').forEach(b => b.classList.toggle('active', b === btn));
+                updateTccLabel();
+                if (_lastKpiData) {
+                    renderKPIs(_lastKpiData);
+                    renderTablaSucursales(_lastKpiData.tabla_sucursales);
+                }
+            });
+        });
+    });
+
     /* ── API principal ───────────────────────── */
     async function loadAll() {
         setLoading(true);
         try {
             const d = await apiFetch('kpis.php');
+            _lastKpiData  = d;
+            _lastPeriodo  = d.periodo ?? null;
+            // Cargar cotizaciones antes de renderizar
+            if (_lastPeriodo) await loadCotizaciones(_lastPeriodo);
             updatePeriodLabel(d.periodo);
             renderKPIs(d);
             renderTablaSucursales(d.tabla_sucursales);
@@ -1131,7 +1345,13 @@ const Dashboard = (() => {
         }
     }
 
-    return { loadAll, loadFilters, getParams, buildQS, getSucNombre, initSearchableSelect, syncSearchableSelect };
+    return {
+        loadAll, loadFilters, getParams, buildQS, getSucNombre,
+        initSearchableSelect, syncSearchableSelect,
+        isSoloActivas, getSucursalesActivasIds,
+        convertir, convertirConFecha, moneyPrefix,
+        getTCCParaMes, getMoneda: () => _moneda,
+    };
 })();
 
 /* ── Tooltip período previo en KPI vars ── */

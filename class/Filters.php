@@ -138,6 +138,14 @@ class Filters
             if ($sr) { $sqls[] = $sr; $params = array_merge($params, $pr); }
         }
 
+        // Solo activas: excluir sucursales con HABILITADO=0 en SUCURSALES_LAKERS
+        if (!empty($p['solo_activas']) && empty($p['sucursal'])) {
+            $sqls[] = "AND {$alias}.{$sucursalCol} IN (
+                SELECT NRO_SUCURSAL
+                FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS
+                WHERE HABILITADO = 1)";
+        }
+
         return [implode(' ', $sqls), $params];
     }
 

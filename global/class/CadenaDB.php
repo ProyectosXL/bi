@@ -187,6 +187,33 @@ class CadenaDB
             GROUP BY o.NRO_SUCURSAL
         ", array_merge([$desde_act, $hasta_act, $desde_act, $desde_act, $desde_act, $hasta_act, $desde_act, $desde_act], $pGO));
 
+        // Ingresos por sucursal (para conversión)
+        [$sfGI, $pGI] = $this->buildGrupoTipoFilter('i', $grupo, $tipoTienda);
+        $rowsIngresos = $this->query("
+            SELECT i.NRO_SUCURS, ISNULL(SUM(i.INGRESOS), 0) AS ingresos
+            FROM BI_T_INGRESOS_SUCURSALES i
+            WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND i.INGRESOS > 0 {$sfGI}
+            GROUP BY i.NRO_SUCURS
+        ", array_merge([$desde_act, $hasta_act], $pGI));
+
+        // Tickets con ingreso (para tasa de conversión)
+        [$sfGTC, $pGTC] = $this->buildGrupoTipoFilter('tc', $grupo, $tipoTienda);
+        $rowsTicketsConv = $this->query("
+            SELECT tc.NRO_SUCURS, COUNT(DISTINCT tc.N_COMP) AS tickets_conv
+            FROM BI_SALES_TOTAL_TICKETS tc
+            WHERE tc.FECHA >= ? AND tc.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND tc.T_COMP = 'FAC' {$sfGTC}
+              AND EXISTS (
+                  SELECT 1 FROM BI_T_INGRESOS_SUCURSALES ic
+                  WHERE ic.NRO_SUCURS = tc.NRO_SUCURS
+                    AND CAST(ic.FECHA AS DATE) = CAST(tc.FECHA AS DATE)
+                    AND ic.FECHA >= ? AND ic.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                    AND ic.INGRESOS > 0
+              )
+            GROUP BY tc.NRO_SUCURS
+        ", array_merge([$desde_act, $hasta_act], $pGTC, [$desde_act, $hasta_act]));
+
         // Mails por sucursal
         [$sfGMail, $pGMail] = $this->buildGrupoTipoFilter('tm', $grupo, $tipoTienda);
         $rowsMails = [];
@@ -236,11 +263,21 @@ class CadenaDB
         foreach ($rowsMails as $r) {
             $mailsMap[(int)$r['NRO_SUCURS']] = (int)$r['mails'];
         }
+        $ingresosMap = [];
+        foreach ($rowsIngresos as $r) {
+            $ingresosMap[(int)$r['NRO_SUCURS']] = (int)$r['ingresos'];
+        }
+        $ticketsConvMap = [];
+        foreach ($rowsTicketsConv as $r) {
+            $ticketsConvMap[(int)$r['NRO_SUCURS']] = (int)$r['tickets_conv'];
+        }
 
         $result = [];
         foreach ($rowsVentas as $v) {
             $nro     = (int)$v['NRO_SUCURS'];
             $factAct = (float)$v['fact_act'];
+            // Omitir sucursales sin ningún dato en el período actual
+            if ($factAct == 0 && (float)$v['unid_act'] == 0) continue;
             $factPrev = (float)$v['fact_prev'];
             $unidAct = (float)$v['unid_act'];
             $unidPrev = (float)$v['unid_prev'];
@@ -289,6 +326,10 @@ class CadenaDB
                 'var_unidades'     => $unidPrev > 0 ? ($unidAct - $unidPrev) / $unidPrev : 0,
                 'mails'            => $mailsMap[$nro] ?? 0,
                 'mails_pct'        => $tickAct > 0 ? ($mailsMap[$nro] ?? 0) / $tickAct : 0,
+                'ingresos'         => $ingresosMap[$nro] ?? 0,
+                'conversion'       => ($ingresosMap[$nro] ?? 0) > 0
+                                        ? ($ticketsConvMap[$nro] ?? 0) / $ingresosMap[$nro]
+                                        : null,
             ];
         }
 

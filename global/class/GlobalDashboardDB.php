@@ -12,6 +12,9 @@ class GlobalDashboardDB
     private string $campoVendedor;
     private string $tablaObjetivos;
     private string $origen;
+    private bool   $soloActivas = false;
+
+    public function setSoloActivas(bool $v): void { $this->soloActivas = $v; }
 
     public function __construct(string $origen = 'argentina')
     {
@@ -64,6 +67,7 @@ class GlobalDashboardDB
             'tipo_tienda' => $tipoTienda,
             'vendedor'    => $vendedor,
             'rubro'       => $rubro,
+            'solo_activas' => $this->soloActivas,
         ];
     }
 
@@ -262,7 +266,8 @@ class GlobalDashboardDB
         $rowI = $this->queryOne("
             SELECT ISNULL(SUM(i.INGRESOS), 0) AS total_ingresos
             FROM BI_T_INGRESOS_SUCURSALES i
-            WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfI}
+            WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND i.INGRESOS > 0 {$sfI}
         ", array_merge([$desde, $hasta], $pI));
 
         $rowT = $this->queryOne("
@@ -276,6 +281,7 @@ class GlobalDashboardDB
                   WHERE i2.NRO_SUCURS = t.NRO_SUCURS
                     AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
                     AND i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                    AND i2.INGRESOS > 0
               )
         ", array_merge([$desde, $hasta], $pT, [$desde, $hasta]));
 
@@ -337,6 +343,28 @@ class GlobalDashboardDB
             GROUP BY CAST(t.FECHA AS DATE)
         ", array_merge([$desde, $hasta], $pTk, [$desde, $hasta], $pT));
 
+        // Tickets filtrados por sucursales con ingresos ese día (para conversión correcta)
+        $tickConvRows = $this->query("
+            SELECT
+                CAST(t.FECHA AS DATE) AS fecha,
+                COUNT(DISTINCT t.N_COMP) AS tickets_conv
+            FROM BI_SALES_TOTAL_TICKETS t
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND t.T_COMP = 'FAC' {$sfT}
+              AND EXISTS (
+                  SELECT 1 FROM BI_T_INGRESOS_SUCURSALES i2
+                  WHERE i2.NRO_SUCURS = t.NRO_SUCURS
+                    AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
+                    AND i2.INGRESOS > 0
+              )
+            GROUP BY CAST(t.FECHA AS DATE)
+        ", array_merge([$desde, $hasta], $pT));
+
+        $tickConvMap = [];
+        foreach ($tickConvRows as $tr) {
+            $tickConvMap[$tr['fecha']->format('Y-m-d')] = (int)$tr['tickets_conv'];
+        }
+
         $tickMap = [];
         foreach ($tickRows as $tr) {
             $tickMap[$tr['fecha']->format('Y-m-d')] = $tr;
@@ -385,13 +413,14 @@ class GlobalDashboardDB
             $incrMap[$ir['fecha']->format('Y-m-d')] = $ir;
         }
 
-        // Ingresos por día
+        // Ingresos por día (solo registros con INGRESOS > 0)
         $ingRows = $this->query("
             SELECT
                 CAST(ig.FECHA AS DATE) AS fecha,
                 ISNULL(SUM(ig.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES ig
-            WHERE ig.FECHA >= ? AND ig.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfI}
+            WHERE ig.FECHA >= ? AND ig.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND ig.INGRESOS > 0 {$sfI}
             GROUP BY CAST(ig.FECHA AS DATE)
         ", array_merge([$desde, $hasta], $pI));
 
@@ -417,7 +446,8 @@ class GlobalDashboardDB
             $devoluciones= (float)($incrInfo['devoluciones']   ?? 0);
             $unidadesPos = (float)$row['unidades_positivas'];
             $cambios     = (float)$row['cambios'];
-            $ingresos    = $ingMap[$fecha] ?? 0;
+            $ingresos     = $ingMap[$fecha] ?? 0;
+            $ticketsConv  = $tickConvMap[$fecha] ?? 0;
 
             $result[] = [
                 'fecha'               => $fecha,
@@ -431,7 +461,7 @@ class GlobalDashboardDB
                 'porc_cambios'        => $unidadesPos > 0 ? $cambios / $unidadesPos : 0,
                 'porc_incremental'    => $devoluciones != 0 ? ($cambiosIncr - $devoluciones) / $devoluciones : 0,
                 'ingresos'            => $ingresos,
-                'conversion'          => $ingresos > 0 ? $tickets / $ingresos : 0,
+                'conversion'          => $ingresos > 0 ? $ticketsConv / $ingresos : 0,
             ];
         }
         return $result;
@@ -554,8 +584,18 @@ class GlobalDashboardDB
      *  LISTAS PARA FILTROS
      * ────────────────────────────────────────────── */
 
-    public function getSucursalesLista(): array
+    public function getSucursalesLista(bool $soloActivas = false): array
     {
+        if ($soloActivas) {
+            return $this->query("
+                SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL
+                FROM BI_SALES_SUCURSALES s
+                INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
+                  ON sl.NRO_SUCURSAL = s.NRO_SUCURS
+                WHERE sl.HABILITADO = 1
+                ORDER BY sl.DESC_SUCURSAL
+            ");
+        }
         return $this->query("
             SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL
             FROM BI_SALES_SUCURSALES s
@@ -564,6 +604,122 @@ class GlobalDashboardDB
             WHERE sl.HABILITADO = 1 OR sl.HABILITADO IS NULL
             ORDER BY sl.DESC_SUCURSAL
         ");
+    }
+
+    public function getSucursalesActivasIds(): array
+    {
+        $rows = $this->query("
+            SELECT NRO_SUCURSAL
+            FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS
+            WHERE HABILITADO = 1
+        ");
+        return array_values(array_map(fn($r) => (int)$r['NRO_SUCURSAL'], $rows));
+    }
+
+    /* ──────────────────────────────────────────────
+     *  EVOLUCIÓN MENSUAL (unidades o tickets)
+     *  Usa UNION ALL con tabla BK si existe.
+     * ────────────────────────────────────────────── */
+
+    public function getEvolucionMensual(
+        string $tipo,
+        ?int   $sucursal    = null,
+        string $vendedor    = '%',
+        string $rubro       = '%',
+        ?string $grupo      = null,
+        ?string $tipoTienda = null
+    ): array {
+        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+        $cv = $this->campoVendedor;
+
+        if ($tipo === 'unidades') {
+            $mainTable = 'BI_SALES_SUCURSALES';
+            $bkTable   = 'BI_SALES_SUCURSALES_BK';
+            [$sfS, $pS] = Filters::build($fp, 's', $cv, $this->origen, true, true);
+
+            $hasBK = false;
+            try {
+                $ck = $this->queryOne(
+                    "SELECT CASE WHEN OBJECT_ID('{$bkTable}') IS NOT NULL THEN 1 ELSE 0 END AS v"
+                );
+                $hasBK = ((int)($ck['v'] ?? 0)) === 1;
+            } catch (\Throwable $e) { /* tabla BK inexistente */ }
+
+            $valExpr  = "SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END)";
+            $mainSql  = "
+                SELECT YEAR(s.FECHA) AS anio, MONTH(s.FECHA) AS mes, {$valExpr} AS valor
+                FROM {$mainTable} s WITH (NOLOCK)
+                WHERE s.FECHA IS NOT NULL {$sfS}
+                GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)";
+            $unionSql = $hasBK ? "
+                UNION ALL
+                SELECT YEAR(s.FECHA) AS anio, MONTH(s.FECHA) AS mes, {$valExpr} AS valor
+                FROM {$bkTable} s WITH (NOLOCK)
+                WHERE s.FECHA IS NOT NULL {$sfS}
+                GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)" : '';
+            $params = $hasBK ? array_merge($pS, $pS) : $pS;
+
+        } else {
+            // tickets
+            $mainTable = 'BI_SALES_TOTAL_TICKETS';
+            $bkTable   = 'BI_SALES_TOTAL_TICKETS_BK';
+            [$sfT, $pT] = Filters::build($fp, 't', $cv, $this->origen, true, false);
+
+            $hasBK = false;
+            try {
+                $ck = $this->queryOne(
+                    "SELECT CASE WHEN OBJECT_ID('{$bkTable}') IS NOT NULL THEN 1 ELSE 0 END AS v"
+                );
+                $hasBK = ((int)($ck['v'] ?? 0)) === 1;
+            } catch (\Throwable $e) { /* tabla BK inexistente */ }
+
+            $valExpr  = "COUNT(DISTINCT t.N_COMP)";
+            $mainSql  = "
+                SELECT YEAR(t.FECHA) AS anio, MONTH(t.FECHA) AS mes, {$valExpr} AS valor
+                FROM {$mainTable} t WITH (NOLOCK)
+                WHERE t.T_COMP = 'FAC' AND t.FECHA IS NOT NULL {$sfT}
+                GROUP BY YEAR(t.FECHA), MONTH(t.FECHA)";
+            $unionSql = $hasBK ? "
+                UNION ALL
+                SELECT YEAR(t.FECHA) AS anio, MONTH(t.FECHA) AS mes, {$valExpr} AS valor
+                FROM {$bkTable} t WITH (NOLOCK)
+                WHERE t.T_COMP = 'FAC' AND t.FECHA IS NOT NULL {$sfT}
+                GROUP BY YEAR(t.FECHA), MONTH(t.FECHA)" : '';
+            $params = $hasBK ? array_merge($pT, $pT) : $pT;
+        }
+
+        $rows = $this->query("
+            SELECT anio, mes, SUM(valor) AS valor
+            FROM ({$mainSql}{$unionSql}) AS combined
+            GROUP BY anio, mes
+            ORDER BY anio, mes
+        ", $params);
+
+        /* Agrupar por año */
+        $byAnioMes = [];
+        $aniosSet  = [];
+        foreach ($rows as $r) {
+            $anio  = (int)$r['anio'];
+            $mes   = (int)$r['mes'];
+            $valor = (float)$r['valor'];
+            $byAnioMes[$anio][$mes] = $valor;
+            $aniosSet[$anio]        = true;
+        }
+
+        $anios = array_keys($aniosSet);
+        rsort($anios);
+
+        $meses  = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        $series = [];
+        foreach ($anios as $anio) {
+            $valores = [];
+            for ($m = 1; $m <= 12; $m++) {
+                $valores[] = isset($byAnioMes[$anio][$m]) ? $byAnioMes[$anio][$m] : null;
+            }
+            $series[] = ['anio' => $anio, 'valores' => $valores];
+        }
+
+        return ['anios' => $anios, 'meses' => $meses, 'series' => $series];
     }
 
     public function getGruposLista(): array
@@ -901,5 +1057,167 @@ class GlobalDashboardDB
         } catch (Throwable $_) {
             return $noMails;
         }
+    }
+
+    /* ──────────────────────────────────────────────
+     *  COTIZACIÓN DÓLAR OFICIAL BCRA
+     * ────────────────────────────────────────────── */
+
+    /**
+     * Retorna la cotización más reciente disponible.
+     * Usado sólo para el label de display en el toggle de moneda.
+     */
+    public function getCotizacionDolar(): array
+    {
+        try {
+            $row = $this->queryOne("
+                SELECT TOP 1 TCC, CONVERT(varchar(10), Fecha, 120) AS Fecha
+                FROM RO_V_DOLAR_OFICIAL_BCRA
+                ORDER BY Fecha DESC
+            ");
+            return [
+                'tcc'   => (float)($row['TCC']   ?? 1),
+                'fecha' => (string)($row['Fecha'] ?? ''),
+            ];
+        } catch (Throwable $_) {
+            return ['tcc' => 1, 'fecha' => ''];
+        }
+    }
+
+    /**
+     * Retorna la cotización del último día disponible de cada mes
+     * dentro del rango [rangoDesde, rangoHasta], más la tcc_actual (top 1).
+     *
+     * Para meses sin cotización aplica fallback hacia el mes anterior más cercano.
+     *
+     * @return array{cotizaciones: array<string,float>, tcc_actual: float}
+     */
+    public function getCotizacionesMensuales(string $rangoDesde, string $rangoHasta): array
+    {
+        // tcc_actual: última cotización disponible (para display)
+        $tccActual = 1.0;
+        try {
+            $row = $this->queryOne("
+                SELECT TOP 1 TCC FROM RO_V_DOLAR_OFICIAL_BCRA ORDER BY Fecha DESC
+            ");
+            $tccActual = (float)($row['TCC'] ?? 1);
+        } catch (Throwable $_) {}
+
+        // Cotización del último día disponible por mes (una sola fila por mes garantizada)
+        $cotizaciones = [];
+        try {
+            $rows = $this->query("
+                SELECT mes_key, TCC
+                FROM (
+                    SELECT
+                        FORMAT(Fecha, 'yyyy-MM') AS mes_key,
+                        TCC,
+                        ROW_NUMBER() OVER (PARTITION BY FORMAT(Fecha, 'yyyy-MM') ORDER BY Fecha DESC) AS rn
+                    FROM RO_V_DOLAR_OFICIAL_BCRA
+                    WHERE Fecha >= ? AND Fecha <= ?
+                ) x
+                WHERE rn = 1
+                ORDER BY mes_key ASC
+            ", [$rangoDesde, $rangoHasta]);
+
+            foreach ($rows as $r) {
+                $cotizaciones[(string)$r['mes_key']] = (float)$r['TCC'];
+            }
+        } catch (Throwable $_) {}
+
+        // Fallback: rellenar meses sin cotización con el valor anterior más cercano
+        if ($cotizaciones) {
+            $cursor = new DateTime($rangoDesde);
+            $end    = new DateTime($rangoHasta);
+            $lastKnown = reset($cotizaciones); // primer valor disponible
+            while ($cursor <= $end) {
+                $mk = $cursor->format('Y-m');
+                if (isset($cotizaciones[$mk])) {
+                    $lastKnown = $cotizaciones[$mk];
+                } else {
+                    $cotizaciones[$mk] = $lastKnown;
+                }
+                $cursor->modify('+1 month');
+            }
+            ksort($cotizaciones);
+        }
+
+        return [
+            'cotizaciones' => $cotizaciones,
+            'tcc_actual'   => $tccActual,
+        ];
+    }
+
+    /* ──────────────────────────────────────────────
+     *  EVOLUCIÓN MENSUAL — FACTURACIÓN
+     * ────────────────────────────────────────────── */
+
+    public function getEvolucionMensualFacturacion(
+        ?int   $sucursal    = null,
+        string $vendedor    = '%',
+        string $rubro       = '%',
+        ?string $grupo      = null,
+        ?string $tipoTienda = null
+    ): array {
+        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+        $cv = $this->campoVendedor;
+
+        $mainTable = 'BI_SALES_SUCURSALES';
+        $bkTable   = 'BI_SALES_SUCURSALES_BK';
+        [$sfS, $pS] = Filters::build($fp, 's', $cv, $this->origen, true, true);
+
+        $hasBK = false;
+        try {
+            $ck = $this->queryOne(
+                "SELECT CASE WHEN OBJECT_ID('{$bkTable}') IS NOT NULL THEN 1 ELSE 0 END AS v"
+            );
+            $hasBK = ((int)($ck['v'] ?? 0)) === 1;
+        } catch (\Throwable $e) { /* tabla BK inexistente */ }
+
+        $valExpr = "ISNULL(SUM(s.IMPORTE), 0)";
+        $mainSql = "
+            SELECT YEAR(s.FECHA) AS anio, MONTH(s.FECHA) AS mes, {$valExpr} AS valor
+            FROM {$mainTable} s WITH (NOLOCK)
+            WHERE s.FECHA IS NOT NULL {$sfS}
+            GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)";
+        $unionSql = $hasBK ? "
+            UNION ALL
+            SELECT YEAR(s.FECHA) AS anio, MONTH(s.FECHA) AS mes, {$valExpr} AS valor
+            FROM {$bkTable} s WITH (NOLOCK)
+            WHERE s.FECHA IS NOT NULL {$sfS}
+            GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)" : '';
+        $params = $hasBK ? array_merge($pS, $pS) : $pS;
+
+        $rows = $this->query("
+            SELECT anio, mes, SUM(valor) AS valor
+            FROM ({$mainSql}{$unionSql}) AS combined
+            GROUP BY anio, mes
+            ORDER BY anio, mes
+        ", $params);
+
+        $byAnioMes = [];
+        $aniosSet  = [];
+        foreach ($rows as $r) {
+            $anio  = (int)$r['anio'];
+            $mes   = (int)$r['mes'];
+            $valor = (float)$r['valor'];
+            $byAnioMes[$anio][$mes] = $valor;
+            $aniosSet[$anio]        = true;
+        }
+
+        $anios = array_keys($aniosSet);
+        rsort($anios);
+
+        $meses  = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        $series = [];
+        foreach ($anios as $anio) {
+            $valores = [];
+            for ($m = 1; $m <= 12; $m++) {
+                $valores[] = isset($byAnioMes[$anio][$m]) ? $byAnioMes[$anio][$m] : null;
+            }
+            $series[] = ['anio' => $anio, 'valores' => $valores];
+        }
+
+        return ['anios' => $anios, 'meses' => $meses, 'series' => $series];
     }
 }

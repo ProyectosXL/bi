@@ -9,6 +9,46 @@ const Participacion = (() => {
 
     let _lastData = null;
 
+    /* ── Exportar a Excel ────────────────────── */
+    function exportarParticipacion() {
+        if (!_lastData?.rubros?.length || !_lastData?.sucursales?.length || typeof ExcelExporter === 'undefined') return;
+
+        const rubros = _lastData.rubros;
+        let sucursales = _lastData.sucursales;
+
+        // Filtro solo activas: excluir filas tipo 'sucursal' que no estén en el Set
+        if (typeof Dashboard !== 'undefined' && Dashboard.isSoloActivas?.()) {
+            const ids = Dashboard.getSucursalesActivasIds?.();
+            if (ids?.size) {
+                sucursales = sucursales.filter(s => s.tipo === 'grupo' || ids.has(+s.nro_sucurs));
+            }
+        }
+
+        const headers = ['Sucursal',
+            ...rubros.flatMap(r => [r + ' % Fact', r + ' % Unid'])];
+
+        const rows = sucursales.map(s => {
+            if (s.tipo === 'grupo') {
+                return [s.nombre ?? '', ...rubros.flatMap(() => [null, null])];
+            }
+            const getSucNombre = n => (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(n) : 'Suc. ' + n);
+            return [
+                getSucNombre(s.nro_sucurs),
+                ...rubros.flatMap(rub => [
+                    s.rubros?.[rub]?.porc_facturacion ?? null,
+                    s.rubros?.[rub]?.porc_unidades    ?? null,
+                ]),
+            ];
+        });
+
+        ExcelExporter.export({
+            title   : 'Participación por Rubro y Sucursal',
+            headers,
+            rows,
+            filename: 'participacion_rubros',
+        });
+    }
+
     /* ── Formato ─────────────────────────────── */
     function pctFmt(n) {
         return n === null || n === undefined ? '—'
@@ -32,8 +72,16 @@ const Participacion = (() => {
             return;
         }
 
-        const rubros     = data.rubros;    // ['CALZADO', 'MARROQUINERÍA', ...]
-        const sucursales = data.sucursales; // [{tipo:'grupo',...}, {tipo:'sucursal',...}]
+        const rubros = data.rubros;
+
+        // Filtro solo activas: mantener grupos, filtrar sucursales no activas
+        let sucursales = data.sucursales;
+        if (typeof Dashboard !== 'undefined' && Dashboard.isSoloActivas?.()) {
+            const ids = Dashboard.getSucursalesActivasIds?.();
+            if (ids?.size) {
+                sucursales = sucursales.filter(s => s.tipo === 'grupo' || ids.has(+s.nro_sucurs));
+            }
+        }
 
         const getSucNombre = n => (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(n) : 'Suc. ' + n);
 
@@ -111,6 +159,7 @@ const Participacion = (() => {
     async function loadAll() {
         const wrap = document.getElementById('participacion-wrap');
         if (wrap) wrap.innerHTML = '<div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>';
+        document.body.classList.add('is-loading');
 
         try {
             const qs  = Dashboard.buildQS({ top_rubros: 5 });
@@ -121,10 +170,20 @@ const Participacion = (() => {
 
             _lastData = data;
             renderPivot(_lastData);
+
+            // Botón de exportación (una sola vez)
+            if (typeof ExcelExporter !== 'undefined') {
+                const sectionHeader = document.querySelector('#tab-participacion .analisis-section-header');
+                // Insertar dentro del div derecho si existe, si no, directo en el header
+                const rightDiv = sectionHeader?.querySelector('[style*="margin-left"]');
+                ExcelExporter.addExportButton(rightDiv ?? sectionHeader, exportarParticipacion);
+            }
         } catch(e) {
             const wrap = document.getElementById('participacion-wrap');
             if (wrap) wrap.innerHTML = `<div style="padding:20px;color:var(--neg);font-size:.85rem"><i class="bi bi-exclamation-triangle"></i> ${e.message}</div>`;
             console.error('[Participacion]', e);
+        } finally {
+            document.body.classList.remove('is-loading');
         }
     }
 

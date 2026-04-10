@@ -22,10 +22,11 @@ try {
         exit;
     }
 
-    $origen     = $_GET['origen']      ?? 'argentina';
-    $periodo    = $_GET['periodo']     ?? 'mes_actual';
-    $grupo      = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
-    $tipoTienda = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $origen      = $_GET['origen']      ?? 'argentina';
+    $periodo     = $_GET['periodo']     ?? 'mes_actual';
+    $grupo       = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
+    $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $soloActivas = isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
     if ($origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
 
@@ -44,6 +45,19 @@ try {
 
     $db = new CadenaDB($origen);
     $sucursales = $db->getKPIsPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda);
+
+    // Filtro "solo activas"
+    if ($soloActivas) {
+        require_once __DIR__ . '/../class/GlobalDashboardDB.php';
+        try {
+            $dbG = new GlobalDashboardDB($origen);
+            $activasFlip = array_flip($dbG->getSucursalesActivasIds());
+            $sucursales = array_values(array_filter(
+                $sucursales,
+                fn($s) => isset($activasFlip[$s['nro_sucurs']])
+            ));
+        } catch (Throwable $_) {}
+    }
 
     ob_clean();
     echo json_encode([

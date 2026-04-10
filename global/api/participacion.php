@@ -22,11 +22,12 @@ try {
         exit;
     }
 
-    $origen     = $_GET['origen']      ?? 'argentina';
-    $periodo    = $_GET['periodo']     ?? 'mes_actual';
-    $topRubros  = (int)($_GET['top_rubros'] ?? 15);
-    $grupo      = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
-    $tipoTienda = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $origen      = $_GET['origen']      ?? 'argentina';
+    $periodo     = $_GET['periodo']     ?? 'mes_actual';
+    $topRubros   = (int)($_GET['top_rubros'] ?? 15);
+    $grupo       = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
+    $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $soloActivas = isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
     if ($origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
 
@@ -40,6 +41,18 @@ try {
 
     $db   = new ParticipacionDB($origen);
     $data = $db->getPivot($desde_act, $hasta_act, $topRubros, $grupo, $tipoTienda);
+
+    // Filtro "solo activas"
+    if ($soloActivas && !empty($data['sucursales'])) {
+        try {
+            $dbG = new GlobalDashboardDB($origen);
+            $activasFlip = array_flip($dbG->getSucursalesActivasIds());
+            $data['sucursales'] = array_values(array_filter(
+                $data['sucursales'],
+                fn($s) => isset($activasFlip[$s['nro_sucurs']])
+            ));
+        } catch (Throwable $_) {}
+    }
 
     ob_clean();
     echo json_encode(array_merge(['ok' => true], $data), JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

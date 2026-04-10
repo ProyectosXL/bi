@@ -13,11 +13,27 @@ const Analisis = (() => {
 
     const _charts = {};
 
+    // Paleta cíclica de 9 colores para los años (del más reciente al más antiguo)
     const EVOLUCION_COLORS = [
-        { border: '#2563eb', bg: 'rgba(37,99,235,0.12)'  },
-        { border: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-        { border: '#00a878', bg: 'rgba(0,168,120,0.15)'  },
+        { border: '#2563eb', bg: 'rgba(37,99,235,0.10)'   },  // 2026
+        { border: '#16a34a', bg: 'rgba(22,163,74,0.10)'   },  // 2025
+        { border: '#dc2626', bg: 'rgba(220,38,38,0.10)'   },  // 2024
+        { border: '#d97706', bg: 'rgba(217,119,6,0.10)'   },  // 2023
+        { border: '#7c3aed', bg: 'rgba(124,58,237,0.10)'  },  // 2022
+        { border: '#0891b2', bg: 'rgba(8,145,178,0.10)'   },  // 2021
+        { border: '#db2777', bg: 'rgba(219,39,119,0.10)'  },  // 2020
+        { border: '#65a30d', bg: 'rgba(101,163,13,0.10)'  },  // 2019
+        { border: '#9f1239', bg: 'rgba(159,18,57,0.10)'   },  // 2018
     ];
+
+    // Cache de últimos datos de evolución por métrica (para el modal y re-render)
+    const _lastEvolucionData = {};
+
+    // Métrica actualmente mostrada en el gráfico de evolución
+    let _evolucionMetrica = 'unidades';
+
+    // Instancia del chart en el modal de evolución
+    let _modalEvChart = null;
 
     /* ── Formato ─────────────────────────────── */
     function numFmt(n, dec = 0) {
@@ -26,7 +42,17 @@ const Analisis = (() => {
     }
     function moneyFmt(n) {
         if (n === null || n === undefined) return '—';
-        return '$\u00A0' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const v   = typeof Dashboard !== 'undefined' ? Dashboard.convertir(n) : n;
+        const pfx = typeof Dashboard !== 'undefined' ? Dashboard.moneyPrefix() : '$\u00A0';
+        return pfx + v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+    function moneyFmtK(n) {
+        if (n === null || n === undefined) return '—';
+        const v   = typeof Dashboard !== 'undefined' ? Dashboard.convertir(n) : n;
+        const pfx = typeof Dashboard !== 'undefined' ? Dashboard.moneyPrefix() : '$\u00A0';
+        if (Math.abs(v) >= 1_000_000) return pfx + (v / 1_000_000).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'M';
+        if (Math.abs(v) >= 1_000)     return pfx + (v / 1_000).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + 'K';
+        return pfx + v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     }
     function varFmt(v) {
         if (v === null || v === undefined) return '';
@@ -322,15 +348,108 @@ const Analisis = (() => {
     }
 
     /* ── Render: evolución ───────────────────── */
-    // getEvolucionMensual → {anios:[...], meses:[...], series:[{anio, valores:[12]}]}
-    function renderEvolucion(data, canvasId) {
+    // tipo: 'unidades' | 'tickets' | 'facturacion'
+    function evolucionFmt(tipo) {
+        return tipo === 'facturacion' ? moneyFmtK : numFmt;
+    }
+
+    function evolucionTitulo(tipo) {
+        if (tipo === 'tickets')     return 'Evolución Mensual — Tickets';
+        if (tipo === 'facturacion') return 'Evolución Mensual — Facturación';
+        return 'Evolución Mensual — Unidades';
+    }
+
+    /**
+     * Convierte los valores de una serie mensual a USD si corresponde.
+     * Cada punto (anio, mesIdx+1) se divide por la TCC de ese mes.
+     */
+    function convertirSerieEvolucion(series) {
+        if (typeof Dashboard === 'undefined' || Dashboard.getMoneda() !== 'USD') return series;
+        return series.map(s => ({
+            ...s,
+            valores: s.valores.map((v, mesIdx) => {
+                if (v === null) return null;
+                const mesKey = `${s.anio}-${String(mesIdx + 1).padStart(2, '0')}`;
+                return Dashboard.convertirConFecha(v, mesKey + '-01');
+            }),
+        }));
+    }
+
+    /**
+     * Asegura que _cotizaciones tenga datos para todos los años presentes en las series.
+     * El rango de KPIs solo cubre el período actual+previo; el gráfico puede ir más atrás.
+     */
+    async function ensureCotizacionesParaEvolucion(series) {
+        if (typeof Dashboard === 'undefined' || Dashboard.getMoneda() !== 'USD') return;
+        if (!series?.length) return;
+        const anios = series.map(s => s.anio).filter(Boolean);
+        if (!anios.length) return;
+        const minAnio = Math.min(...anios);
+        const maxAnio = Math.max(...anios);
+        const desde = `${minAnio}-01-01`;
+        const hasta = `${maxAnio}-12-31`;
+        try {
+            const qs  = new URLSearchParams({ desde, hasta, desde_prev: desde, hasta_prev: hasta }).toString();
+            const res = await fetch(`/bi/global/api/cotizacion.php?${qs}`);
+            const d   = await res.json();
+            if (d.ok && d.cotizaciones) {
+                // Merge into Dashboard's internal map via getTCCParaMes (read-only),
+                // so we patch through a temporary override on Dashboard if possible,
+                // or store locally and shadow getTCCParaMes for the conversion.
+                _cotizacionesEvolucion = d.cotizaciones;
+            }
+        } catch (e) {
+            console.warn('[Analisis] cotizaciones evolución:', e);
+        }
+    }
+
+    // Cotizaciones adicionales cargadas para cubrir el rango histórico de evolución
+    let _cotizacionesEvolucion = {};
+
+    /**
+     * Convierte un valor de evolución usando cotizaciones históricas extendidas.
+     * Prioriza _cotizacionesEvolucion (rango histórico) sobre Dashboard (solo período actual).
+     */
+    function convertirEvolucionValor(valor, mesKey) {
+        if (typeof Dashboard === 'undefined' || Dashboard.getMoneda() !== 'USD') return valor ?? 0;
+        const tcc = _cotizacionesEvolucion[mesKey] ?? Dashboard.getTCCParaMes(mesKey);
+        return (valor ?? 0) / tcc;
+    }
+
+    function convertirSerieEvolucionHistorica(series) {
+        if (typeof Dashboard === 'undefined' || Dashboard.getMoneda() !== 'USD') return series;
+        return series.map(s => ({
+            ...s,
+            valores: s.valores.map((v, mesIdx) => {
+                if (v === null) return null;
+                const mesKey = `${s.anio}-${String(mesIdx + 1).padStart(2, '0')}`;
+                return convertirEvolucionValor(v, mesKey);
+            }),
+        }));
+    }
+
+    function renderEvolucion(data, canvasId, tipo) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || !data?.series?.length) return;
         if (_charts[canvasId]) { _charts[canvasId].destroy(); delete _charts[canvasId]; }
 
-        const meses    = data.meses ?? ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-        const datasets = data.series.map((s, idx) => {
-            const color = EVOLUCION_COLORS[Math.min(idx, EVOLUCION_COLORS.length - 1)];
+        // Guardar datos originales (en ARS) para re-render al cambiar moneda
+        if (tipo) _lastEvolucionData[tipo] = data;
+
+        // Actualizar título del card
+        const tituloEl = document.getElementById('evolucion-titulo');
+        if (tituloEl) tituloEl.textContent = evolucionTitulo(tipo);
+
+        const fmtV  = evolucionFmt(tipo);
+        const meses = data.meses ?? ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+        // Convertir por mes si está en USD (solo para facturación)
+        const seriesConvertidas = tipo === 'facturacion'
+            ? convertirSerieEvolucionHistorica(data.series)
+            : data.series;
+
+        const datasets = seriesConvertidas.map((s, idx) => {
+            const color = EVOLUCION_COLORS[idx % EVOLUCION_COLORS.length];
             return {
                 label          : String(s.anio),
                 data           : s.valores,
@@ -339,7 +458,7 @@ const Analisis = (() => {
                 borderWidth    : 2,
                 pointRadius    : 3,
                 tension        : 0.3,
-                fill           : idx === data.series.length - 1,
+                fill           : false,
             };
         });
 
@@ -348,11 +467,193 @@ const Analisis = (() => {
             data: { labels: meses, datasets },
             options: {
                 responsive: true,
-                plugins   : { legend: { position: 'top', labels: { font: { size: 11 } } }, datalabels: { display: false } },
-                scales    : { y: { ticks: { callback: v => numFmt(v) } } },
+                plugins: {
+                    legend    : { position: 'top', labels: { font: { size: 11 }, boxWidth: 14 } },
+                    datalabels: { display: false },
+                    tooltip   : {
+                        mode       : 'index',
+                        intersect  : false,
+                        backgroundColor: '#1a2340',
+                        titleColor : '#9ba8c8',
+                        bodyColor  : '#ffffff',
+                        padding    : 10,
+                        cornerRadius: 6,
+                        callbacks  : {
+                            title     : items => items.length ? (meses[items[0].dataIndex] ?? '') : '',
+                            afterTitle: () => '──────────────',
+                            label     : ctx => {
+                                const v = ctx.parsed.y;
+                                return ` ${ctx.dataset.label}: ${v !== null && v !== undefined ? fmtV(v) : '—'}`;
+                            },
+                            labelTextColor: ctx => EVOLUCION_COLORS[ctx.datasetIndex % EVOLUCION_COLORS.length].border,
+                        },
+                    },
+                },
+                scales: { y: { ticks: { callback: v => fmtV(v) } } },
             }
         });
     }
+
+    /* ── Modal de evolución ─────────────────── */
+    function openEvolucionModal(tipo) {
+        const resolvedTipo = tipo ?? _evolucionMetrica;
+        const data = _lastEvolucionData[resolvedTipo];
+        if (!data?.series?.length) return;
+
+        const overlay = document.getElementById('evolucion-modal-overlay');
+        if (!overlay) return;
+
+        const titleEl = document.getElementById('evolucion-modal-title');
+        const aniosEl = document.getElementById('evolucion-modal-anios');
+        const canvas  = document.getElementById('evolucion-modal-canvas');
+        if (!canvas) return;
+
+        if (titleEl) titleEl.textContent = evolucionTitulo(resolvedTipo);
+
+        const fmtV = evolucionFmt(resolvedTipo);
+
+        const meses = data.meses ?? ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+        // Convertir por mes si está en USD (solo facturación)
+        const seriesModal = resolvedTipo === 'facturacion'
+            ? convertirSerieEvolucion(data.series)
+            : data.series;
+
+        const datasets = seriesModal.map((s, idx) => {
+            const color = EVOLUCION_COLORS[idx % EVOLUCION_COLORS.length];
+            return {
+                label          : String(s.anio),
+                data           : s.valores,
+                borderColor    : color.border,
+                backgroundColor: color.bg,
+                borderWidth    : 2.5,
+                pointRadius    : 4,
+                tension        : 0.3,
+                fill           : false,
+                hidden         : false,
+            };
+        });
+
+        // Chips de año
+        if (aniosEl) {
+            aniosEl.innerHTML = '';
+            data.series.forEach((s, idx) => {
+                const color = EVOLUCION_COLORS[idx % EVOLUCION_COLORS.length];
+                const chip  = document.createElement('span');
+                chip.className       = 'anio-chip';
+                chip.textContent     = s.anio;
+                chip.style.color     = color.border;
+                chip.style.background = color.bg;
+                chip.dataset.idx     = idx;
+                chip.addEventListener('click', () => {
+                    if (!_modalEvChart) return;
+                    const i  = parseInt(chip.dataset.idx);
+                    const ds = _modalEvChart.data.datasets[i];
+                    if (!ds) return;
+                    ds.hidden = !ds.hidden;
+                    chip.classList.toggle('hidden-year', !!ds.hidden);
+                    _modalEvChart.update();
+                });
+                aniosEl.appendChild(chip);
+            });
+        }
+
+        if (_modalEvChart) { _modalEvChart.destroy(); _modalEvChart = null; }
+
+        _modalEvChart = new Chart(canvas, {
+            type: 'line',
+            data: { labels: meses, datasets },
+            options: {
+                responsive         : true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend    : { display: false },
+                    datalabels: { display: false },
+                    tooltip   : {
+                        mode       : 'index',
+                        intersect  : false,
+                        backgroundColor: '#1a2340',
+                        titleColor : '#9ba8c8',
+                        bodyColor  : '#ffffff',
+                        padding    : 10,
+                        cornerRadius: 6,
+                        callbacks  : {
+                            title     : items => items.length ? (meses[items[0].dataIndex] ?? '') : '',
+                            afterTitle: () => '──────────────',
+                            label     : ctx => {
+                                const v = ctx.parsed.y;
+                                return ` ${ctx.dataset.label}: ${v !== null && v !== undefined ? fmtV(v) : '—'}`;
+                            },
+                            labelTextColor: ctx => EVOLUCION_COLORS[ctx.datasetIndex % EVOLUCION_COLORS.length].border,
+                        },
+                    },
+                },
+                scales: {
+                    y: { ticks: { callback: v => fmtV(v) } },
+                    x: { ticks: { font: { size: 11 } } },
+                },
+            },
+        });
+
+        overlay.style.display = 'flex';
+    }
+
+    function closeEvolucionModal() {
+        if (_modalEvChart) { _modalEvChart.destroy(); _modalEvChart = null; }
+        const overlay = document.getElementById('evolucion-modal-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    // Listeners del modal y switch de métrica (se registran una sola vez)
+    (function _initModalListeners() {
+        document.addEventListener('click', e => {
+            // Expand modal — usa la métrica activa
+            const expandBtn = e.target.closest('#evolucion-expand-btn');
+            if (expandBtn) { e.stopPropagation(); openEvolucionModal(_evolucionMetrica); return; }
+
+            // Switch de métrica
+            const evolBtn = e.target.closest('[data-evol-metrica]');
+            if (evolBtn) {
+                const metrica = evolBtn.dataset.evolMetrica;
+                if (metrica === _evolucionMetrica) return;
+                _evolucionMetrica = metrica;
+                // Activar botón
+                document.querySelectorAll('#evolucion-metric-switch .evol-btn').forEach(b =>
+                    b.classList.toggle('active', b === evolBtn));
+                // Render si ya está en caché, si no fetch
+                const canvasId = 'chart-evolucion-unidades';
+                if (_lastEvolucionData[metrica]) {
+                    // Facturación: asegurar cotizaciones históricas antes de re-renderizar
+                    if (metrica === 'facturacion') {
+                        ensureCotizacionesParaEvolucion(_lastEvolucionData[metrica].series)
+                            .then(() => renderEvolucion(_lastEvolucionData[metrica], canvasId, metrica));
+                    } else {
+                        renderEvolucion(_lastEvolucionData[metrica], canvasId, metrica);
+                    }
+                } else {
+                    const action = metrica === 'facturacion' ? 'evolucion_facturacion'
+                                 : metrica === 'tickets'     ? 'evolucion_tickets'
+                                                             : 'evolucion_unidades';
+                    apiFetch(action).then(async d => {
+                        if (metrica === 'facturacion') {
+                            await ensureCotizacionesParaEvolucion(d.evolucion?.series);
+                        }
+                        renderEvolucion(d.evolucion, canvasId, metrica);
+                    }).catch(err => console.error('[Analisis] evolucion_' + metrica, err));
+                }
+                return;
+            }
+
+            const closeBtn = e.target.closest('#evolucion-modal-close');
+            if (closeBtn) closeEvolucionModal();
+
+            const overlay = document.getElementById('evolucion-modal-overlay');
+            if (overlay && e.target === overlay) closeEvolucionModal();
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeEvolucionModal();
+        });
+    })();
 
     /* ── Carga ranking unidades (usada también desde KPIs tab) ── */
     async function loadRankingUnidades() {
@@ -363,6 +664,12 @@ const Analisis = (() => {
 
     /* ── Carga principal ─────────────────────── */
     async function loadAll() {
+        // Resetear switch a 'unidades' en cada carga
+        _evolucionMetrica = 'unidades';
+        Object.keys(_lastEvolucionData).forEach(k => delete _lastEvolucionData[k]);
+        document.querySelectorAll('#evolucion-metric-switch .evol-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.evolMetrica === 'unidades'));
+
         document.body.classList.add('is-loading');
         try {
             await Promise.all([
@@ -380,11 +687,16 @@ const Analisis = (() => {
                 // Vendedores
                 apiFetch('vendedores').then(d => renderVendedores(d.vendedores)).catch(e => console.error('[Analisis] vendedores:', e)),
 
-                // Evolución unidades
-                apiFetch('evolucion_unidades').then(d => renderEvolucion(d.evolucion, 'chart-evolucion-unidades')).catch(e => console.error('[Analisis] evolucion_unidades:', e)),
-
-                // Evolución tickets
-                apiFetch('evolucion_tickets').then(d => renderEvolucion(d.evolucion, 'chart-evolucion-tickets')).catch(e => console.error('[Analisis] evolucion_tickets:', e)),
+                // Evolución (métrica activa al momento de la carga)
+                apiFetch('evolucion_' + _evolucionMetrica)
+                    .then(async d => {
+                        // Para facturación: cargar cotizaciones históricas antes de convertir
+                        if (_evolucionMetrica === 'facturacion') {
+                            await ensureCotizacionesParaEvolucion(d.evolucion?.series);
+                        }
+                        renderEvolucion(d.evolucion, 'chart-evolucion-unidades', _evolucionMetrica);
+                    })
+                    .catch(e => console.error('[Analisis] evolucion_' + _evolucionMetrica, e)),
             ]);
         } finally {
             document.body.classList.remove('is-loading');

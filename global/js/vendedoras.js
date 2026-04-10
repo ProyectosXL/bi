@@ -9,6 +9,39 @@ const Vendedoras = (() => {
     let _kpisData     = null;
     let _charts       = {};
 
+    /* ── Exportar KPIs vendedoras a Excel ────── */
+    function exportarVendedoras() {
+        if (!_kpisData?.length || typeof ExcelExporter === 'undefined') return;
+        const rows   = _kpisData;
+        const totFact = rows.reduce((s, r) => s + (r.facturacion ?? 0), 0);
+        const totUnid = rows.reduce((s, r) => s + (r.unidades    ?? 0), 0);
+        const totTick = rows.reduce((s, r) => s + (r.tickets     ?? 0), 0);
+        const avgTProm = totTick > 0 ? totFact / totTick : 0;
+        const avg2do   = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_2do   ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
+        const avg3ro   = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_3ro   ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
+        const avgCamb  = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_cambios ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
+        const avgIncr  = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_incremental ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
+        ExcelExporter.export({
+            title    : 'KPIs por Vendedora',
+            headers  : ['Vendedora', 'Facturación', 'Unidades', 'Tickets',
+                        'Ticket Prom.', '% 2do Prod.', '% 3er Prod.', '% Cambios', '% Incremental'],
+            rows     : rows.map(r => [
+                r.vendedora,
+                r.facturacion        ?? null,
+                r.unidades           ?? null,
+                r.tickets            ?? null,
+                r.ticket_promedio    ?? null,
+                r.porc_2do           ?? null,
+                r.porc_3ro           ?? null,
+                r.porc_cambios       ?? null,
+                r.porc_incremental   ?? null,
+            ]),
+            totalsRow: ['PROMEDIO', totFact, totUnid, totTick,
+                        avgTProm, avg2do, avg3ro, avgCamb, avgIncr],
+            filename : 'kpis_vendedoras',
+        });
+    }
+
     /* ── Formato ─────────────────────────────── */
     function moneyK(n) {
         if (n === null || n === undefined) return '—';
@@ -269,6 +302,7 @@ const Vendedoras = (() => {
             const el = document.querySelector(sel.includes(' ') ? sel : '#' + sel);
             if (el) el.innerHTML = '<div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span>Cargando...</span></div>';
         });
+        document.body.classList.add('is-loading');
 
         try {
             const qs  = Dashboard.buildQS();
@@ -281,6 +315,14 @@ const Vendedoras = (() => {
 
             renderTop10();
             renderKPIsTabla(_kpisData);
+
+            // Botón de exportación en el header de KPIs tabla (una sola vez)
+            if (typeof ExcelExporter !== 'undefined') {
+                const headerEl = document.getElementById('tabla-kpis-vendedoras')
+                    ?.closest('.analisis-card')
+                    ?.querySelector('.analisis-section-header');
+                ExcelExporter.addExportButton(headerEl, exportarVendedoras);
+            }
             fillVersusSelects(_kpisData);
             renderVersus(null, null);
             setupVersus();
@@ -291,6 +333,8 @@ const Vendedoras = (() => {
                 if (el) el.innerHTML = `<div style="padding:16px;color:var(--neg);font-size:.85rem"><i class="bi bi-exclamation-triangle"></i> ${e.message}</div>`;
             });
             console.error('[Vendedoras]', e);
+        } finally {
+            document.body.classList.remove('is-loading');
         }
     }
 

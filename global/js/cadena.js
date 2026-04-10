@@ -13,13 +13,17 @@ const Cadena = (() => {
     /* ── Formato ─────────────────────────────── */
     function money(n, d = 0) {
         if (n === null || n === undefined) return '—';
-        return '$\u00A0' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
+        const v   = typeof Dashboard !== 'undefined' ? Dashboard.convertir(n) : n;
+        const pfx = typeof Dashboard !== 'undefined' ? Dashboard.moneyPrefix() : '$\u00A0';
+        return pfx + v.toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
     }
     function moneyK(n) {
         if (n === null || n === undefined) return '—';
-        if (Math.abs(n) >= 1_000_000) return '$\u00A0' + (n / 1_000_000).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'M';
-        if (Math.abs(n) >= 1_000)     return '$\u00A0' + (n / 1_000).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + 'K';
-        return '$\u00A0' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const v   = typeof Dashboard !== 'undefined' ? Dashboard.convertir(n) : n;
+        const pfx = typeof Dashboard !== 'undefined' ? Dashboard.moneyPrefix() : '$\u00A0';
+        if (Math.abs(v) >= 1_000_000) return pfx + (v / 1_000_000).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'M';
+        if (Math.abs(v) >= 1_000)     return pfx + (v / 1_000).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + 'K';
+        return pfx + v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     }
     function numFmt(n, dec = 0) {
         return n === null || n === undefined ? '—' : Number(n).toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
@@ -50,6 +54,7 @@ const Cadena = (() => {
         { key: 'porc_cambios',          label: '% Cambios',      fmt: r => r.porc_cambios != null ? pctFmt(r.porc_cambios) : '—', align: 'right', sortKey: 'porc_cambios',   heatmap: true, inverse: true },
         { key: 'porc_incremental',      label: '% Increm.',      fmt: r => r.porc_incremental != null ? pctFmt(r.porc_incremental) : '—', align: 'right', sortKey: 'porc_incremental', heatmap: true },
         { key: 'mails_pct',             label: '% Mails',        fmt: r => r.mails_pct != null ? pctFmt(r.mails_pct) : '—', align: 'right', sortKey: 'mails_pct', heatmap: true },
+        { key: 'conversion',            label: 'Conv.%',         fmt: r => r.conversion != null ? pctFmt(r.conversion) : '—', align: 'right', sortKey: 'conversion', heatmap: true },
     ];
 
     /* ── Heatmap color ───────────────────────── */
@@ -60,8 +65,55 @@ const Cadena = (() => {
         return `rgba(22,163,74,${0.12 + r * 0.30})`;
     }
 
+    /* ── Exportar a Excel ────────────────────── */
+    function exportarCadena() {
+        if (!_lastData?.length || typeof ExcelExporter === 'undefined') return;
+        let rows = _lastData;
+        if (typeof Dashboard !== 'undefined' && Dashboard.isSoloActivas?.()) {
+            const ids = Dashboard.getSucursalesActivasIds?.();
+            if (ids?.size) rows = rows.filter(r => ids.has(+r.nro_sucurs));
+        }
+        const totObj      = rows.reduce((s, r) => s + (r.objetivo_total ?? 0), 0);
+        const totFact     = rows.reduce((s, r) => s + (r.facturacion    ?? 0), 0);
+        const totUnid     = rows.reduce((s, r) => s + (r.unidades       ?? 0), 0);
+        const totTick     = rows.reduce((s, r) => s + (r.tickets        ?? 0), 0);
+        const totTP       = totTick > 0 ? totFact / totTick : 0;
+        ExcelExporter.export({
+            title   : 'KPIs por Sucursal — Cadena completa',
+            headers : COLS.map(c => c.label),
+            rows    : rows.map(r => [
+                (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(r.nro_sucurs) : 'Suc. ' + r.nro_sucurs),
+                r.objetivo_total        ?? null,
+                r.facturacion           ?? null,
+                r.porc_cumplimiento     ?? null,
+                r.unidades              ?? null,
+                r.var_unidades          ?? null,
+                r.porc_part_facturacion ?? null,
+                r.tickets               ?? null,
+                r.var_tickets           ?? null,
+                r.ticket_promedio       ?? null,
+                r.porc_2do              ?? null,
+                r.porc_3ro              ?? null,
+                r.porc_cambios          ?? null,
+                r.porc_incremental      ?? null,
+                r.mails_pct             ?? null,
+                r.conversion            ?? null,
+            ]),
+            totalsRow: ['TOTAL', totObj, totFact, totObj > 0 ? totFact / totObj : null,
+                        totUnid, null, null, totTick, null, totTP,
+                        null, null, null, null, null, null],
+            filename : 'kpis_cadena',
+        });
+    }
+
     /* ── Render tabla ────────────────────────── */
     function renderTable(rows) {
+        // Filtro "solo activas" (client-side)
+        if (typeof Dashboard !== 'undefined' && Dashboard.isSoloActivas?.()) {
+            const ids = Dashboard.getSucursalesActivasIds?.();
+            if (ids?.size) rows = (rows ?? []).filter(r => ids.has(+r.nro_sucurs));
+        }
+
         const wrap = document.getElementById('cadena-wrap');
         if (!wrap) return;
         if (!rows?.length) {
@@ -116,15 +168,26 @@ const Cadena = (() => {
         const totFact = rows.reduce((s, r) => s + (r.facturacion ?? 0), 0);
         const totUnid = rows.reduce((s, r) => s + (r.unidades ?? 0), 0);
         const totTick = rows.reduce((s, r) => s + (r.tickets ?? 0), 0);
-        const totMailsRaw = rows.reduce((s, r) => s + (r.mails_pct ?? 0) * (r.tickets ?? 0), 0);
         const totTP   = totTick > 0 ? totFact / totTick : 0;
+
+        // Promedios ponderados para KPIs de %
+        const tot2doRaw   = rows.reduce((s, r) => s + (r.porc_2do        ?? 0) * (r.tickets  ?? 0), 0);
+        const tot3roRaw   = rows.reduce((s, r) => s + (r.porc_3ro        ?? 0) * (r.tickets  ?? 0), 0);
+        const totCambRaw  = rows.reduce((s, r) => s + (r.porc_cambios    ?? 0) * (r.unidades ?? 0), 0);
+        const totIncrRaw  = rows.reduce((s, r) => s + (r.porc_incremental?? 0) * (r.unidades ?? 0), 0);
+        const totMailsRaw = rows.reduce((s, r) => s + (r.mails_pct       ?? 0) * (r.tickets  ?? 0), 0);
+
+        // Conversión: solo sucursales con ingresos para no diluir la tasa
+        const totIngresos = rows.reduce((s, r) => s + ((r.ingresos ?? 0) > 0 ? r.ingresos : 0), 0);
+        const totTickConv = rows.reduce((s, r) => (r.ingresos ?? 0) > 0 ? s + ((r.conversion ?? 0) * r.ingresos) : s, 0);
+
         const totRow  = {
             _isTotal: true,
             nro_sucurs: -1,
             objetivo_total: totObj,
             objetivo_fecha: totObj,
             facturacion: totFact,
-            porc_cumplimiento: totObj > 0 ? totFact / totObj : null,  // objetivo_total
+            porc_cumplimiento: totObj > 0 ? totFact / totObj : null,
             unidades: totUnid,
             var_unidades: null,
             porc_part_facturacion: null,
@@ -132,11 +195,12 @@ const Cadena = (() => {
             var_tickets: null,
             ticket_promedio: totTP,
             ticket_prom_prev: null,
-            porc_2do: null,
-            porc_3ro: null,
-            porc_cambios: null,
-            porc_incremental: null,
-            mails_pct: totTick > 0 ? totMailsRaw / totTick : null,
+            porc_2do:         totTick > 0 ? tot2doRaw  / totTick : null,
+            porc_3ro:         totTick > 0 ? tot3roRaw  / totTick : null,
+            porc_cambios:     totUnid > 0 ? totCambRaw / totUnid : null,
+            porc_incremental: totUnid > 0 ? totIncrRaw / totUnid : null,
+            mails_pct:        totTick > 0 ? totMailsRaw / totTick : null,
+            conversion:       totIngresos > 0 ? totTickConv / totIngresos : null,
         };
         const totCells = COLS.map(c => {
             const style = `text-align:${c.align};`;
@@ -165,6 +229,7 @@ const Cadena = (() => {
     async function loadAll() {
         const wrap = document.getElementById('cadena-wrap');
         if (wrap) wrap.innerHTML = '<div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>';
+        document.body.classList.add('is-loading');
 
         try {
             const qs  = Dashboard.buildQS();
@@ -175,10 +240,18 @@ const Cadena = (() => {
 
             _lastData = data.sucursales ?? [];
             renderTable(_lastData);
+
+            // Botón de exportación (una sola vez en el header)
+            if (typeof ExcelExporter !== 'undefined') {
+                const headerEl = document.querySelector('#tab-cadena .analisis-section-header');
+                ExcelExporter.addExportButton(headerEl, exportarCadena);
+            }
         } catch(e) {
             const wrap = document.getElementById('cadena-wrap');
             if (wrap) wrap.innerHTML = `<div style="padding:20px;color:var(--neg);font-size:.85rem"><i class="bi bi-exclamation-triangle"></i> ${e.message}</div>`;
             console.error('[Cadena]', e);
+        } finally {
+            document.body.classList.remove('is-loading');
         }
     }
 

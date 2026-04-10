@@ -102,12 +102,26 @@ try {
             break;
 
         case 'evolucion_unidades':
-            $response['evolucion'] = $db->getEvolucionMensual($sucursal, $vendedor, $rubro, 'unidades');
-            break;
-
         case 'evolucion_tickets':
-            $response['evolucion'] = $db->getEvolucionMensual($sucursal, $vendedor, $rubro, 'tickets');
+        case 'evolucion_facturacion': {
+            // Usa GlobalDashboardDB para soporte multi-origen, filtros completos y
+            // UNION ALL con tablas BK históricas.
+            require_once __DIR__ . '/../class/GlobalDashboardDB.php';
+            $grupo_evo      = isset($_GET['grupo'])      && $_GET['grupo']      !== '' ? $_GET['grupo']      : null;
+            $tipoTienda_evo = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+            $dbGlobal       = new GlobalDashboardDB($origen);
+            if ($action === 'evolucion_facturacion') {
+                $response['evolucion'] = $dbGlobal->getEvolucionMensualFacturacion(
+                    $sucursal, $vendedor, $rubro, $grupo_evo, $tipoTienda_evo
+                );
+            } else {
+                $tipoEvo = ($action === 'evolucion_unidades') ? 'unidades' : 'tickets';
+                $response['evolucion'] = $dbGlobal->getEvolucionMensual(
+                    $tipoEvo, $sucursal, $vendedor, $rubro, $grupo_evo, $tipoTienda_evo
+                );
+            }
             break;
+        }
 
         default:
             $response = ['ok' => false, 'error' => "Acción desconocida: {$action}"];
