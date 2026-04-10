@@ -19,15 +19,23 @@ try {
         throw new RuntimeException('No autenticado');
     }
     $tipoSesion = $_SESSION['tipo'] ?? '';
-    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION'], true)) {
+    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'Acceso denegado']);
         exit;
     }
 
-    $origen    = $_GET['origen']   ?? 'argentina';
+    $isGrupo   = ($tipoSesion === 'GRUPO');
+    $origen    = $isGrupo ? 'franquicias' : ($_GET['origen'] ?? 'argentina');
     $periodo   = $_GET['periodo']  ?? 'mes_actual';
     $sucursal  = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? (int)$_GET['sucursal'] : null;
+
+    // GRUPO: validar sucursal
+    if ($isGrupo && $sucursal !== null) {
+        if (!in_array($sucursal, $_SESSION['sucursalesGrupo'] ?? [], true)) {
+            $sucursal = null;
+        }
+    }
 
     [$desde_act, $hasta_act] = array_slice(GlobalDashboardDB::calcularPeriodo($periodo), 0, 2);
 
@@ -42,16 +50,25 @@ try {
         }
     };
 
+    // Para GRUPO: sucursales = solo las permitidas; grupos/tipos_tienda = vacío
+    if ($isGrupo) {
+        $sucGrupo = $_SESSION['sucursalesGrupo'] ?? [];
+        error_log('[filtros.php GRUPO] sucursalesGrupo=' . json_encode($sucGrupo) . ' origen=' . $origen);
+    }
+    $sucursalesList = $isGrupo
+        ? $tryCall(fn() => $db->getSucursalesPorIds($_SESSION['sucursalesGrupo'] ?? []))
+        : $tryCall(fn() => $db->getSucursalesLista());
+
     ob_clean();
     echo json_encode([
         'ok'                 => true,
         'campo_vendedor'     => 'DESC_VENDEDOR',
-        'sucursales'         => $tryCall(fn() => $db->getSucursalesLista()),
-        'grupos'             => $soloArg ? $tryCall(fn() => $db->getGruposLista()) : [],
-        'tipos_tienda'       => $soloArg ? $tryCall(fn() => $db->getTiposTiendaLista()) : [],
+        'sucursales'         => $sucursalesList,
+        'grupos'             => (!$isGrupo && $soloArg) ? $tryCall(fn() => $db->getGruposLista()) : [],
+        'tipos_tienda'       => (!$isGrupo && $soloArg) ? $tryCall(fn() => $db->getTiposTiendaLista()) : [],
         'vendedores'         => $tryCall(fn() => $db->getVendedoresFiltro($desde_act, $hasta_act, $sucursal)),
         'rubros'             => $tryCall(fn() => $db->getRubrosFiltro($desde_act, $hasta_act, $sucursal)),
-        'sucursales_activas' => $tryCall(fn() => $db->getSucursalesActivasIds()),
+        'sucursales_activas' => $isGrupo ? [] : $tryCall(fn() => $db->getSucursalesActivasIds()),
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {

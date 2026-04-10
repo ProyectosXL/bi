@@ -9,6 +9,19 @@ class AnalisisDB
 {
     private $conn;
     private $campoVendedor;
+    private array $grupoSucursales = [];
+
+    public function setGrupoSucursales(array $ids): void
+    {
+        $this->grupoSucursales = array_values($ids);
+    }
+
+    private function grupoFiltro(string $alias = 's'): array
+    {
+        if (empty($this->grupoSucursales)) return ['', []];
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
+        return Filters::sucursalesGrupo($this->grupoSucursales, $alias);
+    }
 
     public function __construct()
     {
@@ -61,6 +74,8 @@ class AnalisisDB
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
         $rub  = $rubro     !== '%'  ? [$rubro]     : [];
+        [$sfG, $pG] = $this->grupoFiltro('s');
+        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
         // Intentar con columna DESTINO; si no existe, usar constante
         $sql = "
@@ -208,6 +223,8 @@ class AnalisisDB
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
         $rub  = $rubro     !== '%'  ? [$rubro]     : [];
+        [$sfG, $pG] = $this->grupoFiltro('s');
+        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
         // Etiqueta del vendedor: nombre completo si está disponible, código en caso contrario
         $selectVendLabel = $cv === 'DESC_VENDEDOR'
@@ -298,6 +315,8 @@ class AnalisisDB
         $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
+        [$sfG, $pG] = $this->grupoFiltro('s');
+        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
         $placeholders = implode(',', array_fill(0, count($targetRubros), '?'));
 
@@ -358,6 +377,8 @@ class AnalisisDB
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
         $rub  = $rubro     !== '%'  ? [$rubro]     : [];
+        [$sfG, $pG] = $this->grupoFiltro('s');
+        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
         if ($tipo === 'tickets') {
             // Tickets FAC
@@ -365,6 +386,8 @@ class AnalisisDB
             $sfVT = $vendedor  !== '%'  ? "AND t.{$cv} = ?" : "";
             $suc2  = $nroSucurs !== null ? [$nroSucurs] : [];
             $vend2 = $vendedor  !== '%'  ? [$vendedor]  : [];
+            [$sfGT, $pGT] = $this->grupoFiltro('t');
+            $sfT .= ' ' . $sfGT; $suc2 = array_merge($suc2, $pGT);
 
             $sqlMaxYear = "
                 SELECT MAX(YEAR(CAST(t.FECHA AS DATE))) AS max_year
@@ -464,6 +487,8 @@ class AnalisisDB
         $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
+        [$sfG, $pG] = $this->grupoFiltro('s');
+        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
         $sql = "
             SELECT
@@ -496,6 +521,8 @@ class AnalisisDB
         $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
+        [$sfG, $pG] = $this->grupoFiltro('s');
+        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
         $sql = "
             SELECT
@@ -531,6 +558,8 @@ class AnalisisDB
         $pV   = $vendedor  !== '%'  ? [$vendedor]  : [];
         $pR   = $rubro     !== '%'  ? [$rubro]     : [];
         $pC   = $categoria !== '%'  ? [$categoria] : [];
+        [$sfG, $pG] = $this->grupoFiltro('s');
+        $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
 
         return $this->query("
             SELECT
@@ -561,6 +590,8 @@ class AnalisisDB
         $pV   = $vendedor  !== '%'  ? [$vendedor]  : [];
         $pR   = $rubro     !== '%'  ? [$rubro]     : [];
         $pC   = $categoria !== '%'  ? [$categoria] : [];
+        [$sfG, $pG] = $this->grupoFiltro('s');
+        $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
 
         try {
             return $this->query("
@@ -591,6 +622,7 @@ class AnalisisDB
         $pV  = $vendedor  !== '%' ? [$vendedor]  : [];
         $pR  = $rubro     !== '%' ? [$rubro]     : [];
         $pC  = $categoria !== '%' ? [$categoria] : [];
+        [$sfG, $pG] = $this->grupoFiltro('s');
 
         return $this->query("
             SELECT
@@ -600,10 +632,10 @@ class AnalisisDB
             FROM BI_SALES_SUCURSALES s
             WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-              {$sfV} {$sfR} {$sfC}
+              {$sfV} {$sfR} {$sfC} {$sfG}
             GROUP BY s.NRO_SUCURS
             ORDER BY unidades DESC
-        ", array_merge([$desde, $hasta], $pV, $pR, $pC));
+        ", array_merge([$desde, $hasta], $pV, $pR, $pC, $pG));
     }
 
     public function getTopCategoriasProducto(
@@ -617,6 +649,8 @@ class AnalisisDB
         $pS  = $nroSucurs !== null ? [$nroSucurs] : [];
         $pV  = $vendedor  !== '%'  ? [$vendedor]  : [];
         $pR  = $rubro     !== '%'  ? [$rubro]     : [];
+        [$sfG, $pG] = $this->grupoFiltro('s');
+        $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
 
         return $this->query("
             SELECT TOP 10

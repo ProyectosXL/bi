@@ -78,16 +78,18 @@ const Dashboard = (() => {
 
     /* ── Leer parámetros del DOM ─────────────── */
     function getParams(extra = {}) {
+        const cfg = window.BI_CONFIG ?? { isGrupo: false, esGrupo: false, sucursalesGrupo: [] };
+
         const origenActive = document.querySelector('.origen-btn.active');
         const p = {
-            origen      : (origenActive?.dataset.origen ?? 'argentina'),
+            origen      : cfg.isGrupo ? 'franquicias' : (origenActive?.dataset.origen ?? 'argentina'),
             periodo     : ($('sel-periodo')?.value     ?? 'mes_actual'),
             vendedor    : ($('sel-vendedor')?.value    ?? '%'),
             rubro       : ($('sel-rubro')?.value       ?? '%'),
             sucursal    : ($('sel-sucursal')?.value    ?? ''),
-            grupo       : ($('sel-grupo')?.value       ?? ''),
-            tipo_tienda : ($('sel-tipo-tienda')?.value ?? ''),
-            solo_activas: isSoloActivas() ? '1' : '0',
+            grupo       : cfg.isGrupo ? '' : ($('sel-grupo')?.value       ?? ''),
+            tipo_tienda : cfg.isGrupo ? '' : ($('sel-tipo-tienda')?.value ?? ''),
+            solo_activas: (!cfg.isGrupo && isSoloActivas()) ? '1' : '0',
             ...extra
         };
         if (p.periodo === 'custom') {

@@ -150,6 +150,25 @@ class Filters
     }
 
     /**
+     * Fragmento WHERE para restringir por una lista de sucursales (perfil GRUPO).
+     * Si el array está vacío retorna una condición imposible ('AND 1=0') como
+     * medida de seguridad — nunca debe devolver todos los registros.
+     *
+     * @param  int[]  $nroSucursales   IDs de sucursal permitidas
+     * @param  string $alias           Alias de tabla en la query
+     * @param  string $col             Columna de sucursal (default NRO_SUCURS)
+     * @return array{0:string, 1:array} [$sqlFragment, $params]
+     */
+    public static function sucursalesGrupo(array $nroSucursales, string $alias, string $col = 'NRO_SUCURS'): array
+    {
+        if (empty($nroSucursales)) {
+            return ['AND 1=0', []];
+        }
+        $placeholders = implode(',', array_fill(0, count($nroSucursales), '?'));
+        return ["AND {$alias}.{$col} IN ({$placeholders})", array_values($nroSucursales)];
+    }
+
+    /**
      * Normaliza los filtros venidos de $_GET para uso en APIs.
      * Devuelve array limpio y seguro.
      */

@@ -13,6 +13,7 @@ class VendedorasDB
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
 
         $cfg = getConfigForOrigen($origen);
         $this->origen        = $origen;
@@ -42,6 +43,13 @@ class VendedorasDB
     {
         $rows = $this->query($sql, $params);
         return $rows[0] ?? null;
+    }
+
+    private function grupoFiltro(string $alias): array
+    {
+        if (($_SESSION['tipo'] ?? '') !== 'GRUPO') return ['', []];
+        $suc = $_SESSION['sucursalesGrupo'] ?? [];
+        return Filters::sucursalesGrupo($suc, $alias);
     }
 
     private function buildFilter(?int $sucursal, ?string $grupo, ?string $tipoTienda, string $alias): array
@@ -77,6 +85,13 @@ class VendedorasDB
         [$sfS, $pS] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 's');
         [$sfT, $pT] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 't');
         [$sfP, $pP] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 'p');
+
+        [$sfGS, $pGS] = $this->grupoFiltro('s');
+        $sfS .= ' ' . $sfGS; $pS = array_merge($pS, $pGS);
+        [$sfGT, $pGT] = $this->grupoFiltro('t');
+        $sfT .= ' ' . $sfGT; $pT = array_merge($pT, $pGT);
+        [$sfGP, $pGP] = $this->grupoFiltro('p');
+        $sfP .= ' ' . $sfGP; $pP = array_merge($pP, $pGP);
         $sfRS = $rubro !== '%' ? "AND s.RUBRO = ?" : "";
         $rub  = $rubro !== '%' ? [$rubro] : [];
 

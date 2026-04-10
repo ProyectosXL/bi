@@ -16,20 +16,22 @@ try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
 
     if (!isset($_SESSION['username'])) throw new RuntimeException('No autenticado');
-    if (!in_array($_SESSION['tipo'] ?? '', ['GERENCIA', 'SUPERVISION'], true)) {
+    $tipoSesion = $_SESSION['tipo'] ?? '';
+    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'Acceso denegado']);
         exit;
     }
 
-    $origen      = $_GET['origen']      ?? 'argentina';
+    $isGrupo     = ($tipoSesion === 'GRUPO');
+    $origen      = $isGrupo ? 'franquicias' : ($_GET['origen'] ?? 'argentina');
     $periodo     = $_GET['periodo']     ?? 'mes_actual';
     $topRubros   = (int)($_GET['top_rubros'] ?? 15);
     $grupo       = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
     $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
-    $soloActivas = isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
+    $soloActivas = !$isGrupo && isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
-    if ($origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
+    if ($isGrupo || $origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
 
     if ($periodo === 'custom') {
         $da = (isset($_GET['desde']) && $_GET['desde'] !== '') ? $_GET['desde'] : date('Y-m-01');

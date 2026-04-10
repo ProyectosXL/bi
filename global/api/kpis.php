@@ -28,11 +28,13 @@ try {
         throw new RuntimeException('No autenticado');
     }
     $tipoSesion = $_SESSION['tipo'] ?? '';
-    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION'], true)) {
+    if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'Acceso denegado']);
         exit;
     }
+
+    $isGrupo = ($tipoSesion === 'GRUPO');
 
     // ── Endpoint auxiliar: cotización dólar ────────
     if (($_GET['action'] ?? '') === 'cotizacion') {
@@ -44,14 +46,31 @@ try {
         exit;
     }
 
-    $origen      = $_GET['origen']      ?? 'argentina';
+    $origen      = $isGrupo ? 'franquicias' : ($_GET['origen'] ?? 'argentina');
     $periodo     = $_GET['periodo']     ?? 'mes_actual';
     $vendedor    = (isset($_GET['vendedor']) && $_GET['vendedor'] !== '') ? $_GET['vendedor'] : '%';
     $rubro       = (isset($_GET['rubro'])    && $_GET['rubro']    !== '') ? $_GET['rubro']    : '%';
     $sucursal    = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? (int)$_GET['sucursal'] : null;
     $grupo       = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
     $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
-    $soloActivas = isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
+    $soloActivas = !$isGrupo && isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
+
+    // GRUPO: limpiar filtros inaplicables y validar sucursal
+    if ($isGrupo) {
+        $grupo      = null;
+        $tipoTienda = null;
+        $sucGrupo   = $_SESSION['sucursalesGrupo'] ?? [];
+        if (empty($sucGrupo)) {
+            error_log('[kpis.php GRUPO] sucursalesGrupo vacío para codClient=' . ($_SESSION['codClient'] ?? 'N/A'));
+        } else {
+            error_log('[kpis.php GRUPO] sucursalesGrupo=' . implode(',', $sucGrupo) . ' origen=' . $origen);
+        }
+        if ($sucursal !== null && !in_array($sucursal, $sucGrupo, true)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Sucursal no autorizada']);
+            exit;
+        }
+    }
 
     // Solo argentina soporta grupo/tipoTienda
     if ($origen !== 'argentina') {
@@ -78,6 +97,10 @@ try {
     $db = new GlobalDashboardDB($origen);
     if ($soloActivas) $db->setSoloActivas(true);
 
+    // Instancia benchmark: cadena completa franquicias, sin filtro de grupo
+    $dbBench = new GlobalDashboardDB($origen);
+    if ($isGrupo) $dbBench->setIgnorarFiltroGrupo(true);
+
     // Cotización dólar (siempre desde argentina, no depende del origen)
     $cotizacion = (new GlobalDashboardDB('argentina'))->getCotizacionDolar();
 
@@ -101,10 +124,10 @@ try {
     $mails_prev = $db->getMails($desde_prev, $hasta_prev, $sucursal, $grupo, $tipoTienda);
 
     // ── Benchmark (cadena completa sin filtros de sucursal/grupo/tipoTienda) ──
-    $bench_kpi  = $db->getKPIs($desde_act, $hasta_act, null, '%', '%', null, null);
-    $bench_tick = $db->getTicketsProductos($desde_act, $hasta_act, null, '%', null, null);
-    $bench_tp2  = $db->getTicketPromedio2do($desde_act, $hasta_act, null, '%', null, null);
-    $bench_incr = $db->getIncremental($desde_act, $hasta_act, null, '%', null, null);
+    $bench_kpi  = $dbBench->getKPIs($desde_act, $hasta_act, null, '%', '%', null, null);
+    $bench_tick = $dbBench->getTicketsProductos($desde_act, $hasta_act, null, '%', null, null);
+    $bench_tp2  = $dbBench->getTicketPromedio2do($desde_act, $hasta_act, null, '%', null, null);
+    $bench_incr = $dbBench->getIncremental($desde_act, $hasta_act, null, '%', null, null);
 
     // ── Conversión (puede no existir para todos los orígenes) ──────
     $noConv = ['ingresos' => 0, 'tickets' => 0, 'conversion' => 0];
@@ -150,7 +173,10 @@ try {
     // Nombres de sucursales (para mostrar en tabla)
     $sucNombres = [];
     try {
-        foreach ($db->getSucursalesLista() as $s) {
+        $lista = $isGrupo
+            ? $db->getSucursalesPorIds($_SESSION['sucursalesGrupo'] ?? [])
+            : $db->getSucursalesLista();
+        foreach ($lista as $s) {
             $sucNombres[(int)$s['NRO_SUCURS']] = $s['DESC_SUCURSAL'] ?? ('Suc. ' . $s['NRO_SUCURS']);
         }
     } catch (Throwable $_) {}

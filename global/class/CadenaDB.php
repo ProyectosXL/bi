@@ -14,6 +14,7 @@ class CadenaDB
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
 
         $cfg = getConfigForOrigen($origen);
         $this->origen         = $origen;
@@ -46,6 +47,13 @@ class CadenaDB
         return $rows[0] ?? null;
     }
 
+    private function grupoFiltro(string $alias, string $col = 'NRO_SUCURS'): array
+    {
+        if (($_SESSION['tipo'] ?? '') !== 'GRUPO') return ['', []];
+        $suc = $_SESSION['sucursalesGrupo'] ?? [];
+        return Filters::sucursalesGrupo($suc, $alias, $col);
+    }
+
     private function buildGrupoTipoFilter(string $alias, ?string $grupo, ?string $tipoTienda): array
     {
         $clauses = [];
@@ -72,7 +80,10 @@ class CadenaDB
         string $desde_prev, string $hasta_prev,
         ?string $grupo = null, ?string $tipoTienda = null
     ): array {
-        [$sfG, $pG] = $this->buildGrupoTipoFilter('s', $grupo, $tipoTienda);
+        [$sfG, $pG]   = $this->buildGrupoTipoFilter('s', $grupo, $tipoTienda);
+        [$sfGS, $pGS] = $this->grupoFiltro('s');
+        $sfG .= ' ' . $sfGS;
+        $pG   = array_merge($pG, $pGS);
 
         // Facturación y unidades por sucursal (actual y previo)
         $rowsVentas = $this->query("
@@ -109,7 +120,10 @@ class CadenaDB
         ));
 
         // Tickets por sucursal
-        [$sfGT, $pGT] = $this->buildGrupoTipoFilter('t', $grupo, $tipoTienda);
+        [$sfGT, $pGT]   = $this->buildGrupoTipoFilter('t', $grupo, $tipoTienda);
+        [$sfGGT, $pGGT] = $this->grupoFiltro('t');
+        $sfGT .= ' ' . $sfGGT;
+        $pGT   = array_merge($pGT, $pGGT);
         $rowsTickets = $this->query("
             SELECT
                 t.NRO_SUCURS,
@@ -135,7 +149,10 @@ class CadenaDB
         ));
 
         // Tickets 2do y 3er producto por sucursal
-        [$sfGTk, $pGTk] = $this->buildGrupoTipoFilter('tk', $grupo, $tipoTienda);
+        [$sfGTk, $pGTk]   = $this->buildGrupoTipoFilter('tk', $grupo, $tipoTienda);
+        [$sfGGTk, $pGGTk] = $this->grupoFiltro('tk');
+        $sfGTk .= ' ' . $sfGGTk;
+        $pGTk   = array_merge($pGTk, $pGGTk);
         $rowsTick2do = $this->query("
             SELECT
                 tk.NRO_SUCURS,
@@ -149,7 +166,10 @@ class CadenaDB
         ", array_merge([$desde_act, $hasta_act], $pGTk));
 
         // Incremental por sucursal
-        [$sfGP, $pGP] = $this->buildGrupoTipoFilter('p', $grupo, $tipoTienda);
+        [$sfGP, $pGP]   = $this->buildGrupoTipoFilter('p', $grupo, $tipoTienda);
+        [$sfGGP, $pGGP] = $this->grupoFiltro('p');
+        $sfGP .= ' ' . $sfGGP;
+        $pGP   = array_merge($pGP, $pGGP);
         $rowsIncr = $this->query("
             SELECT
                 p.NRO_SUCURS,
@@ -172,6 +192,9 @@ class CadenaDB
             $sfGO .= " AND o.NRO_SUCURSAL IN (SELECT sl.NRO_SUCURSAL FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WHERE sl.TIPO_TIENDA = ?)";
             $pGO[] = $tipoTienda;
         }
+        [$sfGGO, $pGGO] = $this->grupoFiltro('o', 'NRO_SUCURSAL');
+        $sfGO .= ' ' . $sfGGO;
+        $pGO   = array_merge($pGO, $pGGO);
         $rowsObj = $this->query("
             SELECT o.NRO_SUCURSAL,
                 ISNULL(SUM(CASE WHEN o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE))
@@ -188,7 +211,10 @@ class CadenaDB
         ", array_merge([$desde_act, $hasta_act, $desde_act, $desde_act, $desde_act, $hasta_act, $desde_act, $desde_act], $pGO));
 
         // Ingresos por sucursal (para conversión)
-        [$sfGI, $pGI] = $this->buildGrupoTipoFilter('i', $grupo, $tipoTienda);
+        [$sfGI, $pGI]   = $this->buildGrupoTipoFilter('i', $grupo, $tipoTienda);
+        [$sfGGI, $pGGI] = $this->grupoFiltro('i');
+        $sfGI .= ' ' . $sfGGI;
+        $pGI   = array_merge($pGI, $pGGI);
         $rowsIngresos = $this->query("
             SELECT i.NRO_SUCURS, ISNULL(SUM(i.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES i
@@ -198,7 +224,10 @@ class CadenaDB
         ", array_merge([$desde_act, $hasta_act], $pGI));
 
         // Tickets con ingreso (para tasa de conversión)
-        [$sfGTC, $pGTC] = $this->buildGrupoTipoFilter('tc', $grupo, $tipoTienda);
+        [$sfGTC, $pGTC]   = $this->buildGrupoTipoFilter('tc', $grupo, $tipoTienda);
+        [$sfGGTC, $pGGTC] = $this->grupoFiltro('tc');
+        $sfGTC .= ' ' . $sfGGTC;
+        $pGTC   = array_merge($pGTC, $pGGTC);
         $rowsTicketsConv = $this->query("
             SELECT tc.NRO_SUCURS, COUNT(DISTINCT tc.N_COMP) AS tickets_conv
             FROM BI_SALES_TOTAL_TICKETS tc
@@ -215,7 +244,10 @@ class CadenaDB
         ", array_merge([$desde_act, $hasta_act], $pGTC, [$desde_act, $hasta_act]));
 
         // Mails por sucursal
-        [$sfGMail, $pGMail] = $this->buildGrupoTipoFilter('tm', $grupo, $tipoTienda);
+        [$sfGMail, $pGMail]   = $this->buildGrupoTipoFilter('tm', $grupo, $tipoTienda);
+        [$sfGGMail, $pGGMail] = $this->grupoFiltro('tm');
+        $sfGMail .= ' ' . $sfGGMail;
+        $pGMail   = array_merge($pGMail, $pGGMail);
         $rowsMails = [];
         try {
             $rowsMails = $this->query("
