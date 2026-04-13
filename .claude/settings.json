@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -l \"v:/bi/sucursales/api/kpis.php\")",
+      "Bash(php -l \"v:/bi/sucursales/class/DashboardDB.php\")",
+      "Bash(\"/c/xampp/php/php.exe\" -l \"v:/bi/sucursales/api/kpis.php\")",
+      "Bash(\"/c/xampp/php/php.exe\" -l \"v:/bi/sucursales/class/DashboardDB.php\")",
+      "Bash(\"/c/xampp/php/php.exe\" -l \"v:/bi/global/api/kpis.php\")",
+      "Bash(\"/c/xampp/php/php.exe\" -l \"v:/bi/global/index.php\")",
+      "Bash(xargs grep:*)"
+    ]
+  }
+}

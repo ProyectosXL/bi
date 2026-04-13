@@ -397,17 +397,41 @@ class DashboardDB
      *  SERIE TEMPORAL (para mini-charts)
      * ────────────────────────────────────────────── */
 
-    public function getSerieFacturacion(string $desde, string $hasta, ?int $nroSucurs = null, string $vendedor = '%', string $rubro = '%'): array
+    public function getSerieFacturacion(string $desde, string $hasta, ?int $nroSucurs = null, string $vendedor = '%', string $rubro = '%', bool $lightweight = false): array
     {
         $cv   = $this->campoVendedor;
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
         $rub  = $rubro !== '%' ? [$rubro] : [];
 
-        // Serie principal: facturación, unidades y cambios por fecha
         $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
         $sfVS = $vendedor !== '%' ? "AND s.{$cv} = ?" : "";
         $sfRS = $rubro !== '%' ? "AND s.RUBRO = ?" : "";
+
+        // Modo lightweight: solo facturación diaria (sin tickets, incremental ni ingresos)
+        if ($lightweight) {
+            $sql = "
+                SELECT
+                    CAST(s.FECHA AS DATE) AS fecha,
+                    ISNULL(SUM(s.IMPORTE), 0) AS facturacion
+                FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
+                WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                  {$sfS} {$sfVS} {$sfRS}
+                GROUP BY CAST(s.FECHA AS DATE)
+                ORDER BY 1 ASC
+            ";
+            $rows = $this->query($sql, array_merge([$desde, $hasta], $suc, $vend, $rub));
+            $result = [];
+            foreach ($rows as $row) {
+                $result[] = [
+                    'fecha'       => $row['fecha']->format('Y-m-d'),
+                    'facturacion' => (float)$row['facturacion'],
+                ];
+            }
+            return $result;
+        }
+
+        // Modo completo: facturación, unidades y cambios por fecha
         $sql = "
             SELECT
                 CAST(s.FECHA AS DATE) AS fecha,
@@ -415,7 +439,7 @@ class DashboardDB
                 ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                 ISNULL(SUM(CASE WHEN s.CANTIDAD > 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades_positivas,
                 ISNULL(SUM(CASE WHEN s.CANTIDAD < 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
-            FROM BI_SALES_SUCURSALES s
+            FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfS} {$sfVS} {$sfRS}
             GROUP BY CAST(s.FECHA AS DATE)
@@ -433,8 +457,8 @@ class DashboardDB
                 ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS suma_tickets,
                 COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 1 THEN t.N_COMP END) AS tickets_2do,
                 COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 2 THEN t.N_COMP END) AS tickets_3ro
-            FROM BI_SALES_TOTAL_TICKETS t
-            LEFT JOIN BI_SALES_TICKETS tk
+            FROM BI_SALES_TOTAL_TICKETS t WITH (NOLOCK)
+            LEFT JOIN BI_SALES_TICKETS tk WITH (NOLOCK)
                 ON t.N_COMP = tk.N_COMP
                AND tk.FECHA >= ? AND tk.FECHA < DATEADD(day, 1, CAST(? AS DATE))
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day, 1, CAST(? AS DATE))
@@ -455,7 +479,7 @@ class DashboardDB
                 CAST(p.FECHA_MOV AS DATE) AS fecha,
                 ISNULL(SUM(p.CAMBIO), 0) AS cambios_incr,
                 ISNULL(SUM(p.DEVOLUCIONES), 0) AS devoluciones
-            FROM BI_SALES_PORC_INCREMENTAL p
+            FROM BI_SALES_PORC_INCREMENTAL p WITH (NOLOCK)
             WHERE p.FECHA_MOV >= ? AND p.FECHA_MOV < DATEADD(day, 1, CAST(? AS DATE))
               {$sfP} {$sfVP}
             GROUP BY CAST(p.FECHA_MOV AS DATE)
@@ -472,7 +496,7 @@ class DashboardDB
             SELECT
                 CAST(ig.FECHA AS DATE) AS fecha,
                 ISNULL(SUM(ig.INGRESOS), 0) AS ingresos
-            FROM BI_T_INGRESOS_SUCURSALES ig
+            FROM BI_T_INGRESOS_SUCURSALES ig WITH (NOLOCK)
             WHERE ig.FECHA >= ? AND ig.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfIn}
             GROUP BY CAST(ig.FECHA AS DATE)
@@ -537,7 +561,7 @@ class DashboardDB
             SELECT
                 CAST(o.FECHA AS DATE) AS fecha,
                 ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo
-            FROM {$this->tablaObjetivos} o
+            FROM {$this->tablaObjetivos} o WITH (NOLOCK)
             WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfO}
             GROUP BY CAST(o.FECHA AS DATE)
@@ -553,43 +577,342 @@ class DashboardDB
     }
 
     /* ──────────────────────────────────────────────
+     *  KPIs BULK — actual + previo + benchmark en 5 queries
+     *  Reemplaza 9+ llamadas separadas (getKPIs×3, getTicketsProductos×3,
+     *  getIncremental×3) usando agregación condicional CASE WHEN por tabla.
+     * ────────────────────────────────────────────── */
+
+    /**
+     * @return array{actual:array, previo:array, benchmark:array}
+     */
+    public function getKPIsBulk(
+        string $da, string $ha,
+        string $dp, string $hp,
+        ?int   $nroSucurs = null,
+        string $vendedor  = '%',
+        string $rubro     = '%'
+    ): array {
+        $cv   = $this->campoVendedor;
+        // Límites exclusivos: evita DATEADD en SQL y facilita uso de índices
+        $haX  = (new DateTime($ha))->modify('+1 day')->format('Y-m-d');
+        $hpX  = (new DateTime($hp))->modify('+1 day')->format('Y-m-d');
+
+        $sfS  = $nroSucurs !== null ? 'AND NRO_SUCURS = ?'    : '';
+        $sfV  = $vendedor  !== '%'  ? "AND {$cv} = ?"         : '';
+        $sfR  = $rubro     !== '%'  ? 'AND RUBRO = ?'          : '';
+        $sfST = $nroSucurs !== null ? 'AND NRO_SUCURS = ?'    : '';
+        $sfVT = $vendedor  !== '%'  ? "AND {$cv} = ?"         : '';
+        $sfSP = $nroSucurs !== null ? 'AND NRO_SUCURS = ?'    : '';
+        $sfVP = $vendedor  !== '%'  ? "AND {$cv} = ?"         : '';
+        $sfSO = $nroSucurs !== null ? 'AND NRO_SUCURSAL = ?'  : '';
+
+        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
+        $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
+        $rub  = $rubro     !== '%'  ? [$rubro]     : [];
+
+        // ── Q1: BI_SALES_SUCURSALES — un scan para act + prev + benchmark ──
+        $q1 = "
+            SELECT
+                ISNULL(SUM(CASE WHEN is_a=1 THEN imp  ELSE 0 END),0)             AS fact_act,
+                ISNULL(SUM(CASE WHEN is_p=1 THEN imp  ELSE 0 END),0)             AS fact_prev,
+                ISNULL(SUM(CASE WHEN is_b=1 THEN imp  ELSE 0 END),0)             AS fact_bench,
+                ISNULL(SUM(CASE WHEN is_a=1 AND rg=0 THEN qty  ELSE 0 END),0)   AS unid_act,
+                ISNULL(SUM(CASE WHEN is_p=1 AND rg=0 THEN qty  ELSE 0 END),0)   AS unid_prev,
+                ISNULL(SUM(CASE WHEN is_b=1 AND rg=0 THEN qty  ELSE 0 END),0)   AS unid_bench,
+                ISNULL(SUM(CASE WHEN is_a=1 AND rg=0 AND qty>0 THEN  qty ELSE 0 END),0) AS upos_act,
+                ISNULL(SUM(CASE WHEN is_p=1 AND rg=0 AND qty>0 THEN  qty ELSE 0 END),0) AS upos_prev,
+                ISNULL(SUM(CASE WHEN is_b=1 AND rg=0 AND qty>0 THEN  qty ELSE 0 END),0) AS upos_bench,
+                ISNULL(SUM(CASE WHEN is_a=1 AND rg=0 AND qty<0 THEN -qty ELSE 0 END),0) AS camb_act,
+                ISNULL(SUM(CASE WHEN is_p=1 AND rg=0 AND qty<0 THEN -qty ELSE 0 END),0) AS camb_prev,
+                ISNULL(SUM(CASE WHEN is_b=1 AND rg=0 AND qty<0 THEN -qty ELSE 0 END),0) AS camb_bench
+            FROM (
+                SELECT IMPORTE AS imp, CANTIDAD AS qty,
+                    CASE WHEN RUBRO IN ('CONCEPTO','PACKAGING') THEN 1 ELSE 0 END AS rg,
+                    CASE WHEN FECHA >= ? AND FECHA < ? {$sfS} {$sfV} {$sfR} THEN 1 ELSE 0 END AS is_a,
+                    CASE WHEN FECHA >= ? AND FECHA < ? {$sfS} {$sfV} {$sfR} THEN 1 ELSE 0 END AS is_p,
+                    CASE WHEN FECHA >= ? AND FECHA < ?                       THEN 1 ELSE 0 END AS is_b
+                FROM BI_SALES_SUCURSALES WITH (NOLOCK)
+                WHERE (FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?)
+            ) t
+        ";
+        $p1 = array_merge(
+            [$da, $haX], $suc, $vend, $rub,
+            [$dp, $hpX], $suc, $vend, $rub,
+            [$da, $haX],
+            [$da, $haX, $dp, $hpX]
+        );
+        $r1 = $this->queryOne($q1, $p1) ?? [];
+
+        // ── Q2: BI_SALES_TOTAL_TICKETS — conteo + suma ticket ──────────────
+        $q2 = "
+            SELECT
+                COUNT(DISTINCT CASE WHEN is_a=1 THEN nc ELSE NULL END) AS tick_act,
+                ISNULL(SUM(CASE WHEN is_a=1 THEN imp ELSE 0 END),0)    AS suma_act,
+                COUNT(DISTINCT CASE WHEN is_p=1 THEN nc ELSE NULL END) AS tick_prev,
+                ISNULL(SUM(CASE WHEN is_p=1 THEN imp ELSE 0 END),0)    AS suma_prev,
+                COUNT(DISTINCT CASE WHEN is_b=1 THEN nc ELSE NULL END) AS tick_bench,
+                ISNULL(SUM(CASE WHEN is_b=1 THEN imp ELSE 0 END),0)    AS suma_bench
+            FROM (
+                SELECT N_COMP AS nc, IMP_TOTAL_TICKET AS imp,
+                    CASE WHEN FECHA >= ? AND FECHA < ? {$sfST} {$sfVT} THEN 1 ELSE 0 END AS is_a,
+                    CASE WHEN FECHA >= ? AND FECHA < ? {$sfST} {$sfVT} THEN 1 ELSE 0 END AS is_p,
+                    CASE WHEN FECHA >= ? AND FECHA < ?                  THEN 1 ELSE 0 END AS is_b
+                FROM BI_SALES_TOTAL_TICKETS WITH (NOLOCK)
+                WHERE T_COMP = 'FAC'
+                  AND ((FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?))
+            ) t
+        ";
+        $p2 = array_merge(
+            [$da, $haX], $suc, $vend,
+            [$dp, $hpX], $suc, $vend,
+            [$da, $haX],
+            [$da, $haX, $dp, $hpX]
+        );
+        $r2 = $this->queryOne($q2, $p2) ?? [];
+
+        // ── Q3: BI_SALES_TICKETS — 2do y 3er producto ──────────────────────
+        $q3 = "
+            SELECT
+                COUNT(DISTINCT CASE WHEN is_a=1             THEN nc ELSE NULL END) AS tot_act,
+                COUNT(DISTINCT CASE WHEN is_a=1 AND qty > 1 THEN nc ELSE NULL END) AS t2_act,
+                COUNT(DISTINCT CASE WHEN is_a=1 AND qty > 2 THEN nc ELSE NULL END) AS t3_act,
+                COUNT(DISTINCT CASE WHEN is_p=1             THEN nc ELSE NULL END) AS tot_prev,
+                COUNT(DISTINCT CASE WHEN is_p=1 AND qty > 1 THEN nc ELSE NULL END) AS t2_prev,
+                COUNT(DISTINCT CASE WHEN is_p=1 AND qty > 2 THEN nc ELSE NULL END) AS t3_prev,
+                COUNT(DISTINCT CASE WHEN is_b=1             THEN nc ELSE NULL END) AS tot_bench,
+                COUNT(DISTINCT CASE WHEN is_b=1 AND qty > 1 THEN nc ELSE NULL END) AS t2_bench,
+                COUNT(DISTINCT CASE WHEN is_b=1 AND qty > 2 THEN nc ELSE NULL END) AS t3_bench
+            FROM (
+                SELECT N_COMP AS nc, CANTIDAD AS qty,
+                    CASE WHEN FECHA >= ? AND FECHA < ? {$sfST} {$sfVT} THEN 1 ELSE 0 END AS is_a,
+                    CASE WHEN FECHA >= ? AND FECHA < ? {$sfST} {$sfVT} THEN 1 ELSE 0 END AS is_p,
+                    CASE WHEN FECHA >= ? AND FECHA < ?                  THEN 1 ELSE 0 END AS is_b
+                FROM BI_SALES_TICKETS WITH (NOLOCK)
+                WHERE (FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?)
+            ) t
+        ";
+        $r3 = $this->queryOne($q3, $p2) ?? [];  // mismos params que Q2
+
+        // ── Q4: BI_SALES_PORC_INCREMENTAL ──────────────────────────────────
+        $q4 = "
+            SELECT
+                ISNULL(SUM(CASE WHEN is_a=1 THEN ci ELSE 0 END),0) AS ci_act,
+                ISNULL(SUM(CASE WHEN is_a=1 THEN dv ELSE 0 END),0) AS dv_act,
+                ISNULL(SUM(CASE WHEN is_p=1 THEN ci ELSE 0 END),0) AS ci_prev,
+                ISNULL(SUM(CASE WHEN is_p=1 THEN dv ELSE 0 END),0) AS dv_prev,
+                ISNULL(SUM(CASE WHEN is_b=1 THEN ci ELSE 0 END),0) AS ci_bench,
+                ISNULL(SUM(CASE WHEN is_b=1 THEN dv ELSE 0 END),0) AS dv_bench
+            FROM (
+                SELECT CAMBIO AS ci, DEVOLUCIONES AS dv,
+                    CASE WHEN FECHA_MOV >= ? AND FECHA_MOV < ? {$sfSP} {$sfVP} THEN 1 ELSE 0 END AS is_a,
+                    CASE WHEN FECHA_MOV >= ? AND FECHA_MOV < ? {$sfSP} {$sfVP} THEN 1 ELSE 0 END AS is_p,
+                    CASE WHEN FECHA_MOV >= ? AND FECHA_MOV < ?                  THEN 1 ELSE 0 END AS is_b
+                FROM BI_SALES_PORC_INCREMENTAL WITH (NOLOCK)
+                WHERE (FECHA_MOV >= ? AND FECHA_MOV < ?) OR (FECHA_MOV >= ? AND FECHA_MOV < ?)
+            ) t
+        ";
+        $p4 = array_merge(
+            [$da, $haX], $suc, $vend,
+            [$dp, $hpX], $suc, $vend,
+            [$da, $haX],
+            [$da, $haX, $dp, $hpX]
+        );
+        $r4 = $this->queryOne($q4, $p4) ?? [];
+
+        // ── Q5: Tabla objetivos ─────────────────────────────────────────────
+        $q5 = "
+            SELECT
+                ISNULL(SUM(CASE WHEN is_a=1 THEN obj ELSE 0 END),0) AS obj_act,
+                ISNULL(SUM(CASE WHEN is_p=1 THEN obj ELSE 0 END),0) AS obj_prev
+            FROM (
+                SELECT IMPORTE_OBJ AS obj,
+                    CASE WHEN FECHA >= ? AND FECHA < ? {$sfSO} THEN 1 ELSE 0 END AS is_a,
+                    CASE WHEN FECHA >= ? AND FECHA < ? {$sfSO} THEN 1 ELSE 0 END AS is_p
+                FROM {$this->tablaObjetivos} WITH (NOLOCK)
+                WHERE (FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?)
+            ) t
+        ";
+        $p5 = array_merge(
+            [$da, $haX], $suc,
+            [$dp, $hpX], $suc,
+            [$da, $haX, $dp, $hpX]
+        );
+        $r5 = $this->queryOne($q5, $p5) ?? [];
+
+        // ── Ensamblar resultados ────────────────────────────────────────────
+        $make = function (
+            $fact, $unid, $upos, $camb,
+            $ticks, $suma,
+            $tot, $t2, $t3,
+            $ci, $dv, $obj
+        ): array {
+            $fact  = (float)($fact  ?? 0);
+            $unid  = (float)($unid  ?? 0);
+            $upos  = (float)($upos  ?? 0);
+            $camb  = (float)($camb  ?? 0);
+            $ticks = (int)  ($ticks ?? 0);
+            $suma  = (float)($suma  ?? 0);
+            $tot   = (int)  ($tot   ?? 0);
+            $t2    = (int)  ($t2    ?? 0);
+            $t3    = (int)  ($t3    ?? 0);
+            $ci    = (float)($ci    ?? 0);
+            $dv    = (float)($dv    ?? 0);
+            $obj   = (float)($obj   ?? 0);
+            return [
+                'facturacion'      => $fact,
+                'unidades'         => $unid,
+                'tickets'          => $ticks,
+                'ticket_promedio'  => $ticks > 0 ? $suma / $ticks : 0.0,
+                'porc_cambios'     => $upos  > 0 ? $camb / $upos  : 0.0,
+                'objetivo'         => $obj,
+                'cambios'          => $camb,
+                'porc_2do'         => $tot   > 0 ? $t2   / $tot   : 0.0,
+                'porc_3ro'         => $tot   > 0 ? $t3   / $tot   : 0.0,
+                'porc_incremental' => $dv   != 0 ? ($ci  - $dv) / $dv : 0.0,
+            ];
+        };
+
+        return [
+            'actual' => $make(
+                $r1['fact_act'],   $r1['unid_act'],   $r1['upos_act'],   $r1['camb_act'],
+                $r2['tick_act'],   $r2['suma_act'],
+                $r3['tot_act'],    $r3['t2_act'],      $r3['t3_act'],
+                $r4['ci_act'],     $r4['dv_act'],      $r5['obj_act']
+            ),
+            'previo' => $make(
+                $r1['fact_prev'],  $r1['unid_prev'],  $r1['upos_prev'],  $r1['camb_prev'],
+                $r2['tick_prev'],  $r2['suma_prev'],
+                $r3['tot_prev'],   $r3['t2_prev'],     $r3['t3_prev'],
+                $r4['ci_prev'],    $r4['dv_prev'],     $r5['obj_prev']
+            ),
+            'benchmark' => $make(
+                $r1['fact_bench'], $r1['unid_bench'], $r1['upos_bench'], $r1['camb_bench'],
+                $r2['tick_bench'], $r2['suma_bench'],
+                $r3['tot_bench'],  $r3['t2_bench'],    $r3['t3_bench'],
+                $r4['ci_bench'],   $r4['dv_bench'],    0.0
+            ),
+        ];
+    }
+
+    /* ──────────────────────────────────────────────
+     *  OBJETIVO MENSUAL TOTAL (para mes actual)
+     * ────────────────────────────────────────────── */
+
+    public function getObjetivo(string $da, string $ha, ?int $nroSucurs = null): float
+    {
+        $haX  = (new DateTime($ha))->modify('+1 day')->format('Y-m-d');
+        $sfO  = $nroSucurs !== null ? 'AND NRO_SUCURSAL = ?' : '';
+        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
+        $sql  = "SELECT ISNULL(SUM(IMPORTE_OBJ),0) AS obj
+                 FROM {$this->tablaObjetivos} WITH (NOLOCK)
+                 WHERE FECHA >= ? AND FECHA < ? {$sfO}";
+        $row  = $this->queryOne($sql, array_merge([$da, $haX], $suc));
+        return (float)($row['obj'] ?? 0);
+    }
+
+    /* ──────────────────────────────────────────────
      *  CONVERSIÓN (Tickets / Ingresos)
      * ────────────────────────────────────────────── */
 
     /**
-     * Devuelve ingresos totales, tickets totales y tasa de conversión
-     * para el período indicado. No filtra por vendedor/rubro porque
-     * los ingresos son un dato de sucursal completa.
+     * Devuelve conversión para ambos períodos en 3 queries (vs 4 antes).
+     * Reemplaza 2 llamadas a getConversion().
+     * Usa JOIN en lugar de IN (SELECT) para los tickets filtrados por días con ingresos.
+     *
+     * @return array{actual:array, previo:array}
+     */
+    public function getConversionBoth(
+        string $da, string $ha,
+        string $dp, string $hp,
+        ?int   $nroSucurs = null
+    ): array {
+        $haX = (new DateTime($ha))->modify('+1 day')->format('Y-m-d');
+        $hpX = (new DateTime($hp))->modify('+1 day')->format('Y-m-d');
+        $sfI = $nroSucurs !== null ? 'AND NRO_SUCURS = ?'   : '';
+        $sfT = $nroSucurs !== null ? 'AND t.NRO_SUCURS = ?' : '';
+        $suc = $nroSucurs !== null ? [$nroSucurs] : [];
+
+        // Q1: Ingresos de ambos períodos en una sola pasada
+        $qI = "
+            SELECT
+                ISNULL(SUM(CASE WHEN FECHA >= ? AND FECHA < ? THEN INGRESOS ELSE 0 END),0) AS ing_act,
+                ISNULL(SUM(CASE WHEN FECHA >= ? AND FECHA < ? THEN INGRESOS ELSE 0 END),0) AS ing_prev
+            FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
+            WHERE ((FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?))
+              {$sfI}
+        ";
+        $pI  = array_merge([$da, $haX, $dp, $hpX, $da, $haX, $dp, $hpX], $suc);
+        $rI  = $this->queryOne($qI, $pI) ?? [];
+
+        // Q2: Tickets actual — JOIN reemplaza IN (SELECT) lento
+        $qTA = "
+            SELECT COUNT(DISTINCT t.N_COMP) AS total_tickets
+            FROM BI_SALES_TOTAL_TICKETS t WITH (NOLOCK)
+            INNER JOIN (
+                SELECT DISTINCT CAST(FECHA AS DATE) AS dia
+                FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
+                WHERE FECHA >= ? AND FECHA < ? {$sfI}
+            ) dias ON CAST(t.FECHA AS DATE) = dias.dia
+            WHERE t.FECHA >= ? AND t.FECHA < ?
+              AND t.T_COMP = 'FAC' {$sfT}
+        ";
+        $pTA = array_merge([$da, $haX], $suc, [$da, $haX], $suc);
+        $rTA = $this->queryOne($qTA, $pTA) ?? [];
+
+        // Q3: Tickets previo
+        $pTP = array_merge([$dp, $hpX], $suc, [$dp, $hpX], $suc);
+        $rTP = $this->queryOne($qTA, $pTP) ?? [];  // misma query, distintos params
+
+        $ingAct   = (int)($rI['ing_act']          ?? 0);
+        $ingPrev  = (int)($rI['ing_prev']         ?? 0);
+        $tickAct  = (int)($rTA['total_tickets']   ?? 0);
+        $tickPrev = (int)($rTP['total_tickets']   ?? 0);
+
+        return [
+            'actual' => [
+                'ingresos'   => $ingAct,
+                'tickets'    => $tickAct,
+                'conversion' => $ingAct > 0 ? $tickAct  / $ingAct  : 0.0,
+            ],
+            'previo' => [
+                'ingresos'   => $ingPrev,
+                'tickets'    => $tickPrev,
+                'conversion' => $ingPrev > 0 ? $tickPrev / $ingPrev : 0.0,
+            ],
+        ];
+    }
+
+    /**
+     * @deprecated Usar getConversionBoth() para mejor performance.
      */
     public function getConversion(string $desde, string $hasta, ?int $nroSucurs = null): array
     {
         $sfI  = $nroSucurs !== null ? "AND i.NRO_SUCURS = ?" : "";
-        $sfI2 = $nroSucurs !== null ? "AND i2.NRO_SUCURS = ?" : "";
         $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
 
         $sqlI = "
             SELECT ISNULL(SUM(i.INGRESOS), 0) AS total_ingresos
-            FROM BI_T_INGRESOS_SUCURSALES i
+            FROM BI_T_INGRESOS_SUCURSALES i WITH (NOLOCK)
             WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfI}
         ";
         $rowI = $this->queryOne($sqlI, array_merge([$desde, $hasta], $suc));
 
+        $haX  = (new DateTime($hasta))->modify('+1 day')->format('Y-m-d');
+        $sfI2 = $nroSucurs !== null ? 'AND NRO_SUCURS = ?' : '';
         $sqlT = "
             SELECT COUNT(DISTINCT t.N_COMP) AS total_tickets
-            FROM BI_SALES_TOTAL_TICKETS t
-            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day, 1, CAST(? AS DATE))
-              AND t.T_COMP = 'FAC'
-              {$sfT}
-              AND CAST(t.FECHA AS DATE) IN (
-                  SELECT DISTINCT CAST(i2.FECHA AS DATE)
-                  FROM BI_T_INGRESOS_SUCURSALES i2
-                  WHERE i2.FECHA >= ? AND i2.FECHA < DATEADD(day, 1, CAST(? AS DATE))
-                  {$sfI2}
-              )
+            FROM BI_SALES_TOTAL_TICKETS t WITH (NOLOCK)
+            INNER JOIN (
+                SELECT DISTINCT CAST(FECHA AS DATE) AS dia
+                FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
+                WHERE FECHA >= ? AND FECHA < ? {$sfI2}
+            ) dias ON CAST(t.FECHA AS DATE) = dias.dia
+            WHERE t.FECHA >= ? AND t.FECHA < ?
+              AND t.T_COMP = 'FAC' {$sfT}
         ";
-        $rowT = $this->queryOne($sqlT, array_merge([$desde, $hasta], $suc, [$desde, $hasta], $suc));
+        $rowT = $this->queryOne($sqlT, array_merge([$desde, $haX], $suc, [$desde, $haX], $suc));
 
         $ingresos = (int)($rowI['total_ingresos'] ?? 0);
         $tickets  = (int)($rowT['total_tickets']  ?? 0);
@@ -613,7 +936,7 @@ class DashboardDB
     {
         $sf     = $nroSucurs !== null ? "WHERE NRO_SUCURS = ?" : "";
         $params = $nroSucurs !== null ? [$nroSucurs] : [];
-        $sql    = "SELECT MAX(CAST(FECHA AS DATE)) AS ultima_fecha FROM BI_SALES_SUCURSALES {$sf}";
+        $sql    = "SELECT MAX(CAST(FECHA AS DATE)) AS ultima_fecha FROM BI_SALES_SUCURSALES WITH (NOLOCK) {$sf}";
         $row    = $this->queryOne($sql, $params);
         return ($row && $row['ultima_fecha']) ? $row['ultima_fecha']->format('Y-m-d') : '';
     }

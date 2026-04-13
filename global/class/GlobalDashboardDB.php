@@ -67,6 +67,8 @@ class GlobalDashboardDB
 
         $cid        = new Conexion();
         $this->conn = $cid->conectar($cfg['db']);
+        // Lectura sin bloqueo de escrituras (equivalente a WITH NOLOCK global)
+        sqlsrv_query($this->conn, 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
     }
 
     /* ──────────────────────────────────────────────
@@ -525,6 +527,39 @@ class GlobalDashboardDB
     }
 
     /* ──────────────────────────────────────────────
+     *  SERIE TEMPORAL SIMPLE (solo facturación — sparkline previo)
+     * ────────────────────────────────────────────── */
+
+    public function getSerieFacturacionSimple(
+        string $desde, string $hasta,
+        ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
+        ?string $grupo = null, ?string $tipoTienda = null
+    ): array {
+        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+        [$sfS,  $pS]  = Filters::build($fp, 's', $this->campoVendedor, $this->origen, true, true);
+        [$sfGS, $pGS] = $this->grupoFiltro('s');
+
+        $rows = $this->query("
+            SELECT
+                CAST(s.FECHA AS DATE) AS fecha,
+                ISNULL(SUM(s.IMPORTE), 0) AS facturacion
+            FROM BI_SALES_SUCURSALES s
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
+            GROUP BY CAST(s.FECHA AS DATE)
+            ORDER BY 1 ASC
+        ", array_merge([$desde, $hasta], $pS, $pGS));
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[] = [
+                'fecha'       => $row['fecha']->format('Y-m-d'),
+                'facturacion' => (float)$row['facturacion'],
+            ];
+        }
+        return $result;
+    }
+
+    /* ──────────────────────────────────────────────
      *  SERIE DIARIA OBJETIVO
      * ────────────────────────────────────────────── */
 
@@ -556,38 +591,33 @@ class GlobalDashboardDB
     public function getObjetivosPorSucursal(
         string $desde_act, string $hasta_act,
         string $desde_total, string $hasta_total,
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null,
+        ?int $sucursal = null
     ): array {
-        $fp = $this->fp(null, '%', '%', $grupo, $tipoTienda);
-        [$sfO, $pO]   = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURSAL');
+        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda);
+        [$sfO, $pO]   = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, true, false, 'NRO_SUCURSAL');
         [$sfGO, $pGO] = $this->grupoFiltro('o', 'NRO_SUCURSAL');
 
-        $rowsAct = $this->query("
-            SELECT o.NRO_SUCURSAL, ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo_fecha
-            FROM {$this->tablaObjetivos} o
-            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO} {$sfGO}
+        // Un solo scan con CASE WHEN en lugar de dos queries al servidor vinculado
+        $haX  = (new DateTime($hasta_act))->modify('+1 day')->format('Y-m-d');
+        $htX  = (new DateTime($hasta_total))->modify('+1 day')->format('Y-m-d');
+        $rows = $this->query("
+            SELECT o.NRO_SUCURSAL,
+                ISNULL(SUM(CASE WHEN o.FECHA >= ? AND o.FECHA < ? THEN o.IMPORTE_OBJ ELSE 0 END), 0) AS objetivo_fecha,
+                ISNULL(SUM(CASE WHEN o.FECHA >= ? AND o.FECHA < ? THEN o.IMPORTE_OBJ ELSE 0 END), 0) AS objetivo_total
+            FROM {$this->tablaObjetivos} o WITH (NOLOCK)
+            WHERE ((o.FECHA >= ? AND o.FECHA < ?) OR (o.FECHA >= ? AND o.FECHA < ?))
+              {$sfO} {$sfGO}
             GROUP BY o.NRO_SUCURSAL
-        ", array_merge([$desde_act, $hasta_act], $pO, $pGO));
-
-        $rowsTotal = $this->query("
-            SELECT o.NRO_SUCURSAL, ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo_total
-            FROM {$this->tablaObjetivos} o
-            WHERE o.FECHA >= ? AND o.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfO} {$sfGO}
-            GROUP BY o.NRO_SUCURSAL
-        ", array_merge([$desde_total, $hasta_total], $pO, $pGO));
-
-        $totalMap = [];
-        foreach ($rowsTotal as $r) {
-            $totalMap[(int)$r['NRO_SUCURSAL']] = (float)$r['objetivo_total'];
-        }
+        ", array_merge([$desde_act, $haX, $desde_total, $htX, $desde_act, $haX, $desde_total, $htX], $pO, $pGO));
 
         $result = [];
-        foreach ($rowsAct as $r) {
+        foreach ($rows as $r) {
             $nro = (int)$r['NRO_SUCURSAL'];
             $result[$nro] = [
                 'nro_sucursal'   => $nro,
                 'objetivo_fecha' => (float)$r['objetivo_fecha'],
-                'objetivo_total' => $totalMap[$nro] ?? 0.0,
+                'objetivo_total' => (float)$r['objetivo_total'],
             ];
         }
         return $result;
@@ -600,41 +630,36 @@ class GlobalDashboardDB
     public function getFacturacionPorSucursal(
         string $desde_act, string $hasta_act,
         string $desde_prev, string $hasta_prev,
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null,
+        ?int $sucursal = null
     ): array {
-        $fp = $this->fp(null, '%', '%', $grupo, $tipoTienda);
-        [$sfS, $pS]   = Filters::build($fp, 's', $this->campoVendedor, $this->origen, false, false);
+        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda);
+        [$sfS, $pS]   = Filters::build($fp, 's', $this->campoVendedor, $this->origen, true, false);
         [$sfGS, $pGS] = $this->grupoFiltro('s');
 
-        $rowsAct = $this->query("
-            SELECT s.NRO_SUCURS, ISNULL(SUM(s.IMPORTE), 0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
-            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
+        // Un solo scan con CASE WHEN en lugar de dos queries separadas
+        $haX = (new DateTime($hasta_act))->modify('+1 day')->format('Y-m-d');
+        $hpX = (new DateTime($hasta_prev))->modify('+1 day')->format('Y-m-d');
+        $rows = $this->query("
+            SELECT s.NRO_SUCURS,
+                ISNULL(SUM(CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN s.IMPORTE ELSE 0 END), 0) AS fact_act,
+                ISNULL(SUM(CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN s.IMPORTE ELSE 0 END), 0) AS fact_prev
+            FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
+            WHERE ((s.FECHA >= ? AND s.FECHA < ?) OR (s.FECHA >= ? AND s.FECHA < ?))
+              {$sfS} {$sfGS}
             GROUP BY s.NRO_SUCURS
-        ", array_merge([$desde_act, $hasta_act], $pS, $pGS));
-
-        $rowsPrev = $this->query("
-            SELECT s.NRO_SUCURS, ISNULL(SUM(s.IMPORTE), 0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
-            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
-            GROUP BY s.NRO_SUCURS
-        ", array_merge([$desde_prev, $hasta_prev], $pS, $pGS));
-
-        $prevMap = [];
-        foreach ($rowsPrev as $r) {
-            $prevMap[(int)$r['NRO_SUCURS']] = (float)$r['facturacion'];
-        }
+        ", array_merge([$desde_act, $haX, $desde_prev, $hpX, $desde_act, $haX, $desde_prev, $hpX], $pS, $pGS));
 
         $result = [];
-        foreach ($rowsAct as $r) {
+        foreach ($rows as $r) {
             $nro  = (int)$r['NRO_SUCURS'];
-            $fact = (float)$r['facturacion'];
-            $prev = $prevMap[$nro] ?? 0.0;
+            $fact = (float)$r['fact_act'];
+            $prev = (float)$r['fact_prev'];
             $result[$nro] = [
-                'nro_sucurs'      => $nro,
-                'facturacion'     => $fact,
+                'nro_sucurs'       => $nro,
+                'facturacion'      => $fact,
                 'facturacion_prev' => $prev,
-                'var_fact'        => $prev > 0 ? ($fact - $prev) / $prev : ($fact > 0 ? 1 : 0),
+                'var_fact'         => $prev > 0 ? ($fact - $prev) / $prev : ($fact > 0 ? 1 : 0),
             ];
         }
         return $result;
@@ -1108,6 +1133,236 @@ class GlobalDashboardDB
         unset($s);
 
         return $result;
+    }
+
+    /* ──────────────────────────────────────────────
+     *  KPIs BULK — actual + previo en 5 queries (un scan por tabla)
+     *  Siguiendo el patrón de DashboardDB::getKPIsBulk de sucursales.
+     * ────────────────────────────────────────────── */
+
+    public function getKPIsBulk(
+        string $da, string $ha,
+        string $dp, string $hp,
+        ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
+        ?string $grupo = null, ?string $tipoTienda = null
+    ): array {
+        $cv  = $this->campoVendedor;
+        $haX = (new DateTime($ha))->modify('+1 day')->format('Y-m-d');
+        $hpX = (new DateTime($hp))->modify('+1 day')->format('Y-m-d');
+        // Params base: is_a CASE WHEN + is_p CASE WHEN + WHERE dates (8 posiciones)
+        $pBase = [$da, $haX, $dp, $hpX, $da, $haX, $dp, $hpX];
+
+        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+
+        [$sfS,  $pS]  = Filters::build($fp, 's',  $cv, $this->origen, true,  true);
+        [$sfT,  $pT]  = Filters::build($fp, 't',  $cv, $this->origen, true,  false);
+        [$sfTk, $pTk] = Filters::build($fp, 'tk', $cv, $this->origen, true,  false);
+        [$sfP,  $pP]  = Filters::build($fp, 'p',  $cv, $this->origen, false, false);
+        [$sfO,  $pO]  = Filters::build($fp, 'o',  $cv, $this->origen, false, false, 'NRO_SUCURSAL');
+
+        [$sfGS,  $pGS]  = $this->grupoFiltro('s');
+        [$sfGT,  $pGT]  = $this->grupoFiltro('t');
+        [$sfGTk, $pGTk] = $this->grupoFiltro('tk');
+        [$sfGP,  $pGP]  = $this->grupoFiltro('p');
+        [$sfGO,  $pGO]  = $this->grupoFiltro('o', 'NRO_SUCURSAL');
+
+        // ── Q1: BI_SALES_SUCURSALES — facturación, unidades, cambios ──────────
+        $r1 = $this->queryOne("
+            SELECT
+                ISNULL(SUM(CASE WHEN is_a=1 THEN imp ELSE 0 END),0)               AS fact_act,
+                ISNULL(SUM(CASE WHEN is_p=1 THEN imp ELSE 0 END),0)               AS fact_prev,
+                ISNULL(SUM(CASE WHEN is_a=1 AND rg=0 THEN qty ELSE 0 END),0)      AS unid_act,
+                ISNULL(SUM(CASE WHEN is_p=1 AND rg=0 THEN qty ELSE 0 END),0)      AS unid_prev,
+                ISNULL(SUM(CASE WHEN is_a=1 AND rg=0 AND qty>0 THEN  qty ELSE 0 END),0) AS upos_act,
+                ISNULL(SUM(CASE WHEN is_p=1 AND rg=0 AND qty>0 THEN  qty ELSE 0 END),0) AS upos_prev,
+                ISNULL(SUM(CASE WHEN is_a=1 AND rg=0 AND qty<0 THEN -qty ELSE 0 END),0) AS camb_act,
+                ISNULL(SUM(CASE WHEN is_p=1 AND rg=0 AND qty<0 THEN -qty ELSE 0 END),0) AS camb_prev
+            FROM (
+                SELECT s.IMPORTE AS imp, s.CANTIDAD AS qty,
+                    CASE WHEN s.RUBRO IN ('CONCEPTO','PACKAGING') THEN 1 ELSE 0 END AS rg,
+                    CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN 1 ELSE 0 END AS is_a,
+                    CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN 1 ELSE 0 END AS is_p
+                FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
+                WHERE ((s.FECHA >= ? AND s.FECHA < ?) OR (s.FECHA >= ? AND s.FECHA < ?))
+                  {$sfS} {$sfGS}
+            ) t
+        ", array_merge($pBase, $pS, $pGS)) ?? [];
+
+        // ── Q2: BI_SALES_TOTAL_TICKETS — tickets, ticket_promedio, mails ──────
+        // franquicias no tiene columna EMAIL → usar 0 AS hm
+        $hmExpr = ($this->origen === 'franquicias')
+            ? '0'
+            : "CASE WHEN ISNULL(t.EMAIL,'') <> '' AND ISNULL(t.EMAIL,'') <> 'invalido' THEN 1 ELSE 0 END";
+        $r2 = $this->queryOne("
+            SELECT
+                COUNT(DISTINCT CASE WHEN is_a=1          THEN nc ELSE NULL END) AS tick_act,
+                ISNULL(SUM(CASE WHEN is_a=1 THEN imp ELSE 0 END),0)            AS suma_act,
+                COUNT(DISTINCT CASE WHEN is_p=1          THEN nc ELSE NULL END) AS tick_prev,
+                ISNULL(SUM(CASE WHEN is_p=1 THEN imp ELSE 0 END),0)            AS suma_prev,
+                COUNT(DISTINCT CASE WHEN is_a=1 AND hm=1 THEN nc ELSE NULL END) AS mails_act,
+                COUNT(DISTINCT CASE WHEN is_p=1 AND hm=1 THEN nc ELSE NULL END) AS mails_prev
+            FROM (
+                SELECT t.N_COMP AS nc, t.IMP_TOTAL_TICKET AS imp,
+                    {$hmExpr} AS hm,
+                    CASE WHEN t.FECHA >= ? AND t.FECHA < ? THEN 1 ELSE 0 END AS is_a,
+                    CASE WHEN t.FECHA >= ? AND t.FECHA < ? THEN 1 ELSE 0 END AS is_p
+                FROM BI_SALES_TOTAL_TICKETS t WITH (NOLOCK)
+                WHERE t.T_COMP = 'FAC'
+                  AND ((t.FECHA >= ? AND t.FECHA < ?) OR (t.FECHA >= ? AND t.FECHA < ?))
+                  {$sfT} {$sfGT}
+            ) t
+        ", array_merge($pBase, $pT, $pGT)) ?? [];
+
+        // ── Q3: BI_SALES_TICKETS — 2do y 3er producto ───────────────────────
+        try {
+            $r3 = $this->queryOne("
+                SELECT
+                    COUNT(DISTINCT CASE WHEN is_a=1           THEN nc ELSE NULL END) AS tot_act,
+                    COUNT(DISTINCT CASE WHEN is_a=1 AND qty>1 THEN nc ELSE NULL END) AS t2_act,
+                    COUNT(DISTINCT CASE WHEN is_a=1 AND qty>2 THEN nc ELSE NULL END) AS t3_act,
+                    COUNT(DISTINCT CASE WHEN is_p=1           THEN nc ELSE NULL END) AS tot_prev,
+                    COUNT(DISTINCT CASE WHEN is_p=1 AND qty>1 THEN nc ELSE NULL END) AS t2_prev,
+                    COUNT(DISTINCT CASE WHEN is_p=1 AND qty>2 THEN nc ELSE NULL END) AS t3_prev
+                FROM (
+                    SELECT tk.N_COMP AS nc, tk.CANTIDAD AS qty,
+                        CASE WHEN tk.FECHA >= ? AND tk.FECHA < ? THEN 1 ELSE 0 END AS is_a,
+                        CASE WHEN tk.FECHA >= ? AND tk.FECHA < ? THEN 1 ELSE 0 END AS is_p
+                    FROM BI_SALES_TICKETS tk WITH (NOLOCK)
+                    WHERE ((tk.FECHA >= ? AND tk.FECHA < ?) OR (tk.FECHA >= ? AND tk.FECHA < ?))
+                      {$sfTk} {$sfGTk}
+                ) t
+            ", array_merge($pBase, $pTk, $pGTk)) ?? [];
+        } catch (Throwable $_) {
+            $r3 = ['tot_act' => 0, 't2_act' => 0, 't3_act' => 0, 'tot_prev' => 0, 't2_prev' => 0, 't3_prev' => 0];
+        }
+
+        // ── Q4: BI_SALES_PORC_INCREMENTAL ───────────────────────────────────
+        try {
+            $r4 = $this->queryOne("
+                SELECT
+                    ISNULL(SUM(CASE WHEN is_a=1 THEN ci ELSE 0 END),0) AS ci_act,
+                    ISNULL(SUM(CASE WHEN is_a=1 THEN dv ELSE 0 END),0) AS dv_act,
+                    ISNULL(SUM(CASE WHEN is_p=1 THEN ci ELSE 0 END),0) AS ci_prev,
+                    ISNULL(SUM(CASE WHEN is_p=1 THEN dv ELSE 0 END),0) AS dv_prev
+                FROM (
+                    SELECT p.CAMBIO AS ci, p.DEVOLUCIONES AS dv,
+                        CASE WHEN p.FECHA_MOV >= ? AND p.FECHA_MOV < ? THEN 1 ELSE 0 END AS is_a,
+                        CASE WHEN p.FECHA_MOV >= ? AND p.FECHA_MOV < ? THEN 1 ELSE 0 END AS is_p
+                    FROM BI_SALES_PORC_INCREMENTAL p WITH (NOLOCK)
+                    WHERE ((p.FECHA_MOV >= ? AND p.FECHA_MOV < ?) OR (p.FECHA_MOV >= ? AND p.FECHA_MOV < ?))
+                      {$sfP} {$sfGP}
+                ) t
+            ", array_merge($pBase, $pP, $pGP)) ?? [];
+        } catch (Throwable $_) {
+            $r4 = ['ci_act' => 0, 'dv_act' => 0, 'ci_prev' => 0, 'dv_prev' => 0];
+        }
+
+        // ── Q5: Tabla objetivos ──────────────────────────────────────────────
+        try {
+            $r5 = $this->queryOne("
+                SELECT
+                    ISNULL(SUM(CASE WHEN is_a=1 THEN obj ELSE 0 END),0) AS obj_act,
+                    ISNULL(SUM(CASE WHEN is_p=1 THEN obj ELSE 0 END),0) AS obj_prev
+                FROM (
+                    SELECT o.IMPORTE_OBJ AS obj,
+                        CASE WHEN o.FECHA >= ? AND o.FECHA < ? THEN 1 ELSE 0 END AS is_a,
+                        CASE WHEN o.FECHA >= ? AND o.FECHA < ? THEN 1 ELSE 0 END AS is_p
+                    FROM {$this->tablaObjetivos} o WITH (NOLOCK)
+                    WHERE ((o.FECHA >= ? AND o.FECHA < ?) OR (o.FECHA >= ? AND o.FECHA < ?))
+                      {$sfO} {$sfGO}
+                ) t
+            ", array_merge($pBase, $pO, $pGO)) ?? [];
+        } catch (Throwable $_) {
+            $r5 = ['obj_act' => 0, 'obj_prev' => 0];
+        }
+
+        // ── Q6+Q7: Ticket promedio 2do producto (INNER JOIN con subquery — separadas) ──
+        $noTp2 = ['tickets_con_2do' => 0, 'facturacion_con_2do' => 0, 'ticket_promedio_2do' => 0];
+        try { $tp2a = $this->getTicketPromedio2do($da, $ha, $sucursal, $vendedor, $grupo, $tipoTienda); } catch (Throwable $_) { $tp2a = $noTp2; }
+        try { $tp2p = $this->getTicketPromedio2do($dp, $hp, $sucursal, $vendedor, $grupo, $tipoTienda); } catch (Throwable $_) { $tp2p = $noTp2; }
+
+        // Derivadas
+        $tA  = (int)($r2['tick_act']  ?? 0);
+        $tP  = (int)($r2['tick_prev'] ?? 0);
+        $sA  = (float)($r2['suma_act']  ?? 0);
+        $sP  = (float)($r2['suma_prev'] ?? 0);
+        $totA = (int)($r3['tot_act']  ?? 0); $t2A = (int)($r3['t2_act'] ?? 0); $t3A = (int)($r3['t3_act'] ?? 0);
+        $totP = (int)($r3['tot_prev'] ?? 0); $t2P = (int)($r3['t2_prev'] ?? 0); $t3P = (int)($r3['t3_prev'] ?? 0);
+        $ciA = (float)($r4['ci_act'] ?? 0); $dvA = (float)($r4['dv_act'] ?? 0);
+        $ciP = (float)($r4['ci_prev'] ?? 0); $dvP = (float)($r4['dv_prev'] ?? 0);
+        $uposA = (float)($r1['upos_act'] ?? 0); $cambA = (float)($r1['camb_act'] ?? 0);
+        $uposP = (float)($r1['upos_prev'] ?? 0); $cambP = (float)($r1['camb_prev'] ?? 0);
+
+        return [
+            'actual' => [
+                'facturacion'         => (float)($r1['fact_act'] ?? 0),
+                'unidades'            => (float)($r1['unid_act'] ?? 0),
+                'tickets'             => $tA,
+                'ticket_promedio'     => $tA > 0 ? $sA / $tA : 0,
+                'porc_cambios'        => $uposA > 0 ? $cambA / $uposA : 0,
+                'objetivo'            => (float)($r5['obj_act'] ?? 0),
+                'porc_2do'            => $totA > 0 ? $t2A / $totA : 0,
+                'porc_3ro'            => $totA > 0 ? $t3A / $totA : 0,
+                'porc_incremental'    => $dvA != 0 ? ($ciA - $dvA) / $dvA : 0,
+                'mails'               => (int)($r2['mails_act'] ?? 0),
+                'ticket_promedio_2do' => $tp2a['ticket_promedio_2do'],
+                'tickets_con_2do'     => $tp2a['tickets_con_2do'],
+                'ingresos'            => 0,
+                'conversion'          => 0,
+            ],
+            'previo' => [
+                'facturacion'         => (float)($r1['fact_prev'] ?? 0),
+                'unidades'            => (float)($r1['unid_prev'] ?? 0),
+                'tickets'             => $tP,
+                'ticket_promedio'     => $tP > 0 ? $sP / $tP : 0,
+                'porc_cambios'        => $uposP > 0 ? $cambP / $uposP : 0,
+                'objetivo'            => (float)($r5['obj_prev'] ?? 0),
+                'porc_2do'            => $totP > 0 ? $t2P / $totP : 0,
+                'porc_3ro'            => $totP > 0 ? $t3P / $totP : 0,
+                'porc_incremental'    => $dvP != 0 ? ($ciP - $dvP) / $dvP : 0,
+                'mails'               => (int)($r2['mails_prev'] ?? 0),
+                'ticket_promedio_2do' => $tp2p['ticket_promedio_2do'],
+                'tickets_con_2do'     => $tp2p['tickets_con_2do'],
+                'ingresos'            => 0,
+                'conversion'          => 0,
+            ],
+        ];
+    }
+
+    /* ──────────────────────────────────────────────
+     *  KPIs COMPLETOS (agrupa las 5 queries de un período)
+     * ────────────────────────────────────────────── */
+
+    public function getKPIsCompletos(
+        string $desde, string $hasta,
+        ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
+        ?string $grupo = null, ?string $tipoTienda = null
+    ): array {
+        $noTp2  = ['tickets_con_2do' => 0, 'facturacion_con_2do' => 0, 'ticket_promedio_2do' => 0];
+        $noIncr = ['cambios_incr' => 0, 'devoluciones' => 0, 'porc_incremental' => 0];
+
+        $kpi  = $this->getKPIs($desde, $hasta, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+        $tick = $this->getTicketsProductos($desde, $hasta, $sucursal, $vendedor, $grupo, $tipoTienda);
+        try { $tp2  = $this->getTicketPromedio2do($desde, $hasta, $sucursal, $vendedor, $grupo, $tipoTienda); } catch (Throwable $_) { $tp2  = $noTp2; }
+        try { $incr = $this->getIncremental($desde, $hasta, $sucursal, $vendedor, $grupo, $tipoTienda);      } catch (Throwable $_) { $incr = $noIncr; }
+        try { $mails = $this->getMails($desde, $hasta, $sucursal, $grupo, $tipoTienda);                      } catch (Throwable $_) { $mails = ['mails' => 0]; }
+
+        return [
+            'facturacion'         => $kpi['facturacion'],
+            'unidades'            => $kpi['unidades'],
+            'tickets'             => $kpi['tickets'],
+            'ticket_promedio'     => $kpi['ticket_promedio'],
+            'porc_cambios'        => $kpi['porc_cambios'],
+            'objetivo'            => $kpi['objetivo'],
+            'porc_2do'            => $tick['porc_2do'],
+            'porc_3ro'            => $tick['porc_3ro'],
+            'porc_incremental'    => $incr['porc_incremental'],
+            'mails'               => $mails['mails'],
+            'ticket_promedio_2do' => $tp2['ticket_promedio_2do'],
+            'tickets_con_2do'     => $tp2['tickets_con_2do'],
+            'ingresos'            => 0,
+            'conversion'          => 0,
+        ];
     }
 
     /* ──────────────────────────────────────────────

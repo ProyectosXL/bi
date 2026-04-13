@@ -21,6 +21,64 @@ const Dashboard = (() => {
 
     let _abortController = null;
 
+    /* ── Spinner bloqueante ──────────────────────── */
+    const Spinner = (() => {
+        let overlay = null;
+
+        function show(msg = 'Cargando datos...') {
+            if (overlay) return;
+            overlay = document.createElement('div');
+            overlay.id = 'bi-spinner-overlay';
+            overlay.style.cssText = [
+                'position:fixed',
+                'inset:0',
+                'z-index:99999',
+                'background:rgba(26,35,64,0.6)',
+                'backdrop-filter:blur(2px)',
+                'display:flex',
+                'flex-direction:column',
+                'align-items:center',
+                'justify-content:center',
+                'gap:16px',
+                'pointer-events:all'
+            ].join(';');
+
+            if (!document.getElementById('bi-spin-style')) {
+                const style = document.createElement('style');
+                style.id = 'bi-spin-style';
+                style.textContent = '@keyframes bi-spin{to{transform:rotate(360deg)}}';
+                document.head.appendChild(style);
+            }
+
+            overlay.innerHTML = `
+                <div style="
+                    width:52px;height:52px;
+                    border:4px solid rgba(255,255,255,0.2);
+                    border-top-color:#00a878;
+                    border-radius:50%;
+                    animation:bi-spin 0.75s linear infinite;
+                "></div>
+                <div style="
+                    color:rgba(255,255,255,0.92);
+                    font-family:'Barlow Condensed',sans-serif;
+                    font-size:1.1rem;
+                    font-weight:600;
+                    letter-spacing:0.5px;
+                ">${msg}</div>
+            `;
+            document.body.appendChild(overlay);
+        }
+
+        function hide() {
+            if (!overlay) return;
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 0.2s ease';
+            setTimeout(() => { overlay?.remove(); overlay = null; }, 200);
+        }
+
+        return { show, hide };
+    })();
+
     /* ── Utilidades de formato ───────────────────── */
     const fmt = {
         /** $ 1.234.567 */
@@ -685,11 +743,11 @@ const Dashboard = (() => {
                 <td class="td-num">${fmt.num(v.unidades)}</td>
                 <td class="td-num">${fmt.money(v.facturacion)}</td>
                 <td class="td-num">${fmt.num(v.tickets)}</td>
-                <td class="td-num td-prom ${colorKPI(v.ticket_promedio, kpiSucursal.ticket_promedio)}">${fmt.money(v.ticket_promedio)}</td>
-                <td class="td-num ${colorKPI(v.porc_2do, kpiSucursal.porc_2do)}">${fmt.pct(v.porc_2do)}</td>
-                <td class="td-num ${colorKPI(v.porc_3ro, kpiSucursal.porc_3ro)}">${fmt.pct(v.porc_3ro)}</td>
-                <td class="td-num ${colorKPI(v.porc_cambios, kpiSucursal.porc_cambios)}">${fmt.pct(v.porc_cambios)}</td>
-                <td class="td-num ${colorKPI(v.porc_incremental, kpiSucursal.porc_incremental)}">${fmt.pct(v.porc_incremental)}</td>
+                <td class="td-num td-prom ${colorKPI(v.ticket_promedio, kpiSucursal?.ticket_promedio)}">${fmt.money(v.ticket_promedio)}</td>
+                <td class="td-num ${colorKPI(v.porc_2do, kpiSucursal?.porc_2do)}">${fmt.pct(v.porc_2do)}</td>
+                <td class="td-num ${colorKPI(v.porc_3ro, kpiSucursal?.porc_3ro)}">${fmt.pct(v.porc_3ro)}</td>
+                <td class="td-num ${colorKPI(v.porc_cambios, kpiSucursal?.porc_cambios)}">${fmt.pct(v.porc_cambios)}</td>
+                <td class="td-num ${colorKPI(v.porc_incremental, kpiSucursal?.porc_incremental)}">${fmt.pct(v.porc_incremental)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -1147,6 +1205,7 @@ const Dashboard = (() => {
         RankingRubros.drilldownState = { level: 1, rubro: null };
 
         state.loading = true;
+        Spinner.show('Cargando KPIs...');
         document.body.classList.add('is-loading');
 
         // Guardar parámetros actuales para drilldown
@@ -1292,6 +1351,7 @@ const Dashboard = (() => {
         } finally {
             state.loading = false;
             document.body.classList.remove('is-loading');
+            Spinner.hide();
         }
     }
 
@@ -1315,13 +1375,16 @@ const Dashboard = (() => {
 
     /* ── Init ────────────────────────────────────── */
     async function init() {
-        // Selector de período — solo muestra/oculta custom-dates, no dispara carga
+        // Selector de período — actualiza estado y dispara recarga (excepto custom que requiere fechas)
         const selPeriodo = document.getElementById('sel-periodo');
         if (selPeriodo) {
             selPeriodo.addEventListener('change', () => {
                 state.periodo = selPeriodo.value;
                 const customRow = document.getElementById('custom-dates');
                 if (customRow) customRow.style.display = state.periodo === 'custom' ? 'flex' : 'none';
+                if (state.periodo !== 'custom') {
+                    document.getElementById('btn-aplicar')?.click();
+                }
             });
         }
 
@@ -1442,7 +1505,7 @@ const Dashboard = (() => {
         state.compHasta = document.getElementById('input-comp-hasta')?.value || '';
     }
 
-    return { init, loadAll, state, fmt };
+    return { init, loadAll, state, fmt, spinner: Spinner };
 })();
 
 document.addEventListener('DOMContentLoaded', () => Dashboard.init());

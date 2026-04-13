@@ -15,7 +15,7 @@ if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
     exit;
 }
 $isGrupo         = ($tipoSesion === 'GRUPO');
-$esGrupo         = $isGrupo && !empty($_SESSION['esGrupo']);
+$esGrupo         = (bool)($_SESSION['esGrupo'] ?? false);
 $sucursalesGrupo = $isGrupo ? ($_SESSION['sucursalesGrupo'] ?? []) : [];
 if ($isGrupo) {
     $descLabel = $_SESSION['descLocal'] ?? 'GRUPO';
@@ -239,18 +239,15 @@ $ultimaAct = date('d/m/Y H:i:s');
                     <div class="summary-icon">🎯</div>
                     <div class="summary-body">
                         <div class="summary-label">Objetivo a la fecha</div>
-                        <div class="summary-main">
-                            <div class="summary-left">
-                                <div class="summary-value" id="obj-act">—</div>
-                                <div class="summary-var" id="obj-var">—</div>
-                            </div>
-                            <div class="summary-right">
-                                <div class="summary-prev-label">Objetivo Total</div>
-                                <div class="summary-prev-value" id="obj-total">—</div>
-                            </div>
-                        </div>
-                        <div class="summary-sparkline obj-sparkline">
-                            <canvas id="spark-obj" width="200" height="38"></canvas>
+                        <div class="summary-value" id="obj-act">—</div>
+                        <div class="summary-var" id="obj-var">—</div>
+                    </div>
+                    <div class="summary-side">
+                        <div class="summary-prev-label">Objetivo Total</div>
+                        <div class="summary-prev-value" id="obj-total">—</div>
+                        <div class="summary-sparkline">
+                            <canvas id="spark-obj" width="120" height="45"></canvas>
+                            <button class="spark-expand-btn" data-spark="spark-obj" title="Ver detalle"><i class="bi bi-arrows-angle-expand"></i></button>
                         </div>
                     </div>
                 </div>
@@ -670,6 +667,7 @@ $ultimaAct = date('d/m/Y H:i:s');
     <!-- /tab-producto -->
 
     <!-- ══ PESTAÑA: CADENA ══════════════════════════════════════════════ -->
+    <?php if (!$isGrupo || $esGrupo): ?>
     <div id="tab-cadena" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-cadena">
         <div class="dash-content">
             <div class="analisis-card">
@@ -688,8 +686,10 @@ $ultimaAct = date('d/m/Y H:i:s');
         </div>
     </div>
     <!-- /tab-cadena -->
+    <?php endif; ?>
 
     <!-- ══ PESTAÑA: PARTICIPACIÓN ════════════════════════════════════════ -->
+    <?php if (!$isGrupo || $esGrupo): ?>
     <div id="tab-participacion" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-participacion">
         <div class="dash-content">
             <div class="analisis-card">
@@ -711,6 +711,7 @@ $ultimaAct = date('d/m/Y H:i:s');
         </div>
     </div>
     <!-- /tab-participacion -->
+    <?php endif; ?>
 
     <!-- ══ PESTAÑA: VENDEDORAS ═══════════════════════════════════════════ -->
     <div id="tab-vendedoras" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-vendedoras">
@@ -786,6 +787,7 @@ $ultimaAct = date('d/m/Y H:i:s');
     <!-- /tab-vendedoras -->
 
     <!-- ══ PESTAÑA: RANKING ══════════════════════════════════════════════ -->
+    <?php if (!$isGrupo || $esGrupo): ?>
     <div id="tab-ranking" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-ranking">
         <main class="dash-content">
 
@@ -902,6 +904,7 @@ $ultimaAct = date('d/m/Y H:i:s');
         </main>
     </div>
     <!-- /tab-ranking -->
+    <?php endif; ?>
 
     <!-- ══ MODAL EVOLUCIÓN MENSUAL ══════════════════════════════════════ -->
     <div id="evolucion-modal-overlay" style="display:none" class="spark-modal-overlay">
@@ -988,7 +991,7 @@ window.BI_CONFIG = {
         { btn: 'tab-btn-participacion',  pane: 'tab-participacion',  name: 'participacion' },
         { btn: 'tab-btn-vendedoras',     pane: 'tab-vendedoras',     name: 'vendedoras'    },
         { btn: 'tab-btn-ranking',        pane: 'tab-ranking',        name: 'ranking'       },
-    ].filter(t => document.getElementById(t.btn) !== null);
+    ].filter(t => document.getElementById(t.btn) && document.getElementById(t.pane));
 
     const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false };
 

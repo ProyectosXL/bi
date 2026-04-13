@@ -172,7 +172,7 @@
 .summary-left  { flex: 0 0 auto; }
 .summary-value {
     font-family: var(--font-display);
-    font-size  : 2.2rem;
+    font-size  : 2.6rem;
     font-weight: 700;
     line-height: 1;
     color      : var(--text-1);
@@ -452,14 +452,6 @@
 }
 .donut-container canvas { max-height: 260px; }
 
-/* ── Sparkline objetivo cumplimiento ───────────────────── */
-.obj-sparkline {
-    width    : 100%;
-    margin-top: 8px;
-}
-.obj-sparkline canvas {
-    width : 100%;
-}
 
 /* ── ANÁLISIS layout extras ────────────────────────────── */
 .analisis-content { flex: 1; }
@@ -1037,31 +1029,8 @@
 .tcc-table td:nth-child(3) { text-align: right; color: var(--text-3, #7b8fc0); font-size: .72rem; }
 .tcc-row-highlight td { background: rgba(37,99,235,.15); color: #93c5fd !important; font-weight: 600; }
 
-/* ── Overlay de carga ───────────────────────────────────── */
-#loading-overlay {
-    display        : none;
-    position       : fixed;
-    inset          : 0;
-    background     : rgba(15,20,35,0.55);
-    z-index        : 9999;
-    align-items    : center;
-    justify-content: center;
-    backdrop-filter: blur(2px);
-}
-body.is-loading #loading-overlay {
-    display: flex;
-}
-.loading-spinner {
-    width        : 48px;
-    height       : 48px;
-    border       : 4px solid rgba(255,255,255,0.15);
-    border-top   : 4px solid #fff;
-    border-radius: 50%;
-    animation    : spin-overlay .7s linear infinite;
-}
-@keyframes spin-overlay {
-    to { transform: rotate(360deg); }
-}
+/* ── Overlay de carga — reemplazado por Spinner JS (bi-spinner-overlay) ── */
+#loading-overlay { display: none !important; }
 
 /* ── Switch métrica evolución ───────────────────────────── */
 .evolucion-metric-switch {

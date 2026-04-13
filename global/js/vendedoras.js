@@ -303,6 +303,7 @@ const Vendedoras = (() => {
             if (el) el.innerHTML = '<div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span>Cargando...</span></div>';
         });
         document.body.classList.add('is-loading');
+        Spinner.show('Cargando vendedoras...');
 
         try {
             const qs  = Dashboard.buildQS();
@@ -335,6 +336,7 @@ const Vendedoras = (() => {
             console.error('[Vendedoras]', e);
         } finally {
             document.body.classList.remove('is-loading');
+            Spinner.hide();
         }
     }
 

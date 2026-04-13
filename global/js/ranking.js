@@ -343,6 +343,7 @@ const Ranking = (() => {
             <div class="ranking-loading"><div class="spinner"></div><br>Calculando ranking…</div>
         </td></tr>`;
         document.body.classList.add('is-loading');
+        Spinner.show('Calculando ranking...');
 
         attachListeners();
 
@@ -374,6 +375,7 @@ const Ranking = (() => {
             </td></tr>`;
         } finally {
             document.body.classList.remove('is-loading');
+            Spinner.hide();
         }
     }
 

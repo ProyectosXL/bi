@@ -19,7 +19,12 @@ require_once __DIR__ . '/../class/GruposDB.php';
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
-    $nroSucurs = isset($_SESSION['numsuc']) ? (int)$_SESSION['numsuc'] : 7;
+    if (!isset($_SESSION['numsuc'])) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Sesión inválida. Volvé a iniciar sesión.']);
+        exit;
+    }
+    $nroSucurs = (int)$_SESSION['numsuc'];
     $action    = $_GET['action']  ?? 'sucursales_grupo';
     $periodo   = $_GET['periodo'] ?? 'mes_actual';
 

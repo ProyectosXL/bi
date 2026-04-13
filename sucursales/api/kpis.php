@@ -13,7 +13,7 @@
 
 session_start();
 ob_start();
-set_time_limit(120);
+set_time_limit(300);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 
@@ -21,7 +21,12 @@ require_once __DIR__ . '/../class/DashboardDB.php';
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
-    $nroSucurs = isset($_SESSION['numsuc']) ? (int)$_SESSION['numsuc'] : 7;
+    if (!isset($_SESSION['numsuc'])) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Sesión inválida. Volvé a iniciar sesión.']);
+        exit;
+    }
+    $nroSucurs = (int)$_SESSION['numsuc'];
     $periodo  = $_GET['periodo']  ?? 'mes_actual';
     $vendedor = $_GET['vendedor'] ?? '%';
     $rubro    = $_GET['rubro']    ?? '%';
@@ -46,40 +51,28 @@ try {
 
     $db = new DashboardDB();
 
-    // ── Período actual ──────────────────────────────
-    $kpi_act  = $db->getKPIs($desde_act, $hasta_act, $nroSucurs, $vendedor, $rubro);
-    $tick_act = $db->getTicketsProductos($desde_act, $hasta_act, $nroSucurs, $vendedor);
-    $incr_act = $db->getIncremental($desde_act, $hasta_act, $nroSucurs, $vendedor);
-    
-    // Objetivo total del mes (si es mes actual) — sin filtros de vendedor/rubro
+    // ── KPIs actual + previo + benchmark en 5 queries (vs 9+ antes) ──
+    $bulk      = $db->getKPIsBulk($desde_act, $hasta_act, $desde_prev, $hasta_prev, $nroSucurs, $vendedor, $rubro);
+    $kpi_act   = $bulk['actual'];
+    $kpi_prev  = $bulk['previo'];
+    $bench     = $bulk['benchmark'];
+
+    // Objetivo total del mes (si es mes actual) — mes completo sin corte a ayer
     $obj_total = $kpi_act['objetivo'];
     if ($periodo === 'mes_actual') {
-        $primerDia = date('Y-m-01');
-        $ultimoDia = date('Y-m-t');
-        $kpi_total = $db->getKPIs($primerDia, $ultimoDia, $nroSucurs);
-        $obj_total = $kpi_total['objetivo'];
+        $obj_total = $db->getObjetivo(date('Y-m-01'), date('Y-m-t'), $nroSucurs);
     }
-
-    // ── Período previo ──────────────────────────────
-    $kpi_prev  = $db->getKPIs($desde_prev, $hasta_prev, $nroSucurs, $vendedor, $rubro);
-    $tick_prev = $db->getTicketsProductos($desde_prev, $hasta_prev, $nroSucurs, $vendedor);
-    $incr_prev = $db->getIncremental($desde_prev, $hasta_prev, $nroSucurs, $vendedor);
-
-    // ── Benchmark (sin filtro de sucursal ni vendedor/rubro) ──────────
-    $bench_kpi  = $db->getKPIs($desde_act, $hasta_act);
-    $bench_tick = $db->getTicketsProductos($desde_act, $hasta_act);
-    $bench_incr = $db->getIncremental($desde_act, $hasta_act);
 
     // ── Última fecha con datos ───────────────────────────────────────
     $ultima_fecha = $db->getUltimaFecha($nroSucurs);
 
-    // ── Conversión (ingresos físicos vs tickets) ─────────────────────
-    $conv_act  = $db->getConversion($desde_act, $hasta_act, $nroSucurs);
-    $conv_prev = $db->getConversion($desde_prev, $hasta_prev, $nroSucurs);
+    // ── Conversión (ingresos físicos vs tickets) — 3 queries vs 4 ────
+    $conv      = $db->getConversionBoth($desde_act, $hasta_act, $desde_prev, $hasta_prev, $nroSucurs);
+    $conv_act  = $conv['actual'];
+    $conv_prev = $conv['previo'];
 
     // ── Mini-chart serie ────────────────────────────
     $serie_act  = $db->getSerieFacturacion($desde_act, $hasta_act, $nroSucurs, $vendedor, $rubro);
-    $serie_prev = $db->getSerieFacturacion($desde_prev, $hasta_prev, $nroSucurs, $vendedor, $rubro);
 
     // ── Serie cumplimiento objetivo diario acumulado ──
     $obj_diario  = $db->getSerieObjetivo($desde_act, $hasta_act, $nroSucurs);
@@ -126,9 +119,9 @@ try {
             'porc_cambios'     => $kpi_act['porc_cambios'],
             'objetivo'         => $kpi_act['objetivo'],
             'objetivo_total'   => $obj_total,
-            'porc_2do'         => $tick_act['porc_2do'],
-            'porc_3ro'         => $tick_act['porc_3ro'],
-            'porc_incremental' => $incr_act['porc_incremental'],
+            'porc_2do'         => $kpi_act['porc_2do'],
+            'porc_3ro'         => $kpi_act['porc_3ro'],
+            'porc_incremental' => $kpi_act['porc_incremental'],
             'ingresos'         => $conv_act['ingresos'],
             'conversion'       => $conv_act['conversion'],
         ],
@@ -139,9 +132,9 @@ try {
             'ticket_promedio'  => $kpi_prev['ticket_promedio'],
             'porc_cambios'     => $kpi_prev['porc_cambios'],
             'objetivo'         => $kpi_prev['objetivo'],
-            'porc_2do'         => $tick_prev['porc_2do'],
-            'porc_3ro'         => $tick_prev['porc_3ro'],
-            'porc_incremental' => $incr_prev['porc_incremental'],
+            'porc_2do'         => $kpi_prev['porc_2do'],
+            'porc_3ro'         => $kpi_prev['porc_3ro'],
+            'porc_incremental' => $kpi_prev['porc_incremental'],
             'ingresos'         => $conv_prev['ingresos'],
             'conversion'       => $conv_prev['conversion'],
         ],
@@ -151,23 +144,22 @@ try {
             'tickets'          => $var($kpi_act['tickets'],         $kpi_prev['tickets']),
             'ticket_promedio'  => $var($kpi_act['ticket_promedio'], $kpi_prev['ticket_promedio']),
             'objetivo'         => $kpi_act['objetivo'] != 0 ? ($kpi_act['facturacion'] - $kpi_act['objetivo']) / $kpi_act['objetivo'] : 0,
-            'porc_2do'         => $tick_act['porc_2do'] - $tick_prev['porc_2do'],
-            'porc_3ro'         => $tick_act['porc_3ro'] - $tick_prev['porc_3ro'],
-            'porc_cambios'     => $kpi_act['porc_cambios'] - $kpi_prev['porc_cambios'],
-            'porc_incremental' => $incr_act['porc_incremental'] - $incr_prev['porc_incremental'],
+            'porc_2do'         => $kpi_act['porc_2do']         - $kpi_prev['porc_2do'],
+            'porc_3ro'         => $kpi_act['porc_3ro']         - $kpi_prev['porc_3ro'],
+            'porc_cambios'     => $kpi_act['porc_cambios']     - $kpi_prev['porc_cambios'],
+            'porc_incremental' => $kpi_act['porc_incremental'] - $kpi_prev['porc_incremental'],
             'conversion'       => $var($conv_act['conversion'], $conv_prev['conversion']),
         ],
         'benchmark' => [
-            'tickets_var'      => $var($bench_kpi['tickets'],         $kpi_prev['tickets']),
-            'ticket_promedio'  => $bench_kpi['ticket_promedio'],
-            'porc_2do'         => $bench_tick['porc_2do'],
-            'porc_3ro'         => $bench_tick['porc_3ro'],
-            'porc_cambios'     => $bench_kpi['porc_cambios'],
-            'porc_incremental' => $bench_incr['porc_incremental'],
+            'tickets_var'      => $var($bench['tickets'],       $kpi_prev['tickets']),
+            'ticket_promedio'  => $bench['ticket_promedio'],
+            'porc_2do'         => $bench['porc_2do'],
+            'porc_3ro'         => $bench['porc_3ro'],
+            'porc_cambios'     => $bench['porc_cambios'],
+            'porc_incremental' => $bench['porc_incremental'],
         ],
         'serie' => [
-            'actual'     => $serie_act,
-            'previo'     => $serie_prev,
+            'actual'       => $serie_act,
             'cumplimiento' => $serie_cumpl,
         ],
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

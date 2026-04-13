@@ -15,7 +15,7 @@
  */
 session_start();
 ob_start();
-set_time_limit(120);
+set_time_limit(300);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 
@@ -55,21 +55,12 @@ try {
     $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
     $soloActivas = !$isGrupo && isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
-    // GRUPO: limpiar filtros inaplicables y validar sucursal
+    // GRUPO: fijar origen y limpiar filtros que no aplican.
+    // $sucursal se permite pasar — grupoFiltro() garantiza que solo vean sus sucursales.
     if ($isGrupo) {
+        $origen     = 'franquicias';
         $grupo      = null;
         $tipoTienda = null;
-        $sucGrupo   = $_SESSION['sucursalesGrupo'] ?? [];
-        if (empty($sucGrupo)) {
-            error_log('[kpis.php GRUPO] sucursalesGrupo vacío para codClient=' . ($_SESSION['codClient'] ?? 'N/A'));
-        } else {
-            error_log('[kpis.php GRUPO] sucursalesGrupo=' . implode(',', $sucGrupo) . ' origen=' . $origen);
-        }
-        if ($sucursal !== null && !in_array($sucursal, $sucGrupo, true)) {
-            http_response_code(403);
-            echo json_encode(['ok' => false, 'error' => 'Sucursal no autorizada']);
-            exit;
-        }
     }
 
     // Solo argentina soporta grupo/tipoTienda
@@ -101,33 +92,70 @@ try {
     $dbBench = new GlobalDashboardDB($origen);
     if ($isGrupo) $dbBench->setIgnorarFiltroGrupo(true);
 
+    // ── Endpoint: serie para sparklines (carga diferida desde JS) ──────────
+    if (($_GET['action'] ?? '') === 'serie') {
+        $serie_act  = [];
+        $serie_prev = [];
+        $serie_cumpl = [];
+        try {
+            $serie_act  = $db->getSerieFacturacion($desde_act, $hasta_act, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+            $serie_prev = $db->getSerieFacturacionSimple($desde_prev, $hasta_prev, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+            $obj_diario = $db->getSerieObjetivo($desde_act, $hasta_act, $grupo, $tipoTienda);
+            $fact_map   = array_column($serie_act, 'facturacion', 'fecha');
+            $cum_fact   = 0.0; $cum_obj = 0.0;
+            $cursor     = new DateTime($desde_act);
+            $end        = new DateTime($hasta_act);
+            while ($cursor <= $end) {
+                $f = $cursor->format('Y-m-d');
+                $cum_fact += (float)($fact_map[$f]   ?? 0);
+                $cum_obj  += (float)($obj_diario[$f] ?? 0);
+                $serie_cumpl[] = [
+                    'fecha'        => $f,
+                    'cumplimiento' => $cum_obj > 0 ? ($cum_fact - $cum_obj) / $cum_obj : 0,
+                ];
+                $cursor->modify('+1 day');
+            }
+        } catch (Throwable $_) {}
+        ob_clean();
+        echo json_encode([
+            'ok'    => true,
+            'serie' => ['actual' => $serie_act, 'previo' => $serie_prev, 'cumplimiento' => $serie_cumpl],
+        ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
+        exit;
+    }
+
     // Cotización dólar (siempre desde argentina, no depende del origen)
     $cotizacion = (new GlobalDashboardDB('argentina'))->getCotizacionDolar();
 
-    // ── Período actual ──────────────────────────────
-    $kpi_act  = $db->getKPIs($desde_act, $hasta_act, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
-    $tick_act = $db->getTicketsProductos($desde_act, $hasta_act, $sucursal, $vendedor, $grupo, $tipoTienda);
-    $tp2_act  = $db->getTicketPromedio2do($desde_act, $hasta_act, $sucursal, $vendedor, $grupo, $tipoTienda);
-    $incr_act = $db->getIncremental($desde_act, $hasta_act, $sucursal, $vendedor, $grupo, $tipoTienda);
-    // Mails
-    $mails_act  = $db->getMails($desde_act,  $hasta_act,  $sucursal, $grupo, $tipoTienda);
+    // ── Períodos actual + previo en 7 queries (bulk) vs 14 separadas ───────
+    $bulk = $db->getKPIsBulk(
+        $desde_act, $hasta_act, $desde_prev, $hasta_prev,
+        $sucursal, $vendedor, $rubro, $grupo, $tipoTienda
+    );
+    $full_act  = $bulk['actual'];
+    $full_prev = $bulk['previo'];
 
-    // Fechas del mes completo que contiene $desde_act
-    $primerDiaMes = date('Y-m-01', strtotime($desde_act));
-    $ultimoDiaMes = date('Y-m-t',  strtotime($desde_act));
-
-    // ── Período previo ──────────────────────────────
-    $kpi_prev  = $db->getKPIs($desde_prev, $hasta_prev, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
-    $tick_prev = $db->getTicketsProductos($desde_prev, $hasta_prev, $sucursal, $vendedor, $grupo, $tipoTienda);
-    $tp2_prev  = $db->getTicketPromedio2do($desde_prev, $hasta_prev, $sucursal, $vendedor, $grupo, $tipoTienda);
-    $incr_prev = $db->getIncremental($desde_prev, $hasta_prev, $sucursal, $vendedor, $grupo, $tipoTienda);
-    $mails_prev = $db->getMails($desde_prev, $hasta_prev, $sucursal, $grupo, $tipoTienda);
+    // Rango para objetivos: mes completo para mes_actual, rango exacto para el resto
+    if ($periodo === 'mes_actual') {
+        $primerDiaMes = date('Y-m-01', strtotime($desde_act));
+        $ultimoDiaMes = date('Y-m-t',  strtotime($desde_act));
+    } else {
+        $primerDiaMes = $desde_act;
+        $ultimoDiaMes = $hasta_act;
+    }
 
     // ── Benchmark (cadena completa sin filtros de sucursal/grupo/tipoTienda) ──
-    $bench_kpi  = $dbBench->getKPIs($desde_act, $hasta_act, null, '%', '%', null, null);
-    $bench_tick = $dbBench->getTicketsProductos($desde_act, $hasta_act, null, '%', null, null);
-    $bench_tp2  = $dbBench->getTicketPromedio2do($desde_act, $hasta_act, null, '%', null, null);
-    $bench_incr = $dbBench->getIncremental($desde_act, $hasta_act, null, '%', null, null);
+    $noBench = ['ticket_promedio' => 0, 'ticket_promedio_2do' => 0, 'porc_2do' => 0, 'porc_3ro' => 0, 'porc_cambios' => 0, 'porc_incremental' => 0];
+    // Benchmark: no aplica para GRUPO (solo ven su grupo, no la cadena completa)
+    if ($isGrupo) {
+        $full_bench = $noBench;
+    } else {
+        try {
+            $full_bench = $dbBench->getKPIsCompletos($desde_act, $hasta_act, null, '%', '%', null, null);
+        } catch (Throwable $_) {
+            $full_bench = $noBench;
+        }
+    }
 
     // ── Conversión (puede no existir para todos los orígenes) ──────
     $noConv = ['ingresos' => 0, 'tickets' => 0, 'conversion' => 0];
@@ -139,36 +167,22 @@ try {
         $conv_prev = $noConv;
     }
 
-    // ── Serie para sparklines (no crítica — no cancela el resto) ───
-    $serie_act  = [];
-    $serie_prev = [];
+    // Serie cargada de forma diferida desde JS (?action=serie)
+    $serie_act   = [];
+    $serie_prev  = [];
     $serie_cumpl = [];
-    try {
-        $serie_act  = $db->getSerieFacturacion($desde_act,  $hasta_act,  $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
-        $serie_prev = $db->getSerieFacturacion($desde_prev, $hasta_prev, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
-
-        // Serie cumplimiento acumulado vs objetivo diario
-        $obj_diario = $db->getSerieObjetivo($desde_act, $hasta_act, $grupo, $tipoTienda);
-        $fact_map   = array_column($serie_act, 'facturacion', 'fecha');
-        $cum_fact   = 0.0;
-        $cum_obj    = 0.0;
-        $cursor     = new DateTime($desde_act);
-        $end        = new DateTime($hasta_act);
-        while ($cursor <= $end) {
-            $f         = $cursor->format('Y-m-d');
-            $cum_fact += (float)($fact_map[$f]   ?? 0);
-            $cum_obj  += (float)($obj_diario[$f] ?? 0);
-            $serie_cumpl[] = [
-                'fecha'        => $f,
-                'cumplimiento' => $cum_obj > 0 ? ($cum_fact - $cum_obj) / $cum_obj : 0,
-            ];
-            $cursor->modify('+1 day');
-        }
-    } catch (Throwable $_) {}
 
     // ── Tabla Facturación vs Objetivos por sucursal ─
-    $factPorSuc = $db->getFacturacionPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda);
-    $objPorSuc  = $db->getObjetivosPorSucursal($desde_act, $hasta_act, $primerDiaMes, $ultimoDiaMes, $grupo, $tipoTienda);
+    try {
+        $factPorSuc = $db->getFacturacionPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda, $sucursal);
+    } catch (Throwable $_) {
+        $factPorSuc = [];
+    }
+    try {
+        $objPorSuc = $db->getObjetivosPorSucursal($desde_act, $hasta_act, $primerDiaMes, $ultimoDiaMes, $grupo, $tipoTienda, $sucursal);
+    } catch (Throwable $_) {
+        $objPorSuc = [];
+    }
 
     // Nombres de sucursales (para mostrar en tabla)
     $sucNombres = [];
@@ -226,58 +240,58 @@ try {
             'dias_prev'  => $dias_prev,
         ],
         'actual' => [
-            'facturacion'        => $kpi_act['facturacion'],
-            'unidades'           => $kpi_act['unidades'],
-            'tickets'            => $kpi_act['tickets'],
-            'ticket_promedio'    => $kpi_act['ticket_promedio'],
-            'porc_cambios'       => $kpi_act['porc_cambios'],
+            'facturacion'        => $full_act['facturacion'],
+            'unidades'           => $full_act['unidades'],
+            'tickets'            => $full_act['tickets'],
+            'ticket_promedio'    => $full_act['ticket_promedio'],
+            'porc_cambios'       => $full_act['porc_cambios'],
             'objetivo'           => $obj_fecha_kpi,
             'objetivo_total'     => $obj_total,
-            'porc_2do'           => $tick_act['porc_2do'],
-            'porc_3ro'           => $tick_act['porc_3ro'],
-            'porc_incremental'   => $incr_act['porc_incremental'],
+            'porc_2do'           => $full_act['porc_2do'],
+            'porc_3ro'           => $full_act['porc_3ro'],
+            'porc_incremental'   => $full_act['porc_incremental'],
             'ingresos'           => $conv_act['ingresos'],
             'conversion'         => $conv_act['conversion'],
-            'ticket_promedio_2do' => $tp2_act['ticket_promedio_2do'],
-            'tickets_con_2do'    => $tp2_act['tickets_con_2do'],
-            'mails'              => $mails_act['mails'],
+            'ticket_promedio_2do' => $full_act['ticket_promedio_2do'],
+            'tickets_con_2do'    => $full_act['tickets_con_2do'],
+            'mails'              => $full_act['mails'],
         ],
         'previo' => [
-            'facturacion'        => $kpi_prev['facturacion'],
-            'unidades'           => $kpi_prev['unidades'],
-            'tickets'            => $kpi_prev['tickets'],
-            'ticket_promedio'    => $kpi_prev['ticket_promedio'],
-            'porc_cambios'       => $kpi_prev['porc_cambios'],
-            'objetivo'           => $kpi_prev['objetivo'],
-            'porc_2do'           => $tick_prev['porc_2do'],
-            'porc_3ro'           => $tick_prev['porc_3ro'],
-            'porc_incremental'   => $incr_prev['porc_incremental'],
+            'facturacion'        => $full_prev['facturacion'],
+            'unidades'           => $full_prev['unidades'],
+            'tickets'            => $full_prev['tickets'],
+            'ticket_promedio'    => $full_prev['ticket_promedio'],
+            'porc_cambios'       => $full_prev['porc_cambios'],
+            'objetivo'           => $full_prev['objetivo'],
+            'porc_2do'           => $full_prev['porc_2do'],
+            'porc_3ro'           => $full_prev['porc_3ro'],
+            'porc_incremental'   => $full_prev['porc_incremental'],
             'ingresos'           => $conv_prev['ingresos'],
             'conversion'         => $conv_prev['conversion'],
-            'ticket_promedio_2do' => $tp2_prev['ticket_promedio_2do'],
-            'mails'              => $mails_prev['mails'],
+            'ticket_promedio_2do' => $full_prev['ticket_promedio_2do'],
+            'mails'              => $full_prev['mails'],
         ],
         'variacion' => [
-            'facturacion'        => $var($kpi_act['facturacion'],        $kpi_prev['facturacion']),
-            'unidades'           => $var($kpi_act['unidades'],           $kpi_prev['unidades']),
-            'tickets'            => $var($kpi_act['tickets'],            $kpi_prev['tickets']),
-            'ticket_promedio'    => $var($kpi_act['ticket_promedio'],    $kpi_prev['ticket_promedio']),
-            'objetivo'           => $obj_fecha_kpi != 0 ? ($kpi_act['facturacion'] - $obj_fecha_kpi) / $obj_fecha_kpi : 0,
-            'porc_2do'           => $tick_act['porc_2do'] - $tick_prev['porc_2do'],
-            'porc_3ro'           => $tick_act['porc_3ro'] - $tick_prev['porc_3ro'],
-            'porc_cambios'       => $kpi_act['porc_cambios'] - $kpi_prev['porc_cambios'],
-            'porc_incremental'   => $incr_act['porc_incremental'] - $incr_prev['porc_incremental'],
+            'facturacion'        => $var($full_act['facturacion'],        $full_prev['facturacion']),
+            'unidades'           => $var($full_act['unidades'],           $full_prev['unidades']),
+            'tickets'            => $var($full_act['tickets'],            $full_prev['tickets']),
+            'ticket_promedio'    => $var($full_act['ticket_promedio'],    $full_prev['ticket_promedio']),
+            'objetivo'           => $obj_fecha_kpi != 0 ? ($full_act['facturacion'] - $obj_fecha_kpi) / $obj_fecha_kpi : 0,
+            'porc_2do'           => $full_act['porc_2do'] - $full_prev['porc_2do'],
+            'porc_3ro'           => $full_act['porc_3ro'] - $full_prev['porc_3ro'],
+            'porc_cambios'       => $full_act['porc_cambios'] - $full_prev['porc_cambios'],
+            'porc_incremental'   => $full_act['porc_incremental'] - $full_prev['porc_incremental'],
             'conversion'         => $var($conv_act['conversion'], $conv_prev['conversion']),
-            'ticket_promedio_2do' => $var($tp2_act['ticket_promedio_2do'], $tp2_prev['ticket_promedio_2do']),
-            'mails'              => $var($mails_act['mails'], $mails_prev['mails']),
+            'ticket_promedio_2do' => $var($full_act['ticket_promedio_2do'], $full_prev['ticket_promedio_2do']),
+            'mails'              => $var($full_act['mails'], $full_prev['mails']),
         ],
         'benchmark' => [
-            'ticket_promedio'     => $bench_kpi['ticket_promedio'],
-            'ticket_promedio_2do' => $bench_tp2['ticket_promedio_2do'],
-            'porc_2do'            => $bench_tick['porc_2do'],
-            'porc_3ro'            => $bench_tick['porc_3ro'],
-            'porc_cambios'        => $bench_kpi['porc_cambios'],
-            'porc_incremental'    => $bench_incr['porc_incremental'],
+            'ticket_promedio'     => $full_bench['ticket_promedio'],
+            'ticket_promedio_2do' => $full_bench['ticket_promedio_2do'],
+            'porc_2do'            => $full_bench['porc_2do'],
+            'porc_3ro'            => $full_bench['porc_3ro'],
+            'porc_cambios'        => $full_bench['porc_cambios'],
+            'porc_incremental'    => $full_bench['porc_incremental'],
         ],
         'serie' => [
             'actual'       => $serie_act,

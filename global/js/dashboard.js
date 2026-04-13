@@ -4,6 +4,64 @@
  * Expone: Dashboard.loadAll(), Dashboard.loadFilters(), Dashboard.getParams()
  */
 
+/* ── Spinner bloqueante (global — usado por dashboard.js y módulos) ── */
+const Spinner = (() => {
+    let overlay = null;
+
+    function show(msg = 'Cargando datos...') {
+        if (overlay) return;
+        overlay = document.createElement('div');
+        overlay.id = 'bi-spinner-overlay';
+        overlay.style.cssText = [
+            'position:fixed',
+            'inset:0',
+            'z-index:99999',
+            'background:rgba(26,35,64,0.6)',
+            'backdrop-filter:blur(2px)',
+            'display:flex',
+            'flex-direction:column',
+            'align-items:center',
+            'justify-content:center',
+            'gap:16px',
+            'pointer-events:all'
+        ].join(';');
+
+        if (!document.getElementById('bi-spin-style')) {
+            const style = document.createElement('style');
+            style.id = 'bi-spin-style';
+            style.textContent = '@keyframes bi-spin{to{transform:rotate(360deg)}}';
+            document.head.appendChild(style);
+        }
+
+        overlay.innerHTML = `
+            <div style="
+                width:52px;height:52px;
+                border:4px solid rgba(255,255,255,0.2);
+                border-top-color:#00a878;
+                border-radius:50%;
+                animation:bi-spin 0.75s linear infinite;
+            "></div>
+            <div style="
+                color:rgba(255,255,255,0.92);
+                font-family:'Barlow Condensed',sans-serif;
+                font-size:1.1rem;
+                font-weight:600;
+                letter-spacing:0.5px;
+            ">${msg}</div>
+        `;
+        document.body.appendChild(overlay);
+    }
+
+    function hide() {
+        if (!overlay) return;
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.2s ease';
+        setTimeout(() => { overlay?.remove(); overlay = null; }, 200);
+    }
+
+    return { show, hide };
+})();
+
 const Dashboard = (() => {
 
     /* ── Referencias al DOM ──────────────────── */
@@ -112,7 +170,11 @@ const Dashboard = (() => {
 
     async function apiFetch(endpoint, extra = {}) {
         const res = await fetch(`/bi/global/api/${endpoint}?${buildQS(extra)}`);
-        if (!res.ok) throw new Error(`Error ${res.status} en ${endpoint}`);
+        if (!res.ok) {
+            const body = await res.text().catch(() => '');
+            console.error(`[apiFetch] ${endpoint} → HTTP ${res.status}`, body);
+            throw new Error(`Error ${res.status} en ${endpoint}`);
+        }
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || `Error en ${endpoint}`);
         return data;
@@ -670,7 +732,7 @@ const Dashboard = (() => {
             title     : 'Facturación vs Objetivos por Sucursal',
             headers   : ['Sucursal', 'Facturación', 'Var. Fact.', 'Objetivo Total', 'Objetivo Fecha', 'Desvío'],
             rows      : rows.map(r => [
-                r.nombre ?? ('Suc. ' + r.nro_sucurs),
+                getSucNombre(r.nro_sucurs),
                 r.facturacion    ?? null,
                 r.var_facturacion ?? null,
                 r.objetivo_total  ?? null,
@@ -729,15 +791,15 @@ const Dashboard = (() => {
         // Ordenar
         const { col, asc } = _tablaSucSort;
         const sorted = [...allRows].sort((a, b) => {
-            const av = col === 'nombre' ? (a.nombre ?? '') : (a[col] ?? -Infinity);
-            const bv = col === 'nombre' ? (b.nombre ?? '') : (b[col] ?? -Infinity);
+            const av = col === 'nombre' ? getSucNombre(a.nro_sucurs) : (a[col] ?? -Infinity);
+            const bv = col === 'nombre' ? getSucNombre(b.nro_sucurs) : (b[col] ?? -Infinity);
             if (av < bv) return asc ? -1 : 1;
             if (av > bv) return asc ? 1 : -1;
             return 0;
         });
 
         const dataRows = sorted.map(r => `<tr>
-            <td>${r.nombre ?? ('Suc. ' + r.nro_sucurs)}</td>
+            <td>${getSucNombre(r.nro_sucurs)}</td>
             <td style="text-align:right">${fmt.money(r.facturacion)}</td>
             <td style="text-align:right">${iconVar(r.var_facturacion)}</td>
             <td style="text-align:right">${r.objetivo_total ? fmt.money(r.objetivo_total) : '—'}</td>
@@ -1126,19 +1188,21 @@ const Dashboard = (() => {
         setVarDiff('card-incr-var', v.porc_incremental, false, fmt.pct(p.porc_incremental),  fmt.pct(a.porc_incremental));
         setText('card-incr-bench',  fmt.pct(b.porc_incremental));
 
-        // Sparkline objetivo cumplimiento (mismo estilo que los demás, con expand)
-        if (d.serie?.cumplimiento?.length) {
-            const cumpl      = d.serie.cumplimiento;
+    }
+
+    /* ── Sparklines (carga diferida desde ?action=serie) ─────────────── */
+    function renderSparklines(serie) {
+        if (serie?.cumplimiento?.length) {
+            const cumpl      = serie.cumplimiento;
             const cumplVals  = cumpl.map(r => r.cumplimiento);
             const cumplDates = cumpl.map(r => r.fecha);
             sparkLine('spark-obj', cumplVals, '#2563eb', null, cumplDates);
             SparkModal.register('spark-obj', cumplVals, cumplDates, '#2563eb', n => fmt.varPct(n), 'Cumplimiento Objetivo');
         }
 
-        // Sparklines
-        if (d.serie?.actual?.length) {
-            const sa = d.serie.actual;
-            const sp = d.serie.previo ?? [];
+        if (serie?.actual?.length) {
+            const sa = serie.actual;
+            const sp = serie.previo ?? [];
             const dates = sa.map(x => x.fecha);
             const vFact  = sa.map(x => x.facturacion ?? 0);
             const vPFact = sp.map(x => x.facturacion ?? 0);
@@ -1207,6 +1271,8 @@ const Dashboard = (() => {
     /* ── Loading state ───────────────────────── */
     function setLoading(on) {
         document.body.classList.toggle('is-loading', on);
+        if (on) Spinner.show('Cargando KPIs...');
+        else    Spinner.hide();
     }
 
     /* ── Actualizar label TCC ────────────────── */
@@ -1336,7 +1402,10 @@ const Dashboard = (() => {
             updatePeriodLabel(d.periodo);
             renderKPIs(d);
             renderTablaSucursales(d.tabla_sucursales);
-            // Async — no bloquean
+            // Async — no bloquean el render inicial
+            apiFetch('kpis.php', { action: 'serie' })
+                .then(sd => { if (sd?.serie) renderSparklines(sd.serie); })
+                .catch(() => {});
             loadDonuts();
             MediosPago.loadAll();
             if (typeof Analisis !== 'undefined') Analisis.loadRankingUnidades().catch(e => console.error('[Dashboard] ranking_unidades:', e));

@@ -671,6 +671,7 @@ const Analisis = (() => {
             b.classList.toggle('active', b.dataset.evolMetrica === 'unidades'));
 
         document.body.classList.add('is-loading');
+        Spinner.show('Cargando análisis...');
         try {
             await Promise.all([
                 // Ranking de rubros (también alimenta las cards)
@@ -700,6 +701,7 @@ const Analisis = (() => {
             ]);
         } finally {
             document.body.classList.remove('is-loading');
+            Spinner.hide();
         }
     }
 

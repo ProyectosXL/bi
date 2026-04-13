@@ -13,7 +13,12 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
-    $nroSucurs = isset($_SESSION['numsuc']) ? (int)$_SESSION['numsuc'] : 7;
+    if (!isset($_SESSION['numsuc'])) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Sesión inválida. Volvé a iniciar sesión.']);
+        exit;
+    }
+    $nroSucurs = (int)$_SESSION['numsuc'];
     $periodo = $_GET['periodo'] ?? 'mes_actual';
     [$desde_act, $hasta_act] = array_slice(DashboardDB::calcularPeriodo($periodo), 0, 2);
 

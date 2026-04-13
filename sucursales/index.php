@@ -9,12 +9,45 @@ if (!isset($_SESSION['username'])) {
     header('Location: ../sistemas/login.php');
     exit;
 }
+if (!isset($_SESSION['numsuc']) || !isset($_SESSION['descLocal'])) {
+    ?><!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error de sesión — Sales Dashboard</title>
+    <link rel="icon" type="image/jpg" href="../images/icono.jpg">
+    <style>
+        body { margin:0; font-family:system-ui,sans-serif; background:#0f172a;
+               display:flex; align-items:center; justify-content:center; min-height:100vh; }
+        .err-box { background:#1e293b; border:1px solid #334155; border-radius:12px;
+                   padding:40px 48px; text-align:center; max-width:420px; }
+        .err-icon { font-size:3rem; margin-bottom:16px; }
+        h1 { color:#f1f5f9; font-size:1.3rem; margin:0 0 10px; }
+        p  { color:#94a3b8; font-size:.9rem; margin:0 0 28px; line-height:1.5; }
+        a  { display:inline-block; background:#2563eb; color:#fff; text-decoration:none;
+             padding:10px 28px; border-radius:8px; font-size:.9rem; font-weight:600;
+             transition:background .15s; }
+        a:hover { background:#1d4ed8; }
+    </style>
+</head>
+<body>
+    <div class="err-box">
+        <div class="err-icon">&#9888;&#65039;</div>
+        <h1>No se pudo identificar tu sucursal</h1>
+        <p>Tu sesión no contiene los datos necesarios para cargar el dashboard. Por favor, volvé a iniciar sesión.</p>
+        <a href="../sistemas/login.php">Reintentar</a>
+    </div>
+</body>
+</html><?php
+    exit;
+}
 require_once __DIR__ . '/../class/config.php';
 $config     = getConfig();
 $showGrupos = $config['features']['grupos'];
 date_default_timezone_set('America/Argentina/Buenos_Aires');
 $ultimaAct  = '—';
-$descLocal  = isset($_SESSION['descLocal']) ? $_SESSION['descLocal'] : 'Abasto';
+$descLocal  = $_SESSION['descLocal'];
 ?>
 <!DOCTYPE html>
 <html lang="es">

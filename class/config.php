@@ -21,6 +21,7 @@ function getConfig(): array
 
     switch ($tipo) {
         case 'FRANQUICIA':
+        case 'GRUPO':
             return [
                 'db'              => 'power_franquicias',
                 'campo_vendedor'  => 'DESC_VENDEDOR',

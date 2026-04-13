@@ -230,6 +230,7 @@ const Cadena = (() => {
         const wrap = document.getElementById('cadena-wrap');
         if (wrap) wrap.innerHTML = '<div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>';
         document.body.classList.add('is-loading');
+        Spinner.show('Cargando cadena...');
 
         try {
             const qs  = Dashboard.buildQS();
@@ -252,6 +253,7 @@ const Cadena = (() => {
             console.error('[Cadena]', e);
         } finally {
             document.body.classList.remove('is-loading');
+            Spinner.hide();
         }
     }
 

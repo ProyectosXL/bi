@@ -143,6 +143,11 @@ const Analisis = (() => {
     }
 
     function setLoading(on) {
+        if (on) {
+            Dashboard.spinner.show('Cargando análisis...');
+        } else {
+            Dashboard.spinner.hide();
+        }
         document.body.classList.toggle('is-loading', on);
         document.querySelectorAll('.analisis-loading').forEach(el => {
             el.style.display = on ? 'flex' : 'none';

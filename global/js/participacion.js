@@ -160,6 +160,7 @@ const Participacion = (() => {
         const wrap = document.getElementById('participacion-wrap');
         if (wrap) wrap.innerHTML = '<div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>';
         document.body.classList.add('is-loading');
+        Spinner.show('Cargando participación...');
 
         try {
             const qs  = Dashboard.buildQS({ top_rubros: 5 });
@@ -184,6 +185,7 @@ const Participacion = (() => {
             console.error('[Participacion]', e);
         } finally {
             document.body.classList.remove('is-loading');
+            Spinner.hide();
         }
     }
 
