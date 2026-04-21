@@ -48,3 +48,27 @@
 }
 
 .participacion-tabla tr:hover td { filter: brightness(0.96); }
+
+/* Filas de totales por grupo */
+.participacion-tabla tr.partic-grupo-row td {
+    background   : #edf0f8;
+    border-top   : 2px solid #c8cde0;
+    border-bottom: 1px solid #c8cde0;
+}
+.participacion-tabla tr.partic-grupo-row td:first-child {
+    background  : #e4e8f4;
+    border-right: 2px solid #c8cde0;
+    color       : var(--text-1);
+}
+
+/* Fila Total general */
+.participacion-tabla tr.partic-total-row td {
+    background   : #d6dbed;
+    border-top   : 3px solid #a9b2cf;
+    border-bottom: 2px solid #a9b2cf;
+}
+.participacion-tabla tr.partic-total-row td:first-child {
+    background  : #ccd2e8;
+    border-right: 2px solid #a9b2cf;
+    color       : var(--text-1);
+}
