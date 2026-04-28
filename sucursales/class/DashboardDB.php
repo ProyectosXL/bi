@@ -220,8 +220,10 @@ class DashboardDB
         $vend = $vendedor !== '%' ? [$vendedor] : [];
         $rub  = $rubro !== '%' ? [$rubro] : [];
 
-        // Incluir DESC_VENDEDOR en SELECT y GROUP BY solo cuando es el campo de vendedor
-        $selectDescVend  = $cv === 'DESC_VENDEDOR' ? "s.DESC_VENDEDOR," : "";
+        // Incluir DESC_VENDEDOR y la fecha más reciente de cada combinación (código, nombre).
+        // Se usa ultima_fecha en PHP para resolver cuál nombre es el vigente cuando
+        // un COD_VENDED fue reasignado y coexisten nombres distintos en el período.
+        $selectDescVend  = $cv === 'DESC_VENDEDOR' ? "s.DESC_VENDEDOR, CONVERT(VARCHAR(10), MAX(s.FECHA), 120) AS ultima_fecha," : "";
         $groupByDescVend = $cv === 'DESC_VENDEDOR' ? ", s.DESC_VENDEDOR" : "";
 
         // Facturación, unidades y cambios por vendedor
@@ -284,6 +286,19 @@ class DashboardDB
             $incrMap[$i['COD_VENDED']] = $i;
         }
 
+        // Para cada COD_VENDED elegir el nombre vigente (el de la fecha más reciente)
+        // y así evitar filas duplicadas cuando un código fue reasignado a otra persona.
+        $nameMap = [];
+        if ($cv === 'DESC_VENDEDOR') {
+            foreach ($ventas as $v) {
+                $cod   = $v['COD_VENDED'];
+                $fecha = (string)($v['ultima_fecha'] ?? '');
+                if (!isset($nameMap[$cod]) || $fecha > $nameMap[$cod]['fecha']) {
+                    $nameMap[$cod] = ['name' => $v['DESC_VENDEDOR'] ?? (string)$cod, 'fecha' => $fecha];
+                }
+            }
+        }
+
         // Agrupar en PHP por nombre de vendedor para consolidar códigos duplicados.
         // Si una persona fue dada de alta con dos COD_VENDED distintos, sus
         // métricas de ventas e incremental se suman bajo un único nombre.
@@ -291,7 +306,7 @@ class DashboardDB
         foreach ($ventas as $v) {
             $cod  = $v['COD_VENDED'];
             $key  = $cv === 'DESC_VENDEDOR'
-                ? ($v['DESC_VENDEDOR'] ?? $cod)
+                ? ($nameMap[$cod]['name'] ?? $v['DESC_VENDEDOR'] ?? $cod)
                 : $cod;
 
             if (!isset($agg[$key])) {
