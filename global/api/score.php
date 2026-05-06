@@ -62,12 +62,16 @@ try {
     $primerDiaMes = date('Y-m-01', strtotime($desde_act));
     $ultimoDiaMes = date('Y-m-t',  strtotime($desde_act));
 
+    $desde_prev2 = (new DateTime($desde_prev))->modify('-1 year')->format('Y-m-d');
+    $hasta_prev2 = (new DateTime($hasta_prev))->modify('-1 year')->format('Y-m-d');
+
     $db = new GlobalDashboardDB($origen);
     if ($soloActivas) $db->setSoloActivas(true);
 
     $scores = $db->getScorePorSucursal(
-        $desde_act, $hasta_act,
-        $desde_prev, $hasta_prev,
+        $desde_act,   $hasta_act,
+        $desde_prev,  $hasta_prev,
+        $desde_prev2, $hasta_prev2,
         $primerDiaMes, $ultimoDiaMes,
         $grupo, $tipoTienda
     );

@@ -304,6 +304,22 @@ class CadenaDB
             $ticketsConvMap[(int)$r['NRO_SUCURS']] = (int)$r['tickets_conv'];
         }
 
+        // Totales verdaderos de cadena (todas las sucursales de ambos períodos,
+        // antes del filtro de actividad) para calcular variaciones agregadas correctas.
+        $cFactAct = 0.0; $cFactPrev = 0.0;
+        $cUnidAct = 0.0; $cUnidPrev = 0.0;
+        foreach ($rowsVentas as $v) {
+            $cFactAct  += (float)$v['fact_act'];
+            $cFactPrev += (float)$v['fact_prev'];
+            $cUnidAct  += (float)$v['unid_act'];
+            $cUnidPrev += (float)$v['unid_prev'];
+        }
+        $cTickAct = 0; $cTickPrev = 0;
+        foreach ($rowsTickets as $r) {
+            $cTickAct  += (int)$r['tick_act'];
+            $cTickPrev += (int)$r['tick_prev'];
+        }
+
         $result = [];
         foreach ($rowsVentas as $v) {
             $nro     = (int)$v['NRO_SUCURS'];
@@ -373,6 +389,16 @@ class CadenaDB
         unset($row);
 
         usort($result, fn($a, $b) => $b['facturacion'] <=> $a['facturacion']);
-        return $result;
+        return [
+            'sucursales' => $result,
+            'totales' => [
+                'facturacion'      => $cFactAct,
+                'facturacion_prev' => $cFactPrev,
+                'unidades'         => $cUnidAct,
+                'unidades_prev'    => $cUnidPrev,
+                'tickets'          => $cTickAct,
+                'tickets_prev'     => $cTickPrev,
+            ],
+        ];
     }
 }

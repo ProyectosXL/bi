@@ -25,6 +25,7 @@ const Ranking = (() => {
             },
             pct    : (n, d = 1) => (n === null || n === undefined) ? '—' : (n * 100).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d }) + '\u00A0%',
             varPct : (n, d = 1) => { if (n === null || n === undefined) return '—'; const s = n >= 0 ? '+' : ''; return s + (n * 100).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d }) + '\u00A0%'; },
+            pp     : (n, d = 1) => { if (n === null || n === undefined) return '—'; const s = n >= 0 ? '+' : ''; return s + (n * 100).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d }) + ' pp'; },
             num    : (n, d = 0) => (n === null || n === undefined) ? '—' : Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d }),
         };
     })();
@@ -63,39 +64,53 @@ const Ranking = (() => {
             const ids = Dashboard.getSucursalesActivasIds?.();
             if (ids?.size) rows = rows.filter(r => ids.has(+r.nro_sucurs));
         }
+        const _conv = n => typeof Dashboard !== 'undefined' && n != null ? Dashboard.convertir(n) : n;
         ExcelExporter.export({
-            title   : 'Ranking de Sucursales',
-            headers : ['#', 'Sucursal', 'Score', 'Ventas', 'Cumpl. Obj.',
-                       'Var. Ventas', 'T. Promedio', '% 2do', '% 3er'],
-            rows    : rows.map(r => [
+            title     : 'Ranking de Sucursales',
+            headers   : ['#', 'Sucursal', 'Score', 'Ventas', 'Cumpl. Obj.',
+                         'Δ Var. Ventas', 'T. Promedio', 'Δ Var. Tick.', 'Δ Var. Unid.',
+                         '% 2do', '% 3er', '% Increm.'],
+            rows      : rows.map(r => [
                 r.rank,
                 r.nombre ?? ('Suc. ' + r.nro_sucurs),
                 r.score  ?? null,
-                r.facturacion != null && typeof Dashboard !== 'undefined'
-                    ? Dashboard.convertir(r.facturacion) : (r.facturacion ?? null),
+                r.facturacion     != null ? _conv(r.facturacion)     : null,
                 r.detalle?.cumplimiento?.valor ?? null,
-                r.detalle?.var_fact?.valor     ?? null,
-                r.ticket_promedio != null && typeof Dashboard !== 'undefined'
-                    ? Dashboard.convertir(r.ticket_promedio) : (r.ticket_promedio ?? null),
-                r.porc_2do        ?? null,
-                r.porc_3ro        ?? null,
+                r.delta_var_fact     ?? null,
+                r.ticket_promedio != null ? _conv(r.ticket_promedio) : null,
+                r.delta_var_tickets  ?? null,
+                r.delta_var_unidades ?? null,
+                r.porc_2do           ?? null,
+                r.porc_3ro           ?? null,
+                r.porc_incremental   ?? null,
             ]),
-            filename: 'ranking_sucursales',
+            colFormats: ['num', 'text', 'num1', 'money', 'pct', 'pct', 'money', 'pct', 'pct', 'pct', 'pct', 'pct'],
+            filename  : 'ranking_sucursales',
         });
     }
 
     /* ── KPI meta: etiqueta, formato y tipo de normalización ─ */
     const KPI_META = {
-        cumplimiento        : { label: 'Cumpl. Objetivo', fmt: v => fmt.pct(v), type: 'normal'  },
-        var_fact            : { label: 'Var. Ventas',      fmt: v => fmt.varPct(v), type: 'index' },
-        ticket_promedio     : { label: 'Ticket Promedio',  fmt: v => fmt.money(v), type: 'normal'  },
-        unidades            : { label: 'Unidades',         fmt: v => fmt.num(v),   type: 'normal'  },
-        porc_2do            : { label: '% 2do Prod.',      fmt: v => fmt.pct(v),   type: 'normal'  },
-        tickets             : { label: 'Tickets',          fmt: v => fmt.num(v),   type: 'normal'  },
-        ticket_promedio_2do : { label: 'T.P. 2do Prod.',   fmt: v => fmt.money(v), type: 'normal'  },
-        porc_3ro            : { label: '% 3er Prod.',      fmt: v => fmt.pct(v),   type: 'normal'  },
-        porc_cambios        : { label: '% Cambios',        fmt: v => fmt.pct(v),   type: 'inverse' },
-        porc_incremental    : { label: '% Incremental',    fmt: v => fmt.pct(v),   type: 'index'   },
+        cumplimiento     : { label: 'Cumpl. Objetivo',  fmt: v => fmt.pct(v),    type: 'normal' },
+        delta_var_fact   : {
+            label: 'Delta Var. Ventas', fmt: v => fmt.pp(v), type: 'growth',
+            actualKey: 'var_fact_actual',    anteriorKey: 'var_fact_anterior',
+            actualFmt: v => fmt.varPct(v),   anteriorFmt: v => fmt.varPct(v),
+        },
+        ticket_promedio  : { label: 'Ticket Promedio',  fmt: v => fmt.money(v),  type: 'normal' },
+        delta_var_tickets: {
+            label: 'Delta Var. Tickets', fmt: v => fmt.pp(v), type: 'growth',
+            actualKey: 'var_tickets_actual',    anteriorKey: 'var_tickets_anterior',
+            actualFmt: v => fmt.varPct(v),      anteriorFmt: v => fmt.varPct(v),
+        },
+        delta_var_unidades: {
+            label: 'Delta Var. Unidades', fmt: v => fmt.pp(v), type: 'growth',
+            actualKey: 'var_unidades_actual',    anteriorKey: 'var_unidades_anterior',
+            actualFmt: v => fmt.varPct(v),       anteriorFmt: v => fmt.varPct(v),
+        },
+        porc_2do         : { label: '% 2do Prod.',      fmt: v => fmt.pct(v),    type: 'normal' },
+        porc_3ro         : { label: '% 3er Prod.',      fmt: v => fmt.pct(v),    type: 'normal' },
+        porc_incremental : { label: '% Incremental',    fmt: v => fmt.pct(v),    type: 'index'  },
     };
 
     /* ── Score chip ───────────────────────────────────────── */
@@ -143,9 +158,11 @@ const Ranking = (() => {
         });
 
         tbody.innerHTML = sorted.map(s => {
-            const sc = scoreClass(s.score);
-            const cumpl = (s.detalle?.cumplimiento?.valor ?? 0);
-            const varF  = (s.detalle?.var_fact?.valor ?? 0);
+            const sc       = scoreClass(s.score);
+            const cumpl    = (s.detalle?.cumplimiento?.valor   ?? 0);
+            const deltaF   = (s.delta_var_fact     ?? 0);
+            const deltaTk  = (s.delta_var_tickets  ?? 0);
+            const deltaUn  = (s.delta_var_unidades ?? 0);
             return `<tr data-nro="${s.nro_sucurs}">
                 <td>${rankBadgeHTML(s.rank)}</td>
                 <td class="td-nombre">${s.nombre ?? ('Suc. ' + s.nro_sucurs)}</td>
@@ -155,12 +172,15 @@ const Ranking = (() => {
                         ${miniBarHTML(s.score, Math.max(maxScore, 110), sc === 'score-high' ? '#16a34a' : sc === 'score-mid' ? '#b45309' : '#dc2626')}
                     </div>
                 </td>
-                <td>${fmt.moneyK(s.facturacion)}</td>
+                <td>${fmt.money(s.facturacion)}</td>
                 <td class="${cumpl >= 1 ? 'text-green' : cumpl >= 0.9 ? 'text-yellow' : 'text-red'}">${fmt.pct(cumpl)}</td>
-                <td class="${varF >= 0 ? 'text-green' : 'text-red'}">${fmt.varPct(varF)}</td>
+                <td class="${deltaF  >= 0 ? 'text-green' : 'text-red'}">${fmt.pp(deltaF)}</td>
                 <td>${fmt.money(s.ticket_promedio)}</td>
+                <td class="${deltaTk >= 0 ? 'text-green' : 'text-red'}">${fmt.pp(deltaTk)}</td>
+                <td class="${deltaUn >= 0 ? 'text-green' : 'text-red'}">${fmt.pp(deltaUn)}</td>
                 <td>${fmt.pct(s.porc_2do)}</td>
                 <td>${fmt.pct(s.porc_3ro)}</td>
+                <td>${fmt.pct(s.porc_incremental)}</td>
             </tr>`;
         }).join('');
 
@@ -242,6 +262,17 @@ const Ranking = (() => {
                                     const k    = kpis[ctx.dataIndex];
                                     const d    = suc.detalle[k];
                                     const meta = KPI_META[k];
+                                    if (meta?.type === 'growth') {
+                                        const vAct = suc[meta.actualKey];
+                                        const vAnt = suc[meta.anteriorKey];
+                                        return [
+                                            `Contribución: ${ctx.parsed.x.toLocaleString('es-AR', { minimumFractionDigits: 1 })} pts`,
+                                            `Var. actual: ${meta.actualFmt(vAct)}`,
+                                            `Var. anterior: ${meta.anteriorFmt(vAnt)}`,
+                                            `Delta: ${meta.fmt(d.valor)}`,
+                                            `Norm: ×${d.norm.toFixed(2)} | Peso: ${(d.peso * 100).toFixed(0)}%`,
+                                        ];
+                                    }
                                     return [
                                         `Contribución: ${ctx.parsed.x.toLocaleString('es-AR', { minimumFractionDigits: 1 })} pts`,
                                         `Valor: ${meta?.fmt(d.valor) ?? d.valor}`,
@@ -273,10 +304,15 @@ const Ranking = (() => {
                 const norm = d.norm;
                 const normColor = norm >= 1.1 ? '#16a34a' : norm >= 0.9 ? '#b45309' : '#dc2626';
                 const barPct = maxContrib > 0 ? Math.min(100, (d.contrib / maxContrib) * 100) : 0;
+                const growthRows = meta?.type === 'growth'
+                    ? `<div class="kpi-detail-row"><span>Var. actual</span><strong>${meta.actualFmt(suc[meta.actualKey])}</strong></div>
+                    <div class="kpi-detail-row"><span>Var. anterior</span><strong>${meta.anteriorFmt(suc[meta.anteriorKey])}</strong></div>
+                    <div class="kpi-detail-row"><span>Delta</span><strong>${meta.fmt(d.valor)}</strong></div>`
+                    : `<div class="kpi-detail-row"><span>Valor</span><strong>${meta?.fmt(d.valor) ?? d.valor}</strong></div>
+                    <div class="kpi-detail-row"><span>Promedio</span><strong>${meta?.fmt(d.promedio) ?? d.promedio}</strong></div>`;
                 return `<div class="kpi-detail-card">
                     <div class="kpi-detail-name">${meta?.label ?? k}</div>
-                    <div class="kpi-detail-row"><span>Valor</span><strong>${meta?.fmt(d.valor) ?? d.valor}</strong></div>
-                    <div class="kpi-detail-row"><span>Promedio</span><strong>${meta?.fmt(d.promedio) ?? d.promedio}</strong></div>
+                    ${growthRows}
                     <div class="kpi-detail-row"><span>Norm.</span><strong style="color:${normColor}">×${d.norm.toFixed(2)}</strong></div>
                     <div class="kpi-detail-row"><span>Peso</span><strong>${(d.peso * 100).toFixed(0)}%</strong></div>
                     <div class="kpi-detail-contrib">
@@ -339,7 +375,7 @@ const Ranking = (() => {
         const tbody = document.querySelector('#ranking-table tbody');
         if (!tbody) return;
 
-        tbody.innerHTML = `<tr><td colspan="9">
+        tbody.innerHTML = `<tr><td colspan="12">
             <div class="ranking-loading"><div class="spinner"></div><br>Calculando ranking…</div>
         </td></tr>`;
         document.body.classList.add('is-loading');
@@ -361,7 +397,7 @@ const Ranking = (() => {
             }
 
             if (_lastData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9">
+                tbody.innerHTML = `<tr><td colspan="12">
                     <div class="ranking-empty">Sin datos para el período seleccionado.</div>
                 </td></tr>`;
                 return;
@@ -370,7 +406,7 @@ const Ranking = (() => {
             renderTable(_lastData);
 
         } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:#ef4444">
+            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:24px;color:#ef4444">
                 Error: ${err.message}
             </td></tr>`;
         } finally {

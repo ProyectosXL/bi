@@ -738,8 +738,9 @@ const Dashboard = (() => {
 
         vendedores.forEach(v => {
             const tr = document.createElement('tr');
+            const codTitle = v.cod_vended ? ` title="Código: ${v.cod_vended}"` : '';
             tr.innerHTML = `
-                <td class="td-nombre">${v.vendedor}</td>
+                <td class="td-nombre"${codTitle}>${v.vendedor}</td>
                 <td class="td-num">${fmt.num(v.unidades)}</td>
                 <td class="td-num">${fmt.money(v.facturacion)}</td>
                 <td class="td-num">${fmt.num(v.tickets)}</td>
@@ -1221,10 +1222,15 @@ const Dashboard = (() => {
 
         try {
             // ── Bloque 1: KPIs principales (summary cards + sparklines) ──────
-            let kpisActual = null;
+            let kpisActual = null, kpisSucursal = null;
             try {
-                const kpisData = await apiFetch('kpis.php');
-                kpisActual = kpisData.actual;
+                const needsBenchmark = state.vendedor !== '%' || state.rubro !== '%';
+                const [kpisData, kpisBenchData] = await Promise.all([
+                    apiFetch('kpis.php'),
+                    needsBenchmark ? apiFetch('kpis.php', { vendedor: '%', rubro: '%' }) : Promise.resolve(null)
+                ]);
+                kpisActual   = kpisData.actual;
+                kpisSucursal = kpisBenchData ? kpisBenchData.actual : kpisData.actual;
 
                 const act   = kpisData.actual;
                 const prev  = kpisData.previo;
@@ -1324,7 +1330,7 @@ const Dashboard = (() => {
                 (async () => {
                     try {
                         const vendsData = await apiFetch('vendedores.php');
-                        renderVendedores(vendsData.vendedores, kpisActual);
+                        renderVendedores(vendsData.vendedores, kpisSucursal);
                         setupTableSorting();
                     } catch (err) {
                         if (err.name === 'AbortError') return;

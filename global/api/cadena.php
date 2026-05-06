@@ -46,7 +46,9 @@ try {
     }
 
     $db = new CadenaDB($origen);
-    $sucursales = $db->getKPIsPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda);
+    $cadenaData  = $db->getKPIsPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda);
+    $sucursales  = $cadenaData['sucursales'];
+    $totalesCadena = $cadenaData['totales'];
 
     // Filtro "solo activas"
     if ($soloActivas) {
@@ -63,12 +65,13 @@ try {
 
     ob_clean();
     echo json_encode([
-        'ok'         => true,
-        'desde_act'  => $desde_act,
-        'hasta_act'  => $hasta_act,
-        'desde_prev' => $desde_prev,
-        'hasta_prev' => $hasta_prev,
-        'sucursales' => $sucursales,
+        'ok'             => true,
+        'desde_act'      => $desde_act,
+        'hasta_act'      => $hasta_act,
+        'desde_prev'     => $desde_prev,
+        'hasta_prev'     => $hasta_prev,
+        'sucursales'     => $sucursales,
+        'totales_cadena' => $totalesCadena,
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
 } catch (Throwable $e) {

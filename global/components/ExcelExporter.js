@@ -35,8 +35,10 @@ const ExcelExporter = (() => {
         };
     }
 
+    const FMT_MAP = { money: '#,##0', pct: '0.0%', num: '#,##0', num1: '#,##0.0' };
+
     /* ── Exporta al formato XLSX ──────────────────────── */
-    function exportData({ title, headers, rows, totalsRow, filename }) {
+    function exportData({ title, headers, rows, totalsRow, filename, colFormats }) {
         if (typeof XLSX === 'undefined') {
             alert('La librería de Excel no está cargada aún. Intentá de nuevo en unos segundos.');
             return;
@@ -58,6 +60,18 @@ const ExcelExporter = (() => {
         if (totalsRow) wsData.push(totalsRow);
 
         const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        /* Formatos numéricos por columna (dinero, porcentaje, número) */
+        if (colFormats?.length) {
+            for (let ri = 5; ri < wsData.length; ri++) {
+                colFormats.forEach((type, ci) => {
+                    const fmt = FMT_MAP[type];
+                    if (!fmt) return;
+                    const ref = XLSX.utils.encode_cell({ r: ri, c: ci });
+                    if (ws[ref]?.t === 'n') ws[ref].z = fmt;
+                });
+            }
+        }
 
         /* Negritas en encabezados (fila índice 4) y en la fila de totales */
         const boldRows = [4];

@@ -17,7 +17,10 @@
       "Bash(php -l v:/bi/global/class/GlobalDashboardDB.php)",
       "Bash(php -l v:/bi/global/index.php)",
       "Bash(python3 -c ':*)",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e \"const fs=require\\('fs'\\);const c=fs.readFileSync\\('x:/bi/global/js/ranking.js','utf8'\\);const i=c.indexOf\\('baseLabel'\\);console.log\\(JSON.stringify\\(c.slice\\(i-30,i+350\\)\\)\\);\")",
+      "PowerShell($content = Get-Content 'x:\\\\bi\\\\global\\\\js\\\\ranking.js' -Raw -Encoding UTF8; $idx = $content.IndexOf\\('baseLabel'\\); $content.Substring\\([Math]::Max\\(0,$idx-30\\), 400\\) | Write-Host)"
     ]
   }
 }

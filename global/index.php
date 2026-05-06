@@ -173,7 +173,7 @@ $ultimaAct = date('d/m/Y H:i:s');
 
         <?php if (!$isGrupo): ?>
         <label class="comp-radio-label" style="margin-left:8px;white-space:nowrap" id="wrap-solo-activas">
-            <input type="checkbox" id="chk-solo-activas">
+            <input type="checkbox" id="chk-solo-activas" checked>
             Solo activas
         </label>
         <?php endif; ?>
@@ -808,14 +808,17 @@ $ultimaAct = date('d/m/Y H:i:s');
                                 <th data-col="score">Score</th>
                                 <th data-col="facturacion">Ventas</th>
                                 <th data-col="cumplimiento">Cumpl. Obj.</th>
-                                <th data-col="var_fact">Var. Ventas</th>
+                                <th data-col="delta_var_fact">&#916; Var. Ventas</th>
                                 <th data-col="ticket_promedio">T. Promedio</th>
+                                <th data-col="delta_var_tickets">&#916; Var. Tick.</th>
+                                <th data-col="delta_var_unidades">&#916; Var. Unid.</th>
                                 <th data-col="porc_2do">% 2do</th>
                                 <th data-col="porc_3ro">% 3er</th>
+                                <th data-col="porc_incremental">% Increm.</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-3)">Cargando…</td></tr>
+                            <tr><td colspan="12" style="text-align:center;padding:24px;color:var(--text-3)">Cargando…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -830,13 +833,16 @@ $ultimaAct = date('d/m/Y H:i:s');
                         <div class="rk-step">
                             <span class="rk-step-num">1</span>
                             <div>
-                                <strong>Se calculan 10 KPIs</strong> por sucursal (ventas, tickets, ticket promedio, etc.) y se obtiene el promedio de la cadena para cada uno.
+                                <strong>Se calculan 8 KPIs</strong> por sucursal (ventas, tickets, ticket promedio, etc.) y se obtiene el promedio de la cadena para cada uno.
                             </div>
                         </div>
                         <div class="rk-step">
                             <span class="rk-step-num">2</span>
                             <div>
                                 <strong>Se normaliza</strong> cada KPI dividiendo el valor de la sucursal por el promedio. Si el resultado es 1.0, está en el promedio; 1.2 significa 20% mejor; 0.8 significa 20% peor.
+                                <p style="font-size:.71rem;color:#7b8fc0;margin-top:6px;font-style:italic">
+                                    Las variaciones (Ventas, Unidades, Tickets) miden la <strong>mejora del ritmo</strong>: cuánto creció este año vs cuánto había crecido el año pasado, expresado en puntos porcentuales (pp). Una sucursal con la misma tendencia que el año anterior tiene delta = 0pp.
+                                </p>
                             </div>
                         </div>
                         <div class="rk-step">
@@ -848,26 +854,29 @@ $ultimaAct = date('d/m/Y H:i:s');
                     </div>
 
                     <div class="rk-example">
-                        <div class="rk-example-title"><i class="bi bi-calculator"></i> Ejemplo simplificado</div>
-                        <p style="font-size:.72rem;color:#7b8fc0;margin:0 0 8px">Supongamos que una sucursal tiene ticket promedio de <strong style="color:#c9d4f0">$8.000</strong> cuando el promedio de la cadena es <strong style="color:#c9d4f0">$6.000</strong>:</p>
+                        <div class="rk-example-title"><i class="bi bi-calculator"></i> Ejemplo — Delta Var. Ventas (Portal Rosario)</div>
+                        <p style="font-size:.72rem;color:#7b8fc0;margin:0 0 8px">Este año creció <strong style="color:#c9d4f0">+51,1%</strong> vs año anterior; el año pasado había caído <strong style="color:#c9d4f0">-25,6%</strong> vs dos años atrás:</p>
                         <div class="rk-example-calc">
                             <div class="rk-calc-row">
-                                <span>Valor sucursal</span><strong>$8.000</strong>
+                                <span>Var. actual</span><strong style="color:#22c55e">+51,1%</strong>
                             </div>
                             <div class="rk-calc-row">
-                                <span>Promedio cadena</span><strong>$6.000</strong>
+                                <span>Var. anterior</span><strong style="color:#ef4444">-25,6%</strong>
                             </div>
                             <div class="rk-calc-row">
-                                <span>Ratio</span><strong>8.000 ÷ 6.000 = <span style="color:#22c55e">1.33</span></strong>
+                                <span>Delta (pp)</span><strong>51,1 − (−25,6) = <span style="color:#22c55e">+76,7 pp</span></strong>
                             </div>
                             <div class="rk-calc-row">
-                                <span>Peso del KPI</span><strong>10%</strong>
+                                <span>Norm</span><strong>1 + 0,767 = <span style="color:#22c55e">1,77</span></strong>
+                            </div>
+                            <div class="rk-calc-row">
+                                <span>Peso del KPI</span><strong>15%</strong>
                             </div>
                             <div class="rk-calc-row rk-calc-result">
-                                <span>Aporte al score</span><strong>1.33 × 10 = <span style="color:#22c55e">13.3 pts</span></strong>
+                                <span>Aporte al score</span><strong>1,77 × 15 = <span style="color:#22c55e">26,5 pts</span></strong>
                             </div>
                         </div>
-                        <p style="font-size:.71rem;color:#7b8fc0;margin:8px 0 0">Si todos los KPIs estuvieran en el promedio exacto (ratio = 1.0), el score sería <strong style="color:#c9d4f0">100</strong>. Estar por encima sube el score, por debajo lo baja.</p>
+                        <p style="font-size:.71rem;color:#7b8fc0;margin:8px 0 0">Una sucursal nueva (sin datos de dos años atrás) tiene delta = 0pp → norm = 1,0 → aporte neutro de 15 pts.</p>
                     </div>
 
                     <div class="rk-legend">
@@ -882,18 +891,15 @@ $ultimaAct = date('d/m/Y H:i:s');
                             <thead><tr><th>KPI</th><th>Peso</th></tr></thead>
                             <tbody>
                                 <tr><td>Cumpl. Objetivo</td><td>30%</td></tr>
-                                <tr><td>Var. Ventas</td><td>15%</td></tr>
-                                <tr><td>Ticket Promedio</td><td>10%</td></tr>
-                                <tr><td>Unidades</td><td>10%</td></tr>
+                                <tr><td>&#916; Var. Ventas</td><td>15%</td></tr>
+                                <tr><td>Ticket Promedio</td><td>15%</td></tr>
+                                <tr><td>&#916; Var. Tickets</td><td>10%</td></tr>
+                                <tr><td>&#916; Var. Unidades</td><td>10%</td></tr>
                                 <tr><td>% 2do Producto</td><td>10%</td></tr>
-                                <tr><td>Tickets</td><td>5%</td></tr>
-                                <tr><td>T.P. 2do Prod.</td><td>5%</td></tr>
                                 <tr><td>% 3er Producto</td><td>5%</td></tr>
-                                <tr><td>% Cambios ↓</td><td>5%</td></tr>
                                 <tr><td>% Incremental</td><td>5%</td></tr>
                             </tbody>
                         </table>
-                        <p style="font-size:.70rem;color:#8e96ae;margin-top:6px">↓ en % Cambios significa que <em>menos cambios = mejor</em>.</p>
                     </details>
 
                     <p style="margin-top:10px;font-size:.72rem;color:#8e96ae">Hacé clic en una fila para ver el detalle de cada KPI.</p>

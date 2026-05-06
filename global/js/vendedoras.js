@@ -22,23 +22,25 @@ const Vendedoras = (() => {
         const avgCamb  = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_cambios ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
         const avgIncr  = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_incremental ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
         ExcelExporter.export({
-            title    : 'KPIs por Vendedora',
-            headers  : ['Vendedora', 'Facturación', 'Unidades', 'Tickets',
-                        'Ticket Prom.', '% 2do Prod.', '% 3er Prod.', '% Cambios', '% Incremental'],
-            rows     : rows.map(r => [
+            title     : 'KPIs por Vendedora',
+            headers   : ['Vendedora', 'Facturación', 'Unidades', 'Tickets',
+                         'Ticket Prom.', '% 2do Prod.', '% 3er Prod.', '% Cambios', '% Incremental'],
+            rows      : rows.map(r => [
                 r.vendedora,
-                r.facturacion        ?? null,
-                r.unidades           ?? null,
-                r.tickets            ?? null,
-                r.ticket_promedio    ?? null,
-                r.porc_2do           ?? null,
-                r.porc_3ro           ?? null,
-                r.porc_cambios       ?? null,
-                r.porc_incremental   ?? null,
+                r.facturacion      ?? null,
+                r.unidades         ?? null,
+                r.tickets          ?? null,
+                r.ticket_promedio  ?? null,
+                r.porc_2do         ?? null,
+                r.porc_3ro         ?? null,
+                r.porc_cambios     ?? null,
+                r.porc_incremental ?? null,
             ]),
-            totalsRow: ['PROMEDIO', totFact, totUnid, totTick,
-                        avgTProm, avg2do, avg3ro, avgCamb, avgIncr],
-            filename : 'kpis_vendedoras',
+            totalsRow : ['PROMEDIO',
+                totFact, totUnid, totTick,
+                avgTProm, avg2do, avg3ro, avgCamb, avgIncr],
+            colFormats: ['text', 'money', 'num', 'num', 'money', 'pct', 'pct', 'pct', 'pct'],
+            filename  : 'kpis_vendedoras',
         });
     }
 

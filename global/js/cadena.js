@@ -6,9 +6,10 @@
 
 const Cadena = (() => {
 
-    let _lastData = null;
-    let _sortCol  = null;
-    let _sortAsc  = true;
+    let _lastData    = null;
+    let _chainTotals = null;
+    let _sortCol     = null;
+    let _sortAsc     = true;
 
     /* ── Formato ─────────────────────────────── */
     function money(n, d = 0) {
@@ -37,24 +38,80 @@ const Cadena = (() => {
         return s + (n * 100).toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + '\u00A0%';
     }
 
+    function _conv(v) {
+        return typeof Dashboard !== 'undefined' && v != null ? Dashboard.convertir(v) : v;
+    }
+
     /* ── Columnas de la tabla ────────────────── */
     const COLS = [
-        { key: 'nro_sucurs',            label: 'Sucursal',       fmt: r => r._isTotal ? 'TOTAL' : (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(r.nro_sucurs) : 'Suc. ' + r.nro_sucurs), align: 'left',  sortKey: 'nro_sucurs' },
-        { key: 'objetivo_total',        label: 'Objetivo Mes',   fmt: r => money(r.objetivo_total),             align: 'right', sortKey: 'objetivo_total' },
-        { key: 'facturacion',           label: 'Facturación',    fmt: r => money(r.facturacion),                align: 'right', sortKey: 'facturacion' },
-        { key: 'porc_cumplimiento',     label: '% Cumpl.',       fmt: r => r.porc_cumplimiento != null ? pctFmt(r.porc_cumplimiento) : '—', align: 'right', sortKey: 'porc_cumplimiento', cumpl: true },
-        { key: 'unidades',              label: 'Unidades',       fmt: r => numFmt(r.unidades),                  align: 'right', sortKey: 'unidades' },
-        { key: 'var_unidades',          label: 'Var. Unid.',     fmt: r => r.var_unidades != null ? varFmt(r.var_unidades) : '—', align: 'right', sortKey: 'var_unidades', varCls: true },
-        { key: 'porc_part_facturacion', label: '% Part. Fact.',  fmt: r => r.porc_part_facturacion != null ? pctFmt(r.porc_part_facturacion) : '—', align: 'right', sortKey: 'porc_part_facturacion', heatmap: true },
-        { key: 'tickets',               label: 'Tickets',        fmt: r => numFmt(r.tickets),                   align: 'right', sortKey: 'tickets' },
-        { key: 'var_tickets',           label: 'Var. Tick.',     fmt: r => r.var_tickets != null ? varFmt(r.var_tickets) : '—', align: 'right', sortKey: 'var_tickets', varCls: true },
-        { key: 'ticket_promedio',       label: 'T. Prom.',       fmt: r => money(r.ticket_promedio),            align: 'right', sortKey: 'ticket_promedio' },
-        { key: 'porc_2do',              label: 'Tick 2do%',      fmt: r => r.porc_2do != null ? pctFmt(r.porc_2do) : '—', align: 'right', sortKey: 'porc_2do',    heatmap: true },
-        { key: 'porc_3ro',              label: 'Tick 3ro%',      fmt: r => r.porc_3ro != null ? pctFmt(r.porc_3ro) : '—', align: 'right', sortKey: 'porc_3ro',    heatmap: true },
-        { key: 'porc_cambios',          label: '% Cambios',      fmt: r => r.porc_cambios != null ? pctFmt(r.porc_cambios) : '—', align: 'right', sortKey: 'porc_cambios',   heatmap: true, inverse: true },
-        { key: 'porc_incremental',      label: '% Increm.',      fmt: r => r.porc_incremental != null ? pctFmt(r.porc_incremental) : '—', align: 'right', sortKey: 'porc_incremental', heatmap: true },
-        { key: 'mails_pct',             label: '% Mails',        fmt: r => r.mails_pct != null ? pctFmt(r.mails_pct) : '—', align: 'right', sortKey: 'mails_pct', heatmap: true },
-        { key: 'conversion',            label: 'Conv.%',         fmt: r => r.conversion != null ? pctFmt(r.conversion) : '—', align: 'right', sortKey: 'conversion', heatmap: true },
+        { key: 'nro_sucurs',            label: 'Sucursal',
+          fmt: r => r._isTotal ? 'TOTAL' : (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(r.nro_sucurs) : 'Suc. ' + r.nro_sucurs),
+          val: r => r._isTotal ? 'TOTAL' : (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(r.nro_sucurs) : 'Suc. ' + r.nro_sucurs),
+          xlFmt: 'text',  align: 'left',  sortKey: 'nro_sucurs' },
+        { key: 'objetivo_total',        label: 'Objetivo Mes',
+          fmt: r => money(r.objetivo_total),
+          val: r => r.objetivo_total != null ? _conv(r.objetivo_total) : null,
+          xlFmt: 'money', align: 'right', sortKey: 'objetivo_total' },
+        { key: 'facturacion',           label: 'Facturación',
+          fmt: r => money(r.facturacion),
+          val: r => r.facturacion != null ? _conv(r.facturacion) : null,
+          xlFmt: 'money', align: 'right', sortKey: 'facturacion' },
+        { key: 'var_facturacion',       label: 'Var. Fact.',
+          fmt: r => r.var_facturacion != null ? varFmt(r.var_facturacion) : '—',
+          val: r => r.var_facturacion ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'var_facturacion', varCls: true },
+        { key: 'porc_cumplimiento',     label: '% Cumpl.',
+          fmt: r => r.porc_cumplimiento != null ? pctFmt(r.porc_cumplimiento) : '—',
+          val: r => r.porc_cumplimiento ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'porc_cumplimiento', cumpl: true },
+        { key: 'unidades',              label: 'Unidades',
+          fmt: r => numFmt(r.unidades),
+          val: r => r.unidades ?? null,
+          xlFmt: 'num',   align: 'right', sortKey: 'unidades' },
+        { key: 'var_unidades',          label: 'Var. Unid.',
+          fmt: r => r.var_unidades != null ? varFmt(r.var_unidades) : '—',
+          val: r => r.var_unidades ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'var_unidades', varCls: true },
+        { key: 'porc_part_facturacion', label: '% Part. Fact.',
+          fmt: r => r.porc_part_facturacion != null ? pctFmt(r.porc_part_facturacion) : '—',
+          val: r => r.porc_part_facturacion ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'porc_part_facturacion', heatmap: true },
+        { key: 'tickets',               label: 'Tickets',
+          fmt: r => numFmt(r.tickets),
+          val: r => r.tickets ?? null,
+          xlFmt: 'num',   align: 'right', sortKey: 'tickets' },
+        { key: 'var_tickets',           label: 'Var. Tick.',
+          fmt: r => r.var_tickets != null ? varFmt(r.var_tickets) : '—',
+          val: r => r.var_tickets ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'var_tickets', varCls: true },
+        { key: 'ticket_promedio',       label: 'T. Prom.',
+          fmt: r => money(r.ticket_promedio),
+          val: r => r.ticket_promedio != null ? _conv(r.ticket_promedio) : null,
+          xlFmt: 'money', align: 'right', sortKey: 'ticket_promedio' },
+        { key: 'porc_2do',              label: 'Tick 2do%',
+          fmt: r => r.porc_2do != null ? pctFmt(r.porc_2do) : '—',
+          val: r => r.porc_2do ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'porc_2do',    heatmap: true },
+        { key: 'porc_3ro',              label: 'Tick 3ro%',
+          fmt: r => r.porc_3ro != null ? pctFmt(r.porc_3ro) : '—',
+          val: r => r.porc_3ro ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'porc_3ro',    heatmap: true },
+        { key: 'porc_cambios',          label: '% Cambios',
+          fmt: r => r.porc_cambios != null ? pctFmt(r.porc_cambios) : '—',
+          val: r => r.porc_cambios ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'porc_cambios',   heatmap: true, inverse: true },
+        { key: 'porc_incremental',      label: '% Increm.',
+          fmt: r => r.porc_incremental != null ? pctFmt(r.porc_incremental) : '—',
+          val: r => r.porc_incremental ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'porc_incremental', heatmap: true },
+        { key: 'mails_pct',             label: '% Mails',
+          fmt: r => r.mails_pct != null ? pctFmt(r.mails_pct) : '—',
+          val: r => r.mails_pct ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'mails_pct', heatmap: true },
+        { key: 'conversion',            label: 'Conv.%',
+          fmt: r => r.conversion != null ? pctFmt(r.conversion) : '—',
+          val: r => r.conversion ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'conversion', heatmap: true },
     ];
 
     /* ── Heatmap color ───────────────────────── */
@@ -73,36 +130,53 @@ const Cadena = (() => {
             const ids = Dashboard.getSucursalesActivasIds?.();
             if (ids?.size) rows = rows.filter(r => ids.has(+r.nro_sucurs));
         }
-        const totObj      = rows.reduce((s, r) => s + (r.objetivo_total ?? 0), 0);
-        const totFact     = rows.reduce((s, r) => s + (r.facturacion    ?? 0), 0);
-        const totUnid     = rows.reduce((s, r) => s + (r.unidades       ?? 0), 0);
-        const totTick     = rows.reduce((s, r) => s + (r.tickets        ?? 0), 0);
+
+        // Construir fila de totales igual que en renderTable
+        const totObj      = rows.reduce((s, r) => s + (r.objetivo_total   ?? 0), 0);
+        const totFact     = rows.reduce((s, r) => s + (r.facturacion      ?? 0), 0);
+        const totUnid     = rows.reduce((s, r) => s + (r.unidades         ?? 0), 0);
+        const totTick     = rows.reduce((s, r) => s + (r.tickets          ?? 0), 0);
         const totTP       = totTick > 0 ? totFact / totTick : 0;
+        const tot2doRaw   = rows.reduce((s, r) => s + (r.porc_2do         ?? 0) * (r.tickets  ?? 0), 0);
+        const tot3roRaw   = rows.reduce((s, r) => s + (r.porc_3ro         ?? 0) * (r.tickets  ?? 0), 0);
+        const totCambRaw  = rows.reduce((s, r) => s + (r.porc_cambios     ?? 0) * (r.unidades ?? 0), 0);
+        const totIncrRaw  = rows.reduce((s, r) => s + (r.porc_incremental ?? 0) * (r.unidades ?? 0), 0);
+        const totMailsRaw = rows.reduce((s, r) => s + (r.mails_pct        ?? 0) * (r.tickets  ?? 0), 0);
+        const totIngresos = rows.reduce((s, r) => s + ((r.ingresos ?? 0) > 0 ? r.ingresos : 0), 0);
+        const totTickConv = rows.reduce((s, r) => (r.ingresos ?? 0) > 0 ? s + ((r.conversion ?? 0) * r.ingresos) : s, 0);
+        // Variaciones: usar totales de cadena (incluye sucursales cerradas del período previo)
+        const cFactAct  = _chainTotals?.facturacion      ?? totFact;
+        const cFactPrev = _chainTotals?.facturacion_prev ?? 0;
+        const cUnidAct  = _chainTotals?.unidades         ?? totUnid;
+        const cUnidPrev = _chainTotals?.unidades_prev    ?? 0;
+        const cTickAct  = _chainTotals?.tickets          ?? totTick;
+        const cTickPrev = _chainTotals?.tickets_prev     ?? 0;
+        const totRow = {
+            _isTotal: true, nro_sucurs: -1,
+            objetivo_total: totObj, facturacion: totFact,
+            var_facturacion: cFactPrev > 0 ? (cFactAct - cFactPrev) / cFactPrev : null,
+            porc_cumplimiento: totObj > 0 ? totFact / totObj : null,
+            unidades: totUnid,
+            var_unidades: cUnidPrev > 0 ? (cUnidAct - cUnidPrev) / cUnidPrev : null,
+            porc_part_facturacion: null,
+            tickets: totTick,
+            var_tickets: cTickPrev > 0 ? (cTickAct - cTickPrev) / cTickPrev : null,
+            ticket_promedio: totTP,
+            porc_2do:         totTick > 0 ? tot2doRaw  / totTick : null,
+            porc_3ro:         totTick > 0 ? tot3roRaw  / totTick : null,
+            porc_cambios:     totUnid > 0 ? totCambRaw / totUnid : null,
+            porc_incremental: totUnid > 0 ? totIncrRaw / totUnid : null,
+            mails_pct:        totTick > 0 ? totMailsRaw / totTick : null,
+            conversion:       totIngresos > 0 ? totTickConv / totIngresos : null,
+        };
+
         ExcelExporter.export({
-            title   : 'KPIs por Sucursal — Cadena completa',
-            headers : COLS.map(c => c.label),
-            rows    : rows.map(r => [
-                (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(r.nro_sucurs) : 'Suc. ' + r.nro_sucurs),
-                r.objetivo_total        ?? null,
-                r.facturacion           ?? null,
-                r.porc_cumplimiento     ?? null,
-                r.unidades              ?? null,
-                r.var_unidades          ?? null,
-                r.porc_part_facturacion ?? null,
-                r.tickets               ?? null,
-                r.var_tickets           ?? null,
-                r.ticket_promedio       ?? null,
-                r.porc_2do              ?? null,
-                r.porc_3ro              ?? null,
-                r.porc_cambios          ?? null,
-                r.porc_incremental      ?? null,
-                r.mails_pct             ?? null,
-                r.conversion            ?? null,
-            ]),
-            totalsRow: ['TOTAL', totObj, totFact, totObj > 0 ? totFact / totObj : null,
-                        totUnid, null, null, totTick, null, totTP,
-                        null, null, null, null, null, null],
-            filename : 'kpis_cadena',
+            title      : 'KPIs por Sucursal — Cadena completa',
+            headers    : COLS.map(c => c.label),
+            rows       : rows.map(r => COLS.map(c => c.val(r))),
+            totalsRow  : COLS.map(c => c.val(totRow)),
+            colFormats : COLS.map(c => c.xlFmt),
+            filename   : 'kpis_cadena',
         });
     }
 
@@ -154,7 +228,7 @@ const Cadena = (() => {
                     const { min, max } = ranges[c.sortKey] || {};
                     const ratio = max > min ? (val - min) / (max - min) : 0.5;
                     style += `background:${heatColor(ratio, c.inverse)};`;
-                } else if (!r._isTotal && c.varCls) {
+                } else if (c.varCls && r[c.sortKey] != null) {
                     cls = val >= 0 ? 'pos' : 'neg';
                 }
                 return `<td style="${style}" class="${cls}">${c.fmt(r)}</td>`;
@@ -164,11 +238,11 @@ const Cadena = (() => {
         }).join('');
 
         // Fila totales
-        const totObj  = rows.reduce((s, r) => s + (r.objetivo_total ?? 0), 0);
-        const totFact = rows.reduce((s, r) => s + (r.facturacion ?? 0), 0);
-        const totUnid = rows.reduce((s, r) => s + (r.unidades ?? 0), 0);
-        const totTick = rows.reduce((s, r) => s + (r.tickets ?? 0), 0);
-        const totTP   = totTick > 0 ? totFact / totTick : 0;
+        const totObj      = rows.reduce((s, r) => s + (r.objetivo_total    ?? 0), 0);
+        const totFact     = rows.reduce((s, r) => s + (r.facturacion       ?? 0), 0);
+        const totUnid     = rows.reduce((s, r) => s + (r.unidades          ?? 0), 0);
+        const totTick     = rows.reduce((s, r) => s + (r.tickets           ?? 0), 0);
+        const totTP       = totTick > 0 ? totFact / totTick : 0;
 
         // Promedios ponderados para KPIs de %
         const tot2doRaw   = rows.reduce((s, r) => s + (r.porc_2do        ?? 0) * (r.tickets  ?? 0), 0);
@@ -181,18 +255,27 @@ const Cadena = (() => {
         const totIngresos = rows.reduce((s, r) => s + ((r.ingresos ?? 0) > 0 ? r.ingresos : 0), 0);
         const totTickConv = rows.reduce((s, r) => (r.ingresos ?? 0) > 0 ? s + ((r.conversion ?? 0) * r.ingresos) : s, 0);
 
+        // Variaciones: usar totales de cadena (incluye sucursales cerradas del período previo)
+        const cFactAct  = _chainTotals?.facturacion      ?? totFact;
+        const cFactPrev = _chainTotals?.facturacion_prev ?? 0;
+        const cUnidAct  = _chainTotals?.unidades         ?? totUnid;
+        const cUnidPrev = _chainTotals?.unidades_prev    ?? 0;
+        const cTickAct  = _chainTotals?.tickets          ?? totTick;
+        const cTickPrev = _chainTotals?.tickets_prev     ?? 0;
+
         const totRow  = {
             _isTotal: true,
             nro_sucurs: -1,
             objetivo_total: totObj,
             objetivo_fecha: totObj,
             facturacion: totFact,
+            var_facturacion: cFactPrev > 0 ? (cFactAct - cFactPrev) / cFactPrev : null,
             porc_cumplimiento: totObj > 0 ? totFact / totObj : null,
             unidades: totUnid,
-            var_unidades: null,
+            var_unidades: cUnidPrev > 0 ? (cUnidAct - cUnidPrev) / cUnidPrev : null,
             porc_part_facturacion: null,
             tickets: totTick,
-            var_tickets: null,
+            var_tickets: cTickPrev > 0 ? (cTickAct - cTickPrev) / cTickPrev : null,
             ticket_promedio: totTP,
             ticket_prom_prev: null,
             porc_2do:         totTick > 0 ? tot2doRaw  / totTick : null,
@@ -239,7 +322,8 @@ const Cadena = (() => {
             const data = await res.json();
             if (!data.ok) throw new Error(data.error || 'Error en cadena');
 
-            _lastData = data.sucursales ?? [];
+            _lastData    = data.sucursales    ?? [];
+            _chainTotals = data.totales_cadena ?? null;
             renderTable(_lastData);
 
             // Botón de exportación (una sola vez en el header)

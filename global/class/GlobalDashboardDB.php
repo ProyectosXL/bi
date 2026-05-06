@@ -878,8 +878,9 @@ class GlobalDashboardDB
      * ────────────────────────────────────────────── */
 
     public function getScorePorSucursal(
-        string $desde_act,  string $hasta_act,
-        string $desde_prev, string $hasta_prev,
+        string $desde_act,    string $hasta_act,
+        string $desde_prev,   string $hasta_prev,
+        string $desde_prev2,  string $hasta_prev2,
         string $primerDiaMes, string $ultimoDiaMes,
         ?string $grupo = null, ?string $tipoTienda = null
     ): array {
@@ -977,7 +978,59 @@ class GlobalDashboardDB
             GROUP BY t.NRO_SUCURS
         ", array_merge([$desde_prev, $hasta_prev], $pT, $pGT));
 
-        // 7. Objetivos pro-rated
+        // 7. Unidades período previo (para var_unidades)
+        $prevUnidRows = $this->query("
+            SELECT
+                s.NRO_SUCURS,
+                ISNULL(SUM(CASE WHEN s.CANTIDAD > 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+                                THEN s.CANTIDAD ELSE 0 END), 0) AS unidades_prev
+            FROM BI_SALES_SUCURSALES s
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
+            GROUP BY s.NRO_SUCURS
+        ", array_merge([$desde_prev, $hasta_prev], $pS, $pGS));
+
+        // 8. Tickets período previo (para var_tickets)
+        $prevTickRows = $this->query("
+            SELECT
+                t.NRO_SUCURS,
+                COUNT(DISTINCT t.N_COMP) AS tickets_prev
+            FROM BI_SALES_TOTAL_TICKETS t
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND t.T_COMP = 'FAC' {$sfT} {$sfGT}
+            GROUP BY t.NRO_SUCURS
+        ", array_merge([$desde_prev, $hasta_prev], $pT, $pGT));
+
+        // 9a. Facturación período prev2
+        $prev2FactRows = $this->query("
+            SELECT t.NRO_SUCURS,
+                ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS facturacion_prev2
+            FROM BI_SALES_TOTAL_TICKETS t
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND t.T_COMP = 'FAC' {$sfT} {$sfGT}
+            GROUP BY t.NRO_SUCURS
+        ", array_merge([$desde_prev2, $hasta_prev2], $pT, $pGT));
+
+        // 9b. Unidades período prev2
+        $prev2UnidRows = $this->query("
+            SELECT s.NRO_SUCURS,
+                ISNULL(SUM(CASE WHEN s.CANTIDAD > 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+                                THEN s.CANTIDAD ELSE 0 END), 0) AS unidades_prev2
+            FROM BI_SALES_SUCURSALES s
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
+            GROUP BY s.NRO_SUCURS
+        ", array_merge([$desde_prev2, $hasta_prev2], $pS, $pGS));
+
+        // 9c. Tickets período prev2
+        $prev2TickRows = $this->query("
+            SELECT t.NRO_SUCURS,
+                COUNT(DISTINCT t.N_COMP) AS tickets_prev2
+            FROM BI_SALES_TOTAL_TICKETS t
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND t.T_COMP = 'FAC' {$sfT} {$sfGT}
+            GROUP BY t.NRO_SUCURS
+        ", array_merge([$desde_prev2, $hasta_prev2], $pT, $pGT));
+
+        // 10. Objetivos pro-rated
         $objPorSuc = $this->getObjetivosPorSucursal(
             $desde_act, $hasta_act, $primerDiaMes, $ultimoDiaMes, $grupo, $tipoTienda
         );
@@ -987,19 +1040,27 @@ class GlobalDashboardDB
         foreach ($kpiRows as $r) {
             $nro = (int)$r['NRO_SUCURS'];
             $byNro[$nro] = [
-                'nro_sucurs'          => $nro,
-                'facturacion'         => (float)($r['facturacion'] ?? 0),
-                'tickets'             => (int)($r['tickets']       ?? 0),
-                'ticket_promedio'     => 0.0,
-                'unidades'            => 0.0,
-                'porc_2do'            => 0.0,
-                'porc_3ro'            => 0.0,
-                'porc_cambios'        => 0.0,
-                'porc_incremental'    => 0.0,
-                'ticket_promedio_2do' => 0.0,
-                'var_fact'            => 0.0,
-                'cumplimiento'        => 1.0,
-                'objetivo_fecha'      => 0.0,
+                'nro_sucurs'              => $nro,
+                'facturacion'             => (float)($r['facturacion'] ?? 0),
+                'tickets'                 => (int)($r['tickets']       ?? 0),
+                'ticket_promedio'         => 0.0,
+                'unidades'                => 0.0,
+                'porc_2do'                => 0.0,
+                'porc_3ro'                => 0.0,
+                'porc_cambios'            => 0.0,
+                'porc_incremental'        => 0.0,
+                'ticket_promedio_2do'     => 0.0,
+                'delta_var_fact'          => 0.0,
+                'var_fact_actual'         => null,
+                'var_fact_anterior'       => null,
+                'delta_var_unidades'      => 0.0,
+                'var_unidades_actual'     => null,
+                'var_unidades_anterior'   => null,
+                'delta_var_tickets'       => 0.0,
+                'var_tickets_actual'      => null,
+                'var_tickets_anterior'    => null,
+                'cumplimiento'            => 1.0,
+                'objetivo_fecha'          => 0.0,
             ];
         }
 
@@ -1041,7 +1102,63 @@ class GlobalDashboardDB
             if (!isset($byNro[$nro])) continue;
             $prev = (float)$r['facturacion_prev'];
             $act  = $byNro[$nro]['facturacion'];
-            $byNro[$nro]['var_fact'] = $prev != 0 ? ($act - $prev) / $prev : ($act > 0 ? 1.0 : 0.0);
+            $byNro[$nro]['_fact_prev']      = $prev;
+            $byNro[$nro]['var_fact_actual'] = $prev != 0 ? ($act - $prev) / $prev : null;
+        }
+
+        foreach ($prevUnidRows as $r) {
+            $nro  = (int)$r['NRO_SUCURS'];
+            if (!isset($byNro[$nro])) continue;
+            $prev = (float)$r['unidades_prev'];
+            $act  = $byNro[$nro]['unidades'];
+            $byNro[$nro]['_unid_prev']           = $prev;
+            $byNro[$nro]['var_unidades_actual']  = $prev != 0 ? ($act - $prev) / $prev : null;
+        }
+
+        foreach ($prevTickRows as $r) {
+            $nro  = (int)$r['NRO_SUCURS'];
+            if (!isset($byNro[$nro])) continue;
+            $prev = (float)$r['tickets_prev'];
+            $act  = (float)$byNro[$nro]['tickets'];
+            $byNro[$nro]['_tick_prev']           = $prev;
+            $byNro[$nro]['var_tickets_actual']   = $prev != 0 ? ($act - $prev) / $prev : null;
+        }
+
+        // Delta de tendencia: var_actual − var_anterior (pp). Sucursales sin prev2 → delta = 0.
+        foreach ($prev2FactRows as $r) {
+            $nro   = (int)$r['NRO_SUCURS'];
+            if (!isset($byNro[$nro])) continue;
+            $prev  = $byNro[$nro]['_fact_prev'] ?? null;
+            $prev2 = (float)$r['facturacion_prev2'];
+            if ($prev !== null && $prev2 != 0 && $byNro[$nro]['var_fact_actual'] !== null) {
+                $varAnt = ($prev - $prev2) / $prev2;
+                $byNro[$nro]['delta_var_fact']    = $byNro[$nro]['var_fact_actual'] - $varAnt;
+                $byNro[$nro]['var_fact_anterior'] = $varAnt;
+            }
+        }
+
+        foreach ($prev2UnidRows as $r) {
+            $nro   = (int)$r['NRO_SUCURS'];
+            if (!isset($byNro[$nro])) continue;
+            $prev  = $byNro[$nro]['_unid_prev'] ?? null;
+            $prev2 = (float)$r['unidades_prev2'];
+            if ($prev !== null && $prev2 != 0 && $byNro[$nro]['var_unidades_actual'] !== null) {
+                $varAnt = ($prev - $prev2) / $prev2;
+                $byNro[$nro]['delta_var_unidades']    = $byNro[$nro]['var_unidades_actual'] - $varAnt;
+                $byNro[$nro]['var_unidades_anterior'] = $varAnt;
+            }
+        }
+
+        foreach ($prev2TickRows as $r) {
+            $nro   = (int)$r['NRO_SUCURS'];
+            if (!isset($byNro[$nro])) continue;
+            $prev  = $byNro[$nro]['_tick_prev'] ?? null;
+            $prev2 = (float)$r['tickets_prev2'];
+            if ($prev !== null && $prev2 != 0 && $byNro[$nro]['var_tickets_actual'] !== null) {
+                $varAnt = ($prev - $prev2) / $prev2;
+                $byNro[$nro]['delta_var_tickets']    = $byNro[$nro]['var_tickets_actual'] - $varAnt;
+                $byNro[$nro]['var_tickets_anterior'] = $varAnt;
+            }
         }
 
         foreach ($objPorSuc as $nro => $o) {
@@ -1059,36 +1176,34 @@ class GlobalDashboardDB
         unset($s);
 
         // ── Scoring ────────────────────────────────────────────────────────
+        // 8 KPIs — suma de pesos = 1.0
+        // delta_var_* usan tipo 'growth': norm = 1 + delta_pp (baseline = 0pp)
         $weights = [
-            'cumplimiento'        => 0.30,
-            'var_fact'            => 0.15,
-            'ticket_promedio'     => 0.10,
-            'unidades'            => 0.10,
-            'porc_2do'            => 0.10,
-            'tickets'             => 0.05,
-            'ticket_promedio_2do' => 0.05,
-            'porc_3ro'            => 0.05,
-            'porc_cambios'        => 0.05,
-            'porc_incremental'    => 0.05,
+            'cumplimiento'       => 0.30,
+            'delta_var_fact'     => 0.15,
+            'ticket_promedio'    => 0.15,
+            'delta_var_tickets'  => 0.10,
+            'delta_var_unidades' => 0.10,
+            'porc_2do'           => 0.10,
+            'porc_3ro'           => 0.05,
+            'porc_incremental'   => 0.05,
         ];
         $types = [
-            'cumplimiento'        => 'normal',
-            'var_fact'            => 'index',
-            'ticket_promedio'     => 'normal',
-            'unidades'            => 'normal',
-            'porc_2do'            => 'normal',
-            'tickets'             => 'normal',
-            'ticket_promedio_2do' => 'normal',
-            'porc_3ro'            => 'normal',
-            'porc_cambios'        => 'inverse',
-            'porc_incremental'    => 'index',
+            'cumplimiento'       => 'normal',
+            'delta_var_fact'     => 'growth',
+            'ticket_promedio'    => 'normal',
+            'delta_var_tickets'  => 'growth',
+            'delta_var_unidades' => 'growth',
+            'porc_2do'           => 'normal',
+            'porc_3ro'           => 'normal',
+            'porc_incremental'   => 'index',
         ];
 
         $sucList = array_values($byNro);
         $cnt = count($sucList);
         if ($cnt === 0) return [];
 
-        // Averages across all sucursales
+        // Promedios de cadena (usados en normalización normal/index; growth no usa avg)
         $avgs = [];
         foreach (array_keys($weights) as $kpi) {
             $sum = 0.0;
@@ -1099,6 +1214,9 @@ class GlobalDashboardDB
         $normalize = function(string $type, float $val, float $avg): float {
             if ($type === 'inverse') {
                 return max(0.1, min(3.0, $val != 0 ? $avg / $val : ($avg >= 0 ? 3.0 : 0.1)));
+            } elseif ($type === 'growth') {
+                // Baseline = 0%: norm = 1 + val (ej. +51% → 1.51, -20% → 0.80)
+                return max(0.1, min(3.0, 1.0 + $val));
             } elseif ($type === 'index') {
                 $denom = 1.0 + $avg;
                 return max(0.1, min(3.0, $denom != 0 ? (1.0 + $val) / $denom : 1.0));
@@ -1423,11 +1541,16 @@ class GlobalDashboardDB
      * dentro del rango [rangoDesde, rangoHasta], más la tcc_actual (top 1).
      *
      * Para meses sin cotización aplica fallback hacia el mes anterior más cercano.
+     * Para origen 'uruguay' usa RO_T_COTIZACION_DOLARES_UY (formato PERIODO = 'M-YYYY').
      *
      * @return array{cotizaciones: array<string,float>, tcc_actual: float}
      */
     public function getCotizacionesMensuales(string $rangoDesde, string $rangoHasta): array
     {
+        if ($this->origen === 'uruguay') {
+            return $this->_getCotizacionesMensualesUY($rangoDesde, $rangoHasta);
+        }
+
         // tcc_actual: última cotización disponible (para display)
         $tccActual = 1.0;
         try {
@@ -1464,6 +1587,77 @@ class GlobalDashboardDB
             $cursor = new DateTime($rangoDesde);
             $end    = new DateTime($rangoHasta);
             $lastKnown = reset($cotizaciones); // primer valor disponible
+            while ($cursor <= $end) {
+                $mk = $cursor->format('Y-m');
+                if (isset($cotizaciones[$mk])) {
+                    $lastKnown = $cotizaciones[$mk];
+                } else {
+                    $cotizaciones[$mk] = $lastKnown;
+                }
+                $cursor->modify('+1 month');
+            }
+            ksort($cotizaciones);
+        }
+
+        return [
+            'cotizaciones' => $cotizaciones,
+            'tcc_actual'   => $tccActual,
+        ];
+    }
+
+    /**
+     * Cotizaciones mensuales para Uruguay desde RO_T_COTIZACION_DOLARES_UY.
+     * PERIODO tiene formato 'M-YYYY' (ej: '2-2026'), COTIZACION usa coma decimal.
+     */
+    private function _getCotizacionesMensualesUY(string $rangoDesde, string $rangoHasta): array
+    {
+        $tccActual    = 1.0;
+        $cotizaciones = [];
+
+        try {
+            $rows = $this->query("
+                SELECT PERIODO, COTIZACION
+                FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.RO_T_COTIZACION_DOLARES_UY
+            ");
+
+            // Convertir todas las filas a formato 'YYYY-MM' => float
+            $todas = [];
+            foreach ($rows as $r) {
+                $periodo = trim((string)($r['PERIODO']    ?? ''));
+                $cot     = (float)str_replace(',', '.', (string)($r['COTIZACION'] ?? '0'));
+                // Parsear 'M-YYYY' → 'YYYY-MM'
+                if (preg_match('/^(\d{1,2})-(\d{4})$/', $periodo, $m)) {
+                    $mk = $m[2] . '-' . str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                    $todas[$mk] = $cot;
+                }
+            }
+            ksort($todas);
+
+            // tcc_actual: cotización del mes más reciente disponible
+            if ($todas) {
+                $tccActual = end($todas);
+            }
+
+            // Filtrar al rango requerido
+            $cursor = new DateTime($rangoDesde);
+            $end    = new DateTime($rangoHasta);
+            $cursor->modify('first day of this month');
+            $end->modify('first day of this month');
+            while ($cursor <= $end) {
+                $mk = $cursor->format('Y-m');
+                if (isset($todas[$mk])) {
+                    $cotizaciones[$mk] = $todas[$mk];
+                }
+                $cursor->modify('+1 month');
+            }
+
+        } catch (Throwable $_) {}
+
+        // Fallback: rellenar meses sin cotización con el valor anterior más cercano
+        if ($cotizaciones) {
+            $cursor    = new DateTime($rangoDesde);
+            $end       = new DateTime($rangoHasta);
+            $lastKnown = reset($cotizaciones);
             while ($cursor <= $end) {
                 $mk = $cursor->format('Y-m');
                 if (isset($cotizaciones[$mk])) {

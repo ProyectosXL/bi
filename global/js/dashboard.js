@@ -733,13 +733,18 @@ const Dashboard = (() => {
             headers   : ['Sucursal', 'Facturación', 'Var. Fact.', 'Objetivo Total', 'Objetivo Fecha', 'Desvío'],
             rows      : rows.map(r => [
                 getSucNombre(r.nro_sucurs),
-                r.facturacion    ?? null,
+                r.facturacion    != null ? convertir(r.facturacion)    : null,
                 r.var_facturacion ?? null,
-                r.objetivo_total  ?? null,
-                r.objetivo_fecha  ?? null,
+                r.objetivo_total  != null ? convertir(r.objetivo_total) : null,
+                r.objetivo_fecha  != null ? convertir(r.objetivo_fecha) : null,
                 r.desvio          ?? null,
             ]),
-            totalsRow : ['TOTAL', totFact, null, totObjT, totObjF, totDesv],
+            totalsRow : ['TOTAL',
+                convertir(totFact), null,
+                totObjT ? convertir(totObjT) : null,
+                totObjF ? convertir(totObjF) : null,
+                totDesv ?? null],
+            colFormats: ['text', 'money', 'pct', 'money', 'money', 'pct'],
             filename  : 'facturacion_vs_objetivos',
         });
     }
@@ -1354,11 +1359,14 @@ const Dashboard = (() => {
     /* ── Cargar cotizaciones mensuales ───────── */
     async function loadCotizaciones(periodo) {
         try {
+            const origenActive = document.querySelector('.origen-btn.active');
+            const origen = (window.BI_CONFIG?.isGrupo ? 'franquicias' : (origenActive?.dataset.origen ?? 'argentina'));
             const qs = new URLSearchParams({
                 desde      : periodo.desde_act  ?? '',
                 hasta      : periodo.hasta_act  ?? '',
                 desde_prev : periodo.desde_prev ?? '',
                 hasta_prev : periodo.hasta_prev ?? '',
+                origen,
             }).toString();
             const res  = await fetch(`/bi/global/api/cotizacion.php?${qs}`);
             const data = await res.json();

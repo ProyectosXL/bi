@@ -247,26 +247,41 @@ class DashboardDB
         ";
         $ventas = $this->query($sql, array_merge([$desde, $hasta], $suc, $vend, $rub));
 
-        // Tickets por vendedor
-        $sqlT = "
+        // Q-T1: tickets y monto — sin JOIN para evitar inflación del SUM por los ítems del ticket
+        $sqlT1 = "
             SELECT
-                t.COD_VENDED,
-                COUNT(DISTINCT t.N_COMP)                          AS tickets,
-                ISNULL(SUM(t.IMP_TOTAL_TICKET), 0)               AS suma_ticket,
-                COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 1 THEN t.N_COMP END) AS tickets_2do,
-                COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 2 THEN t.N_COMP END) AS tickets_3ro
+                t.{$cv} AS cv_key,
+                COUNT(DISTINCT t.N_COMP)           AS tickets,
+                ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS suma_ticket
             FROM BI_SALES_TOTAL_TICKETS t
-            LEFT JOIN BI_SALES_TICKETS tk ON t.N_COMP = tk.N_COMP
-                AND tk.FECHA >= ? AND tk.FECHA < DATEADD(day, 1, CAST(? AS DATE))
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND t.T_COMP = 'FAC'
               {$sfT} {$sfVT}
-            GROUP BY t.COD_VENDED
+            GROUP BY t.{$cv}
         ";
-        $tickets = $this->query($sqlT, array_merge([$desde, $hasta, $desde, $hasta], $suc, $vend));
-        $tickMap = [];
-        foreach ($tickets as $t) {
-            $tickMap[$t['COD_VENDED']] = $t;
+        $tickRows = $this->query($sqlT1, array_merge([$desde, $hasta], $suc, $vend));
+        $tickMap  = [];
+        foreach ($tickRows as $row) {
+            $tickMap[(string)$row['cv_key']] = ['tickets' => (int)$row['tickets'], 'suma_ticket' => (float)$row['suma_ticket']];
+        }
+
+        // Q-T2: 2do/3er producto — desde BI_SALES_TICKETS directamente (igual que getKPIsBulk Q3)
+        $sfTK  = $nroSucurs !== null ? "AND NRO_SUCURS = ?" : "";
+        $sfVTK = $vendedor !== '%'   ? "AND {$cv} = ?"      : "";
+        $sqlT2 = "
+            SELECT
+                {$cv} AS cv_key,
+                COUNT(DISTINCT CASE WHEN CANTIDAD > 1 THEN N_COMP END) AS tickets_2do,
+                COUNT(DISTINCT CASE WHEN CANTIDAD > 2 THEN N_COMP END) AS tickets_3ro
+            FROM BI_SALES_TICKETS
+            WHERE FECHA >= ? AND FECHA < DATEADD(day, 1, CAST(? AS DATE))
+              {$sfTK} {$sfVTK}
+            GROUP BY {$cv}
+        ";
+        $prodRows = $this->query($sqlT2, array_merge([$desde, $hasta], $suc, $vend));
+        $prodMap  = [];
+        foreach ($prodRows as $row) {
+            $prodMap[(string)$row['cv_key']] = ['tickets_2do' => (int)$row['tickets_2do'], 'tickets_3ro' => (int)$row['tickets_3ro']];
         }
 
         // Incremental por vendedor
@@ -328,22 +343,24 @@ class DashboardDB
 
         $result = [];
         foreach ($agg as $key => $a) {
-            // Sumar tickets e incremental de todos los códigos del mismo vendedor
-            $tickets_ = 0; $sumaT = 0.0; $t2 = 0; $t3 = 0;
+            $ticks    = $tickMap[(string)$key] ?? [];
+            $prods    = $prodMap[(string)$key] ?? [];
+            $tickets_ = (int)($ticks['tickets']       ?? 0);
+            $sumaT    = (float)($ticks['suma_ticket']  ?? 0);
+            $t2       = (int)($prods['tickets_2do']    ?? 0);
+            $t3       = (int)($prods['tickets_3ro']    ?? 0);
+
+            // Incremental — lookup por COD_VENDED (consistente con BI_SALES_SUCURSALES)
             $cambI = 0.0; $devol = 0.0;
             foreach ($a['_codes'] as $cod) {
-                $ticks  = $tickMap[$cod]  ?? [];
-                $inc    = $incrMap[$cod]  ?? [];
-                $tickets_ += (int)($ticks['tickets']    ?? 0);
-                $sumaT    += (float)($ticks['suma_ticket'] ?? 0);
-                $t2       += (int)($ticks['tickets_2do']  ?? 0);
-                $t3       += (int)($ticks['tickets_3ro']  ?? 0);
-                $cambI    += (float)($inc['cambios_incr']  ?? 0);
-                $devol    += (float)($inc['devoluciones']  ?? 0);
+                $inc   = $incrMap[$cod] ?? [];
+                $cambI += (float)($inc['cambios_incr']  ?? 0);
+                $devol += (float)($inc['devoluciones']  ?? 0);
             }
 
             $result[] = [
                 'vendedor'         => $a['label'],
+                'cod_vended'       => implode(' / ', $a['_codes']),
                 'unidades'         => $a['unidades'],
                 'facturacion'      => $a['facturacion'],
                 'tickets'          => $tickets_,
@@ -781,8 +798,8 @@ class DashboardDB
                 'porc_cambios'     => $upos  > 0 ? $camb / $upos  : 0.0,
                 'objetivo'         => $obj,
                 'cambios'          => $camb,
-                'porc_2do'         => $tot   > 0 ? $t2   / $tot   : 0.0,
-                'porc_3ro'         => $tot   > 0 ? $t3   / $tot   : 0.0,
+                'porc_2do'         => $ticks > 0 ? $t2   / $ticks : 0.0,
+                'porc_3ro'         => $ticks > 0 ? $t3   / $ticks : 0.0,
                 'porc_incremental' => $dv   != 0 ? ($ci  - $dv) / $dv : 0.0,
             ];
         };

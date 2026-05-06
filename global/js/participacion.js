@@ -27,11 +27,11 @@ const Participacion = (() => {
         const headers = ['Sucursal',
             ...rubros.flatMap(r => [r + ' % Fact', r + ' % Unid'])];
 
+        const getSucNombre = n => (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(n) : 'Suc. ' + n);
         const rows = sucursales.map(s => {
             if (s.tipo === 'grupo') {
                 return [s.nombre ?? '', ...rubros.flatMap(() => [null, null])];
             }
-            const getSucNombre = n => (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(n) : 'Suc. ' + n);
             return [
                 getSucNombre(s.nro_sucurs),
                 ...rubros.flatMap(rub => [
@@ -42,10 +42,11 @@ const Participacion = (() => {
         });
 
         ExcelExporter.export({
-            title   : 'Participación por Rubro y Sucursal',
+            title     : 'Participación por Rubro y Sucursal',
             headers,
             rows,
-            filename: 'participacion_rubros',
+            colFormats: ['text', ...rubros.flatMap(() => ['pct', 'pct'])],
+            filename  : 'participacion_rubros',
         });
     }
 

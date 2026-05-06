@@ -37,6 +37,9 @@ try {
     $hasta      = $_GET['hasta']      ?? '';
     $desdePrev  = $_GET['desde_prev'] ?? '';
     $hastaPrev  = $_GET['hasta_prev'] ?? '';
+    $origen     = in_array($_GET['origen'] ?? '', ['argentina', 'uruguay', 'franquicias'], true)
+                    ? $_GET['origen']
+                    : 'argentina';
 
     // Rango total: desde el mínimo hasta el máximo de ambos períodos
     $fechas = array_filter([$desde, $hasta, $desdePrev, $hastaPrev]);
@@ -46,7 +49,7 @@ try {
     $rangoDesde = min($fechas);
     $rangoHasta = max($fechas);
 
-    $db = new GlobalDashboardDB('argentina');
+    $db = new GlobalDashboardDB($origen);
     $result = $db->getCotizacionesMensuales($rangoDesde, $rangoHasta);
 
     ob_clean();
