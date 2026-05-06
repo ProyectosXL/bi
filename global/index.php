@@ -115,6 +115,15 @@ $ultimaAct = date('d/m/Y H:i:s');
                 <option value="">Todos</option>
             </select>
         </span>
+
+        <span class="ar-only-wrap" id="canal-wrap">
+            <label for="sel-canal">Canal</label>
+            <select id="sel-canal">
+                <option value="">Todos</option>
+                <option value="PROPIOS">Locales propios</option>
+                <option value="ECOMMERCE">Ecommerce</option>
+            </select>
+        </span>
         <?php endif; ?>
 
         <label for="sel-periodo">Período</label>
@@ -1036,10 +1045,10 @@ window.BI_CONFIG = {
     function toggleArFilters() {
         const activeBtn = document.querySelector('.origen-btn.active');
         const isAr = (activeBtn?.dataset.origen ?? 'argentina') === 'argentina';
-        const grupoEl     = document.getElementById('grupo-wrap');
-        const tipoTiendaEl = document.getElementById('tipo-tienda-wrap');
-        if (grupoEl)      grupoEl.style.display      = isAr ? '' : 'none';
-        if (tipoTiendaEl) tipoTiendaEl.style.display = isAr ? '' : 'none';
+        ['grupo-wrap', 'tipo-tienda-wrap', 'canal-wrap'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = isAr ? '' : 'none';
+        });
     }
     document.querySelectorAll('.origen-btn').forEach(btn => {
         btn.addEventListener('click', () => {

@@ -36,9 +36,10 @@ try {
     $periodo     = $_GET['periodo'] ?? 'mes_actual';
     $grupo       = isset($_GET['grupo'])       && $_GET['grupo']       !== '' ? $_GET['grupo']       : null;
     $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $canal       = isset($_GET['canal'])       && $_GET['canal']       !== '' ? $_GET['canal']       : null;
     $soloActivas = !$isGrupo && isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
-    if ($isGrupo || $origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
+    if ($isGrupo || $origen !== 'argentina') { $grupo = null; $tipoTienda = null; $canal = null; }
 
     // GRUPO: validar sucursal solicitada (score no recibe sucursal, pero score usa getSucursalesLista)
     // La restricción se aplica en GlobalDashboardDB::grupoFiltro()
@@ -73,7 +74,7 @@ try {
         $desde_prev,  $hasta_prev,
         $desde_prev2, $hasta_prev2,
         $primerDiaMes, $ultimoDiaMes,
-        $grupo, $tipoTienda
+        $grupo, $tipoTienda, $canal
     );
 
     // Nombres de sucursales

@@ -98,7 +98,7 @@ class GlobalDashboardDB
     }
 
     /** Construye el array de params de filtro normalizado para Filters::build(). */
-    private function fp(?int $sucursal, string $vendedor, string $rubro, ?string $grupo, ?string $tipoTienda): array
+    private function fp(?int $sucursal, string $vendedor, string $rubro, ?string $grupo, ?string $tipoTienda, ?string $canal = null): array
     {
         return [
             'sucursal'    => $sucursal,
@@ -106,6 +106,7 @@ class GlobalDashboardDB
             'tipo_tienda' => $tipoTienda,
             'vendedor'    => $vendedor,
             'rubro'       => $rubro,
+            'canal'       => $canal,
             'solo_activas' => $this->soloActivas,
         ];
     }
@@ -127,17 +128,17 @@ class GlobalDashboardDB
     public function getKPIs(
         string $desde, string $hasta,
         ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $cv = $this->campoVendedor;
-        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
 
         // Filtros para la tabla de ventas (alias s) — sucursal + vendedor + rubro
         [$sfS, $pS] = Filters::build($fp, 's', $cv, $this->origen, true, true);
         // Filtros para tickets (alias t) — sucursal + vendedor, sin rubro
         [$sfT, $pT] = Filters::build($fp, 't', $cv, $this->origen, true, false);
-        // Filtros para objetivos (alias o) — solo sucursal, columna NRO_SUCURSAL
-        [$sfO, $pO] = Filters::build($fp, 'o', $cv, $this->origen, false, false, 'NRO_SUCURSAL');
+        // Filtros para objetivos (alias o) — solo sucursal, columna NRO_SUCURSAL; sin CANAL
+        [$sfO, $pO] = Filters::build($fp, 'o', $cv, $this->origen, false, false, 'NRO_SUCURSAL', false);
 
         // Filtro GRUPO (sucursales permitidas)
         [$sfGS, $pGS] = $this->grupoFiltro('s');
@@ -199,9 +200,9 @@ class GlobalDashboardDB
     public function getTicketsProductos(
         string $desde, string $hasta,
         ?int $sucursal = null, string $vendedor = '%',
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda);
+        $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda, $canal);
         [$sfT, $pT]   = Filters::build($fp, 't', $this->campoVendedor, $this->origen, true, false);
         [$sfGT, $pGT] = $this->grupoFiltro('t');
 
@@ -233,9 +234,9 @@ class GlobalDashboardDB
     public function getTicketPromedio2do(
         string $desde, string $hasta,
         ?int $sucursal = null, string $vendedor = '%',
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda);
+        $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda, $canal);
         [$sfTk, $pTk]   = Filters::build($fp, 'tk', $this->campoVendedor, $this->origen, true, false);
         [$sfTt, $pTt]   = Filters::build($fp, 'tt', $this->campoVendedor, $this->origen, true, false);
         [$sfGTk, $pGTk] = $this->grupoFiltro('tk');
@@ -274,10 +275,10 @@ class GlobalDashboardDB
     public function getIncremental(
         string $desde, string $hasta,
         ?int $sucursal = null, string $vendedor = '%',
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda);
-        [$sfP, $pP]   = Filters::build($fp, 'p', $this->campoVendedor, $this->origen, true, false);
+        $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda, $canal);
+        [$sfP, $pP]   = Filters::build($fp, 'p', $this->campoVendedor, $this->origen, true, false, 'NRO_SUCURS', false);
         [$sfGP, $pGP] = $this->grupoFiltro('p');
 
         $row = $this->queryOne("
@@ -305,10 +306,10 @@ class GlobalDashboardDB
     public function getConversion(
         string $desde, string $hasta,
         ?int $sucursal = null,
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda);
-        [$sfI, $pI]   = Filters::build($fp, 'i', $this->campoVendedor, $this->origen, false, false);
+        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
+        [$sfI, $pI]   = Filters::build($fp, 'i', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURS', false);
         [$sfT, $pT]   = Filters::build($fp, 't', $this->campoVendedor, $this->origen, false, false);
         [$sfGI, $pGI] = $this->grupoFiltro('i');
         [$sfGT, $pGT] = $this->grupoFiltro('t');
@@ -352,14 +353,14 @@ class GlobalDashboardDB
     public function getSerieFacturacion(
         string $desde, string $hasta,
         ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
         [$sfS,  $pS]  = Filters::build($fp, 's',  $this->campoVendedor, $this->origen, true,  true);
         [$sfT,  $pT]  = Filters::build($fp, 't',  $this->campoVendedor, $this->origen, true,  false);
         [$sfTk, $pTk] = Filters::build($fp, 'tk', $this->campoVendedor, $this->origen, true,  false);
-        [$sfP,  $pP]  = Filters::build($fp, 'p',  $this->campoVendedor, $this->origen, false, false);
-        [$sfI,  $pI]  = Filters::build($fp, 'ig', $this->campoVendedor, $this->origen, false, false);
+        [$sfP,  $pP]  = Filters::build($fp, 'p',  $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURS', false);
+        [$sfI,  $pI]  = Filters::build($fp, 'ig', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURS', false);
 
         // Filtros GRUPO
         [$sfGS,  $pGS]  = $this->grupoFiltro('s');
@@ -533,9 +534,9 @@ class GlobalDashboardDB
     public function getSerieFacturacionSimple(
         string $desde, string $hasta,
         ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
         [$sfS,  $pS]  = Filters::build($fp, 's', $this->campoVendedor, $this->origen, true, true);
         [$sfGS, $pGS] = $this->grupoFiltro('s');
 
@@ -565,10 +566,10 @@ class GlobalDashboardDB
 
     public function getSerieObjetivo(
         string $desde, string $hasta,
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $fp = $this->fp(null, '%', '%', $grupo, $tipoTienda);
-        [$sfO, $pO]   = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURSAL');
+        $fp = $this->fp(null, '%', '%', $grupo, $tipoTienda, $canal);
+        [$sfO, $pO]   = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURSAL', false);
         [$sfGO, $pGO] = $this->grupoFiltro('o', 'NRO_SUCURSAL');
         $rows = $this->query("
             SELECT CAST(o.FECHA AS DATE) AS fecha, ISNULL(SUM(o.IMPORTE_OBJ), 0) AS objetivo
@@ -592,10 +593,10 @@ class GlobalDashboardDB
         string $desde_act, string $hasta_act,
         string $desde_total, string $hasta_total,
         ?string $grupo = null, ?string $tipoTienda = null,
-        ?int $sucursal = null
+        ?int $sucursal = null, ?string $canal = null
     ): array {
-        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda);
-        [$sfO, $pO]   = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, true, false, 'NRO_SUCURSAL');
+        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
+        [$sfO, $pO]   = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, true, false, 'NRO_SUCURSAL', false);
         [$sfGO, $pGO] = $this->grupoFiltro('o', 'NRO_SUCURSAL');
 
         // Un solo scan con CASE WHEN en lugar de dos queries al servidor vinculado
@@ -631,9 +632,9 @@ class GlobalDashboardDB
         string $desde_act, string $hasta_act,
         string $desde_prev, string $hasta_prev,
         ?string $grupo = null, ?string $tipoTienda = null,
-        ?int $sucursal = null
+        ?int $sucursal = null, ?string $canal = null
     ): array {
-        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda);
+        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
         [$sfS, $pS]   = Filters::build($fp, 's', $this->campoVendedor, $this->origen, true, false);
         [$sfGS, $pGS] = $this->grupoFiltro('s');
 
@@ -712,9 +713,10 @@ class GlobalDashboardDB
         string $vendedor    = '%',
         string $rubro       = '%',
         ?string $grupo      = null,
-        ?string $tipoTienda = null
+        ?string $tipoTienda = null,
+        ?string $canal      = null
     ): array {
-        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
         $cv = $this->campoVendedor;
 
         if ($tipo === 'unidades') {
@@ -882,14 +884,14 @@ class GlobalDashboardDB
         string $desde_prev,   string $hasta_prev,
         string $desde_prev2,  string $hasta_prev2,
         string $primerDiaMes, string $ultimoDiaMes,
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $fp  = $this->fp(null, '%', '%', $grupo, $tipoTienda);
+        $fp  = $this->fp(null, '%', '%', $grupo, $tipoTienda, $canal);
         [$sfS,  $pS]  = Filters::build($fp, 's',  $this->campoVendedor, $this->origen, false, false);
         [$sfT,  $pT]  = Filters::build($fp, 't',  $this->campoVendedor, $this->origen, false, false);
         [$sfTk, $pTk] = Filters::build($fp, 'tk', $this->campoVendedor, $this->origen, false, false);
         [$sfTt, $pTt] = Filters::build($fp, 'tt', $this->campoVendedor, $this->origen, false, false);
-        [$sfP,  $pP]  = Filters::build($fp, 'p',  $this->campoVendedor, $this->origen, false, false);
+        [$sfP,  $pP]  = Filters::build($fp, 'p',  $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURS', false);
 
         // Filtros GRUPO para scoring
         [$sfGS,  $pGS]  = $this->grupoFiltro('s');
@@ -1032,7 +1034,7 @@ class GlobalDashboardDB
 
         // 10. Objetivos pro-rated
         $objPorSuc = $this->getObjetivosPorSucursal(
-            $desde_act, $hasta_act, $primerDiaMes, $ultimoDiaMes, $grupo, $tipoTienda
+            $desde_act, $hasta_act, $primerDiaMes, $ultimoDiaMes, $grupo, $tipoTienda, null, $canal
         );
 
         // ── Combinar en array indexado por NRO_SUCURS ──────────────────────
@@ -1262,7 +1264,7 @@ class GlobalDashboardDB
         string $da, string $ha,
         string $dp, string $hp,
         ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $cv  = $this->campoVendedor;
         $haX = (new DateTime($ha))->modify('+1 day')->format('Y-m-d');
@@ -1270,13 +1272,13 @@ class GlobalDashboardDB
         // Params base: is_a CASE WHEN + is_p CASE WHEN + WHERE dates (8 posiciones)
         $pBase = [$da, $haX, $dp, $hpX, $da, $haX, $dp, $hpX];
 
-        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
 
         [$sfS,  $pS]  = Filters::build($fp, 's',  $cv, $this->origen, true,  true);
         [$sfT,  $pT]  = Filters::build($fp, 't',  $cv, $this->origen, true,  false);
         [$sfTk, $pTk] = Filters::build($fp, 'tk', $cv, $this->origen, true,  false);
-        [$sfP,  $pP]  = Filters::build($fp, 'p',  $cv, $this->origen, false, false);
-        [$sfO,  $pO]  = Filters::build($fp, 'o',  $cv, $this->origen, false, false, 'NRO_SUCURSAL');
+        [$sfP,  $pP]  = Filters::build($fp, 'p',  $cv, $this->origen, false, false, 'NRO_SUCURS', false);
+        [$sfO,  $pO]  = Filters::build($fp, 'o',  $cv, $this->origen, false, false, 'NRO_SUCURSAL', false);
 
         [$sfGS,  $pGS]  = $this->grupoFiltro('s');
         [$sfGT,  $pGT]  = $this->grupoFiltro('t');
@@ -1396,8 +1398,8 @@ class GlobalDashboardDB
 
         // ── Q6+Q7: Ticket promedio 2do producto (INNER JOIN con subquery — separadas) ──
         $noTp2 = ['tickets_con_2do' => 0, 'facturacion_con_2do' => 0, 'ticket_promedio_2do' => 0];
-        try { $tp2a = $this->getTicketPromedio2do($da, $ha, $sucursal, $vendedor, $grupo, $tipoTienda); } catch (Throwable $_) { $tp2a = $noTp2; }
-        try { $tp2p = $this->getTicketPromedio2do($dp, $hp, $sucursal, $vendedor, $grupo, $tipoTienda); } catch (Throwable $_) { $tp2p = $noTp2; }
+        try { $tp2a = $this->getTicketPromedio2do($da, $ha, $sucursal, $vendedor, $grupo, $tipoTienda, $canal); } catch (Throwable $_) { $tp2a = $noTp2; }
+        try { $tp2p = $this->getTicketPromedio2do($dp, $hp, $sucursal, $vendedor, $grupo, $tipoTienda, $canal); } catch (Throwable $_) { $tp2p = $noTp2; }
 
         // Derivadas
         $tA  = (int)($r2['tick_act']  ?? 0);
@@ -1454,16 +1456,16 @@ class GlobalDashboardDB
     public function getKPIsCompletos(
         string $desde, string $hasta,
         ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $noTp2  = ['tickets_con_2do' => 0, 'facturacion_con_2do' => 0, 'ticket_promedio_2do' => 0];
         $noIncr = ['cambios_incr' => 0, 'devoluciones' => 0, 'porc_incremental' => 0];
 
-        $kpi  = $this->getKPIs($desde, $hasta, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
-        $tick = $this->getTicketsProductos($desde, $hasta, $sucursal, $vendedor, $grupo, $tipoTienda);
-        try { $tp2  = $this->getTicketPromedio2do($desde, $hasta, $sucursal, $vendedor, $grupo, $tipoTienda); } catch (Throwable $_) { $tp2  = $noTp2; }
-        try { $incr = $this->getIncremental($desde, $hasta, $sucursal, $vendedor, $grupo, $tipoTienda);      } catch (Throwable $_) { $incr = $noIncr; }
-        try { $mails = $this->getMails($desde, $hasta, $sucursal, $grupo, $tipoTienda);                      } catch (Throwable $_) { $mails = ['mails' => 0]; }
+        $kpi  = $this->getKPIs($desde, $hasta, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
+        $tick = $this->getTicketsProductos($desde, $hasta, $sucursal, $vendedor, $grupo, $tipoTienda, $canal);
+        try { $tp2  = $this->getTicketPromedio2do($desde, $hasta, $sucursal, $vendedor, $grupo, $tipoTienda, $canal); } catch (Throwable $_) { $tp2  = $noTp2; }
+        try { $incr = $this->getIncremental($desde, $hasta, $sucursal, $vendedor, $grupo, $tipoTienda, $canal);       } catch (Throwable $_) { $incr = $noIncr; }
+        try { $mails = $this->getMails($desde, $hasta, $sucursal, $grupo, $tipoTienda, $canal);                       } catch (Throwable $_) { $mails = ['mails' => 0]; }
 
         return [
             'facturacion'         => $kpi['facturacion'],
@@ -1489,9 +1491,9 @@ class GlobalDashboardDB
 
     public function getMails(
         string $desde, string $hasta,
-        ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null
+        ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda);
+        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
         [$sfT, $pT]   = Filters::build($fp, 't', $this->campoVendedor, $this->origen, false, false);
         [$sfGT, $pGT] = $this->grupoFiltro('t');
 
@@ -1685,9 +1687,10 @@ class GlobalDashboardDB
         string $vendedor    = '%',
         string $rubro       = '%',
         ?string $grupo      = null,
-        ?string $tipoTienda = null
+        ?string $tipoTienda = null,
+        ?string $canal      = null
     ): array {
-        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
+        $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
         $cv = $this->campoVendedor;
 
         $mainTable    = 'BI_SALES_SUCURSALES';

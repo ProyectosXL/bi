@@ -34,10 +34,12 @@ try {
     $sucursal   = isset($_GET['sucursal'])   && $_GET['sucursal']   !== '' ? (int)$_GET['sucursal']   : null;
     $grupo      = isset($_GET['grupo'])      && $_GET['grupo']      !== '' ? $_GET['grupo']      : null;
     $tipoTienda = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $canal      = isset($_GET['canal'])      && $_GET['canal']      !== '' ? $_GET['canal']      : null;
 
     if ($isGrupo || $origen !== 'argentina') {
         $grupo      = null;
         $tipoTienda = null;
+        $canal      = null;
     }
 
     // GRUPO: validar sucursal solicitada
@@ -66,8 +68,8 @@ try {
 
     $db = new VendedorasDB($origen);
 
-    $act  = $db->getKPIsVendedoras($desde_act,  $hasta_act,  $sucursal, $rubro, $grupo, $tipoTienda);
-    $prev = $db->getKPIsVendedoras($desde_prev, $hasta_prev, $sucursal, $rubro, $grupo, $tipoTienda);
+    $act  = $db->getKPIsVendedoras($desde_act,  $hasta_act,  $sucursal, $rubro, $grupo, $tipoTienda, $canal);
+    $prev = $db->getKPIsVendedoras($desde_prev, $hasta_prev, $sucursal, $rubro, $grupo, $tipoTienda, $canal);
 
     // Merge prev period fields into act rows
     $prevIdx = [];

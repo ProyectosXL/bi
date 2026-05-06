@@ -94,13 +94,14 @@ class Filters
     /**
      * Combina todos los filtros en un único fragmento WHERE + params.
      *
-     * @param array  $p             Claves opcionales: sucursal, grupo, tipo_tienda, vendedor, rubro
+     * @param array  $p             Claves opcionales: sucursal, grupo, tipo_tienda, vendedor, rubro, canal
      * @param string $alias         Alias de tabla principal
      * @param string $campoVendedor Nombre del campo vendedor (default DESC_VENDEDOR)
      * @param string $origen        Origen de datos
      * @param bool   $incluirVendedor  Incluir filtro vendedor en este alias
      * @param bool   $incluirRubro    Incluir filtro rubro en este alias
      * @param string $sucursalCol   Columna de sucursal (default NRO_SUCURS)
+     * @param bool   $tieneCanal    La tabla tiene campo CANAL; si false usa fallback por NRO_SUCURS
      * @return array{0:string, 1:array} [$sqlFragment, $params]
      */
     public static function build(
@@ -110,7 +111,8 @@ class Filters
         string $origen = 'argentina',
         bool $incluirVendedor = true,
         bool $incluirRubro = false,
-        string $sucursalCol = 'NRO_SUCURS'
+        string $sucursalCol = 'NRO_SUCURS',
+        bool $tieneCanal = true
     ): array {
         $sqls   = [];
         $params = [];
@@ -144,6 +146,24 @@ class Filters
                 SELECT NRO_SUCURSAL
                 FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS
                 WHERE HABILITADO = 1)";
+        }
+
+        // Canal (solo Argentina; vacío = sin filtro)
+        $canal = $p['canal'] ?? null;
+        if (!empty($canal)) {
+            if ($tieneCanal) {
+                if ($canal === 'PROPIOS') {
+                    $sqls[] = "AND {$alias}.CANAL = 'LOCALES PROPIOS'";
+                } elseif ($canal === 'ECOMMERCE') {
+                    $sqls[] = "AND {$alias}.CANAL = 'ECOMMERCE'";
+                }
+            } else {
+                if ($canal === 'PROPIOS') {
+                    $sqls[] = "AND {$alias}.{$sucursalCol} NOT IN (1, 9)";
+                } elseif ($canal === 'ECOMMERCE') {
+                    $sqls[] = "AND {$alias}.{$sucursalCol} IN (1, 9)";
+                }
+            }
         }
 
         return [implode(' ', $sqls), $params];
@@ -184,6 +204,8 @@ class Filters
                              ? $get['tipo_tienda'] : null,
             'vendedor'    => $get['vendedor'] ?? '%',
             'rubro'       => $get['rubro']    ?? '%',
+            'canal'       => ($soloArg && isset($get['canal']) && $get['canal'] !== '')
+                             ? $get['canal'] : null,
         ];
     }
 }

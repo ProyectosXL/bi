@@ -147,6 +147,7 @@ const Dashboard = (() => {
             sucursal    : ($('sel-sucursal')?.value    ?? ''),
             grupo       : cfg.isGrupo ? '' : ($('sel-grupo')?.value       ?? ''),
             tipo_tienda : cfg.isGrupo ? '' : ($('sel-tipo-tienda')?.value ?? ''),
+            canal       : cfg.isGrupo ? '' : ($('sel-canal')?.value       ?? ''),
             solo_activas: (!cfg.isGrupo && isSoloActivas()) ? '1' : '0',
             ...extra
         };
@@ -160,7 +161,7 @@ const Dashboard = (() => {
             }
         }
         // Limpiar vacíos para no enviar param vacío
-        ['sucursal','grupo','tipo_tienda'].forEach(k => { if (!p[k]) delete p[k]; });
+        ['sucursal','grupo','tipo_tienda','canal'].forEach(k => { if (!p[k]) delete p[k]; });
         return p;
     }
 

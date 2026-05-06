@@ -124,6 +124,7 @@ try {
             require_once __DIR__ . '/../class/GlobalDashboardDB.php';
             $grupo_evo      = (!$isGrupo && isset($_GET['grupo'])      && $_GET['grupo']      !== '') ? $_GET['grupo']      : null;
             $tipoTienda_evo = (!$isGrupo && isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '') ? $_GET['tipo_tienda'] : null;
+            $canal_evo      = (!$isGrupo && $origen === 'argentina' && isset($_GET['canal']) && $_GET['canal'] !== '') ? $_GET['canal'] : null;
             $dbGlobal       = new GlobalDashboardDB($origen);
             // Para GRUPO: $_SESSION['tipo'] fue sobreescrito a 'FRANQUICIA'; inyectar sucursales
             // explícitamente para que grupoFiltro() funcione sin leer la sesión.
@@ -132,12 +133,12 @@ try {
             }
             if ($action === 'evolucion_facturacion') {
                 $response['evolucion'] = $dbGlobal->getEvolucionMensualFacturacion(
-                    $sucursal, $vendedor, $rubro, $grupo_evo, $tipoTienda_evo
+                    $sucursal, $vendedor, $rubro, $grupo_evo, $tipoTienda_evo, $canal_evo
                 );
             } else {
                 $tipoEvo = ($action === 'evolucion_unidades') ? 'unidades' : 'tickets';
                 $response['evolucion'] = $dbGlobal->getEvolucionMensual(
-                    $tipoEvo, $sucursal, $vendedor, $rubro, $grupo_evo, $tipoTienda_evo
+                    $tipoEvo, $sucursal, $vendedor, $rubro, $grupo_evo, $tipoTienda_evo, $canal_evo
                 );
             }
             break;

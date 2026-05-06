@@ -29,9 +29,10 @@ try {
     $topRubros   = (int)($_GET['top_rubros'] ?? 15);
     $grupo       = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
     $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $canal       = isset($_GET['canal']) && $_GET['canal'] !== '' ? $_GET['canal'] : null;
     $soloActivas = !$isGrupo && isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
-    if ($isGrupo || $origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
+    if ($isGrupo || $origen !== 'argentina') { $grupo = null; $tipoTienda = null; $canal = null; }
 
     if ($periodo === 'custom') {
         $da = (isset($_GET['desde']) && $_GET['desde'] !== '') ? $_GET['desde'] : date('Y-m-01');
@@ -42,7 +43,7 @@ try {
     }
 
     $db   = new ParticipacionDB($origen);
-    $data = $db->getPivot($desde_act, $hasta_act, $topRubros, $grupo, $tipoTienda);
+    $data = $db->getPivot($desde_act, $hasta_act, $topRubros, $grupo, $tipoTienda, $canal);
 
     // Filtro "solo activas"
     if ($soloActivas && !empty($data['sucursales'])) {

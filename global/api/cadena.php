@@ -28,9 +28,10 @@ try {
     $periodo     = $_GET['periodo']     ?? 'mes_actual';
     $grupo       = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
     $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $canal       = isset($_GET['canal']) && $_GET['canal'] !== '' ? $_GET['canal'] : null;
     $soloActivas = !$isGrupo && isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
-    if ($isGrupo || $origen !== 'argentina') { $grupo = null; $tipoTienda = null; }
+    if ($isGrupo || $origen !== 'argentina') { $grupo = null; $tipoTienda = null; $canal = null; }
 
     if ($periodo === 'custom') {
         $da        = (isset($_GET['desde']) && $_GET['desde'] !== '') ? $_GET['desde'] : date('Y-m-01');
@@ -46,7 +47,7 @@ try {
     }
 
     $db = new CadenaDB($origen);
-    $cadenaData  = $db->getKPIsPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda);
+    $cadenaData  = $db->getKPIsPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda, $canal);
     $sucursales  = $cadenaData['sucursales'];
     $totalesCadena = $cadenaData['totales'];
 

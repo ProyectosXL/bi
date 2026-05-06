@@ -53,6 +53,7 @@ try {
     $sucursal    = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? (int)$_GET['sucursal'] : null;
     $grupo       = isset($_GET['grupo']) && $_GET['grupo'] !== '' ? $_GET['grupo'] : null;
     $tipoTienda  = isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '' ? $_GET['tipo_tienda'] : null;
+    $canal       = isset($_GET['canal']) && $_GET['canal'] !== '' ? $_GET['canal'] : null;
     $soloActivas = !$isGrupo && isset($_GET['solo_activas']) && $_GET['solo_activas'] === '1';
 
     // GRUPO: fijar origen y limpiar filtros que no aplican.
@@ -61,12 +62,14 @@ try {
         $origen     = 'franquicias';
         $grupo      = null;
         $tipoTienda = null;
+        $canal      = null;
     }
 
-    // Solo argentina soporta grupo/tipoTienda
+    // Solo argentina soporta grupo/tipoTienda/canal
     if ($origen !== 'argentina') {
-        $grupo = null;
+        $grupo      = null;
         $tipoTienda = null;
+        $canal      = null;
     }
 
     if ($periodo === 'custom') {
@@ -98,9 +101,9 @@ try {
         $serie_prev = [];
         $serie_cumpl = [];
         try {
-            $serie_act  = $db->getSerieFacturacion($desde_act, $hasta_act, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
-            $serie_prev = $db->getSerieFacturacionSimple($desde_prev, $hasta_prev, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda);
-            $obj_diario = $db->getSerieObjetivo($desde_act, $hasta_act, $grupo, $tipoTienda);
+            $serie_act  = $db->getSerieFacturacion($desde_act, $hasta_act, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
+            $serie_prev = $db->getSerieFacturacionSimple($desde_prev, $hasta_prev, $sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
+            $obj_diario = $db->getSerieObjetivo($desde_act, $hasta_act, $grupo, $tipoTienda, $canal);
             $fact_map   = array_column($serie_act, 'facturacion', 'fecha');
             $cum_fact   = 0.0; $cum_obj = 0.0;
             $cursor     = new DateTime($desde_act);
@@ -130,7 +133,7 @@ try {
     // ── Períodos actual + previo en 7 queries (bulk) vs 14 separadas ───────
     $bulk = $db->getKPIsBulk(
         $desde_act, $hasta_act, $desde_prev, $hasta_prev,
-        $sucursal, $vendedor, $rubro, $grupo, $tipoTienda
+        $sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal
     );
     $full_act  = $bulk['actual'];
     $full_prev = $bulk['previo'];
@@ -160,8 +163,8 @@ try {
     // ── Conversión (puede no existir para todos los orígenes) ──────
     $noConv = ['ingresos' => 0, 'tickets' => 0, 'conversion' => 0];
     try {
-        $conv_act  = $db->getConversion($desde_act,  $hasta_act,  $sucursal, $grupo, $tipoTienda);
-        $conv_prev = $db->getConversion($desde_prev, $hasta_prev, $sucursal, $grupo, $tipoTienda);
+        $conv_act  = $db->getConversion($desde_act,  $hasta_act,  $sucursal, $grupo, $tipoTienda, $canal);
+        $conv_prev = $db->getConversion($desde_prev, $hasta_prev, $sucursal, $grupo, $tipoTienda, $canal);
     } catch (Throwable $_) {
         $conv_act  = $noConv;
         $conv_prev = $noConv;
@@ -174,12 +177,12 @@ try {
 
     // ── Tabla Facturación vs Objetivos por sucursal ─
     try {
-        $factPorSuc = $db->getFacturacionPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda, $sucursal);
+        $factPorSuc = $db->getFacturacionPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda, $sucursal, $canal);
     } catch (Throwable $_) {
         $factPorSuc = [];
     }
     try {
-        $objPorSuc = $db->getObjetivosPorSucursal($desde_act, $hasta_act, $primerDiaMes, $ultimoDiaMes, $grupo, $tipoTienda, $sucursal);
+        $objPorSuc = $db->getObjetivosPorSucursal($desde_act, $hasta_act, $primerDiaMes, $ultimoDiaMes, $grupo, $tipoTienda, $sucursal, $canal);
     } catch (Throwable $_) {
         $objPorSuc = [];
     }

@@ -52,7 +52,7 @@ class VendedorasDB
         return Filters::sucursalesGrupo($suc, $alias);
     }
 
-    private function buildFilter(?int $sucursal, ?string $grupo, ?string $tipoTienda, string $alias): array
+    private function buildFilter(?int $sucursal, ?string $grupo, ?string $tipoTienda, string $alias, ?string $canal = null, bool $tieneCanal = true): array
     {
         $clauses = [];
         $params  = [];
@@ -68,6 +68,15 @@ class VendedorasDB
             $clauses[] = "{$alias}.NRO_SUCURS IN (SELECT sl.NRO_SUCURSAL FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WHERE sl.TIPO_TIENDA = ?)";
             $params[]  = $tipoTienda;
         }
+        if (!empty($canal) && $this->origen === 'argentina') {
+            if ($tieneCanal) {
+                if ($canal === 'PROPIOS') $clauses[] = "{$alias}.CANAL = 'LOCALES PROPIOS'";
+                elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.CANAL = 'ECOMMERCE'";
+            } else {
+                if ($canal === 'PROPIOS') $clauses[] = "{$alias}.NRO_SUCURS NOT IN (1, 9)";
+                elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.NRO_SUCURS IN (1, 9)";
+            }
+        }
         $sql = $clauses ? 'AND ' . implode(' AND ', $clauses) : '';
         return [$sql, $params];
     }
@@ -79,12 +88,12 @@ class VendedorasDB
     public function getKPIsVendedoras(
         string $desde, string $hasta,
         ?int $sucursal = null, string $rubro = '%',
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $cv = $this->campoVendedor;
-        [$sfS, $pS] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 's');
-        [$sfT, $pT] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 't');
-        [$sfP, $pP] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 'p');
+        [$sfS, $pS] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 's', $canal);
+        [$sfT, $pT] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 't', $canal);
+        [$sfP, $pP] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 'p', $canal, false);
 
         [$sfGS, $pGS] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfGS; $pS = array_merge($pS, $pGS);
@@ -203,9 +212,9 @@ class VendedorasDB
      */
     public function getTop10(
         string $desde, string $hasta, string $metrica = 'facturacion',
-        ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null
+        ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $all = $this->getKPIsVendedoras($desde, $hasta, $sucursal, '%', $grupo, $tipoTienda);
+        $all = $this->getKPIsVendedoras($desde, $hasta, $sucursal, '%', $grupo, $tipoTienda, $canal);
         usort($all, fn($a, $b) => $b[$metrica] <=> $a[$metrica]);
         return array_slice($all, 0, 10);
     }
@@ -216,9 +225,9 @@ class VendedorasDB
     public function getVersusVendedoras(
         string $desde, string $hasta,
         string $vendedora_a, string $vendedora_b,
-        ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null
+        ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        $all = $this->getKPIsVendedoras($desde, $hasta, $sucursal, '%', $grupo, $tipoTienda);
+        $all = $this->getKPIsVendedoras($desde, $hasta, $sucursal, '%', $grupo, $tipoTienda, $canal);
         $map = [];
         foreach ($all as $v) {
             $map[$v['vendedora']] = $v;
@@ -234,10 +243,10 @@ class VendedorasDB
      */
     public function getListaVendedoras(
         string $desde, string $hasta,
-        ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null
+        ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $cv = $this->campoVendedor;
-        [$sfS, $pS] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 's');
+        [$sfS, $pS] = $this->buildFilter($sucursal, $grupo, $tipoTienda, 's', $canal);
 
         return $this->query("
             SELECT DISTINCT s.{$cv} AS nombre

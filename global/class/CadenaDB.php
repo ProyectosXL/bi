@@ -54,7 +54,7 @@ class CadenaDB
         return Filters::sucursalesGrupo($suc, $alias, $col);
     }
 
-    private function buildGrupoTipoFilter(string $alias, ?string $grupo, ?string $tipoTienda): array
+    private function buildGrupoTipoFilter(string $alias, ?string $grupo, ?string $tipoTienda, ?string $canal = null, bool $tieneCanal = true): array
     {
         $clauses = [];
         $params  = [];
@@ -65,6 +65,15 @@ class CadenaDB
         if ($tipoTienda !== null && $this->origen === 'argentina') {
             $clauses[] = "{$alias}.NRO_SUCURS IN (SELECT sl.NRO_SUCURSAL FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WHERE sl.TIPO_TIENDA = ?)";
             $params[]  = $tipoTienda;
+        }
+        if (!empty($canal) && $this->origen === 'argentina') {
+            if ($tieneCanal) {
+                if ($canal === 'PROPIOS') $clauses[] = "{$alias}.CANAL = 'LOCALES PROPIOS'";
+                elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.CANAL = 'ECOMMERCE'";
+            } else {
+                if ($canal === 'PROPIOS') $clauses[] = "{$alias}.NRO_SUCURS NOT IN (1, 9)";
+                elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.NRO_SUCURS IN (1, 9)";
+            }
         }
         $sql = $clauses ? 'AND ' . implode(' AND ', $clauses) : '';
         return [$sql, $params];
@@ -78,9 +87,9 @@ class CadenaDB
     public function getKPIsPorSucursal(
         string $desde_act, string $hasta_act,
         string $desde_prev, string $hasta_prev,
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
-        [$sfG, $pG]   = $this->buildGrupoTipoFilter('s', $grupo, $tipoTienda);
+        [$sfG, $pG]   = $this->buildGrupoTipoFilter('s', $grupo, $tipoTienda, $canal);
         [$sfGS, $pGS] = $this->grupoFiltro('s');
         $sfG .= ' ' . $sfGS;
         $pG   = array_merge($pG, $pGS);
@@ -120,7 +129,7 @@ class CadenaDB
         ));
 
         // Tickets por sucursal
-        [$sfGT, $pGT]   = $this->buildGrupoTipoFilter('t', $grupo, $tipoTienda);
+        [$sfGT, $pGT]   = $this->buildGrupoTipoFilter('t', $grupo, $tipoTienda, $canal);
         [$sfGGT, $pGGT] = $this->grupoFiltro('t');
         $sfGT .= ' ' . $sfGGT;
         $pGT   = array_merge($pGT, $pGGT);
@@ -149,7 +158,7 @@ class CadenaDB
         ));
 
         // Tickets 2do y 3er producto por sucursal
-        [$sfGTk, $pGTk]   = $this->buildGrupoTipoFilter('tk', $grupo, $tipoTienda);
+        [$sfGTk, $pGTk]   = $this->buildGrupoTipoFilter('tk', $grupo, $tipoTienda, $canal);
         [$sfGGTk, $pGGTk] = $this->grupoFiltro('tk');
         $sfGTk .= ' ' . $sfGGTk;
         $pGTk   = array_merge($pGTk, $pGGTk);
@@ -166,7 +175,7 @@ class CadenaDB
         ", array_merge([$desde_act, $hasta_act], $pGTk));
 
         // Incremental por sucursal
-        [$sfGP, $pGP]   = $this->buildGrupoTipoFilter('p', $grupo, $tipoTienda);
+        [$sfGP, $pGP]   = $this->buildGrupoTipoFilter('p', $grupo, $tipoTienda, $canal, false);
         [$sfGGP, $pGGP] = $this->grupoFiltro('p');
         $sfGP .= ' ' . $sfGGP;
         $pGP   = array_merge($pGP, $pGGP);
@@ -192,6 +201,10 @@ class CadenaDB
             $sfGO .= " AND o.NRO_SUCURSAL IN (SELECT sl.NRO_SUCURSAL FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WHERE sl.TIPO_TIENDA = ?)";
             $pGO[] = $tipoTienda;
         }
+        if (!empty($canal) && $this->origen === 'argentina') {
+            if ($canal === 'PROPIOS') $sfGO .= " AND o.NRO_SUCURSAL NOT IN (1, 9)";
+            elseif ($canal === 'ECOMMERCE') $sfGO .= " AND o.NRO_SUCURSAL IN (1, 9)";
+        }
         [$sfGGO, $pGGO] = $this->grupoFiltro('o', 'NRO_SUCURSAL');
         $sfGO .= ' ' . $sfGGO;
         $pGO   = array_merge($pGO, $pGGO);
@@ -211,7 +224,7 @@ class CadenaDB
         ", array_merge([$desde_act, $hasta_act, $desde_act, $desde_act, $desde_act, $hasta_act, $desde_act, $desde_act], $pGO));
 
         // Ingresos por sucursal (para conversión)
-        [$sfGI, $pGI]   = $this->buildGrupoTipoFilter('i', $grupo, $tipoTienda);
+        [$sfGI, $pGI]   = $this->buildGrupoTipoFilter('i', $grupo, $tipoTienda, $canal, false);
         [$sfGGI, $pGGI] = $this->grupoFiltro('i');
         $sfGI .= ' ' . $sfGGI;
         $pGI   = array_merge($pGI, $pGGI);
@@ -224,7 +237,7 @@ class CadenaDB
         ", array_merge([$desde_act, $hasta_act], $pGI));
 
         // Tickets con ingreso (para tasa de conversión)
-        [$sfGTC, $pGTC]   = $this->buildGrupoTipoFilter('tc', $grupo, $tipoTienda);
+        [$sfGTC, $pGTC]   = $this->buildGrupoTipoFilter('tc', $grupo, $tipoTienda, $canal);
         [$sfGGTC, $pGGTC] = $this->grupoFiltro('tc');
         $sfGTC .= ' ' . $sfGGTC;
         $pGTC   = array_merge($pGTC, $pGGTC);
@@ -244,7 +257,7 @@ class CadenaDB
         ", array_merge([$desde_act, $hasta_act], $pGTC, [$desde_act, $hasta_act]));
 
         // Mails por sucursal
-        [$sfGMail, $pGMail]   = $this->buildGrupoTipoFilter('tm', $grupo, $tipoTienda);
+        [$sfGMail, $pGMail]   = $this->buildGrupoTipoFilter('tm', $grupo, $tipoTienda, $canal);
         [$sfGGMail, $pGGMail] = $this->grupoFiltro('tm');
         $sfGMail .= ' ' . $sfGGMail;
         $pGMail   = array_merge($pGMail, $pGGMail);

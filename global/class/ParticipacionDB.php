@@ -61,7 +61,7 @@ class ParticipacionDB
     public function getPivot(
         string $desde, string $hasta,
         int $topRubros = 15,
-        ?string $grupo = null, ?string $tipoTienda = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $sfG = '';
         $pG  = [];
@@ -72,6 +72,10 @@ class ParticipacionDB
         if ($tipoTienda !== null && $this->origen === 'argentina') {
             $sfG .= " AND s.NRO_SUCURS IN (SELECT sl.NRO_SUCURSAL FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WHERE sl.TIPO_TIENDA = ?)";
             $pG[] = $tipoTienda;
+        }
+        if (!empty($canal) && $this->origen === 'argentina') {
+            if ($canal === 'PROPIOS') $sfG .= " AND s.CANAL = 'LOCALES PROPIOS'";
+            elseif ($canal === 'ECOMMERCE') $sfG .= " AND s.CANAL = 'ECOMMERCE'";
         }
         [$sfGS, $pGS] = $this->grupoFiltro('s');
         $sfG .= ' ' . $sfGS;
