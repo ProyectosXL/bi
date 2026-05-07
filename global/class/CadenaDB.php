@@ -369,7 +369,7 @@ class CadenaDB
                 'desc_sucursal'    => $descMap[$nro] ?? "Suc {$nro}",
                 'facturacion'      => $factAct,
                 'facturacion_prev' => $factPrev,
-                'var_facturacion'  => $factPrev > 0 ? ($factAct - $factPrev) / $factPrev : 0,
+                'var_facturacion'  => $factPrev > 0 ? ($factAct - $factPrev) / $factPrev : null, // null = sin período previo → muestra guion
                 'objetivo_fecha'   => $objFecha,
                 'objetivo_total'   => $objTotal,
                 'porc_cumplimiento' => $objTotal > 0 ? $factAct / $objTotal : null,
@@ -392,6 +392,67 @@ class CadenaDB
                                         ? ($ticketsConvMap[$nro] ?? 0) / $ingresosMap[$nro]
                                         : null,
             ];
+        }
+
+        // Franquicias sin Tango: agregar filas de las 11 sucursales sin Tango
+        if ($this->origen === 'franquicias') {
+            $existentes = array_flip(array_column($result, 'nro_sucurs'));
+            $rowsST = $this->query("
+                SELECT
+                    NRO_SUCURS,
+                    ISNULL(SUM(CASE WHEN FECHA >= ? AND FECHA < DATEADD(day,1,CAST(? AS DATE))
+                                    THEN IMPORTE ELSE 0 END), 0) AS fact_act,
+                    ISNULL(SUM(CASE WHEN FECHA >= ? AND FECHA < DATEADD(day,1,CAST(? AS DATE))
+                                    THEN IMPORTE ELSE 0 END), 0) AS fact_prev
+                FROM BI_SALES_FRANQUICIAS_SIN_TANGO WITH (NOLOCK)
+                WHERE (
+                    (FECHA >= ? AND FECHA < DATEADD(day,1,CAST(? AS DATE)))
+                    OR (FECHA >= ? AND FECHA < DATEADD(day,1,CAST(? AS DATE)))
+                )
+                GROUP BY NRO_SUCURS
+            ", [$desde_act, $hasta_act, $desde_prev, $hasta_prev,
+                $desde_act, $hasta_act, $desde_prev, $hasta_prev]);
+
+            foreach ($rowsST as $v) {
+                $nro     = (int)$v['NRO_SUCURS'];
+                $factAct = (float)$v['fact_act'];
+                if ($factAct == 0) continue;
+                if (isset($existentes[$nro])) continue;
+
+                $factPrev = (float)$v['fact_prev'];
+                $objFecha = $objMap[$nro]      ?? 0.0;
+                $objTotal = $objTotalMap[$nro] ?? 0.0;
+
+                $result[] = [
+                    'nro_sucurs'            => $nro,
+                    'desc_sucursal'         => $descMap[$nro] ?? "Suc {$nro}",
+                    'facturacion'           => $factAct,
+                    'facturacion_prev'      => $factPrev,
+                    'var_facturacion'       => $factPrev > 0 ? ($factAct - $factPrev) / $factPrev : null, // null = sin período previo → muestra guion
+                    'objetivo_fecha'        => $objFecha,
+                    'objetivo_total'        => $objTotal,
+                    'porc_cumplimiento'     => $objTotal > 0 ? $factAct / $objTotal : null,
+                    'unidades'              => 0.0,
+                    'unidades_prev'         => 0.0,
+                    'tickets'               => 0,
+                    'tickets_prev'          => 0,
+                    'var_tickets'           => 0,
+                    'ticket_promedio'       => 0,
+                    'ticket_prom_prev'      => 0,
+                    'porc_cambios'          => 0,
+                    'porc_incremental'      => 0,
+                    'porc_2do'              => 0,
+                    'porc_3ro'              => 0,
+                    'var_unidades'          => 0,
+                    'mails'                 => 0,
+                    'mails_pct'             => 0,
+                    'ingresos'              => 0,
+                    'conversion'            => null,
+                    'porc_part_facturacion' => 0,
+                ];
+                $cFactAct  += $factAct;
+                $cFactPrev += $factPrev;
+            }
         }
 
         // Calcular participación de facturación por sucursal sobre el total

@@ -47,7 +47,7 @@ const Cadena = (() => {
         { key: 'nro_sucurs',            label: 'Sucursal',
           fmt: r => r._isTotal ? 'TOTAL' : (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(r.nro_sucurs) : 'Suc. ' + r.nro_sucurs),
           val: r => r._isTotal ? 'TOTAL' : (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(r.nro_sucurs) : 'Suc. ' + r.nro_sucurs),
-          xlFmt: 'text',  align: 'left',  sortKey: 'nro_sucurs' },
+          xlFmt: 'text',  align: 'left',  sortKey: 'desc_sucursal' },
         { key: 'objetivo_total',        label: 'Objetivo Mes',
           fmt: r => money(r.objetivo_total),
           val: r => r.objetivo_total != null ? _conv(r.objetivo_total) : null,
@@ -206,7 +206,16 @@ const Cadena = (() => {
         let sorted = [...rows];
         if (_sortCol) {
             sorted.sort((a, b) => {
-                const av = a[_sortCol] ?? 0, bv = b[_sortCol] ?? 0;
+                const av = a[_sortCol], bv = b[_sortCol];
+                // Nulls siempre al final, independientemente del sentido
+                if (av == null && bv == null) return 0;
+                if (av == null) return 1;
+                if (bv == null) return -1;
+                // Strings: localeCompare insensible a acentos y mayúsculas
+                if (typeof av === 'string' || typeof bv === 'string') {
+                    const cmp = String(av).localeCompare(String(bv), 'es', { sensitivity: 'base' });
+                    return _sortAsc ? cmp : -cmp;
+                }
                 return _sortAsc ? av - bv : bv - av;
             });
         }

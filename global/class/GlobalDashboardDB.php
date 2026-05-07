@@ -53,6 +53,26 @@ class GlobalDashboardDB
         return Filters::sucursalesGrupo($suc, $alias, $col);
     }
 
+    /**
+     * FROM clause para BI_SALES_SUCURSALES.
+     * Cuando origen='franquicias' incluye UNION ALL contra BI_SALES_FRANQUICIAS_SIN_TANGO,
+     * exponiendo CANTIDAD=0 y RUBRO='FRANQUICIA_ST' para que los filtros de unidades/rubro
+     * no distorsionen la facturación de las 11 sucursales sin Tango.
+     */
+    private function fromVentasSucursales(): string
+    {
+        if ($this->origen !== 'franquicias') {
+            return 'BI_SALES_SUCURSALES s WITH (NOLOCK)';
+        }
+        return "(
+            SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO
+            FROM BI_SALES_SUCURSALES WITH (NOLOCK)
+            UNION ALL
+            SELECT NRO_SUCURS, FECHA, IMPORTE, 0 AS CANTIDAD, 'FRANQUICIA_ST' AS RUBRO
+            FROM BI_SALES_FRANQUICIAS_SIN_TANGO WITH (NOLOCK)
+        ) s";
+    }
+
     public function __construct(string $origen = 'argentina')
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
@@ -370,6 +390,7 @@ class GlobalDashboardDB
         [$sfGI,  $pGI]  = $this->grupoFiltro('ig');
 
         // Ventas: facturación, unidades, unidades positivas y cambios por día
+        $fromSerie = $this->fromVentasSucursales();
         $rows = $this->query("
             SELECT
                 CAST(s.FECHA AS DATE) AS fecha,
@@ -377,7 +398,7 @@ class GlobalDashboardDB
                 ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                 ISNULL(SUM(CASE WHEN s.CANTIDAD > 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades_positivas,
                 ISNULL(SUM(CASE WHEN s.CANTIDAD < 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
-            FROM BI_SALES_SUCURSALES s
+            FROM {$fromSerie}
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
             GROUP BY CAST(s.FECHA AS DATE)
             ORDER BY 1 ASC
@@ -540,11 +561,12 @@ class GlobalDashboardDB
         [$sfS,  $pS]  = Filters::build($fp, 's', $this->campoVendedor, $this->origen, true, true);
         [$sfGS, $pGS] = $this->grupoFiltro('s');
 
+        $fromSimple = $this->fromVentasSucursales();
         $rows = $this->query("
             SELECT
                 CAST(s.FECHA AS DATE) AS fecha,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$fromSimple}
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE)) {$sfS} {$sfGS}
             GROUP BY CAST(s.FECHA AS DATE)
             ORDER BY 1 ASC
@@ -641,11 +663,12 @@ class GlobalDashboardDB
         // Un solo scan con CASE WHEN en lugar de dos queries separadas
         $haX = (new DateTime($hasta_act))->modify('+1 day')->format('Y-m-d');
         $hpX = (new DateTime($hasta_prev))->modify('+1 day')->format('Y-m-d');
+        $fromFact = $this->fromVentasSucursales();
         $rows = $this->query("
             SELECT s.NRO_SUCURS,
                 ISNULL(SUM(CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN s.IMPORTE ELSE 0 END), 0) AS fact_act,
                 ISNULL(SUM(CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN s.IMPORTE ELSE 0 END), 0) AS fact_prev
-            FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
+            FROM {$fromFact}
             WHERE ((s.FECHA >= ? AND s.FECHA < ?) OR (s.FECHA >= ? AND s.FECHA < ?))
               {$sfS} {$sfGS}
             GROUP BY s.NRO_SUCURS
@@ -660,7 +683,7 @@ class GlobalDashboardDB
                 'nro_sucurs'       => $nro,
                 'facturacion'      => $fact,
                 'facturacion_prev' => $prev,
-                'var_fact'         => $prev > 0 ? ($fact - $prev) / $prev : ($fact > 0 ? 1 : 0),
+                'var_fact'         => $prev > 0 ? ($fact - $prev) / $prev : null,
             ];
         }
         return $result;
@@ -672,6 +695,20 @@ class GlobalDashboardDB
 
     public function getSucursalesLista(bool $soloActivas = false): array
     {
+        // Franquicias: incluir las 11 sin Tango aunque no estén en BI_SALES_SUCURSALES
+        if ($this->origen === 'franquicias') {
+            return $this->query("
+                SELECT DISTINCT sl.NRO_SUCURSAL AS NRO_SUCURS, sl.DESC_SUCURSAL
+                FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
+                WHERE sl.HABILITADO = 1
+                  AND sl.CANAL = 'FRANQUICIAS'
+                  AND (
+                      EXISTS (SELECT 1 FROM BI_SALES_SUCURSALES s WHERE s.NRO_SUCURS = sl.NRO_SUCURSAL)
+                      OR sl.TANGO IS NULL
+                  )
+                ORDER BY sl.DESC_SUCURSAL
+            ");
+        }
         if ($soloActivas) {
             return $this->query("
                 SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL
@@ -1287,6 +1324,7 @@ class GlobalDashboardDB
         [$sfGO,  $pGO]  = $this->grupoFiltro('o', 'NRO_SUCURSAL');
 
         // ── Q1: BI_SALES_SUCURSALES — facturación, unidades, cambios ──────────
+        $fromQ1 = $this->fromVentasSucursales();
         $r1 = $this->queryOne("
             SELECT
                 ISNULL(SUM(CASE WHEN is_a=1 THEN imp ELSE 0 END),0)               AS fact_act,
@@ -1302,7 +1340,7 @@ class GlobalDashboardDB
                     CASE WHEN s.RUBRO IN ('CONCEPTO','PACKAGING') THEN 1 ELSE 0 END AS rg,
                     CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN 1 ELSE 0 END AS is_a,
                     CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN 1 ELSE 0 END AS is_p
-                FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
+                FROM {$fromQ1}
                 WHERE ((s.FECHA >= ? AND s.FECHA < ?) OR (s.FECHA >= ? AND s.FECHA < ?))
                   {$sfS} {$sfGS}
             ) t
@@ -1722,9 +1760,21 @@ class GlobalDashboardDB
             GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)" : '';
         $params = $hasBK ? array_merge($pSAll, $pSAll) : $pSAll;
 
+        // Franquicias sin Tango: agregar rama adicional con BI_SALES_FRANQUICIAS_SIN_TANGO
+        $stUnionSql = '';
+        if ($this->origen === 'franquicias') {
+            $stUnionSql = "
+            UNION ALL
+            SELECT YEAR(s.FECHA) AS anio, MONTH(s.FECHA) AS mes, {$valExpr} AS valor
+            FROM BI_SALES_FRANQUICIAS_SIN_TANGO s WITH (NOLOCK)
+            WHERE s.FECHA IS NOT NULL {$sfSAll}
+            GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)";
+            $params = array_merge($params, $pSAll);
+        }
+
         $rows = $this->query("
             SELECT anio, mes, SUM(valor) AS valor
-            FROM ({$mainSql}{$unionSql}) AS combined
+            FROM ({$mainSql}{$unionSql}{$stUnionSql}) AS combined
             GROUP BY anio, mes
             ORDER BY anio, mes
         ", $params);
