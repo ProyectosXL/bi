@@ -1,0 +1,482 @@
+/* ============================================================
+   /bi/mayoristas/css/mayoristas.css
+   Estilos específicos del dashboard de Ventas Mayoristas.
+   Requiere base.css + components.css.
+   ============================================================ */
+
+/* ── Overlay bloqueante ─────────────────────────────────────── */
+#loading-overlay {
+    position        : fixed;
+    inset           : 0;
+    background      : rgba(240, 242, 247, 0.82);
+    z-index         : 9999;
+    display         : flex;
+    align-items     : center;
+    justify-content : center;
+    backdrop-filter : blur(2px);
+}
+/* El selector ID tiene mayor especificidad que [hidden], hay que forzarlo */
+#loading-overlay[hidden] {
+    display: none;
+}
+.ov-spinner {
+    display     : flex;
+    flex-direction: column;
+    align-items : center;
+    gap         : 12px;
+    color       : var(--text-2);
+    font-size   : .9rem;
+    font-family : var(--font-display);
+    font-weight : 600;
+    letter-spacing: .5px;
+}
+.ov-spinner i {
+    font-size  : 2rem;
+    color      : var(--accent);
+    animation  : spin .8s linear infinite;
+}
+
+/* ── Layout principal ─────────────────────────────────────── */
+.main-content { flex: 1; }
+
+/* ── KPI Grid ─────────────────────────────────────────────── */
+.kpi-grid {
+    display              : grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap                  : 14px;
+}
+
+.kpi-card {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    padding      : 18px 20px;
+    display      : flex;
+    align-items  : flex-start;
+    gap          : 14px;
+    transition   : box-shadow var(--transition), transform var(--transition);
+}
+.kpi-card:hover {
+    box-shadow: 0 4px 20px rgba(26,35,64,0.13);
+    transform : translateY(-1px);
+}
+.kpi-card.skeleton .kpi-value,
+.kpi-card.skeleton .kpi-var { opacity: .35; }
+
+.kpi-icon {
+    width        : 44px;
+    height       : 44px;
+    background   : rgba(0,168,120,.10);
+    border-radius: var(--radius-sm);
+    display      : flex;
+    align-items  : center;
+    justify-content: center;
+    flex-shrink  : 0;
+    font-size    : 1.35rem;
+    color        : var(--accent);
+}
+
+.kpi-body { flex: 1; min-width: 0; }
+
+.kpi-label {
+    font-size     : .72rem;
+    color         : var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight   : 500;
+    white-space   : nowrap;
+}
+
+.kpi-value {
+    font-family  : var(--font-display);
+    font-size    : 1.7rem;
+    font-weight  : 700;
+    color        : var(--text-1);
+    line-height  : 1.1;
+    margin-top   : 3px;
+    white-space  : nowrap;
+    overflow     : hidden;
+    text-overflow: ellipsis;
+}
+
+.kpi-var {
+    font-size  : .8rem;
+    margin-top : 5px;
+    font-weight: 600;
+    display    : flex;
+    align-items: center;
+    gap        : 4px;
+}
+.kpi-var.pos { color: var(--pos); }
+.kpi-var.neg { color: var(--neg); }
+.kpi-var.neu { color: var(--text-3); }
+
+/* ── Rubros chart ─────────────────────────────────────────── */
+.rubros-chart-wrap {
+    display    : flex;
+    align-items: flex-start;
+    gap        : 24px;
+    padding    : 16px 20px;
+    flex-wrap  : wrap;
+}
+/* Contenedor de tamaño fijo: evita que Chart.js expanda el canvas */
+.rubros-pie-container {
+    width     : 240px;
+    height    : 240px;
+    flex-shrink: 0;
+    position  : relative;
+}
+.rubros-legend {
+    flex        : 1;
+    display     : flex;
+    flex-direction: column;
+    gap         : 8px;
+    min-width   : 200px;
+    padding-top : 12px;
+}
+.rubros-legend-item {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+    font-size  : .82rem;
+}
+.rubros-legend-dot {
+    width        : 11px;
+    height       : 11px;
+    border-radius: 50%;
+    flex-shrink  : 0;
+}
+.rubros-legend-name {
+    flex     : 1;
+    color    : var(--text-1);
+    font-weight: 500;
+}
+.rubros-legend-pct {
+    color    : var(--text-2);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: .9rem;
+}
+.rubros-legend-importe {
+    color    : var(--text-3);
+    font-size: .78rem;
+}
+
+/* ── Tabla clientes / comparativa ────────────────────────── */
+.table-wrap table {
+    width          : 100%;
+    border-collapse: collapse;
+    font-size      : .82rem;
+}
+.table-wrap thead th {
+    background    : var(--bg-header);
+    color         : rgba(255,255,255,.92);
+    padding       : 8px 10px;
+    text-align    : left;
+    white-space   : nowrap;
+    font-family   : var(--font-display);
+    font-weight   : 600;
+    font-size     : .82rem;
+    letter-spacing: .3px;
+    cursor        : pointer;
+    user-select   : none;
+    position      : sticky;
+    top           : 0;
+}
+.table-wrap thead th:hover { background: var(--bg-header2); }
+.table-wrap thead th.sort-asc::after  { content: ' ▲'; font-size: .7rem; }
+.table-wrap thead th.sort-desc::after { content: ' ▼'; font-size: .7rem; }
+
+.table-wrap tbody td {
+    padding      : 6px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space  : nowrap;
+    vertical-align: middle;
+}
+.table-wrap tbody tr:hover td { background: var(--bg-card2); }
+
+.table-wrap tfoot td {
+    background : var(--bg-card2);
+    font-weight: 700;
+    border-top : 2px solid var(--border);
+    padding    : 7px 10px;
+    white-space: nowrap;
+}
+
+.col-num { text-align: right; }
+.col-pct { text-align: right; color: var(--text-2); }
+
+/* Barra de participación inline */
+.part-bar-cell { min-width: 120px; }
+.part-bar-wrap {
+    display    : flex;
+    align-items: center;
+    gap        : 6px;
+}
+.part-bar-bg {
+    flex         : 1;
+    height       : 6px;
+    background   : var(--border);
+    border-radius: 3px;
+    overflow     : hidden;
+}
+.part-bar-fill {
+    height       : 100%;
+    background   : var(--accent);
+    border-radius: 3px;
+    transition   : width .4s ease;
+}
+.part-bar-val {
+    font-size  : .78rem;
+    color      : var(--text-2);
+    min-width  : 38px;
+    text-align : right;
+    font-family: var(--font-display);
+}
+
+/* Variación en comparativa */
+.var-pos { color: var(--pos); font-weight: 600; }
+.var-neg { color: var(--neg); font-weight: 600; }
+.var-neu { color: var(--text-3); }
+
+/* ── Evolución ─────────────────────────────────────────────── */
+.evol-toolbar {
+    display    : flex;
+    align-items: center;
+    gap        : 10px;
+    padding    : 4px 0;
+}
+.evol-label {
+    font-size     : .78rem;
+    color         : var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight   : 500;
+}
+.evol-toggle {
+    display      : flex;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow     : hidden;
+}
+.evol-btn {
+    background   : var(--bg-card);
+    border       : none;
+    padding      : 5px 14px;
+    font-size    : .82rem;
+    font-family  : var(--font-display);
+    font-weight  : 600;
+    color        : var(--text-2);
+    cursor       : pointer;
+    transition   : background var(--transition), color var(--transition);
+}
+.evol-btn.active {
+    background: var(--accent);
+    color     : #fff;
+}
+.evol-btn:not(.active):hover {
+    background: var(--bg-card2);
+    color     : var(--text-1);
+}
+.chart-wrap {
+    padding: 16px 20px 20px;
+}
+.chart-wrap canvas { max-height: 320px; }
+
+/* ── Tabla rubros ─────────────────────────────────────────── */
+.tabla-rubros {
+    width          : 100%;
+    border-collapse: collapse;
+    font-size      : .82rem;
+}
+
+/* ── Botón exportar ───────────────────────────────────────── */
+.btn-export {
+    display      : flex;
+    align-items  : center;
+    gap          : 6px;
+    background   : transparent;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color        : var(--text-2);
+    font-size    : .8rem;
+    font-family  : var(--font-display);
+    font-weight  : 600;
+    padding      : 4px 12px;
+    cursor       : pointer;
+    transition   : background var(--transition), color var(--transition), border-color var(--transition);
+}
+.btn-export:hover {
+    background  : #1d6f42;
+    color       : #fff;
+    border-color: #1d6f42;
+}
+
+/* ── Estado vacío ─────────────────────────────────────────── */
+.empty-state {
+    display       : flex;
+    flex-direction: column;
+    align-items   : center;
+    gap           : 10px;
+    padding       : 48px 20px;
+    color         : var(--text-3);
+    font-size     : .9rem;
+    text-align    : center;
+}
+.empty-state i { font-size: 2.5rem; opacity: .4; }
+
+/* ── Error ────────────────────────────────────────────────── */
+.error-state {
+    display    : flex;
+    align-items: center;
+    gap        : 10px;
+    padding    : 16px 20px;
+    background : rgba(220,38,38,.06);
+    border-left: 3px solid var(--neg);
+    color      : var(--neg);
+    font-size  : .85rem;
+    margin     : 12px 16px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* ── Toolbar de la tab Matriz ────────────────────────────── */
+.matriz-toolbar {
+    display    : flex;
+    align-items: center;
+    gap        : 10px;
+    padding    : 6px 0;
+}
+.matriz-toolbar label {
+    font-size     : .78rem;
+    color         : var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight   : 500;
+    display       : flex;
+    align-items   : center;
+    gap           : 5px;
+    white-space   : nowrap;
+}
+.matriz-toolbar select {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding      : 5px 10px;
+    font-size    : .82rem;
+    font-family  : var(--font-body);
+    color        : var(--text-1);
+    cursor       : pointer;
+    min-width    : 220px;
+    transition   : border-color var(--transition);
+}
+.matriz-toolbar select:focus { outline: none; border-color: var(--accent); }
+
+/* ── Selector de año (evolución) ─────────────────────────── */
+.toolbar-select-sm {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding      : 4px 8px;
+    font-size    : .82rem;
+    font-family  : var(--font-body);
+    color        : var(--text-1);
+    cursor       : pointer;
+}
+
+/* ── Matriz CLIENTE × RUBRO ─────────────────────────────── */
+.matriz-wrap { overflow-x: auto; max-height: 70vh; overflow-y: auto; }
+
+.tabla-matriz {
+    width          : max-content;
+    min-width      : 100%;
+    border-collapse: collapse;
+    font-size      : .78rem;
+}
+
+.tabla-matriz thead th {
+    background    : var(--bg-header);
+    color         : rgba(255,255,255,.92);
+    padding       : 7px 8px;
+    text-align    : center;
+    white-space   : nowrap;
+    font-family   : var(--font-display);
+    font-weight   : 600;
+    font-size     : .78rem;
+    letter-spacing: .3px;
+    position      : sticky;
+    top           : 0;
+    z-index       : 2;
+    border-right  : 1px solid rgba(255,255,255,.12);
+}
+.tabla-matriz thead .subheader th {
+    background : var(--bg-header2);
+    font-size  : .7rem;
+    padding    : 4px 6px;
+    font-weight: 500;
+    font-family: var(--font-body);
+}
+
+.tabla-matriz .th-rubro {
+    text-align : left;
+    min-width  : 180px;
+    position   : sticky;
+    left       : 0;
+    z-index    : 3;
+    background : var(--bg-header);
+}
+.tabla-matriz .subheader .th-rubro-sub {
+    position   : sticky;
+    left       : 0;
+    z-index    : 3;
+    background : var(--bg-header2);
+}
+.tabla-matriz .th-total-rubro { min-width: 70px; }
+.tabla-matriz .th-cliente      { min-width: 130px; }
+
+.tabla-matriz tbody td {
+    padding      : 5px 8px;
+    border-bottom: 1px solid var(--border);
+    border-right : 1px solid var(--border);
+    white-space  : nowrap;
+    vertical-align: middle;
+}
+.tabla-matriz .td-rubro {
+    font-weight : 500;
+    color       : var(--text-1);
+    text-align  : left;
+    position    : sticky;
+    left        : 0;
+    background  : var(--bg-card);
+    z-index     : 1;
+    border-right: 2px solid var(--border);
+}
+.tabla-matriz tbody tr:hover td  { background: var(--bg-card2); }
+.tabla-matriz tbody tr:hover .td-rubro { background: var(--bg-card2); }
+
+.tabla-matriz tfoot td {
+    background  : var(--bg-card2);
+    font-weight : 700;
+    border-top  : 2px solid var(--border);
+    padding     : 6px 8px;
+    white-space : nowrap;
+}
+
+/* Header sub para nombre rubro en matriz */
+.header-sub {
+    font-size  : .72rem;
+    color      : var(--text-3);
+    font-weight: 400;
+    font-family: var(--font-body);
+    margin-left: 6px;
+}
+
+/* ── ms-auto util ─────────────────────────────────────────── */
+.ms-auto { margin-left: auto; }
+
+/* ── Responsive ─────────────────────────────────────────────  */
+@media (max-width: 600px) {
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .rubros-chart-wrap canvas { max-width: 100%; }
+    .topbar-meta { display: none; }
+}
