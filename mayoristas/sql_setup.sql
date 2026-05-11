@@ -1,0 +1,172 @@
+-- ============================================================
+-- /bi/mayoristas/sql_setup.sql
+-- Setup completo: índices + vistas para Dashboard Mayoristas
+-- Base: POWER_BI_CONTROL
+-- Tabla: BI_REPORTE_VENTAS_MAYORISTA
+--
+-- Columnas reales:
+--   FECHA, VENDEDOR, CANT_FACTURADA, RUBRO, CATEGORIA,
+--   CLIENTE, C_POSTAL, LOCALIDAD, PROVINCIA, REGION
+-- ============================================================
+
+USE POWER_BI_CONTROL;
+GO
+
+-- ── Índices de performance ──────────────────────────────────────
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = 'IX_MAYORISTAS_FECHA'
+      AND object_id = OBJECT_ID('BI_REPORTE_VENTAS_MAYORISTA')
+)
+    CREATE INDEX IX_MAYORISTAS_FECHA
+        ON BI_REPORTE_VENTAS_MAYORISTA (FECHA)
+        INCLUDE (CANT_FACTURADA, CLIENTE, VENDEDOR, RUBRO, CATEGORIA, REGION);
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = 'IX_MAYORISTAS_CLIENTE'
+      AND object_id = OBJECT_ID('BI_REPORTE_VENTAS_MAYORISTA')
+)
+    CREATE INDEX IX_MAYORISTAS_CLIENTE
+        ON BI_REPORTE_VENTAS_MAYORISTA (CLIENTE)
+        INCLUDE (FECHA, CANT_FACTURADA, VENDEDOR, RUBRO, CATEGORIA);
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = 'IX_MAYORISTAS_VENDEDOR'
+      AND object_id = OBJECT_ID('BI_REPORTE_VENTAS_MAYORISTA')
+)
+    CREATE INDEX IX_MAYORISTAS_VENDEDOR
+        ON BI_REPORTE_VENTAS_MAYORISTA (VENDEDOR)
+        INCLUDE (FECHA, CANT_FACTURADA, CLIENTE, RUBRO, CATEGORIA);
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = 'IX_MAYORISTAS_RUBRO'
+      AND object_id = OBJECT_ID('BI_REPORTE_VENTAS_MAYORISTA')
+)
+    CREATE INDEX IX_MAYORISTAS_RUBRO
+        ON BI_REPORTE_VENTAS_MAYORISTA (RUBRO)
+        INCLUDE (FECHA, CANT_FACTURADA, CLIENTE, VENDEDOR, CATEGORIA);
+GO
+
+-- ── Vista 1: Base plana normalizada ────────────────────────────
+
+IF OBJECT_ID('VW_MAYORISTAS_BASE', 'V') IS NOT NULL
+    DROP VIEW VW_MAYORISTAS_BASE;
+GO
+
+CREATE VIEW VW_MAYORISTAS_BASE AS
+SELECT
+    CAST(FECHA AS DATE)                                  AS FECHA,
+    YEAR(FECHA)                                          AS ANIO,
+    MONTH(FECHA)                                         AS MES,
+    ISNULL(LTRIM(RTRIM(CLIENTE)),    'SIN CLIENTE')      AS CLIENTE,
+    ISNULL(LTRIM(RTRIM(VENDEDOR)),   'SIN VENDEDOR')     AS VENDEDOR,
+    ISNULL(LTRIM(RTRIM(RUBRO)),      'SIN RUBRO')        AS RUBRO,
+    ISNULL(LTRIM(RTRIM(CATEGORIA)),  'SIN CATEGORIA')    AS CATEGORIA,
+    ISNULL(LTRIM(RTRIM(LOCALIDAD)),  '')                 AS LOCALIDAD,
+    ISNULL(LTRIM(RTRIM(PROVINCIA)),  '')                 AS PROVINCIA,
+    ISNULL(LTRIM(RTRIM(REGION)),     '')                 AS REGION,
+    ISNULL(LTRIM(RTRIM(C_POSTAL)),   '')                 AS C_POSTAL,
+    ISNULL(CANT_FACTURADA,            0)                 AS CANT_FACTURADA
+FROM BI_REPORTE_VENTAS_MAYORISTA
+WHERE FECHA IS NOT NULL;
+GO
+
+-- ── Vista 2: Agregada por cliente-rubro-mes ─────────────────────
+
+IF OBJECT_ID('VW_MAYORISTAS_AGREGADA', 'V') IS NOT NULL
+    DROP VIEW VW_MAYORISTAS_AGREGADA;
+GO
+
+CREATE VIEW VW_MAYORISTAS_AGREGADA AS
+SELECT
+    b.ANIO,
+    b.MES,
+    b.CLIENTE,
+    b.VENDEDOR,
+    b.RUBRO,
+    b.CATEGORIA,
+    b.REGION,
+
+    ISNULL(SUM(b.CANT_FACTURADA), 0) AS UNIDADES_TOTAL,
+    COUNT(DISTINCT b.FECHA)          AS DIAS_ACTIVO,
+
+    -- % participación unidades del cliente sobre total global
+    CAST(
+        100.0 * SUM(b.CANT_FACTURADA)
+        / NULLIF(SUM(SUM(b.CANT_FACTURADA)) OVER (), 0)
+    AS DECIMAL(10,4)) AS PORC_PART_UNID_GLOBAL,
+
+    -- % participación del rubro dentro del mismo cliente
+    CAST(
+        100.0 * SUM(b.CANT_FACTURADA)
+        / NULLIF(SUM(SUM(b.CANT_FACTURADA)) OVER (PARTITION BY b.CLIENTE), 0)
+    AS DECIMAL(10,4)) AS PORC_RUBRO_EN_CLIENTE
+
+FROM VW_MAYORISTAS_BASE b
+GROUP BY
+    b.ANIO, b.MES,
+    b.CLIENTE, b.VENDEDOR,
+    b.RUBRO, b.CATEGORIA, b.REGION;
+GO
+
+-- ── Vista 3: Comparativa actual vs año anterior ─────────────────
+-- Año dinámico vía MAX(ANIO). SUM(CASE WHEN ...) para pivote.
+
+IF OBJECT_ID('VW_MAYORISTAS_COMPARATIVA', 'V') IS NOT NULL
+    DROP VIEW VW_MAYORISTAS_COMPARATIVA;
+GO
+
+CREATE VIEW VW_MAYORISTAS_COMPARATIVA AS
+WITH MaxAnio AS (
+    SELECT MAX(ANIO) AS ANIO_ACT, MAX(ANIO) - 1 AS ANIO_PREV
+    FROM VW_MAYORISTAS_BASE
+)
+SELECT
+    b.CLIENTE,
+    b.VENDEDOR,
+    b.RUBRO,
+    b.MES,
+
+    ISNULL(SUM(CASE WHEN b.ANIO = ma.ANIO_ACT  THEN b.CANT_FACTURADA ELSE 0 END), 0) AS UNIDADES_ACT,
+    ISNULL(SUM(CASE WHEN b.ANIO = ma.ANIO_PREV THEN b.CANT_FACTURADA ELSE 0 END), 0) AS UNIDADES_PREV,
+
+    CAST(
+        CASE
+            WHEN SUM(CASE WHEN b.ANIO = ma.ANIO_PREV THEN b.CANT_FACTURADA ELSE 0 END) = 0 THEN NULL
+            ELSE (
+                SUM(CASE WHEN b.ANIO = ma.ANIO_ACT  THEN b.CANT_FACTURADA ELSE 0 END)
+              - SUM(CASE WHEN b.ANIO = ma.ANIO_PREV THEN b.CANT_FACTURADA ELSE 0 END)
+            ) / NULLIF(ABS(SUM(CASE WHEN b.ANIO = ma.ANIO_PREV THEN b.CANT_FACTURADA ELSE 0 END)), 0)
+        END
+    AS DECIMAL(10,4)) AS VAR_UNIDADES,
+
+    ma.ANIO_ACT,
+    ma.ANIO_PREV
+
+FROM VW_MAYORISTAS_BASE b
+CROSS JOIN MaxAnio ma
+WHERE b.ANIO IN (ma.ANIO_ACT, ma.ANIO_PREV)
+GROUP BY
+    b.CLIENTE, b.VENDEDOR, b.RUBRO, b.MES,
+    ma.ANIO_ACT, ma.ANIO_PREV;
+GO
+
+-- ── Verificación ────────────────────────────────────────────────
+/*
+SELECT COUNT(*) AS total_base        FROM VW_MAYORISTAS_BASE;
+SELECT COUNT(*) AS total_agregada    FROM VW_MAYORISTAS_AGREGADA;
+SELECT COUNT(*) AS total_comparativa FROM VW_MAYORISTAS_COMPARATIVA;
+
+-- Validar que % participación rubro por cliente ≈ 100%
+SELECT CLIENTE, SUM(PORC_RUBRO_EN_CLIENTE) AS total_pct
+FROM VW_MAYORISTAS_AGREGADA
+GROUP BY CLIENTE
+HAVING ABS(SUM(PORC_RUBRO_EN_CLIENTE) - 100) > 1;  -- debe devolver 0 filas
+*/
