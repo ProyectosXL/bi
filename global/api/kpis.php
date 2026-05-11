@@ -91,10 +91,6 @@ try {
     $db = new GlobalDashboardDB($origen);
     if ($soloActivas) $db->setSoloActivas(true);
 
-    // Instancia benchmark: cadena completa franquicias, sin filtro de grupo
-    $dbBench = new GlobalDashboardDB($origen);
-    if ($isGrupo) $dbBench->setIgnorarFiltroGrupo(true);
-
     // ── Endpoint: serie para sparklines (carga diferida desde JS) ──────────
     if (($_GET['action'] ?? '') === 'serie') {
         $serie_act  = [];
@@ -127,6 +123,53 @@ try {
         exit;
     }
 
+    // ── Endpoint diferido: benchmark cadena completa ──────────────────────
+    if (($_GET['action'] ?? '') === 'benchmark') {
+        $noBench = ['ticket_promedio' => 0, 'ticket_promedio_2do' => 0,
+                    'porc_2do' => 0, 'porc_3ro' => 0,
+                    'porc_cambios' => 0, 'porc_incremental' => 0];
+        if ($isGrupo) {
+            $bench = $noBench;
+        } else {
+            $dbBench = new GlobalDashboardDB($origen);
+            try {
+                $bench = $dbBench->getKPIsCompletos($desde_act, $hasta_act, null, '%', '%', null, null);
+            } catch (Throwable $_) {
+                $bench = $noBench;
+            }
+        }
+        ob_clean();
+        echo json_encode(['ok' => true, 'benchmark' => $bench],
+            JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
+        exit;
+    }
+
+    // ── Endpoint diferido: conversión ──────────────────────────────────────
+    if (($_GET['action'] ?? '') === 'conversion') {
+        $noConv = ['ingresos' => 0, 'tickets' => 0, 'conversion' => 0];
+        if ($origen === 'franquicias') {
+            $conv_act = $noConv; $conv_prev = $noConv;
+        } else {
+            $dbConv = new GlobalDashboardDB($origen);
+            if ($soloActivas) $dbConv->setSoloActivas(true);
+            try {
+                $conv_act  = $dbConv->getConversion($desde_act,  $hasta_act,  $sucursal, $grupo, $tipoTienda, $canal);
+                $conv_prev = $dbConv->getConversion($desde_prev, $hasta_prev, $sucursal, $grupo, $tipoTienda, $canal);
+            } catch (Throwable $_) {
+                $conv_act = $noConv; $conv_prev = $noConv;
+            }
+        }
+        $varFn = fn($a, $p) => $p != 0 ? ($a - $p) / $p : ($a > 0 ? 1 : 0);
+        ob_clean();
+        echo json_encode([
+            'ok'       => true,
+            'actual'   => ['ingresos' => $conv_act['ingresos'],  'conversion' => $conv_act['conversion']],
+            'previo'   => ['ingresos' => $conv_prev['ingresos'], 'conversion' => $conv_prev['conversion']],
+            'variacion' => ['conversion' => $varFn($conv_act['conversion'], $conv_prev['conversion'])],
+        ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
+        exit;
+    }
+
     // Cotización dólar (siempre desde argentina, no depende del origen)
     $cotizacion = (new GlobalDashboardDB('argentina'))->getCotizacionDolar();
 
@@ -145,29 +188,6 @@ try {
     } else {
         $primerDiaMes = $desde_act;
         $ultimoDiaMes = $hasta_act;
-    }
-
-    // ── Benchmark (cadena completa sin filtros de sucursal/grupo/tipoTienda) ──
-    $noBench = ['ticket_promedio' => 0, 'ticket_promedio_2do' => 0, 'porc_2do' => 0, 'porc_3ro' => 0, 'porc_cambios' => 0, 'porc_incremental' => 0];
-    // Benchmark: no aplica para GRUPO (solo ven su grupo, no la cadena completa)
-    if ($isGrupo) {
-        $full_bench = $noBench;
-    } else {
-        try {
-            $full_bench = $dbBench->getKPIsCompletos($desde_act, $hasta_act, null, '%', '%', null, null);
-        } catch (Throwable $_) {
-            $full_bench = $noBench;
-        }
-    }
-
-    // ── Conversión (puede no existir para todos los orígenes) ──────
-    $noConv = ['ingresos' => 0, 'tickets' => 0, 'conversion' => 0];
-    try {
-        $conv_act  = $db->getConversion($desde_act,  $hasta_act,  $sucursal, $grupo, $tipoTienda, $canal);
-        $conv_prev = $db->getConversion($desde_prev, $hasta_prev, $sucursal, $grupo, $tipoTienda, $canal);
-    } catch (Throwable $_) {
-        $conv_act  = $noConv;
-        $conv_prev = $noConv;
     }
 
     // Serie cargada de forma diferida desde JS (?action=serie)
@@ -253,8 +273,6 @@ try {
             'porc_2do'           => $full_act['porc_2do'],
             'porc_3ro'           => $full_act['porc_3ro'],
             'porc_incremental'   => $full_act['porc_incremental'],
-            'ingresos'           => $conv_act['ingresos'],
-            'conversion'         => $conv_act['conversion'],
             'ticket_promedio_2do' => $full_act['ticket_promedio_2do'],
             'tickets_con_2do'    => $full_act['tickets_con_2do'],
             'mails'              => $full_act['mails'],
@@ -269,8 +287,6 @@ try {
             'porc_2do'           => $full_prev['porc_2do'],
             'porc_3ro'           => $full_prev['porc_3ro'],
             'porc_incremental'   => $full_prev['porc_incremental'],
-            'ingresos'           => $conv_prev['ingresos'],
-            'conversion'         => $conv_prev['conversion'],
             'ticket_promedio_2do' => $full_prev['ticket_promedio_2do'],
             'mails'              => $full_prev['mails'],
         ],
@@ -284,17 +300,8 @@ try {
             'porc_3ro'           => $full_act['porc_3ro'] - $full_prev['porc_3ro'],
             'porc_cambios'       => $full_act['porc_cambios'] - $full_prev['porc_cambios'],
             'porc_incremental'   => $full_act['porc_incremental'] - $full_prev['porc_incremental'],
-            'conversion'         => $var($conv_act['conversion'], $conv_prev['conversion']),
             'ticket_promedio_2do' => $var($full_act['ticket_promedio_2do'], $full_prev['ticket_promedio_2do']),
             'mails'              => $var($full_act['mails'], $full_prev['mails']),
-        ],
-        'benchmark' => [
-            'ticket_promedio'     => $full_bench['ticket_promedio'],
-            'ticket_promedio_2do' => $full_bench['ticket_promedio_2do'],
-            'porc_2do'            => $full_bench['porc_2do'],
-            'porc_3ro'            => $full_bench['porc_3ro'],
-            'porc_cambios'        => $full_bench['porc_cambios'],
-            'porc_incremental'    => $full_bench['porc_incremental'],
         ],
         'serie' => [
             'actual'       => $serie_act,

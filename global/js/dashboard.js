@@ -1141,7 +1141,7 @@ const Dashboard = (() => {
 
     /* ── KPIs ────────────────────────────────── */
     function renderKPIs(d) {
-        const a = d.actual, p = d.previo, v = d.variacion, b = d.benchmark ?? {};
+        const a = d.actual, p = d.previo, v = d.variacion;
 
         // Ventas
         setText('fact-act',  fmt.moneyK(a.facturacion));
@@ -1163,37 +1163,43 @@ const Dashboard = (() => {
         setVar ('tickets-var',  v.tickets);
         setText('tickets-prev', fmt.num(p.tickets));
 
-        // Conversión
-        setText('conv-act',     fmt.pct(a.conversion));
-        setVar ('conv-var',     v.conversion);
-        setText('conv-prev',    fmt.pct(p.conversion));
-        setText('conv-ingresos', fmt.num(a.ingresos));
-
         // KPI cards
         setText('card-tprom-val',   fmt.money(a.ticket_promedio));
         setKpiVar('card-tprom-var', v.ticket_promedio,     fmt.money(p.ticket_promedio),     fmt.money(a.ticket_promedio));
-        setText('card-tprom-bench', fmt.money(b.ticket_promedio));
 
         setText('card-tp2do-val',   fmt.money(a.ticket_promedio_2do));
         setKpiVar('card-tp2do-var', v.ticket_promedio_2do, fmt.money(p.ticket_promedio_2do), fmt.money(a.ticket_promedio_2do));
-        setText('card-tp2do-bench', fmt.money(b.ticket_promedio_2do));
 
         setText('card-t2do-val',    fmt.pct(a.porc_2do));
         setVarDiff('card-t2do-var', v.porc_2do,         false, fmt.pct(p.porc_2do),         fmt.pct(a.porc_2do));
-        setText('card-t2do-bench',  fmt.pct(b.porc_2do));
 
         setText('card-t3ro-val',    fmt.pct(a.porc_3ro));
         setVarDiff('card-t3ro-var', v.porc_3ro,         false, fmt.pct(p.porc_3ro),         fmt.pct(a.porc_3ro));
-        setText('card-t3ro-bench',  fmt.pct(b.porc_3ro));
 
         setText('card-cambios-val',    fmt.pct(a.porc_cambios));
         setVarDiff('card-cambios-var', v.porc_cambios,   true,  fmt.pct(p.porc_cambios),     fmt.pct(a.porc_cambios));
-        setText('card-cambios-bench',  fmt.pct(b.porc_cambios));
 
         setText('card-incr-val',    fmt.pct(a.porc_incremental));
         setVarDiff('card-incr-var', v.porc_incremental, false, fmt.pct(p.porc_incremental),  fmt.pct(a.porc_incremental));
-        setText('card-incr-bench',  fmt.pct(b.porc_incremental));
+    }
 
+    /* ── Benchmark diferido (?action=benchmark) ──────────────────────────── */
+    function renderBenchmark(b) {
+        setText('card-tprom-bench',   fmt.money(b.ticket_promedio));
+        setText('card-tp2do-bench',   fmt.money(b.ticket_promedio_2do));
+        setText('card-t2do-bench',    fmt.pct(b.porc_2do));
+        setText('card-t3ro-bench',    fmt.pct(b.porc_3ro));
+        setText('card-cambios-bench', fmt.pct(b.porc_cambios));
+        setText('card-incr-bench',    fmt.pct(b.porc_incremental));
+    }
+
+    /* ── Conversión diferida (?action=conversion) ────────────────────────── */
+    function renderConversion(cd) {
+        const a = cd.actual ?? {}, p = cd.previo ?? {}, v = cd.variacion ?? {};
+        setText('conv-act',      fmt.pct(a.conversion));
+        setVar ('conv-var',      v.conversion);
+        setText('conv-prev',     fmt.pct(p.conversion));
+        setText('conv-ingresos', fmt.num(a.ingresos));
     }
 
     /* ── Sparklines (carga diferida desde ?action=serie) ─────────────── */
@@ -1382,7 +1388,9 @@ const Dashboard = (() => {
     }
 
     /* ── Moneda toggle ───────────────────────── */
-    let _lastKpiData = null;
+    let _lastKpiData  = null;
+    let _lastBenchData = null;
+    let _lastConvData  = null;
 
     document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('#moneda-toggle .moneda-btn').forEach(btn => {
@@ -1395,6 +1403,8 @@ const Dashboard = (() => {
                     renderKPIs(_lastKpiData);
                     renderTablaSucursales(_lastKpiData.tabla_sucursales);
                 }
+                if (_lastBenchData) renderBenchmark(_lastBenchData);
+                if (_lastConvData)  renderConversion(_lastConvData);
             });
         });
     });
@@ -1414,6 +1424,12 @@ const Dashboard = (() => {
             // Async — no bloquean el render inicial
             apiFetch('kpis.php', { action: 'serie' })
                 .then(sd => { if (sd?.serie) renderSparklines(sd.serie); })
+                .catch(() => {});
+            apiFetch('kpis.php', { action: 'benchmark' })
+                .then(bd => { if (bd?.benchmark) { _lastBenchData = bd.benchmark; renderBenchmark(bd.benchmark); } })
+                .catch(() => {});
+            apiFetch('kpis.php', { action: 'conversion' })
+                .then(cd => { if (cd) { _lastConvData = cd; renderConversion(cd); } })
                 .catch(() => {});
             loadDonuts();
             MediosPago.loadAll();
