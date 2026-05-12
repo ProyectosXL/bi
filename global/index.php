@@ -215,6 +215,9 @@ $ultimaAct = date('d/m/Y H:i:s');
             <i class="bi bi-trophy"></i>&nbsp; Ranking
         </button>
         <?php endif; ?>
+        <button class="tab-btn" id="tab-btn-franquicias-detalle" role="tab" aria-controls="tab-franquicias-detalle" aria-selected="false" style="display:none">
+            <i class="bi bi-calendar3"></i>&nbsp; Venta día por día
+        </button>
         <button class="tab-reload-btn" id="btn-reload-tab" title="Recargar pestaña">
             <i class="bi bi-arrow-clockwise"></i>
         </button>
@@ -921,6 +924,25 @@ $ultimaAct = date('d/m/Y H:i:s');
     <!-- /tab-ranking -->
     <?php endif; ?>
 
+    <!-- ══ PESTAÑA: FRANQUICIAS DETALLE (Venta día por día) ════════════ -->
+    <div id="tab-franquicias-detalle" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-franquicias-detalle">
+        <main class="dash-content">
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-calendar3"></i> Venta Día por Día — Franquicias
+                    <div style="margin-left:auto; display:flex; gap:10px;">
+                        <button id="btn-export-franquicias-detalle" class="btn-volver" style="background:#16a34a">
+                            <i class="bi bi-file-earmark-excel"></i> Exportar
+                        </button>
+                    </div>
+                </div>
+                <div id="franquicias-detalle-wrap" style="overflow-x:auto; padding:12px">
+                    <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
     <!-- ══ MODAL EVOLUCIÓN MENSUAL ══════════════════════════════════════ -->
     <div id="evolucion-modal-overlay" style="display:none" class="spark-modal-overlay">
         <div class="spark-modal" style="width:min(900px,96vw);max-height:92vh">
@@ -976,6 +998,7 @@ $jsFiles = [
     '/bi/global/js/participacion.js',
     '/bi/global/js/vendedoras.js',
     '/bi/global/js/ranking.js',
+    '/bi/global/js/franquicias_detalle.js',
 ];
 foreach ($jsFiles as $f):
     $v = @filemtime($_SERVER['DOCUMENT_ROOT'] . $f) ?: 1;
@@ -1006,9 +1029,10 @@ window.BI_CONFIG = {
         { btn: 'tab-btn-participacion',  pane: 'tab-participacion',  name: 'participacion' },
         { btn: 'tab-btn-vendedoras',     pane: 'tab-vendedoras',     name: 'vendedoras'    },
         { btn: 'tab-btn-ranking',        pane: 'tab-ranking',        name: 'ranking'       },
+        { btn: 'tab-btn-franquicias-detalle', pane: 'tab-franquicias-detalle', name: 'franquiciasDetalle' },
     ].filter(t => document.getElementById(t.btn) && document.getElementById(t.pane));
 
-    const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false };
+    const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false, franquiciasDetalle: false };
 
     const loaders = {
         kpis         : () => Dashboard.loadAll(),
@@ -1018,9 +1042,14 @@ window.BI_CONFIG = {
         participacion: () => Participacion.loadAll(),
         vendedoras   : () => Vendedoras.loadAll(),
         ranking      : () => Ranking.loadAll(),
+        franquiciasDetalle: () => FranquiciasDetalle.loadAll(),
     };
 
     function loadTab(name) {
+        // Si cargamos una pestaña de detalle, ocultamos el spinner global para que no bloquee la interfaz
+        if (name !== 'kpis') {
+            Dashboard.setLoading(false);
+        }
         if (loaded[name]) return Promise.resolve();
         loaded[name] = true;
         return loaders[name]?.() ?? Promise.resolve();
@@ -1049,6 +1078,9 @@ window.BI_CONFIG = {
             const el = document.getElementById(id);
             if (el) el.style.display = isAr ? '' : 'none';
         });
+        const isFran = (activeBtn?.dataset.origen ?? '') === 'franquicias';
+        const tabBtnFran = document.getElementById('tab-btn-franquicias-detalle');
+        if (tabBtnFran) tabBtnFran.style.display = isFran ? '' : 'none';
     }
     document.querySelectorAll('.origen-btn').forEach(btn => {
         btn.addEventListener('click', () => {

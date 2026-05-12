@@ -1281,9 +1281,15 @@ const Dashboard = (() => {
     }
 
     /* ── Loading state ───────────────────────── */
-    function setLoading(on) {
+    function setLoading(on, msg = 'Cargando datos...') {
+        // Si intentamos activar el loading pero no estamos en la pestaña de KPIs, lo ignoramos
+        // (a menos que sea un mensaje genérico no relacionado a KPIs)
+        if (on && msg.includes('KPIs') && !document.getElementById('tab-kpis')?.classList.contains('active')) {
+            return;
+        }
+
         document.body.classList.toggle('is-loading', on);
-        if (on) Spinner.show('Cargando KPIs...');
+        if (on) Spinner.show(msg);
         else    Spinner.hide();
     }
 
@@ -1411,7 +1417,8 @@ const Dashboard = (() => {
 
     /* ── API principal ───────────────────────── */
     async function loadAll() {
-        setLoading(true);
+        if (!document.getElementById('tab-kpis')?.classList.contains('active')) return;
+        setLoading(true, 'Cargando KPIs...');
         try {
             const d = await apiFetch('kpis.php');
             _lastKpiData  = d;
@@ -1447,6 +1454,7 @@ const Dashboard = (() => {
         isSoloActivas, getSucursalesActivasIds,
         convertir, convertirConFecha, moneyPrefix,
         getTCCParaMes, getMoneda: () => _moneda,
+        apiFetch, fmt, setLoading
     };
 })();
 

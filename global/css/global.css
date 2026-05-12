@@ -1056,3 +1056,34 @@
     color     : #fff;
     border-color: rgba(255,255,255,0.5);
 }
+/* ── Matrix Table (Venta día por día) ─────────────────── */
+.rk-detalle-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.rk-detalle-table th, 
+.rk-detalle-table td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+}
+.rk-detalle-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-header);
+    color: #fff;
+}
+.rk-detalle-table tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+.rk-detalle-table .text-pos { color: var(--pos, #22c55e); font-weight: 600; }
+.rk-detalle-table .text-neg { color: var(--neg, #ef4444); font-weight: 600; }
+
+.analisis-error {
+    padding: 24px;
+    text-align: center;
+    color: var(--neg);
+    font-weight: 600;
+}
