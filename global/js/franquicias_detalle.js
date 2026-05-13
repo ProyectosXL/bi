@@ -61,16 +61,15 @@ const FranquiciasDetalle = (function () {
                 <tbody>
         `;
 
-        // Filas por día
         _state.dias.forEach(d => {
-            html += `<tr><td style="position:sticky; left:0; z-index:5; background:var(--bg-card2); font-weight:600">${d.label}</td>`;
+            html += `<tr><td style="position:sticky; left:0; z-index:5; background:var(--bg-card2); font-weight:600" data-t="s">${d.label}</td>`;
             let totalDia = 0;
             _state.sucursales.forEach(s => {
                 const val = _state.data[s.nro]?.[d.dia] || 0;
                 totalDia += val;
-                html += `<td style="text-align:right">${val > 0 ? Dashboard.fmt.money(val) : '—'}</td>`;
+                html += `<td style="text-align:right" data-t="n" data-v="${val}">${val > 0 ? Dashboard.fmt.money(val) : '—'}</td>`;
             });
-            html += `<td style="text-align:right; font-weight:700; background:rgba(255,255,255,0.05)">${totalDia > 0 ? Dashboard.fmt.money(totalDia) : '—'}</td></tr>`;
+            html += `<td style="text-align:right; font-weight:700; background:rgba(255,255,255,0.05)" data-t="n" data-v="${totalDia}">${totalDia > 0 ? Dashboard.fmt.money(totalDia) : '—'}</td></tr>`;
         });
 
         // Fila de TOTALES
@@ -86,9 +85,9 @@ const FranquiciasDetalle = (function () {
             let totalSuc = 0;
             Object.values(_state.data[s.nro] || {}).forEach(v => totalSuc += v);
             totalGeneral += totalSuc;
-            html += `<td style="text-align:right">${Dashboard.fmt.money(totalSuc)}</td>`;
+            html += `<td style="text-align:right" data-t="n" data-v="${totalSuc}">${Dashboard.fmt.money(totalSuc)}</td>`;
         });
-        html += `<td style="text-align:right">${Dashboard.fmt.money(totalGeneral)}</td></tr>`;
+        html += `<td style="text-align:right" data-t="n" data-v="${totalGeneral}">${Dashboard.fmt.money(totalGeneral)}</td></tr>`;
 
         // Fila de PERÍODO PREVIO
         html += `
@@ -99,9 +98,9 @@ const FranquiciasDetalle = (function () {
         _state.sucursales.forEach(s => {
             const valPrev = _state.prevTotals[s.nro] || 0;
             totalPrevGeneral += valPrev;
-            html += `<td style="text-align:right">${Dashboard.fmt.money(valPrev)}</td>`;
+            html += `<td style="text-align:right" data-t="n" data-v="${valPrev}">${Dashboard.fmt.money(valPrev)}</td>`;
         });
-        html += `<td style="text-align:right">${Dashboard.fmt.money(totalPrevGeneral)}</td></tr>`;
+        html += `<td style="text-align:right" data-t="n" data-v="${totalPrevGeneral}">${Dashboard.fmt.money(totalPrevGeneral)}</td></tr>`;
 
         // Fila de CRECIMIENTO
         html += `
@@ -114,11 +113,11 @@ const FranquiciasDetalle = (function () {
             const valPrev = _state.prevTotals[s.nro] || 0;
             const growth = valPrev > 0 ? (totalSuc - valPrev) / valPrev : (totalSuc > 0 ? 1 : 0);
             const cls = growth >= 0 ? 'text-pos' : 'text-neg';
-            html += `<td style="text-align:right" class="${cls}">${Dashboard.fmt.pct(growth)}</td>`;
+            html += `<td style="text-align:right" class="${cls}" data-t="n" data-v="${growth}">${Dashboard.fmt.pct(growth)}</td>`;
         });
         const totalGrowth = totalPrevGeneral > 0 ? (totalGeneral - totalPrevGeneral) / totalPrevGeneral : (totalGeneral > 0 ? 1 : 0);
         const clsGen = totalGrowth >= 0 ? 'text-pos' : 'text-neg';
-        html += `<td style="text-align:right" class="${clsGen}">${Dashboard.fmt.pct(totalGrowth)}</td></tr>`;
+        html += `<td style="text-align:right" class="${clsGen}" data-t="n" data-v="${totalGrowth}">${Dashboard.fmt.pct(totalGrowth)}</td></tr>`;
 
         html += `
                 </tfoot>

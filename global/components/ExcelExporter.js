@@ -101,6 +101,42 @@ const ExcelExporter = (() => {
         XLSX.writeFile(wb, fname);
     }
 
+    /* ── Exporta una tabla HTML directamente ──────────── */
+    function exportTable(tableEl, filename) {
+        if (typeof XLSX === 'undefined') {
+            alert('La librería de Excel no está cargada aún. Intentá de nuevo en unos segundos.');
+            return;
+        }
+
+        const ctx   = _getContext();
+        const today = new Date().toISOString().slice(0, 10);
+        const fname = `${filename}_${today}.xlsx`;
+
+        const title = filename.split('_').join(' ');
+
+        const wsData = [
+            [title],
+            [`Período: ${ctx.period}`],
+            [ctx.filters],
+            []
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        
+        /* Agregamos la tabla a partir de la fila 5 */
+        XLSX.utils.sheet_add_dom(ws, tableEl, { origin: "A5" });
+
+        /* Ajuste de anchos básico */
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        ws['!cols'] = [];
+        for (let i = 0; i <= range.e.c; i++) {
+            ws['!cols'].push({ wch: 15 });
+        }
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+        XLSX.writeFile(wb, fname);
+    }
+
     /* ── Inserta botón Excel en el elemento header recibido ── */
     function addExportButton(headerEl, exportFn) {
         if (!headerEl || headerEl.querySelector('.btn-export-excel')) return;
@@ -114,5 +150,5 @@ const ExcelExporter = (() => {
         return btn;
     }
 
-    return { export: exportData, addExportButton };
+    return { export: exportData, exportTable, addExportButton };
 })();
