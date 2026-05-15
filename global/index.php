@@ -48,7 +48,7 @@ $ultimaAct = date('d/m/Y H:i:s');
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 </head>
-<body>
+<body<?= !$isGrupo ? ' class="has-origen"' : '' ?>>
 <div class="dash-wrap">
 <div id="loading-bar"></div>
 <div id="loading-overlay"><div class="loading-spinner"></div></div>
@@ -57,7 +57,7 @@ $ultimaAct = date('d/m/Y H:i:s');
     <!-- ══ TOPBAR ══════════════════════════════════════════════════════ -->
     <header class="topbar">
         <div class="logo-box">XL</div>
-        <div>
+        <div class="topbar-info">
             <div class="topbar-title">DASHBOARD SALES GLOBAL — <?= htmlspecialchars($descLabel) ?></div>
             <div class="topbar-sub">
                 <span id="periodo-label">—</span> <span id="periodo-previo-label"></span>
@@ -742,7 +742,7 @@ $ultimaAct = date('d/m/Y H:i:s');
             </div>
 
             <!-- KPIs tabla + Versus en la misma fila -->
-            <div style="display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start">
+            <div class="vendedoras-main-grid">
 
                 <!-- KPIs tabla completa -->
                 <div class="analisis-card" style="margin:0">

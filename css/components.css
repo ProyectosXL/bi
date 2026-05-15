@@ -38,6 +38,8 @@
     flex-shrink  : 0;
 }
 
+.topbar-info { min-width: 0; }
+
 .topbar-title {
     font-family  : var(--font-display);
     font-size    : 1.25rem;
@@ -366,4 +368,50 @@ tr.totales td,
     33%  { content: '.'; }
     66%  { content: '..'; }
     100% { content: '...'; }
+}
+
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+    /* Topbar: fila 1 (logo + título + moneda), fila 2 (origen) */
+    .topbar {
+        flex-wrap : wrap;
+        padding   : 7px 12px;
+        gap       : 4px 8px;
+    }
+    .topbar-info {
+        flex      : 1;
+        min-width : 0;
+    }
+    .topbar-title {
+        font-size    : .82rem;
+        white-space  : nowrap;
+        overflow     : hidden;
+        text-overflow: ellipsis;
+    }
+    .topbar-sub { font-size: .72rem; }
+    .topbar-meta { display: none; }
+    /* Cotizaciones: no hay espacio en fila 1 */
+    .moneda-tcc-label { display: none !important; }
+
+    /* Tab-nav: scrollable, top según si hay origen (1 o 2 filas de topbar) */
+    .tab-nav {
+        overflow-x     : auto;
+        flex-wrap      : nowrap;
+        padding        : 0 6px;
+        top            : 56px;   /* topbar 1 fila (~7+40+7 = 54px + 2px sombra) */
+        scrollbar-width: none;
+    }
+    .tab-nav::-webkit-scrollbar { display: none; }
+    /* Con origen-toggle: topbar tiene 2 filas (~54 + 4 gap + 28 = ~86px) */
+    body.has-origen .tab-nav { top: 88px; }
+
+    .tab-btn {
+        padding   : 8px 12px 6px;
+        font-size : .82rem;
+    }
+
+    .dash-content {
+        padding: 10px 12px;
+        gap    : 10px;
+    }
 }

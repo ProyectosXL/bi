@@ -1087,3 +1087,61 @@
     color: var(--neg);
     font-weight: 600;
 }
+
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+    /* Origen toggle: baja a segunda fila, ocupa todo el ancho */
+    .origen-toggle {
+        width        : 100%;
+        margin-left  : 0;
+        justify-content: stretch;
+    }
+    .origen-btn {
+        flex       : 1;
+        text-align : center;
+        padding    : 5px 6px;
+        font-size  : .78rem;
+    }
+
+    /* Summary row: 2 columnas */
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+    .summary-side { display: none; }
+    .summary-icon  { font-size: 1.6rem; }
+    .summary-value { font-size: 1.9rem; }
+    .summary-var   { font-size: 1rem; }
+
+    /* KPI grid: 3 columnas */
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    .kpi-val  { font-size: 1.4rem; }
+    .kpi-spark { display: none; }
+
+    /* Bottom section: 1 columna */
+    .bottom-section { grid-template-columns: 1fr; }
+
+    /* Donuts: 1 columna, container en columna */
+    .donuts-row { grid-template-columns: 1fr; }
+    .donut-container {
+        flex-direction: column;
+        align-items   : stretch;
+    }
+    .donut-chart-wrapper { width: 100%; }
+
+    /* Análisis grids */
+    .analisis-tablas-row,
+    .charts-row,
+    .ranking-analisis-wrap { grid-template-columns: 1fr; }
+
+    /* Rubros cards: 2 columnas */
+    .rubros-cards-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+    /* Summary: 1 columna */
+    .summary-row { grid-template-columns: 1fr; }
+
+    /* KPI: 2 columnas */
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+
+    /* Rubros cards: 1 columna */
+    .rubros-cards-grid { grid-template-columns: 1fr; }
+}

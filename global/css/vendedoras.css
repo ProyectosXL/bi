@@ -3,6 +3,20 @@
    Estilos de la pestaña Vendedoras.
    ============================================================ */
 
+/* ── Layout KPIs tabla + Versus ─────────────────────────── */
+.vendedoras-main-grid {
+    display              : grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap                  : 16px;
+    align-items          : start;
+}
+
+@media (max-width: 768px) {
+    .vendedoras-main-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* ── Versus ──────────────────────────────────────────────── */
 .versus-names {
     display        : flex;

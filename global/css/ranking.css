@@ -356,6 +356,16 @@
     color      : var(--text-1);
 }
 
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .ranking-main-layout {
+        grid-template-columns: 1fr;
+    }
+    .ranking-info-box {
+        position: static;
+    }
+}
+
 /* ── Loading / empty states ───────────────────────────── */
 .ranking-loading,
 .ranking-empty {

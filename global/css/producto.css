@@ -166,3 +166,14 @@
     color: var(--text-3);
     font-size: .85rem;
 }
+
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .producto-top {
+        grid-template-columns: 1fr;
+    }
+    .producto-mid {
+        grid-template-columns: 1fr;
+        margin-top: 0;
+    }
+}
