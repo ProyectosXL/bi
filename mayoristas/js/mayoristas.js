@@ -10,6 +10,9 @@
         periodo   : 'año_actual',
         desde     : '',
         hasta     : '',
+        compMode  : 'year_ago',  // 'year_ago' | 'custom'
+        compDesde : '',
+        compHasta : '',
         vendedor  : '',
         rubro     : '',
         categoria : '',
@@ -78,9 +81,18 @@
             categoria: State.categoria,
             region   : State.region,
             provincia: State.provincia,
+            cliente  : State.cliente || '',
             ...extra,
         };
-        if (State.periodo === 'custom') { p.desde = State.desde; p.hasta = State.hasta; }
+        if (State.periodo === 'custom') {
+            p.desde     = State.desde;
+            p.hasta     = State.hasta;
+            p.comp_mode = State.compMode;
+            if (State.compMode === 'custom') {
+                p.desde_comp = State.compDesde;
+                p.hasta_comp = State.compHasta;
+            }
+        }
         return $.param(p);
     }
 
@@ -101,15 +113,90 @@
             if (!json.ok) return;
             poblarSelect('#sel-vendedor',  json.vendedores, 'Todos');
             poblarSelect('#sel-rubro',     json.rubros,     'Todos');
-            poblarSelect('#sel-categoria', json.categorias, 'Todas');
+            const catSelect = initSearchableSelect(json.categorias);
+            const catXRubro = json.categorias_x_rubro || {};
+            $('#sel-rubro').on('change', function() {
+                const rubro = $(this).val();
+                catSelect.update(rubro && catXRubro[rubro] ? catXRubro[rubro] : json.categorias);
+            });
             poblarSelect('#sel-region',    json.regiones,   'Todas');
             poblarSelect('#sel-provincia', json.provincias, 'Todas');
+            poblarSelect('#sel-cliente',   json.clientes,   'Todos');
         } catch (e) { console.error('Error filtros:', e); }
     }
 
     function poblarSelect(sel, items, ph) {
         const $s = $(sel).empty().append($('<option>').val('').text(ph));
         (items || []).forEach(v => $s.append($('<option>').val(v).text(v)));
+    }
+
+    function initSearchableSelect(initialItems) {
+        const $input    = $('#cat-input');
+        const $hidden   = $('#sel-categoria');
+        const $dropdown = $('#cat-dropdown');
+        let currentItems  = initialItems || [];
+        let selectedVal   = '';
+        let selectedLabel = '';
+
+        function render(filter) {
+            $dropdown.empty();
+            const f = (filter || '').toLowerCase();
+            const opts = [{ val: '', label: 'Todas' }]
+                .concat(currentItems.map(v => ({ val: v, label: v })))
+                .filter(o => o.val === '' || o.label.toLowerCase().includes(f));
+            if (!opts.length) {
+                $dropdown.append($('<li>').addClass('no-results').text('Sin resultados'));
+            } else {
+                opts.forEach(o => {
+                    $dropdown.append(
+                        $('<li>').text(o.label).attr('data-val', o.val)
+                            .toggleClass('selected', o.val === selectedVal)
+                    );
+                });
+            }
+        }
+
+        function applySelection(val, label) {
+            selectedVal   = val;
+            selectedLabel = label;
+            $hidden.val(val);
+            $input.val(val ? label : '').attr('placeholder', val ? '' : 'Todas');
+            $dropdown.prop('hidden', true);
+        }
+
+        $input.on('focus', function() {
+            render($(this).val());
+            $dropdown.prop('hidden', false);
+        }).on('input', function() {
+            render($(this).val());
+            $dropdown.prop('hidden', false);
+        });
+
+        $dropdown.on('mousedown', 'li', function(e) {
+            e.preventDefault();
+            if (!$(this).hasClass('no-results')) {
+                applySelection($(this).attr('data-val'), $(this).text());
+            }
+        });
+
+        $(document).off('click.catSearch').on('click.catSearch', function(e) {
+            if (!$(e.target).closest('#cat-wrap').length) {
+                $dropdown.prop('hidden', true);
+                $input.val(selectedVal ? selectedLabel : '').attr('placeholder', selectedVal ? '' : 'Todas');
+            }
+        });
+
+        return {
+            update(newItems) {
+                currentItems = newItems || [];
+                // Si la selección actual ya no existe en la nueva lista, limpiar
+                if (selectedVal && !currentItems.includes(selectedVal)) {
+                    applySelection('', '');
+                }
+                $input.val('').attr('placeholder', selectedVal ? selectedLabel : 'Todas');
+                $dropdown.prop('hidden', true);
+            }
+        };
     }
 
     async function reloadProvincias(region) {
@@ -239,11 +326,11 @@
         $tbl.append($('<thead>').append(
             $('<tr>').append(
                 th('Rubro',                  true),
-                th('Unid. ' + anio1,        true),
-                th('Unid. ' + anio2,        true),
-                th('% Var. vs ' + anio2,    false),
-                th('Unid. ' + anio3,        true),
-                th('% Var. vs ' + anio3,    false),
+                th('Unid. ' + anio1,        true,  'col-num'),
+                th('Unid. ' + anio2,        true,  'col-num'),
+                th('% Var. vs ' + anio2,    false, 'col-num'),
+                th('Unid. ' + anio3,        true,  'col-num'),
+                th('% Var. vs ' + anio3,    false, 'col-num'),
             )
         ));
 
@@ -309,15 +396,15 @@
         const $tbl = $('<table>');
         $tbl.append($('<thead>').append(
             $('<tr>').append(
-                th('#',                false),
+                th('#',                false, 'col-num'),
                 th('Cliente',         true),
                 th('Vendedor',        true),
                 th('Región',          true),
                 th('Provincia',       true),
-                th('Unidades',        true),
-                th('Rubros',          true),
-                th('Días activo',     true),
-                th('% Participación', false),
+                th('Unidades',        true,  'col-num'),
+                th('Rubros',          true,  'col-num'),
+                th('Días activo',     true,  'col-num'),
+                th('% Participación', false, 'col-num'),
             )
         ));
 
@@ -349,9 +436,66 @@
         initSort($tbl);
     }
 
+    // ── TAB: Vendedores ─────────────────────────────────────────
+    async function loadTablaVendedores() {
+        if (Cache.vendedores) { renderTablaVendedores(Cache.vendedores); return; }
+        $('#wrap-tabla-vendedores').html(loadingHTML());
+        try {
+            Cache.vendedores = await apiFetch('vendedores');
+            renderTablaVendedores(Cache.vendedores);
+        } catch (e) { $('#wrap-tabla-vendedores').html(errorHTML(e.message)); }
+    }
+
+    function renderTablaVendedores(res) {
+        const rows = res.data    || [];
+        const tot  = res.totales || {};
+        const $wrap = $('#wrap-tabla-vendedores');
+
+        if (!rows.length) { $wrap.html(emptyState('Sin datos para los filtros seleccionados')); return; }
+
+        const $tbl = $('<table>');
+        $tbl.append($('<thead>').append(
+            $('<tr>').append(
+                th('#',                false, 'col-num'),
+                th('Vendedor',        true),
+                th('Unidades',        true,  'col-num'),
+                th('Clientes',        true,  'col-num'),
+                th('Rubros',          true,  'col-num'),
+                th('Días activo',     true,  'col-num'),
+                th('% Participación', false, 'col-num'),
+            )
+        ));
+
+        const $tbody = $('<tbody>');
+        rows.forEach((r, i) => {
+            $tbody.append($('<tr>').append(
+                td(i + 1,                       'col-num'),
+                td(r.VENDEDOR),
+                td(fmt.num(r.unidades),         'col-num'),
+                td(fmt.num(r.clientes),         'col-num'),
+                td(fmt.num(r.rubros_distintos), 'col-num'),
+                td(fmt.num(r.dias_activo),      'col-num'),
+                tdBar(r.porc_part),
+            ));
+        });
+        $tbl.append($tbody);
+
+        $tbl.append($('<tfoot>').append(
+            $('<tr>').append(
+                $('<td colspan="2">').text('TOTAL (' + rows.length + ' vendedores)'),
+                td(fmt.num(tot.unidades), 'col-num'),
+                td(fmt.num(tot.clientes), 'col-num'),
+                $('<td colspan="3">'),
+            )
+        ));
+
+        $wrap.html('').append($tbl);
+        initSort($tbl);
+    }
+
     // ── TAB: Matriz CLIENTE × RUBRO ───────────────────────────────
     async function loadMatriz() {
-        const cliente  = $('#sel-matriz-cliente').val();
+        const cliente  = State.cliente || '';
         const cacheKey = cliente ? 'mat_' + cliente : 'matriz';
         if (Cache[cacheKey]) { renderMatriz(Cache[cacheKey]); return; }
         $('#wrap-matriz').html(loadingHTML());
@@ -374,8 +518,8 @@
             $tbl.append($('<thead>').append(
                 $('<tr>').append(
                     th('Rubro', true),
-                    th('Unidades', true),
-                    th('% Participación', false),
+                    th('Unidades', true,  'col-num'),
+                    th('% Participación', false, 'col-num'),
                 )
             ));
             const $tbody2 = $('<tbody>');
@@ -411,13 +555,10 @@
         }
 
         // Populate client selector with actual clients from data
-        const $sel = $('#sel-matriz-cliente');
-        const current = $sel.val();
-        $sel.empty().append($('<option>').val('').text('Top 10 clientes'));
-        clientes.forEach(c => $sel.append($('<option>').val(c).text(c)));
-        if (current) $sel.val(current);
+        // (selector interno eliminado — se usa el filtro global #sel-cliente)
+        const current = State.cliente || '';
 
-        const $tbl = $('<table class="tabla-matriz">');
+        const $tbl = $('<table class="tabla-matriz">', );
 
         // Header: RUBRO + clientes
         const $hRow = $('<tr>').append(
@@ -488,14 +629,12 @@
     async function loadEvolucion() {
         if (Cache.evolucion) { renderEvolucionAnio(Cache.evolucion); return; }
         $('#evol-chart-wrap').html(loadingHTML());
-        $('#wrap-tabla-rubros').html(loadingHTML());
         try {
             Cache.evolucion = await apiFetch('evolucion');
             populateEvolAnioSelect(Cache.evolucion.anios);
             renderEvolucionAnio(Cache.evolucion);
         } catch (e) {
             $('#evol-chart-wrap').html(errorHTML(e.message));
-            $('#wrap-tabla-rubros').html(errorHTML(e.message));
         }
     }
 
@@ -515,7 +654,6 @@
         } else {
             buildChartAnio(res.anios, res.meses);
         }
-        renderTablaRubros(res.rubros);
     }
 
     function buildChartAnio(anios, meses) {
@@ -633,8 +771,8 @@
         $tbl.append($('<thead>').append(
             $('<tr>').append(
                 th('Rubro',              true),
-                th('Unidades',           true),
-                th('% Participación',    false),
+                th('Unidades',           true,  'col-num'),
+                th('% Participación',    false, 'col-num'),
             )
         ));
 
@@ -664,9 +802,10 @@
     }
 
     // ── Helpers DOM ───────────────────────────────────────────────
-    function th(label, sortable = true) {
+    function th(label, sortable = true, cls = '') {
         const $h = $('<th>').text(label);
         if (!sortable) $h.css('cursor', 'default');
+        if (cls) $h.addClass(cls);
         return $h;
     }
     function td(val, cls = '') {
@@ -720,10 +859,10 @@
     // ── Carga lazy por tab ────────────────────────────────────────
     function loadActiveTab() {
         switch (State.activeTab) {
-            case 'kpis':       loadKPIs(); loadRubrosPie();    break;
-            case 'rubros':     loadComparativaRubros();         break;
+            case 'kpis':       loadKPIs(); loadRubrosPie(); loadComparativaRubros(); break;
             case 'clientes':   loadTablaClientes();             break;
             case 'matriz':     loadMatriz();                    break;
+            case 'vendedores': loadTablaVendedores();           break;
             case 'evolucion':
                 if (State.evolMode === 'rubro') loadEvolucionRubro();
                 else loadEvolucion();
@@ -739,9 +878,13 @@
         State.categoria = $('#sel-categoria').val();
         State.region    = $('#sel-region').val();
         State.provincia = $('#sel-provincia').val();
+        State.cliente   = $('#sel-cliente').val();
         if (State.periodo === 'custom') {
-            State.desde = $('#inp-desde').val();
-            State.hasta = $('#inp-hasta').val();
+            State.desde     = $('#inp-desde').val();
+            State.hasta     = $('#inp-hasta').val();
+            State.compMode  = $('input[name="comp-mode"]:checked').val() || 'year_ago';
+            State.compDesde = $('#inp-comp-desde').val();
+            State.compHasta = $('#inp-comp-hasta').val();
         }
         // Invalidar toda la cache
         Object.keys(Cache).forEach(k => { Cache[k] = null; });
@@ -768,6 +911,16 @@
             $('#custom-dates').toggleClass('visible', $(this).val() === 'custom');
         });
 
+        // Modo de comparación (radio)
+        $('input[name="comp-mode"]').on('change', function () {
+            State.compMode = $(this).val();
+            $('#custom-comp-dates').toggleClass('visible', State.compMode === 'custom');
+        });
+
+        // Fechas de comparación personalizada
+        $('#inp-comp-desde').on('change', function () { State.compDesde = $(this).val(); });
+        $('#inp-comp-hasta').on('change', function () { State.compHasta = $(this).val(); });
+
         // Región → actualizar provincias
         $('#sel-region').on('change', function () {
             reloadProvincias($(this).val());
@@ -779,6 +932,12 @@
         // Reload pestaña activa
         $('#btn-reload').on('click', function () {
             Cache[State.activeTab] = null;
+            if (State.activeTab === 'kpis') {
+                Cache.rubros_comp = null;
+            }
+            if (State.activeTab === 'vendedores') {
+                Cache.vendedores = null;
+            }
             if (State.activeTab === 'evolucion') {
                 const ck = 'evolucion_rub_' + (State.evolAnio || '');
                 Cache[ck] = null;
@@ -811,11 +970,6 @@
             const ck = 'evolucion_rub_' + State.evolAnio;
             if (!Cache[ck]) loadEvolucionRubro();
             else renderEvolucionRubro(Cache[ck]);
-        });
-
-        // Selector de cliente en Matriz
-        $('#sel-matriz-cliente').on('change', function () {
-            loadMatriz();
         });
 
         // Exportar rubros comparativa
@@ -856,6 +1010,22 @@
             );
         });
 
+        // Exportar vendedores
+        $('#btn-export-vendedores').on('click', function () {
+            if (!Cache.vendedores?.data) return;
+            exportToExcel(
+                Cache.vendedores.data.map(r => ({
+                    'Vendedor'       : r.VENDEDOR,
+                    'Unidades'       : r.unidades,
+                    'Clientes'       : r.clientes,
+                    'Rubros'         : r.rubros_distintos,
+                    'Días activo'    : r.dias_activo,
+                    '% Participación': r.porc_part,
+                })),
+                'mayoristas_vendedores', 'Vendedores'
+            );
+        });
+
         // Exportar matriz
         $('#btn-export-matriz').on('click', function () {
             if (!Cache.matriz?.filas) return;
@@ -879,7 +1049,7 @@
         initFiltros().then(() => {
             bindEvents();
             showOverlay();
-            Promise.all([loadKPIs(), loadRubrosPie()]).finally(hideOverlay);
+            Promise.all([loadKPIs(), loadRubrosPie(), loadComparativaRubros()]).finally(hideOverlay);
         });
     });
 

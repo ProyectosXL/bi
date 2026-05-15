@@ -39,6 +39,53 @@
 /* ── Layout principal ─────────────────────────────────────── */
 .main-content { flex: 1; }
 
+/* ── Searchable select (Categoría) ───────────────────────── */
+.toolbar .searchable-wrap {
+    position: relative;
+}
+.toolbar .searchable-wrap input[type="text"] {
+    background   : rgba(255,255,255,.12);
+    border       : 1px solid rgba(255,255,255,.2);
+    color        : #ffffff;
+    border-radius: var(--radius-sm);
+    padding      : 5px 10px;
+    font-family  : var(--font-body);
+    font-size    : .82rem;
+    width        : 150px;
+    transition   : border-color var(--transition), background var(--transition);
+}
+.toolbar .searchable-wrap input[type="text"]::placeholder { color: rgba(255,255,255,.75); }
+.toolbar .searchable-wrap input[type="text"]:hover  { border-color: var(--accent); background: rgba(255,255,255,.2); }
+.toolbar .searchable-wrap input[type="text"]:focus  { outline: none; border-color: var(--accent); }
+.searchable-dropdown {
+    position     : absolute;
+    top          : calc(100% + 3px);
+    left         : 0;
+    z-index      : 1100;
+    background   : #fff;
+    color        : #1a2340;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow   : 0 4px 18px rgba(0,0,0,.18);
+    max-height   : 240px;
+    overflow-y   : auto;
+    min-width    : 180px;
+    list-style   : none;
+    margin       : 0;
+    padding      : 4px 0;
+}
+.searchable-dropdown[hidden] { display: none; }
+.searchable-dropdown li {
+    padding  : 6px 12px;
+    font-size: .82rem;
+    cursor   : pointer;
+    white-space: nowrap;
+}
+.searchable-dropdown li:hover,
+.searchable-dropdown li.highlighted { background: var(--accent); color: #fff; }
+.searchable-dropdown li.selected    { font-weight: 700; }
+.searchable-dropdown li.no-results  { color: var(--text-3); cursor: default; font-style: italic; }
+
 /* ── KPI Grid ─────────────────────────────────────────────── */
 .kpi-grid {
     display              : grid;
@@ -113,27 +160,32 @@
 .kpi-var.neu { color: var(--text-3); }
 
 /* ── Rubros chart ─────────────────────────────────────────── */
+.resumen-row {
+    display              : grid;
+    grid-template-columns: 380px 1fr;
+    gap                  : 16px;
+    align-items          : stretch;
+}
 .rubros-chart-wrap {
-    display    : flex;
-    align-items: flex-start;
-    gap        : 24px;
-    padding    : 16px 20px;
-    flex-wrap  : wrap;
+    display       : flex;
+    flex-direction: column;
+    align-items   : center;
+    gap           : 16px;
+    padding       : 16px 20px;
 }
 /* Contenedor de tamaño fijo: evita que Chart.js expanda el canvas */
 .rubros-pie-container {
-    width     : 240px;
-    height    : 240px;
+    width     : 220px;
+    height    : 220px;
     flex-shrink: 0;
     position  : relative;
 }
 .rubros-legend {
-    flex        : 1;
-    display     : flex;
-    flex-direction: column;
-    gap         : 8px;
-    min-width   : 200px;
-    padding-top : 12px;
+    width           : 100%;
+    display         : flex;
+    flex-direction  : column;
+    gap             : 6px;
+    padding-top     : 0;
 }
 .rubros-legend-item {
     display    : flex;
@@ -205,6 +257,7 @@
 }
 
 .col-num { text-align: right; }
+.table-wrap thead th.col-num { text-align: right; }
 .col-pct { text-align: right; color: var(--text-2); }
 
 /* Barra de participación inline */
@@ -475,6 +528,9 @@
 .ms-auto { margin-left: auto; }
 
 /* ── Responsive ─────────────────────────────────────────────  */
+@media (max-width: 900px) {
+    .resumen-row { grid-template-columns: 1fr; }
+}
 @media (max-width: 600px) {
     .kpi-grid { grid-template-columns: 1fr 1fr; }
     .rubros-chart-wrap canvas { max-width: 100%; }

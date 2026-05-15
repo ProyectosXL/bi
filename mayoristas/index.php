@@ -69,6 +69,25 @@ $ultimaAct = date('d/m/Y H:i:s');
         <input type="date" id="inp-desde">
         <label for="inp-hasta">Hasta</label>
         <input type="date" id="inp-hasta">
+
+        <div class="comp-mode-wrap">
+            <label class="comp-mode-label">Comparar vs</label>
+            <label class="comp-radio-label">
+                <input type="radio" name="comp-mode" id="comp-year" value="year_ago" checked>
+                Mismo período año anterior
+            </label>
+            <label class="comp-radio-label">
+                <input type="radio" name="comp-mode" id="comp-custom" value="custom">
+                Rango personalizado
+            </label>
+        </div>
+
+        <div class="custom-comp-dates" id="custom-comp-dates">
+            <label for="inp-comp-desde">vs Desde</label>
+            <input type="date" id="inp-comp-desde" value="<?= date('Y-m-01', strtotime('-1 year')) ?>">
+            <label for="inp-comp-hasta">Hasta</label>
+            <input type="date" id="inp-comp-hasta" value="<?= date('Y-m-d', strtotime('-1 year')) ?>">
+        </div>
     </span>
 
     <label for="sel-vendedor">Vendedor</label>
@@ -77,14 +96,21 @@ $ultimaAct = date('d/m/Y H:i:s');
     <label for="sel-rubro">Rubro</label>
     <select id="sel-rubro"><option value="">Todos</option></select>
 
-    <label for="sel-categoria">Categoría</label>
-    <select id="sel-categoria"><option value="">Todas</option></select>
+    <label for="cat-input">Categoría</label>
+    <div class="searchable-wrap" id="cat-wrap">
+        <input type="text" id="cat-input" placeholder="Todas" autocomplete="off" spellcheck="false">
+        <input type="hidden" id="sel-categoria" value="">
+        <ul class="searchable-dropdown" id="cat-dropdown" hidden></ul>
+    </div>
 
     <label for="sel-region">Región</label>
     <select id="sel-region"><option value="">Todas</option></select>
 
     <label for="sel-provincia">Provincia</label>
     <select id="sel-provincia"><option value="">Todas</option></select>
+
+    <label for="sel-cliente">Cliente</label>
+    <select id="sel-cliente"><option value="">Todos</option></select>
 
     <button class="btn-aplicar" id="btn-aplicar">
         <i class="bi bi-play-fill"></i> Aplicar
@@ -96,9 +122,6 @@ $ultimaAct = date('d/m/Y H:i:s');
     <button class="tab-btn active" data-tab="kpis">
         <i class="bi bi-speedometer2"></i> Resumen
     </button>
-    <button class="tab-btn" data-tab="rubros">
-        <i class="bi bi-tags"></i> Rubros
-    </button>
     <button class="tab-btn" data-tab="clientes">
         <i class="bi bi-people"></i> Clientes
     </button>
@@ -107,6 +130,9 @@ $ultimaAct = date('d/m/Y H:i:s');
     </button>
     <button class="tab-btn" data-tab="evolucion">
         <i class="bi bi-graph-up"></i> Evolución
+    </button>
+    <button class="tab-btn" data-tab="vendedores">
+        <i class="bi bi-person-badge"></i> Vendedores
     </button>
     <button class="tab-reload-btn" id="btn-reload" title="Recargar pestaña">
         <i class="bi bi-arrow-clockwise"></i>
@@ -154,6 +180,8 @@ $ultimaAct = date('d/m/Y H:i:s');
                 </div>
             </div>
 
+            <div class="resumen-row">
+
             <div class="analisis-card">
                 <div class="analisis-section-header">
                     <i class="bi bi-pie-chart"></i> Participación por Rubro
@@ -163,12 +191,7 @@ $ultimaAct = date('d/m/Y H:i:s');
                     <div class="rubros-legend" id="rubros-legend"></div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- ── TAB: RUBROS (comparativa 3 años) ──────────────────────────── -->
-    <div class="tab-pane" id="tab-rubros">
-        <div class="dash-content">
             <div class="analisis-card">
                 <div class="analisis-section-header">
                     <i class="bi bi-bar-chart-steps"></i>
@@ -184,6 +207,8 @@ $ultimaAct = date('d/m/Y H:i:s');
                     </div>
                 </div>
             </div>
+
+            </div><!-- /resumen-row -->
         </div>
     </div>
 
@@ -211,16 +236,7 @@ $ultimaAct = date('d/m/Y H:i:s');
     <div class="tab-pane" id="tab-matriz">
         <div class="dash-content">
 
-            <!-- Selector de cliente -->
-            <div class="matriz-toolbar">
-                <label for="sel-matriz-cliente">
-                    <i class="bi bi-person-lines-fill"></i> Cliente
-                </label>
-                <select id="sel-matriz-cliente">
-                    <option value="">Top 10 clientes</option>
-                </select>
-                <span class="evol-label" id="matriz-cliente-info" style="display:none"></span>
-            </div>
+            <span class="evol-label" id="matriz-cliente-info" style="display:none"></span>
 
             <div class="analisis-card">
                 <div class="analisis-section-header">
@@ -278,12 +294,21 @@ $ultimaAct = date('d/m/Y H:i:s');
                 </div>
             </div>
 
-            <!-- Tabla participación por rubro -->
+        </div>
+    </div>
+
+    <!-- ── TAB: VENDEDORES ──────────────────────────────────────── -->
+    <div class="tab-pane" id="tab-vendedores">
+        <div class="dash-content">
+
             <div class="analisis-card">
                 <div class="analisis-section-header">
-                    <i class="bi bi-pie-chart-fill"></i> Participación por Rubro — Período
+                    <i class="bi bi-person-badge"></i> Vendedores
+                    <button class="btn-export ms-auto" id="btn-export-vendedores" title="Exportar Excel">
+                        <i class="bi bi-file-earmark-excel"></i> Exportar
+                    </button>
                 </div>
-                <div class="table-wrap" id="wrap-tabla-rubros">
+                <div class="table-wrap" id="wrap-tabla-vendedores">
                     <div class="analisis-loading">
                         <i class="bi bi-arrow-repeat"></i>
                         <span>Cargando<span class="loading-text"></span></span>
