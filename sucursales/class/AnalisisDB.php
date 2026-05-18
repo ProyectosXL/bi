@@ -23,6 +23,22 @@ class AnalisisDB
         return Filters::sucursalesGrupo($this->grupoSucursales, $alias);
     }
 
+    private function fromVentasSucursales(): string
+    {
+        $tipo = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
+        if ($tipo !== 'FRANQUICIA' && $tipo !== 'GRUPO') {
+            return 'BI_SALES_SUCURSALES WITH (NOLOCK)';
+        }
+        return "(
+            SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO, COD_VENDED, DESC_VENDEDOR, CATEGORIA, COLOR, DESTINO
+            FROM BI_SALES_SUCURSALES WITH (NOLOCK)
+            UNION ALL
+            SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE, 0 AS CANTIDAD, 'FRANQUICIA_ST' AS RUBRO, '0' AS COD_VENDED, 'SIN TANGO' AS DESC_VENDEDOR, NULL AS CATEGORIA, 'SIN COLOR' AS COLOR, 'SIN DESTINO' AS DESTINO
+            FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+            INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+        )";
+    }
+
     public function __construct()
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
@@ -77,6 +93,7 @@ class AnalisisDB
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
+        $from = $this->fromVentasSucursales();
         // Intentar con columna DESTINO; si no existe, usar constante
         $sql = "
             SELECT
@@ -86,7 +103,7 @@ class AnalisisDB
                 ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                                 THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS} {$sfRS}
@@ -109,7 +126,7 @@ class AnalisisDB
                     ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                                     THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                     ISNULL(SUM(s.IMPORTE), 0) AS facturacion
-                FROM BI_SALES_SUCURSALES s
+                FROM {$from} s
                 WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
                   AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                   {$sfS} {$sfVS} {$sfRS}
@@ -231,6 +248,7 @@ class AnalisisDB
             ? "MAX(s.DESC_VENDEDOR) AS vendedor"
             : "s.COD_VENDED AS vendedor";
 
+        $from = $this->fromVentasSucursales();
         $sql = "
             SELECT
                 s.COD_VENDED,
@@ -238,7 +256,7 @@ class AnalisisDB
                 ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                                 THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS} {$sfRS}
@@ -320,12 +338,13 @@ class AnalisisDB
 
         $placeholders = implode(',', array_fill(0, count($targetRubros), '?'));
 
+        $from = $this->fromVentasSucursales();
         $sql = "
             SELECT
                 s.RUBRO,
                 ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                                 THEN s.CANTIDAD ELSE 0 END), 0) AS unidades
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
               AND s.RUBRO IN ({$placeholders})
               {$sfS} {$sfVS}
@@ -415,9 +434,10 @@ class AnalisisDB
             $rows = $this->query($sql, array_merge([$minYear, $maxYear], $suc2, $vend2));
         } else {
             // Unidades
+            $from = $this->fromVentasSucursales();
             $sqlMaxYear = "
                 SELECT MAX(YEAR(CAST(s.FECHA AS DATE))) AS max_year
-                FROM BI_SALES_SUCURSALES s
+                FROM {$from} s
                 WHERE s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                   {$sfS}
             ";
@@ -432,7 +452,7 @@ class AnalisisDB
                     MONTH(CAST(s.FECHA AS DATE)) AS mes,
                     ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                                     THEN s.CANTIDAD ELSE 0 END), 0) AS valor
-                FROM BI_SALES_SUCURSALES s
+                FROM {$from} s
                 WHERE s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                   AND YEAR(CAST(s.FECHA AS DATE)) BETWEEN ? AND ?
                   {$sfS} {$sfVS} {$sfRS}
@@ -490,12 +510,13 @@ class AnalisisDB
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
+        $from = $this->fromVentasSucursales();
         $sql = "
             SELECT
                 s.RUBRO,
                 ISNULL(SUM(s.CANTIDAD), 0)  AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0)   AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS}
@@ -529,7 +550,7 @@ class AnalisisDB
                 ISNULL(s.CATEGORIA, 'SIN CATEGORÍA') AS CATEGORIA,
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0)  AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
               AND s.RUBRO = ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
@@ -567,7 +588,7 @@ class AnalisisDB
                 ISNULL(s.CATEGORIA, 'SIN CATEGORÍA') AS CATEGORIA,
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE),  0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfV} {$sfR} {$sfC}
@@ -599,7 +620,7 @@ class AnalisisDB
                     ISNULL(s.COLOR, 'SIN COLOR') AS COLOR,
                     ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                     ISNULL(SUM(s.IMPORTE),  0) AS facturacion
-                FROM BI_SALES_SUCURSALES s
+                FROM {$from} s
                 WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
                   AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                   {$sfS} {$sfV} {$sfR} {$sfC}
@@ -629,7 +650,7 @@ class AnalisisDB
                 s.NRO_SUCURS,
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE),  0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfV} {$sfR} {$sfC} {$sfG}
@@ -658,7 +679,7 @@ class AnalisisDB
                 ISNULL(s.CATEGORIA, 'SIN CATEGORÍA') AS CATEGORIA,
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE),  0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfV} {$sfR}

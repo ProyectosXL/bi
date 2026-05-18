@@ -61,8 +61,10 @@ try {
             SELECT DISTINCT NRO_SUCURS FROM BI_SALES_SUCURSALES WITH (NOLOCK) 
             WHERE (FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?)
             UNION ALL
-            SELECT DISTINCT NRO_SUCURS FROM BI_SALES_FRANQUICIAS_SIN_TANGO WITH (NOLOCK)
-            WHERE (FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?)
+            SELECT DISTINCT pv.idTango AS NRO_SUCURS
+            FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+            INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+            WHERE (fd.fecha >= ? AND fd.fecha < ?) OR (fd.fecha >= ? AND fd.fecha < ?)
         )
         ORDER BY sl.DESC_SUCURSAL
     ";
@@ -93,7 +95,11 @@ try {
             WHERE s.FECHA >= ? AND s.FECHA < ? {$sfS} {$sfG}
             UNION ALL
             SELECT NRO_SUCURS, DAY(FECHA) as dia, IMPORTE, 1 as is_a, 0 as is_p
-            FROM BI_SALES_FRANQUICIAS_SIN_TANGO s WITH (NOLOCK)
+            FROM (
+                SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
+                FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+                INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+            ) s
             WHERE s.FECHA >= ? AND s.FECHA < ? {$sfS} {$sfG}
             UNION ALL
             SELECT NRO_SUCURS, NULL as dia, IMPORTE, 0 as is_a, 1 as is_p
@@ -101,7 +107,11 @@ try {
             WHERE s.FECHA >= ? AND s.FECHA < ? {$sfS} {$sfG}
             UNION ALL
             SELECT NRO_SUCURS, NULL as dia, IMPORTE, 0 as is_a, 1 as is_p
-            FROM BI_SALES_FRANQUICIAS_SIN_TANGO s WITH (NOLOCK)
+            FROM (
+                SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
+                FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+                INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+            ) s
             WHERE s.FECHA >= ? AND s.FECHA < ? {$sfS} {$sfG}
         ) t
         GROUP BY NRO_SUCURS, dia

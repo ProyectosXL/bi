@@ -404,7 +404,11 @@ class CadenaDB
                                     THEN IMPORTE ELSE 0 END), 0) AS fact_act,
                     ISNULL(SUM(CASE WHEN FECHA >= ? AND FECHA < DATEADD(day,1,CAST(? AS DATE))
                                     THEN IMPORTE ELSE 0 END), 0) AS fact_prev
-                FROM BI_SALES_FRANQUICIAS_SIN_TANGO WITH (NOLOCK)
+                FROM (
+                    SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
+                    FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+                    INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                ) s
                 WHERE (
                     (FECHA >= ? AND FECHA < DATEADD(day,1,CAST(? AS DATE)))
                     OR (FECHA >= ? AND FECHA < DATEADD(day,1,CAST(? AS DATE)))

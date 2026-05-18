@@ -49,6 +49,22 @@ class DashboardDB
         return $rows[0] ?? null;
     }
 
+    private function fromVentasSucursales(): string
+    {
+        $tipo = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
+        if ($tipo !== 'FRANQUICIA' && $tipo !== 'GRUPO') {
+            return 'BI_SALES_SUCURSALES WITH (NOLOCK)';
+        }
+        return "(
+            SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO, COD_VENDED, DESC_VENDEDOR, NULL AS CATEGORIA
+            FROM BI_SALES_SUCURSALES WITH (NOLOCK)
+            UNION ALL
+            SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE, 0 AS CANTIDAD, 'FRANQUICIA_ST' AS RUBRO, '0' AS COD_VENDED, 'SIN TANGO' AS DESC_VENDEDOR, NULL AS CATEGORIA
+            FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+            INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+        )";
+    }
+
     /* ──────────────────────────────────────────────
      *  FILTROS DE PERÍODO
      *  Devuelve [desde_actual, hasta_actual, desde_previo, hasta_previo]
@@ -80,6 +96,7 @@ class DashboardDB
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
         $rub  = $rubro !== '%' ? [$rubro] : [];
+        $from = $this->fromVentasSucursales();
         $sql = "
             SELECT
                 ISNULL(SUM(s.IMPORTE), 0)   AS facturacion,
@@ -91,7 +108,7 @@ class DashboardDB
                 ISNULL(SUM(CASE WHEN s.CANTIDAD < 0
                                  AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                             THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfS} {$sfVS} {$sfRS}
         ";
@@ -226,6 +243,7 @@ class DashboardDB
         $selectDescVend  = $cv === 'DESC_VENDEDOR' ? "s.DESC_VENDEDOR, CONVERT(VARCHAR(10), MAX(s.FECHA), 120) AS ultima_fecha," : "";
         $groupByDescVend = $cv === 'DESC_VENDEDOR' ? ", s.DESC_VENDEDOR" : "";
 
+        $from = $this->fromVentasSucursales();
         // Facturación, unidades y cambios por vendedor
         $sql = "
             SELECT
@@ -240,7 +258,7 @@ class DashboardDB
                                  AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                             THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfS} {$sfVS} {$sfRS}
             GROUP BY s.COD_VENDED{$groupByDescVend}
@@ -387,12 +405,13 @@ class DashboardDB
         $sfVS = $vendedor !== '%' ? "AND s.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
+        $from = $this->fromVentasSucursales();
         $sql = "
             SELECT
                 s.RUBRO,
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS}
@@ -409,12 +428,13 @@ class DashboardDB
         $sfVS = $vendedor !== '%' ? "AND s.{$cv} = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
         $vend = $vendedor !== '%' ? [$vendedor] : [];
+        $from = $this->fromVentasSucursales();
         $sql = "
             SELECT
                 s.CATEGORIA AS RUBRO,
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
-            FROM BI_SALES_SUCURSALES s
+            FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND s.RUBRO = ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
@@ -440,13 +460,14 @@ class DashboardDB
         $sfVS = $vendedor !== '%' ? "AND s.{$cv} = ?" : "";
         $sfRS = $rubro !== '%' ? "AND s.RUBRO = ?" : "";
 
+        $from = $this->fromVentasSucursales();
         // Modo lightweight: solo facturación diaria (sin tickets, incremental ni ingresos)
         if ($lightweight) {
             $sql = "
                 SELECT
                     CAST(s.FECHA AS DATE) AS fecha,
                     ISNULL(SUM(s.IMPORTE), 0) AS facturacion
-                FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
+                FROM {$from} s
                 WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
                   {$sfS} {$sfVS} {$sfRS}
                 GROUP BY CAST(s.FECHA AS DATE)
@@ -471,7 +492,7 @@ class DashboardDB
                 ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                 ISNULL(SUM(CASE WHEN s.CANTIDAD > 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END), 0) AS unidades_positivas,
                 ISNULL(SUM(CASE WHEN s.CANTIDAD < 0 AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING') THEN s.CANTIDAD ELSE 0 END) * -1, 0) AS cambios
-            FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
+            FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfS} {$sfVS} {$sfRS}
             GROUP BY CAST(s.FECHA AS DATE)
@@ -642,6 +663,7 @@ class DashboardDB
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
         $rub  = $rubro     !== '%'  ? [$rubro]     : [];
 
+        $from = $this->fromVentasSucursales();
         // ── Q1: BI_SALES_SUCURSALES — un scan para act + prev + benchmark ──
         $q1 = "
             SELECT
@@ -663,7 +685,7 @@ class DashboardDB
                     CASE WHEN FECHA >= ? AND FECHA < ? {$sfS} {$sfV} {$sfR} THEN 1 ELSE 0 END AS is_a,
                     CASE WHEN FECHA >= ? AND FECHA < ? {$sfS} {$sfV} {$sfR} THEN 1 ELSE 0 END AS is_p,
                     CASE WHEN FECHA >= ? AND FECHA < ?                       THEN 1 ELSE 0 END AS is_b
-                FROM BI_SALES_SUCURSALES WITH (NOLOCK)
+                FROM {$from} s
                 WHERE (FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?)
             ) t
         ";
@@ -966,15 +988,17 @@ class DashboardDB
 
     public function getUltimaFecha(?int $nroSucurs = null): string
     {
+        $from   = $this->fromVentasSucursales();
         $sf     = $nroSucurs !== null ? "WHERE NRO_SUCURS = ?" : "";
         $params = $nroSucurs !== null ? [$nroSucurs] : [];
-        $sql    = "SELECT MAX(CAST(FECHA AS DATE)) AS ultima_fecha FROM BI_SALES_SUCURSALES WITH (NOLOCK) {$sf}";
+        $sql    = "SELECT MAX(CAST(FECHA AS DATE)) AS ultima_fecha FROM {$from} s {$sf}";
         $row    = $this->queryOne($sql, $params);
         return ($row && $row['ultima_fecha']) ? $row['ultima_fecha']->format('Y-m-d') : '';
     }
 
     public function getVendedoresFiltro(?string $desde = null, ?string $hasta = null, ?int $nroSucurs = null): array
     {
+        $from = $this->fromVentasSucursales();
         $cv  = $this->campoVendedor;
         $params = [];
         $where  = [];
@@ -995,7 +1019,7 @@ class DashboardDB
         // Si hay dos códigos para el mismo nombre, aparece una sola opción.
         $sql = "
             SELECT DISTINCT {$cv}
-            FROM BI_SALES_SUCURSALES
+            FROM {$from} s
             {$whereClause}
             ORDER BY {$cv}
         ";
@@ -1004,11 +1028,12 @@ class DashboardDB
 
     public function getRubrosFiltro(string $desde, string $hasta, ?int $nroSucurs = null): array
     {
+        $from = $this->fromVentasSucursales();
         $sfS = $nroSucurs !== null ? "AND NRO_SUCURS = ?" : "";
         $suc = $nroSucurs !== null ? [$nroSucurs] : [];
         $sql = "
             SELECT DISTINCT RUBRO
-            FROM BI_SALES_SUCURSALES
+            FROM {$from} s
             WHERE FECHA BETWEEN ? AND ?
               AND RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS}

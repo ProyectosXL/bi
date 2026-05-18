@@ -68,8 +68,9 @@ class GlobalDashboardDB
             SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO
             FROM BI_SALES_SUCURSALES WITH (NOLOCK)
             UNION ALL
-            SELECT NRO_SUCURS, FECHA, IMPORTE, 0 AS CANTIDAD, 'FRANQUICIA_ST' AS RUBRO
-            FROM BI_SALES_FRANQUICIAS_SIN_TANGO WITH (NOLOCK)
+            SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE, 0 AS CANTIDAD, 'FRANQUICIA_ST' AS RUBRO
+            FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+            INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
         ) s";
     }
 
@@ -1766,7 +1767,11 @@ class GlobalDashboardDB
             $stUnionSql = "
             UNION ALL
             SELECT YEAR(s.FECHA) AS anio, MONTH(s.FECHA) AS mes, {$valExpr} AS valor
-            FROM BI_SALES_FRANQUICIAS_SIN_TANGO s WITH (NOLOCK)
+            FROM (
+                SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
+                FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+                INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+            ) s
             WHERE s.FECHA IS NOT NULL {$sfSAll}
             GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)";
             $params = array_merge($params, $pSAll);
