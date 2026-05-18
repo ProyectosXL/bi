@@ -27,7 +27,7 @@ class AnalisisDB
     {
         $tipo = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
         if ($tipo !== 'FRANQUICIA' && $tipo !== 'GRUPO') {
-            return 'BI_SALES_SUCURSALES WITH (NOLOCK)';
+            return '(SELECT * FROM BI_SALES_SUCURSALES WITH (NOLOCK))';
         }
         return "(
             SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO, COD_VENDED, DESC_VENDEDOR, CATEGORIA, COLOR, DESTINO
