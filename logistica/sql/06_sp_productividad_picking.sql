@@ -1,0 +1,125 @@
+USE [POWER_BI_CONTROL];
+GO
+-- ============================================================
+-- 06_sp_productividad_picking.sql
+-- RO_SP_PRODUCTIVIDAD_PICKING
+-- Area 5: Productividad de picking.
+-- Nota: FECHA_INI_PICKING es tipo DATE (sin componente horario).
+-- ============================================================
+
+IF OBJECT_ID('dbo.RO_SP_PRODUCTIVIDAD_PICKING','P') IS NOT NULL
+    DROP PROCEDURE dbo.RO_SP_PRODUCTIVIDAD_PICKING;
+GO
+
+CREATE PROCEDURE dbo.RO_SP_PRODUCTIVIDAD_PICKING
+    @FECHA_DESDE DATE,
+    @FECHA_HASTA DATE,
+    @USUARIO     NVARCHAR(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @HOY DATE = CAST(GETDATE() AS DATE);
+    DECLARE @FECHA_HASTA_FIN DATE = DATEADD(DAY, 1, @FECHA_HASTA);
+    DECLARE @ULT7_DESDE DATE = DATEADD(DAY, -6, @FECHA_HASTA);
+
+    -- FECHA_INI_PICKING es DATE: se agrega directamente por dia + usuario
+    SELECT
+        CAST(FECHA_INI_PICKING AS DATE) AS FECHA_PICK,
+        USUARIO,
+        SUM(CANT_PICKING) AS Unidades,
+        SUM(MINUTOS)      AS Minutos
+    INTO #PickDiaUsuario
+    FROM dbo.BI_T_TRACKING_PICKING
+    WHERE FECHA_INI_PICKING >= @FECHA_DESDE
+      AND FECHA_INI_PICKING <  @FECHA_HASTA_FIN
+      AND (@USUARIO IS NULL OR USUARIO = @USUARIO)
+    GROUP BY CAST(FECHA_INI_PICKING AS DATE), USUARIO;
+
+    CREATE NONCLUSTERED INDEX IX_PickDU_FechaUsuario ON #PickDiaUsuario (FECHA_PICK, USUARIO);
+    CREATE NONCLUSTERED INDEX IX_PickDU_Usuario      ON #PickDiaUsuario (USUARIO, FECHA_PICK);
+
+    -- Result set 1: KPIs
+    SELECT
+        CAST(ISNULL((SELECT SUM(Unidades) FROM #PickDiaUsuario), 0) AS DECIMAL(18,2)) AS UNIDADES_PICK,
+        CAST(ISNULL((SELECT AVG(CAST(Unidades AS FLOAT)) FROM #PickDiaUsuario WHERE Minutos >= 180), 0) AS DECIMAL(18,2)) AS PROM_UNID_PICKERS,
+        CAST(ISNULL((SELECT SUM(Minutos) FROM #PickDiaUsuario), 0) / 60.0 AS DECIMAL(18,2)) AS TIEMPO_PRODUCTIVO_HS,
+        CAST(60.0 * ISNULL((SELECT SUM(Unidades) FROM #PickDiaUsuario), 0) / NULLIF((SELECT SUM(Minutos) FROM #PickDiaUsuario), 0) AS DECIMAL(18,2)) AS PROM_UNID_HORA,
+        CAST((SELECT TOP 1 PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY Unidades) OVER () FROM #PickDiaUsuario) AS DECIMAL(18,2)) AS MEDIANA_PICKING,
+        CAST(ISNULL((SELECT MAX(Unidades) FROM #PickDiaUsuario), 0) AS DECIMAL(18,2)) AS MODA_PICKING,
+        CAST(ISNULL((SELECT AVG(CAST(Unidades AS FLOAT)) FROM #PickDiaUsuario WHERE FECHA_PICK BETWEEN @ULT7_DESDE AND @FECHA_HASTA AND Minutos >= 180), 0) AS DECIMAL(18,2)) AS PROM_ULT7_DIAS,
+        CAST(ISNULL((SELECT SUM(CANT_PICKING)
+                     FROM dbo.BI_T_TRACKING_PICKING
+                     WHERE FECHA_INI_PICKING >= DATEADD(DAY, -30, @HOY)
+                       AND FECHA_INI_PICKING <  @HOY
+                       AND (@USUARIO IS NULL OR USUARIO = @USUARIO)), 0) AS DECIMAL(18,2)) AS UNIDADES_ULT30,
+        CAST(ISNULL((SELECT AVG(CAST(UnidadesDia AS FLOAT))
+                     FROM (SELECT FECHA_PICK, SUM(Unidades) AS UnidadesDia FROM #PickDiaUsuario GROUP BY FECHA_PICK) d), 0) AS DECIMAL(18,2)) AS PROM_UNID_DIA,
+        CAST(ISNULL((SELECT MAX(UnidadesDia)
+                     FROM (SELECT FECHA_PICK, SUM(Unidades) AS UnidadesDia FROM #PickDiaUsuario GROUP BY FECHA_PICK) d), 0) AS DECIMAL(18,2)) AS PICO_DIA_UNIDADES,
+        (SELECT TOP 1 FECHA_PICK
+         FROM (SELECT FECHA_PICK, SUM(Unidades) AS UnidadesDia FROM #PickDiaUsuario GROUP BY FECHA_PICK) d
+         ORDER BY UnidadesDia DESC, FECHA_PICK DESC) AS PICO_DIA_FECHA,
+        (SELECT TOP 1 USUARIO FROM #PickDiaUsuario ORDER BY Unidades DESC, USUARIO) AS PICO_USUARIO,
+        CAST(ISNULL((SELECT TOP 1 Unidades FROM #PickDiaUsuario ORDER BY Unidades DESC, USUARIO), 0) AS DECIMAL(18,2)) AS PICO_USUARIO_UNIDADES;
+
+    -- Result set 2: evolucion diaria
+    SELECT
+        FECHA_PICK AS FECHA_INI_PICKING,
+        CAST(SUM(Unidades) AS DECIMAL(18,2)) AS UNIDADES_DIA,
+        CAST(SUM(Minutos) / 60.0 AS DECIMAL(10,2)) AS HORAS_DIA,
+        CAST(60.0 * SUM(Unidades) / NULLIF(SUM(Minutos), 0) AS DECIMAL(18,2)) AS PROM_UNID_HORA
+    FROM #PickDiaUsuario
+    GROUP BY FECHA_PICK
+    ORDER BY FECHA_PICK;
+
+    -- Result set 3: indicadores por usuario
+    ;WITH Tot AS (
+        SELECT SUM(Unidades) AS TotalUnidades FROM #PickDiaUsuario
+    ),
+    Percentiles AS (
+        SELECT DISTINCT
+            USUARIO,
+            CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY Unidades) OVER (PARTITION BY USUARIO) AS DECIMAL(18,2)) AS MEDIANA_PICKING
+        FROM #PickDiaUsuario
+    ),
+    Ult30 AS (
+        SELECT
+            USUARIO,
+            SUM(CANT_PICKING) AS UNIDADES_ULT30
+        FROM dbo.BI_T_TRACKING_PICKING
+        WHERE FECHA_INI_PICKING >= DATEADD(DAY, -30, @HOY)
+          AND FECHA_INI_PICKING <  @HOY
+          AND (@USUARIO IS NULL OR USUARIO = @USUARIO)
+        GROUP BY USUARIO
+    )
+    SELECT
+        p.USUARIO,
+        CAST(SUM(p.Unidades) AS DECIMAL(18,2)) AS UNIDADES,
+        CAST(SUM(p.Unidades) * 1.0 / NULLIF(MAX(t.TotalUnidades), 0) AS DECIMAL(10,4)) AS PCT_UNIDADES,
+        CAST(MAX(p.Unidades) AS DECIMAL(18,2)) AS PICO_PICKING,
+        pr.MEDIANA_PICKING,
+        CAST(SUM(p.Minutos) / 60.0 AS DECIMAL(10,2)) AS HORAS,
+        CAST(60.0 * SUM(p.Unidades) / NULLIF(SUM(p.Minutos), 0) AS DECIMAL(18,2)) AS PROM_UNID_HORA,
+        CAST(ISNULL(MAX(u.UNIDADES_ULT30), 0) AS DECIMAL(18,2)) AS UNIDADES_ULT30
+    FROM #PickDiaUsuario p
+    CROSS JOIN Tot t
+    LEFT JOIN Percentiles pr ON pr.USUARIO = p.USUARIO
+    LEFT JOIN Ult30 u ON u.USUARIO = p.USUARIO
+    GROUP BY p.USUARIO, pr.MEDIANA_PICKING
+    ORDER BY UNIDADES DESC;
+
+    -- Result set 4: productividad por usuario ultimos 7 dias
+    SELECT
+        FECHA_PICK,
+        USUARIO,
+        CAST(SUM(Minutos) / 60.0 AS DECIMAL(10,2)) AS HORAS,
+        CAST(SUM(Unidades) AS DECIMAL(18,2)) AS UNIDADES
+    FROM #PickDiaUsuario
+    WHERE FECHA_PICK BETWEEN @ULT7_DESDE AND @FECHA_HASTA
+    GROUP BY FECHA_PICK, USUARIO
+    ORDER BY FECHA_PICK, USUARIO;
+
+    DROP TABLE #PickDiaUsuario;
+END;
+GO
