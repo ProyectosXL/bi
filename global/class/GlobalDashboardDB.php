@@ -16,6 +16,7 @@ class GlobalDashboardDB
     private bool    $aplicarFiltroGrupo = true;
     private ?array  $grupoSucursales    = null; // override explícito para casos que alteran $_SESSION['tipo']
     private bool    $fqStReady          = false; // true cuando #fq_st ya fue materializada en este request
+    private ?array  $activasCache       = null;  // IDs de sucursales activas (se resuelve una sola vez)
 
     public function setSoloActivas(bool $v): void      { $this->soloActivas = $v; }
 
@@ -72,7 +73,7 @@ class GlobalDashboardDB
         // Si usáramos SELECT INTO con params, sqlsrv usaría sp_prepare/sp_execute y
         // la tabla temporal quedaría confinada a ese scope y desaparecería al terminar.
         $create = sqlsrv_query($this->conn,
-            'CREATE TABLE #fq_st (NRO_SUCURS INT, FECHA DATE, IMPORTE DECIMAL(18,4), CANTIDAD INT, RUBRO VARCHAR(50))'
+            'CREATE TABLE #fq_st (NRO_SUCURS INT, FECHA DATE, IMPORTE DECIMAL(18,4), CANTIDAD INT, RUBRO VARCHAR(50) COLLATE DATABASE_DEFAULT)'
         );
         if ($create === false) {
             throw new RuntimeException('initTempFranquiciasST CREATE: ' . (sqlsrv_errors()[0]['message'] ?? 'error'));
@@ -109,17 +110,17 @@ class GlobalDashboardDB
         }
         if ($this->fqStReady) {
             return "(
-                SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO
+                SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO COLLATE DATABASE_DEFAULT AS RUBRO
                 FROM BI_SALES_SUCURSALES WITH (NOLOCK)
                 UNION ALL
-                SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO FROM #fq_st
+                SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO COLLATE DATABASE_DEFAULT AS RUBRO FROM #fq_st
             ) s";
         }
         return "(
-            SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO
+            SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO COLLATE DATABASE_DEFAULT AS RUBRO
             FROM BI_SALES_SUCURSALES WITH (NOLOCK)
             UNION ALL
-            SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE, 0 AS CANTIDAD, 'FRANQUICIA_ST' AS RUBRO
+            SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE, 0 AS CANTIDAD, CAST('FRANQUICIA_ST' AS VARCHAR(50)) COLLATE DATABASE_DEFAULT AS RUBRO
             FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
             INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
             INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
@@ -171,6 +172,15 @@ class GlobalDashboardDB
         return $rows[0] ?? null;
     }
 
+    /** Resuelve los IDs de sucursales activas una sola vez por instancia. */
+    private function getActivasIds(): array
+    {
+        if ($this->activasCache === null) {
+            $this->activasCache = $this->getSucursalesActivasIds();
+        }
+        return $this->activasCache;
+    }
+
     /** Construye el array de params de filtro normalizado para Filters::build(). */
     private function fp(?int $sucursal, string $vendedor, string $rubro, ?string $grupo, ?string $tipoTienda, ?string $canal = null): array
     {
@@ -182,6 +192,7 @@ class GlobalDashboardDB
             'rubro'       => $rubro,
             'canal'       => $canal,
             'solo_activas' => $this->soloActivas,
+            'activas_ids'  => $this->soloActivas ? $this->getActivasIds() : null,
         ];
     }
 
