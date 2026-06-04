@@ -151,6 +151,49 @@ class VendedorasDB
             GROUP BY p.COD_VENDED
         ", array_merge([$desde, $hasta], $pP));
 
+        // Presencialidad por vendedora (con filtros)
+        $sfH = "";
+        $pH = [$desde, $hasta];
+        if ($sucursal !== null) {
+            $sfH .= " AND m.nro_sucursal = ?";
+            $pH[] = $sucursal;
+        }
+        if ($grupo !== null && $this->origen === 'argentina') {
+            $sfH .= " AND m.nro_sucursal IN (SELECT g.NRO_SUCURS FROM BI_DIM_SUCURSALES_GRUPO g WHERE g.GRUPO = ?)";
+            $pH[] = $grupo;
+        }
+        if ($tipoTienda !== null && $this->origen === 'argentina') {
+            $sfH .= " AND m.nro_sucursal IN (SELECT sl.NRO_SUCURSAL FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WHERE sl.TIPO_TIENDA = ?)";
+            $pH[] = $tipoTienda;
+        }
+        if (!empty($canal) && $this->origen === 'argentina') {
+            if ($canal === 'PROPIOS') $sfH .= " AND m.nro_sucursal NOT IN (1, 9)";
+            elseif ($canal === 'ECOMMERCE') $sfH .= " AND m.nro_sucursal IN (1, 9)";
+        }
+        $rowsPresence = [];
+        try {
+            $rowsPresence = $this->query("
+                SELECT
+                    h.COD_VENDED,
+                    COUNT(*) AS total_horas,
+                    SUM(CASE WHEN h.TIPO_HORA = 'ausencia' THEN 1 ELSE 0 END) AS horas_ausencia
+                FROM sistemas.dbo.FP_GESTION_HORARIOS h WITH (NOLOCK)
+                LEFT JOIN (
+                    SELECT 
+                        ID_DEPARTAMENTO AS id_depto,
+                        CASE 
+                            WHEN DESC_DEPARTAMENTO LIKE '%UNICENTER%' THEN 2
+                            ELSE TRY_CAST(REPLACE(REPLACE(COD_DEPARTAMENTO, 'LOC', ''), 'loc', '') AS INT)
+                        END AS nro_sucursal
+                    FROM OPENQUERY([XL-SUELDOS], 'SELECT ID_DEPARTAMENTO, COD_DEPARTAMENTO, DESC_DEPARTAMENTO FROM LAKERS_CORP_SA.dbo.DEPARTAMENTO')
+                    WHERE COD_DEPARTAMENTO LIKE 'LOC%'
+                ) m ON h.NRO_SUCURSAL = m.id_depto
+                WHERE h.FECHA >= ? AND h.FECHA < DATEADD(day, 1, CAST(? AS DATE))
+                  {$sfH}
+                GROUP BY h.COD_VENDED
+            ", $pH);
+        } catch (Throwable $_) {}
+
         $tickMap = [];
         foreach ($rowsTickets as $t) {
             $tickMap[$t['COD_VENDED']] = $t;
@@ -158,6 +201,10 @@ class VendedorasDB
         $incrMap = [];
         foreach ($rowsIncr as $i) {
             $incrMap[$i['COD_VENDED']] = $i;
+        }
+        $presenceMap = [];
+        foreach ($rowsPresence as $pr) {
+            $presenceMap[(string)$pr['COD_VENDED']] = $pr;
         }
 
         // Consolidar por nombre (varios COD_VENDED pueden ser misma persona)
@@ -178,16 +225,21 @@ class VendedorasDB
         $result = [];
         foreach ($agg as $key => $a) {
             $ticks = 0; $sumaT = 0; $t2 = 0; $t3 = 0; $cambI = 0; $devol = 0;
+            $totHrs = 0.0; $ausHrs = 0.0;
             foreach ($a['_codes'] as $cod) {
                 $tk = $tickMap[$cod] ?? [];
                 $in = $incrMap[$cod] ?? [];
+                $pr = $presenceMap[(string)$cod] ?? [];
                 $ticks += (int)($tk['tickets']     ?? 0);
                 $sumaT += (float)($tk['suma_ticket'] ?? 0);
                 $t2    += (int)($tk['tickets_2do']  ?? 0);
                 $t3    += (int)($tk['tickets_3ro']  ?? 0);
                 $cambI += (float)($in['cambios_incr'] ?? 0);
                 $devol += (float)($in['devoluciones'] ?? 0);
+                $totHrs += (float)($pr['total_horas'] ?? 0);
+                $ausHrs += (float)($pr['horas_ausencia'] ?? 0);
             }
+            $porcPresencia = $totHrs > 0 ? ($totHrs - $ausHrs) / $totHrs : null;
 
             $result[] = [
                 'vendedora'        => $a['label'],
@@ -199,6 +251,7 @@ class VendedorasDB
                 'porc_3ro'         => $ticks > 0 ? $t3 / $ticks : 0,
                 'porc_cambios'     => $a['unidades_pos'] > 0 ? $a['cambios'] / $a['unidades_pos'] : 0,
                 'porc_incremental' => $devol != 0 ? ($cambI - $devol) / $devol : 0,
+                'porc_presencia'   => $porcPresencia,
             ];
         }
 

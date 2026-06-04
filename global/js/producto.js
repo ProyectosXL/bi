@@ -434,12 +434,10 @@ const Producto = (() => {
         ['prod-rubros-wrap', 'prod-colores-wrap', 'prod-top-wrap', 'prod-suc-wrap'].forEach(setLoading);
 
         try {
-            const [dRubros, dColores, dSuc, dTop] = await Promise.all([
-                apiFetch('rubros_categorias').catch(() => ({ rubros: [] })),
-                apiFetch('colores').catch(() => ({ colores: [] })),
-                apiFetch('sucursales').catch(() => ({ sucursales: [] })),
-                apiFetch('top_categorias').catch(() => ({ top: [] })),
-            ]);
+            const dRubros = await apiFetch('rubros_categorias').catch(() => ({ rubros: [] }));
+            const dColores = await apiFetch('colores').catch(() => ({ colores: [] }));
+            const dSuc    = await apiFetch('sucursales').catch(() => ({ sucursales: [] }));
+            const dTop    = await apiFetch('top_categorias').catch(() => ({ top: [] }));
 
             renderRubrosCategorias(dRubros.rubros ?? []);
             renderColores(dColores.colores ?? []);

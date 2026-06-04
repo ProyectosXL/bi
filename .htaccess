@@ -1,0 +1,14 @@
+Options -Indexes
+# 1. Bloquear el acceso a archivos de entorno (.env)
+<Files ".env">
+    Require all denied
+</Files>
+
+# 2. Bloquear otros archivos sensibles comunes (por seguridad extra)
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(bak|config|sql|log|ini|git)$">
+    Require all denied
+</FilesMatch>

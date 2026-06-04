@@ -122,6 +122,7 @@ try {
             'porc_2do'         => $kpi_act['porc_2do'],
             'porc_3ro'         => $kpi_act['porc_3ro'],
             'porc_incremental' => $kpi_act['porc_incremental'],
+            'porc_presencia'   => $kpi_act['porc_presencia'],
             'ingresos'         => $conv_act['ingresos'],
             'conversion'       => $conv_act['conversion'],
         ],
@@ -135,6 +136,7 @@ try {
             'porc_2do'         => $kpi_prev['porc_2do'],
             'porc_3ro'         => $kpi_prev['porc_3ro'],
             'porc_incremental' => $kpi_prev['porc_incremental'],
+            'porc_presencia'   => $kpi_prev['porc_presencia'],
             'ingresos'         => $conv_prev['ingresos'],
             'conversion'       => $conv_prev['conversion'],
         ],
@@ -148,6 +150,7 @@ try {
             'porc_3ro'         => $kpi_act['porc_3ro']         - $kpi_prev['porc_3ro'],
             'porc_cambios'     => $kpi_act['porc_cambios']     - $kpi_prev['porc_cambios'],
             'porc_incremental' => $kpi_act['porc_incremental'] - $kpi_prev['porc_incremental'],
+            'porc_presencia'   => $kpi_act['porc_presencia']   - $kpi_prev['porc_presencia'],
             'conversion'       => $var($conv_act['conversion'], $conv_prev['conversion']),
         ],
         'benchmark' => [
@@ -157,6 +160,7 @@ try {
             'porc_3ro'         => $bench['porc_3ro'],
             'porc_cambios'     => $bench['porc_cambios'],
             'porc_incremental' => $bench['porc_incremental'],
+            'porc_presencia'   => $bench['porc_presencia'],
         ],
         'serie' => [
             'actual'       => $serie_act,

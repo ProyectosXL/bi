@@ -275,6 +275,30 @@ class CadenaDB
             ", array_merge([$desde_act, $hasta_act], $pGMail));
         } catch (Throwable $_) {}
 
+        // Presencialidad por sucursal
+        $rowsPresence = [];
+        try {
+            $rowsPresence = $this->query("
+                SELECT
+                    m.nro_sucursal,
+                    COUNT(*) AS total_horas,
+                    SUM(CASE WHEN h.TIPO_HORA = 'ausencia' THEN 1 ELSE 0 END) AS horas_ausencia
+                FROM sistemas.dbo.FP_GESTION_HORARIOS h WITH (NOLOCK)
+                LEFT JOIN (
+                    SELECT 
+                        ID_DEPARTAMENTO AS id_depto,
+                        CASE 
+                            WHEN DESC_DEPARTAMENTO LIKE '%UNICENTER%' THEN 2
+                            ELSE TRY_CAST(REPLACE(REPLACE(COD_DEPARTAMENTO, 'LOC', ''), 'loc', '') AS INT)
+                        END AS nro_sucursal
+                    FROM OPENQUERY([XL-SUELDOS], 'SELECT ID_DEPARTAMENTO, COD_DEPARTAMENTO, DESC_DEPARTAMENTO FROM LAKERS_CORP_SA.dbo.DEPARTAMENTO')
+                    WHERE COD_DEPARTAMENTO LIKE 'LOC%'
+                ) m ON h.NRO_SUCURSAL = m.id_depto
+                WHERE h.FECHA >= ? AND h.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                GROUP BY m.nro_sucursal
+            ", [$desde_act, $hasta_act]);
+        } catch (Throwable $_) {}
+
         // Descripción de sucursales
         $rowsDesc = $this->query("
             SELECT sl.NRO_SUCURSAL, sl.DESC_SUCURSAL
@@ -316,6 +340,12 @@ class CadenaDB
         foreach ($rowsTicketsConv as $r) {
             $ticketsConvMap[(int)$r['NRO_SUCURS']] = (int)$r['tickets_conv'];
         }
+        $presenceMap = [];
+        foreach ($rowsPresence as $r) {
+            if ($r['nro_sucursal'] !== null) {
+                $presenceMap[(int)$r['nro_sucursal']] = $r;
+            }
+        }
 
         // Totales verdaderos de cadena (todas las sucursales de ambos períodos,
         // antes del filtro de actividad) para calcular variaciones agregadas correctas.
@@ -348,6 +378,7 @@ class CadenaDB
             $t     = $tickMap[$nro] ?? [];
             $tk2   = $tick2Map[$nro] ?? [];
             $incr  = $incrMap[$nro] ?? [];
+            $pres  = $presenceMap[$nro] ?? [];
 
             $tickAct  = (int)($t['tick_act']  ?? 0);
             $tickPrev = (int)($t['tick_prev'] ?? 0);
@@ -360,6 +391,10 @@ class CadenaDB
 
             $cambI  = (float)($incr['cambios_incr'] ?? 0);
             $devol  = (float)($incr['devoluciones'] ?? 0);
+
+            $totHrs = (float)($pres['total_horas'] ?? 0);
+            $ausHrs = (float)($pres['horas_ausencia'] ?? 0);
+            $porcPres = $totHrs > 0 ? ($totHrs - $ausHrs) / $totHrs : null;
 
             $objFecha  = $objMap[$nro]      ?? 0.0;
             $objTotal  = $objTotalMap[$nro] ?? 0.0;
@@ -391,6 +426,7 @@ class CadenaDB
                 'conversion'       => ($ingresosMap[$nro] ?? 0) > 0
                                         ? ($ticketsConvMap[$nro] ?? 0) / $ingresosMap[$nro]
                                         : null,
+                'porc_presencia'   => $porcPres,
             ];
         }
 
@@ -408,6 +444,8 @@ class CadenaDB
                     SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
                     FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
                     INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                    INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
+                    WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
                 ) s
                 WHERE (
                     (FECHA >= ? AND FECHA < DATEADD(day,1,CAST(? AS DATE)))
@@ -453,6 +491,7 @@ class CadenaDB
                     'ingresos'              => 0,
                     'conversion'            => null,
                     'porc_part_facturacion' => 0,
+                    'porc_presencia'        => null,
                 ];
                 $cFactAct  += $factAct;
                 $cFactPrev += $factPrev;

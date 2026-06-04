@@ -62,6 +62,8 @@ class DashboardDB
             SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE, 0 AS CANTIDAD, 'FRANQUICIA_ST' AS RUBRO, '0' AS COD_VENDED, 'SIN TANGO' AS DESC_VENDEDOR, NULL AS CATEGORIA
             FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
             INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+            INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
+            WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
         )";
     }
 
@@ -319,6 +321,42 @@ class DashboardDB
             $incrMap[$i['COD_VENDED']] = $i;
         }
 
+        // Presencialidad por vendedor (COD_VENDED)
+        $sfH = "";
+        $pH = [$desde, $hasta];
+        if ($nroSucurs !== null) {
+            $sfH = "AND m.nro_sucursal = ?";
+            $pH[] = $nroSucurs;
+        }
+        $sqlH = "
+            SELECT
+                h.COD_VENDED,
+                COUNT(*) AS total_horas,
+                SUM(CASE WHEN h.TIPO_HORA = 'ausencia' THEN 1 ELSE 0 END) AS horas_ausencia
+            FROM sistemas.dbo.FP_GESTION_HORARIOS h WITH (NOLOCK)
+            LEFT JOIN (
+                SELECT 
+                    ID_DEPARTAMENTO AS id_depto,
+                    CASE 
+                        WHEN DESC_DEPARTAMENTO LIKE '%UNICENTER%' THEN 2
+                        ELSE TRY_CAST(REPLACE(REPLACE(COD_DEPARTAMENTO, 'LOC', ''), 'loc', '') AS INT)
+                    END AS nro_sucursal
+                FROM OPENQUERY([XL-SUELDOS], 'SELECT ID_DEPARTAMENTO, COD_DEPARTAMENTO, DESC_DEPARTAMENTO FROM LAKERS_CORP_SA.dbo.DEPARTAMENTO')
+                WHERE COD_DEPARTAMENTO LIKE 'LOC%'
+            ) m ON h.NRO_SUCURSAL = m.id_depto
+            WHERE h.FECHA >= ? AND h.FECHA < DATEADD(day, 1, CAST(? AS DATE))
+              {$sfH}
+            GROUP BY h.COD_VENDED
+        ";
+        $presenceRows = $this->query($sqlH, $pH);
+        $presenceMap = [];
+        foreach ($presenceRows as $row) {
+            $presenceMap[(string)$row['COD_VENDED']] = [
+                'total_horas' => (float)$row['total_horas'],
+                'horas_ausencia' => (float)$row['horas_ausencia']
+            ];
+        }
+
         // Para cada COD_VENDED elegir el nombre vigente (el de la fecha más reciente)
         // y así evitar filas duplicadas cuando un código fue reasignado a otra persona.
         $nameMap = [];
@@ -368,13 +406,19 @@ class DashboardDB
             $t2       = (int)($prods['tickets_2do']    ?? 0);
             $t3       = (int)($prods['tickets_3ro']    ?? 0);
 
-            // Incremental — lookup por COD_VENDED (consistente con BI_SALES_SUCURSALES)
+            // Incremental y Presencialidad — lookup por COD_VENDED (consistente con BI_SALES_SUCURSALES)
             $cambI = 0.0; $devol = 0.0;
+            $totHrs = 0.0; $ausHrs = 0.0;
             foreach ($a['_codes'] as $cod) {
                 $inc   = $incrMap[$cod] ?? [];
                 $cambI += (float)($inc['cambios_incr']  ?? 0);
                 $devol += (float)($inc['devoluciones']  ?? 0);
+
+                $pres  = $presenceMap[(string)$cod] ?? [];
+                $totHrs += (float)($pres['total_horas'] ?? 0);
+                $ausHrs += (float)($pres['horas_ausencia'] ?? 0);
             }
+            $porcPresencia = $totHrs > 0 ? ($totHrs - $ausHrs) / $totHrs : 1.0;
 
             $result[] = [
                 'vendedor'         => $a['label'],
@@ -387,6 +431,7 @@ class DashboardDB
                 'porc_3ro'         => $tickets_ > 0 ? $t3 / $tickets_ : 0,
                 'porc_cambios'     => $a['unidades_positivas'] > 0 ? $a['cambios'] / $a['unidades_positivas'] : 0,
                 'porc_incremental' => $devol != 0 ? ($cambI - $devol) / $devol : 0,
+                'porc_presencia'   => $porcPresencia,
             ];
         }
 
@@ -560,12 +605,46 @@ class DashboardDB
             $ingresosMap[$ig['fecha']->format('Y-m-d')] = (int)$ig['ingresos'];
         }
 
+        // Presencialidad por fecha (solo a nivel sucursal)
+        $sfH = "";
+        $pH = [$desde, $hasta];
+        if ($nroSucurs !== null) {
+            $sfH = "AND m.nro_sucursal = ?";
+            $pH[] = $nroSucurs;
+        }
+        $sqlH = "
+            SELECT
+                CAST(h.FECHA AS DATE) AS fecha,
+                COUNT(*) AS total_horas,
+                SUM(CASE WHEN h.TIPO_HORA = 'ausencia' THEN 1 ELSE 0 END) AS horas_ausencia
+            FROM sistemas.dbo.FP_GESTION_HORARIOS h WITH (NOLOCK)
+            LEFT JOIN (
+                SELECT 
+                    ID_DEPARTAMENTO AS id_depto,
+                    CASE 
+                        WHEN DESC_DEPARTAMENTO LIKE '%UNICENTER%' THEN 2
+                        ELSE TRY_CAST(REPLACE(REPLACE(COD_DEPARTAMENTO, 'LOC', ''), 'loc', '') AS INT)
+                    END AS nro_sucursal
+                FROM OPENQUERY([XL-SUELDOS], 'SELECT ID_DEPARTAMENTO, COD_DEPARTAMENTO, DESC_DEPARTAMENTO FROM LAKERS_CORP_SA.dbo.DEPARTAMENTO')
+                WHERE COD_DEPARTAMENTO LIKE 'LOC%'
+            ) m ON h.NRO_SUCURSAL = m.id_depto
+            WHERE h.FECHA >= ? AND h.FECHA < DATEADD(day, 1, CAST(? AS DATE))
+              {$sfH}
+            GROUP BY CAST(h.FECHA AS DATE)
+        ";
+        $presenceData = $this->query($sqlH, $pH);
+        $presenceMap = [];
+        foreach ($presenceData as $pd) {
+            $presenceMap[$pd['fecha']->format('Y-m-d')] = $pd;
+        }
+
         // Combinar todos los datos
         $result = [];
         foreach ($rows as $row) {
             $fecha = $row['fecha']->format('Y-m-d');
             $tickInfo = $ticketsMap[$fecha] ?? null;
             $incrInfo = $incrMap[$fecha] ?? null;
+            $presInfo = $presenceMap[$fecha] ?? null;
 
             $tickets = (int)($tickInfo['tickets'] ?? 0);
             $sumaTickets = (float)($tickInfo['suma_tickets'] ?? 0);
@@ -577,6 +656,10 @@ class DashboardDB
             $unidades = (float)$row['unidades'];
             $unidadesPos = (float)$row['unidades_positivas'];
             $cambios = (float)$row['cambios'];
+
+            $hrs = (float)($presInfo['total_horas'] ?? 0);
+            $aus = (float)($presInfo['horas_ausencia'] ?? 0);
+            $porcPresencia = $hrs > 0 ? ($hrs - $aus) / $hrs : 1.0;
 
             $result[] = [
                 'fecha' => $fecha,
@@ -591,6 +674,7 @@ class DashboardDB
                 'porc_incremental' => $devoluciones != 0 ? ($cambiosIncr - $devoluciones) / $devoluciones : 0,
                 'ingresos'   => $ingresosMap[$fecha] ?? 0,
                 'conversion' => ($ingresosMap[$fecha] ?? 0) > 0 ? $tickets / $ingresosMap[$fecha] : 0,
+                'porc_presencia' => $porcPresencia,
             ];
         }
 
@@ -793,12 +877,66 @@ class DashboardDB
         );
         $r5 = $this->queryOne($q5, $p5) ?? [];
 
+        // ── Q6: sistemas.dbo.FP_GESTION_HORARIOS — planificacion horaria y ausencias ──
+        $sfH_act = $nroSucurs !== null ? "m.nro_sucursal = ? AND" : "";
+        $sfH_prev = $nroSucurs !== null ? "m.nro_sucursal = ? AND" : "";
+        $q6 = "
+            SELECT
+                ISNULL(SUM(CASE WHEN is_a=1 THEN 1 ELSE 0 END),0) AS hrs_act,
+                ISNULL(SUM(CASE WHEN is_a=1 AND TIPO_HORA='ausencia' THEN 1 ELSE 0 END),0) AS aus_act,
+                ISNULL(SUM(CASE WHEN is_p=1 THEN 1 ELSE 0 END),0) AS hrs_prev,
+                ISNULL(SUM(CASE WHEN is_p=1 AND TIPO_HORA='ausencia' THEN 1 ELSE 0 END),0) AS aus_prev,
+                ISNULL(SUM(CASE WHEN is_b=1 THEN 1 ELSE 0 END),0) AS hrs_bench,
+                ISNULL(SUM(CASE WHEN is_b=1 AND TIPO_HORA='ausencia' THEN 1 ELSE 0 END),0) AS aus_bench
+            FROM (
+                SELECT h.TIPO_HORA,
+                    CASE WHEN {$sfH_act} h.FECHA >= ? AND h.FECHA < ? THEN 1 ELSE 0 END AS is_a,
+                    CASE WHEN {$sfH_prev} h.FECHA >= ? AND h.FECHA < ? THEN 1 ELSE 0 END AS is_p,
+                    CASE WHEN h.FECHA >= ? AND h.FECHA < ? THEN 1 ELSE 0 END AS is_b
+                FROM sistemas.dbo.FP_GESTION_HORARIOS h WITH (NOLOCK)
+                LEFT JOIN (
+                    SELECT 
+                        ID_DEPARTAMENTO AS id_depto,
+                        CASE 
+                            WHEN DESC_DEPARTAMENTO LIKE '%UNICENTER%' THEN 2
+                            ELSE TRY_CAST(REPLACE(REPLACE(COD_DEPARTAMENTO, 'LOC', ''), 'loc', '') AS INT)
+                        END AS nro_sucursal
+                    FROM OPENQUERY([XL-SUELDOS], 'SELECT ID_DEPARTAMENTO, COD_DEPARTAMENTO, DESC_DEPARTAMENTO FROM LAKERS_CORP_SA.dbo.DEPARTAMENTO')
+                    WHERE COD_DEPARTAMENTO LIKE 'LOC%'
+                ) m ON h.NRO_SUCURSAL = m.id_depto
+                WHERE (h.FECHA >= ? AND h.FECHA < ?) OR (h.FECHA >= ? AND h.FECHA < ?)
+            ) t
+        ";
+        $p6 = [];
+        if ($nroSucurs !== null) { $p6[] = $nroSucurs; }
+        $p6[] = $da; $p6[] = $haX;
+        if ($nroSucurs !== null) { $p6[] = $nroSucurs; }
+        $p6[] = $dp; $p6[] = $hpX;
+        $p6[] = $da; $p6[] = $haX;
+        $p6[] = $da; $p6[] = $haX;
+        $p6[] = $dp; $p6[] = $hpX;
+
+        $r6 = $this->queryOne($q6, $p6) ?? [];
+
+        $hrsAct = (float)($r6['hrs_act'] ?? 0);
+        $ausAct = (float)($r6['aus_act'] ?? 0);
+        $porcPresenciaAct = $hrsAct > 0 ? ($hrsAct - $ausAct) / $hrsAct : 1.0;
+
+        $hrsPrev = (float)($r6['hrs_prev'] ?? 0);
+        $ausPrev = (float)($r6['aus_prev'] ?? 0);
+        $porcPresenciaPrev = $hrsPrev > 0 ? ($hrsPrev - $ausPrev) / $hrsPrev : 1.0;
+
+        $hrsBench = (float)($r6['hrs_bench'] ?? 0);
+        $ausBench = (float)($r6['aus_bench'] ?? 0);
+        $porcPresenciaBench = $hrsBench > 0 ? ($hrsBench - $ausBench) / $hrsBench : 1.0;
+
         // ── Ensamblar resultados ────────────────────────────────────────────
         $make = function (
             $fact, $unid, $upos, $camb,
             $ticks, $suma,
             $tot, $t2, $t3,
-            $ci, $dv, $obj
+            $ci, $dv, $obj,
+            $porcPresencia = 1.0
         ): array {
             $fact  = (float)($fact  ?? 0);
             $unid  = (float)($unid  ?? 0);
@@ -812,6 +950,7 @@ class DashboardDB
             $ci    = (float)($ci    ?? 0);
             $dv    = (float)($dv    ?? 0);
             $obj   = (float)($obj   ?? 0);
+            $porcPresencia = (float)($porcPresencia ?? 1.0);
             return [
                 'facturacion'      => $fact,
                 'unidades'         => $unid,
@@ -823,6 +962,7 @@ class DashboardDB
                 'porc_2do'         => $ticks > 0 ? $t2   / $ticks : 0.0,
                 'porc_3ro'         => $ticks > 0 ? $t3   / $ticks : 0.0,
                 'porc_incremental' => $dv   != 0 ? ($ci  - $dv) / $dv : 0.0,
+                'porc_presencia'   => $porcPresencia,
             ];
         };
 
@@ -831,19 +971,22 @@ class DashboardDB
                 $r1['fact_act'],   $r1['unid_act'],   $r1['upos_act'],   $r1['camb_act'],
                 $r2['tick_act'],   $r2['suma_act'],
                 $r3['tot_act'],    $r3['t2_act'],      $r3['t3_act'],
-                $r4['ci_act'],     $r4['dv_act'],      $r5['obj_act']
+                $r4['ci_act'],     $r4['dv_act'],      $r5['obj_act'],
+                $porcPresenciaAct
             ),
             'previo' => $make(
                 $r1['fact_prev'],  $r1['unid_prev'],  $r1['upos_prev'],  $r1['camb_prev'],
                 $r2['tick_prev'],  $r2['suma_prev'],
                 $r3['tot_prev'],   $r3['t2_prev'],     $r3['t3_prev'],
-                $r4['ci_prev'],    $r4['dv_prev'],     $r5['obj_prev']
+                $r4['ci_prev'],    $r4['dv_prev'],     $r5['obj_prev'],
+                $porcPresenciaPrev
             ),
             'benchmark' => $make(
                 $r1['fact_bench'], $r1['unid_bench'], $r1['upos_bench'], $r1['camb_bench'],
                 $r2['tick_bench'], $r2['suma_bench'],
                 $r3['tot_bench'],  $r3['t2_bench'],    $r3['t3_bench'],
-                $r4['ci_bench'],   $r4['dv_bench'],    0.0
+                $r4['ci_bench'],   $r4['dv_bench'],    0.0,
+                $porcPresenciaBench
             ),
         ];
     }

@@ -36,6 +36,8 @@ class AnalisisDB
             SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE, 0 AS CANTIDAD, 'FRANQUICIA_ST' AS RUBRO, '0' AS COD_VENDED, 'SIN TANGO' AS DESC_VENDEDOR, NULL AS CATEGORIA, 'SIN COLOR' AS COLOR, 'SIN DESTINO' AS DESTINO
             FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
             INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+            INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
+            WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
         )";
     }
 

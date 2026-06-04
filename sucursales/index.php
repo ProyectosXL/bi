@@ -347,6 +347,17 @@ $descLocal  = $_SESSION['descLocal'];
                     </div>
                 </div>
 
+                <div class="kpi-card" id="card-presencia">
+                    <div class="kpi-card-header">
+                        <span class="kpi-title">% Presencialidad</span>
+                        <div><span class="kpi-bench-label">Benchmark</span><span class="kpi-bench-val" id="card-presencia-bench">—</span></div>
+                    </div>
+                    <div class="kpi-card-body">
+                        <div><div class="kpi-val" id="card-presencia-val">—</div><div class="kpi-var" id="card-presencia-var">—</div></div>
+                        <div class="kpi-spark"><canvas id="spark-presencia" width="90" height="36"></canvas></div>
+                    </div>
+                </div>
+
             </div>
 
             <!-- ── SECCIÓN INFERIOR ───────────────────────────────── -->
@@ -363,11 +374,11 @@ $descLocal  = $_SESSION['descLocal'];
                                 <tr>
                                     <th>Vendedor</th><th>Unidades</th><th>Facturación</th><th>Tickets</th>
                                     <th>Ticket Prom.</th><th>2do. Prod.&nbsp;%</th><th>3er. Prod.&nbsp;%</th>
-                                    <th>%&nbsp;Cambios</th><th>%&nbsp;Incremental</th>
+                                    <th>%&nbsp;Cambios</th><th>%&nbsp;Incremental</th><th>%&nbsp;Presencialidad</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-3);">Cargando...</td></tr>
+                                <tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-3);">Cargando...</td></tr>
                             </tbody>
                         </table>
                     </div>

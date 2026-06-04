@@ -112,6 +112,10 @@ const Cadena = (() => {
           fmt: r => r.conversion != null ? pctFmt(r.conversion) : '—',
           val: r => r.conversion ?? null,
           xlFmt: 'pct',   align: 'right', sortKey: 'conversion', heatmap: true },
+        { key: 'porc_presencia',        label: '% Presencialidad',
+          fmt: r => r.porc_presencia != null ? pctFmt(r.porc_presencia) : '—',
+          val: r => r.porc_presencia ?? null,
+          xlFmt: 'pct',   align: 'right', sortKey: 'porc_presencia', heatmap: true },
     ];
 
     /* ── Heatmap color ───────────────────────── */
@@ -144,6 +148,13 @@ const Cadena = (() => {
         const totMailsRaw = rows.reduce((s, r) => s + (r.mails_pct        ?? 0) * (r.tickets  ?? 0), 0);
         const totIngresos = rows.reduce((s, r) => s + ((r.ingresos ?? 0) > 0 ? r.ingresos : 0), 0);
         const totTickConv = rows.reduce((s, r) => (r.ingresos ?? 0) > 0 ? s + ((r.conversion ?? 0) * r.ingresos) : s, 0);
+
+        // Promedio ponderado de presencialidad por tickets
+        const rowsWithPres = rows.filter(r => r.porc_presencia != null);
+        const totTickPres  = rowsWithPres.reduce((s, r) => s + (r.tickets ?? 0), 0);
+        const totPresRaw   = rowsWithPres.reduce((s, r) => s + (r.porc_presencia * (r.tickets ?? 0)), 0);
+        const chainPres    = totTickPres > 0 ? totPresRaw / totTickPres : null;
+
         // Variaciones: usar totales de cadena (incluye sucursales cerradas del período previo)
         const cFactAct  = _chainTotals?.facturacion      ?? totFact;
         const cFactPrev = _chainTotals?.facturacion_prev ?? 0;
@@ -168,6 +179,7 @@ const Cadena = (() => {
             porc_incremental: totUnid > 0 ? totIncrRaw / totUnid : null,
             mails_pct:        totTick > 0 ? totMailsRaw / totTick : null,
             conversion:       totIngresos > 0 ? totTickConv / totIngresos : null,
+            porc_presencia:   chainPres,
         };
 
         ExcelExporter.export({
@@ -265,6 +277,13 @@ const Cadena = (() => {
         const totTickConv = rows.reduce((s, r) => (r.ingresos ?? 0) > 0 ? s + ((r.conversion ?? 0) * r.ingresos) : s, 0);
 
         // Variaciones: usar totales de cadena (incluye sucursales cerradas del período previo)
+        // Promedio ponderado de presencialidad por tickets
+        const rowsWithPres = rows.filter(r => r.porc_presencia != null);
+        const totTickPres  = rowsWithPres.reduce((s, r) => s + (r.tickets ?? 0), 0);
+        const totPresRaw   = rowsWithPres.reduce((s, r) => s + (r.porc_presencia * (r.tickets ?? 0)), 0);
+        const chainPres    = totTickPres > 0 ? totPresRaw / totTickPres : null;
+
+        // Variaciones: usar totales de cadena (incluye sucursales cerradas del período previo)
         const cFactAct  = _chainTotals?.facturacion      ?? totFact;
         const cFactPrev = _chainTotals?.facturacion_prev ?? 0;
         const cUnidAct  = _chainTotals?.unidades         ?? totUnid;
@@ -293,6 +312,7 @@ const Cadena = (() => {
             porc_incremental: totUnid > 0 ? totIncrRaw / totUnid : null,
             mails_pct:        totTick > 0 ? totMailsRaw / totTick : null,
             conversion:       totIngresos > 0 ? totTickConv / totIngresos : null,
+            porc_presencia:   chainPres,
         };
         const totCells = COLS.map(c => {
             const style = `text-align:${c.align};`;

@@ -91,6 +91,15 @@ try {
     $db = new GlobalDashboardDB($origen);
     if ($soloActivas) $db->setSoloActivas(true);
 
+    // Pre-materializar datos sin Tango una sola vez para evitar el JOIN triple repetido
+    if ($origen === 'franquicias') {
+        try {
+            $db->initTempFranquiciasST($desde_act, $hasta_act, $desde_prev, $hasta_prev);
+        } catch (Throwable $_) {
+            // Si falla, fromVentasSucursales() cae al UNION ALL inline original
+        }
+    }
+
     // ── Endpoint: serie para sparklines (carga diferida desde JS) ──────────
     if (($_GET['action'] ?? '') === 'serie') {
         $serie_act  = [];

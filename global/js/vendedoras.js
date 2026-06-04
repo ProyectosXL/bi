@@ -21,10 +21,16 @@ const Vendedoras = (() => {
         const avg3ro   = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_3ro   ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
         const avgCamb  = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_cambios ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
         const avgIncr  = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_incremental ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
+
+        const rowsWithPres = rows.filter(r => r.porc_presencia != null);
+        const totTickPres  = rowsWithPres.reduce((s, r) => s + (r.tickets ?? 0), 0);
+        const totPresRaw   = rowsWithPres.reduce((s, r) => s + (r.porc_presencia * (r.tickets ?? 0)), 0);
+        const avgPres      = totTickPres > 0 ? totPresRaw / totTickPres : null;
+
         ExcelExporter.export({
             title     : 'KPIs por Vendedora',
             headers   : ['Vendedora', 'Facturación', 'Unidades', 'Tickets',
-                         'Ticket Prom.', '% 2do Prod.', '% 3er Prod.', '% Cambios', '% Incremental'],
+                         'Ticket Prom.', '% 2do Prod.', '% 3er Prod.', '% Cambios', '% Incremental', '% Presencialidad'],
             rows      : rows.map(r => [
                 r.vendedora,
                 r.facturacion      ?? null,
@@ -35,11 +41,12 @@ const Vendedoras = (() => {
                 r.porc_3ro         ?? null,
                 r.porc_cambios     ?? null,
                 r.porc_incremental ?? null,
+                r.porc_presencia   ?? null,
             ]),
             totalsRow : ['PROMEDIO',
                 totFact, totUnid, totTick,
-                avgTProm, avg2do, avg3ro, avgCamb, avgIncr],
-            colFormats: ['text', 'money', 'num', 'num', 'money', 'pct', 'pct', 'pct', 'pct'],
+                avgTProm, avg2do, avg3ro, avgCamb, avgIncr, avgPres],
+            colFormats: ['text', 'money', 'num', 'num', 'money', 'pct', 'pct', 'pct', 'pct', 'pct'],
             filename  : 'kpis_vendedoras',
         });
     }
@@ -182,7 +189,7 @@ const Vendedoras = (() => {
         const tbody = document.querySelector('#tabla-kpis-vendedoras tbody');
         if (!tbody) return;
         if (!rows?.length) {
-            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-3)">Sin datos</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-3)">Sin datos</td></tr>`;
             return;
         }
 
@@ -195,6 +202,11 @@ const Vendedoras = (() => {
         const avg3ro   = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_3ro ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
         const avgCamb  = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_cambios ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
         const avgIncr  = totTick > 0 ? rows.reduce((s, r) => s + ((r.porc_incremental ?? 0) * (r.tickets ?? 0)), 0) / totTick : 0;
+
+        const rowsWithPres = rows.filter(r => r.porc_presencia != null);
+        const totTickPres  = rowsWithPres.reduce((s, r) => s + (r.tickets ?? 0), 0);
+        const totPresRaw   = rowsWithPres.reduce((s, r) => s + (r.porc_presencia * (r.tickets ?? 0)), 0);
+        const avgPres      = totTickPres > 0 ? totPresRaw / totTickPres : null;
 
         const border = 'border-bottom:1px solid var(--border)';
 
@@ -214,6 +226,7 @@ const Vendedoras = (() => {
             ${cellSem(r.porc_3ro,        avg3ro,   pctFmt)}
             ${cellSem(r.porc_cambios,    avgCamb,  pctFmt, true)}
             ${cellSem(r.porc_incremental,avgIncr,  pctFmt)}
+            ${cellSem(r.porc_presencia,  avgPres,  pctFmt)}
         </tr>`).join('');
 
         // Fila de totales/promedio (ALL) — sin semáforo
@@ -228,6 +241,7 @@ const Vendedoras = (() => {
             <td style="text-align:right">${pctFmt(avg3ro)}</td>
             <td style="text-align:right">${pctFmt(avgCamb)}</td>
             <td style="text-align:right">${pctFmt(avgIncr)}</td>
+            <td style="text-align:right">${pctFmt(avgPres)}</td>
         </tr>`;
 
         tbody.innerHTML = dataRows + totalsRow;

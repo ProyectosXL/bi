@@ -15,6 +15,7 @@ class GlobalDashboardDB
     private bool    $soloActivas        = false;
     private bool    $aplicarFiltroGrupo = true;
     private ?array  $grupoSucursales    = null; // override explícito para casos que alteran $_SESSION['tipo']
+    private bool    $fqStReady          = false; // true cuando #fq_st ya fue materializada en este request
 
     public function setSoloActivas(bool $v): void      { $this->soloActivas = $v; }
 
@@ -54,15 +55,65 @@ class GlobalDashboardDB
     }
 
     /**
+     * Pre-materializa las ventas de franquicias sin Tango en una tabla temporal #fq_st.
+     * Al llamar a este método UNA vez al inicio del request, todas las queries posteriores
+     * que usen fromVentasSucursales() evitan repetir el JOIN triple entre servidores enlazados.
+     */
+    public function initTempFranquiciasST(string $da, string $ha, string $dp, string $hp): void
+    {
+        if ($this->origen !== 'franquicias' || $this->fqStReady) return;
+        $haX = (new DateTime($ha))->modify('+1 day')->format('Y-m-d');
+        $hpX = (new DateTime($hp))->modify('+1 day')->format('Y-m-d');
+
+        $drop = sqlsrv_query($this->conn, 'IF OBJECT_ID(\'tempdb..#fq_st\') IS NOT NULL DROP TABLE #fq_st');
+        if ($drop !== false) sqlsrv_free_stmt($drop);
+
+        // CREATE TABLE sin parámetros: la tabla queda en el scope de la sesión.
+        // Si usáramos SELECT INTO con params, sqlsrv usaría sp_prepare/sp_execute y
+        // la tabla temporal quedaría confinada a ese scope y desaparecería al terminar.
+        $create = sqlsrv_query($this->conn,
+            'CREATE TABLE #fq_st (NRO_SUCURS INT, FECHA DATE, IMPORTE DECIMAL(18,4), CANTIDAD INT, RUBRO VARCHAR(50))'
+        );
+        if ($create === false) {
+            throw new RuntimeException('initTempFranquiciasST CREATE: ' . (sqlsrv_errors()[0]['message'] ?? 'error'));
+        }
+        sqlsrv_free_stmt($create);
+
+        // INSERT con parámetros: #fq_st ya existe en la sesión, no importa el scope de sp_execute
+        $stmt = sqlsrv_query($this->conn, "
+            INSERT INTO #fq_st (NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO)
+            SELECT pv.idTango, CAST(fd.fecha AS DATE), fd.importeVentaReal, 0, 'FRANQUICIA_ST'
+            FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+            INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+            INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
+            WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
+              AND ((fd.fecha >= ? AND fd.fecha < ?) OR (fd.fecha >= ? AND fd.fecha < ?))
+        ", [$da, $haX, $dp, $hpX]);
+        if ($stmt === false) {
+            throw new RuntimeException('initTempFranquiciasST INSERT: ' . (sqlsrv_errors()[0]['message'] ?? 'error'));
+        }
+        sqlsrv_free_stmt($stmt);
+        $this->fqStReady = true;
+    }
+
+    /**
      * FROM clause para BI_SALES_SUCURSALES.
-     * Cuando origen='franquicias' incluye UNION ALL contra BI_SALES_FRANQUICIAS_SIN_TANGO,
-     * exponiendo CANTIDAD=0 y RUBRO='FRANQUICIA_ST' para que los filtros de unidades/rubro
-     * no distorsionen la facturación de las 11 sucursales sin Tango.
+     * Cuando origen='franquicias' incluye UNION ALL contra los datos sin Tango.
+     * Si ya se llamó a initTempFranquiciasST() usa #fq_st (local, rápido);
+     * de lo contrario cae al JOIN triple inline original.
      */
     private function fromVentasSucursales(): string
     {
         if ($this->origen !== 'franquicias') {
             return 'BI_SALES_SUCURSALES s WITH (NOLOCK)';
+        }
+        if ($this->fqStReady) {
+            return "(
+                SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO
+                FROM BI_SALES_SUCURSALES WITH (NOLOCK)
+                UNION ALL
+                SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO FROM #fq_st
+            ) s";
         }
         return "(
             SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO
@@ -71,6 +122,8 @@ class GlobalDashboardDB
             SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE, 0 AS CANTIDAD, 'FRANQUICIA_ST' AS RUBRO
             FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
             INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+            INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
+            WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
         ) s";
     }
 
@@ -1771,6 +1824,8 @@ class GlobalDashboardDB
                 SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
                 INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
+                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
             ) s
             WHERE s.FECHA IS NOT NULL {$sfSAll}
             GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)";

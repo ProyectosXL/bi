@@ -533,7 +533,7 @@ body.is-loading .toolbar {
 /* ── KPI GRID ──────────────────────────────────────── */
 .kpi-grid {
     display              : grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap                  : 12px;
 }
 
@@ -1137,9 +1137,10 @@ canvas { display: block; }
 .neg { color: var(--neg); }
 
 /* ── SCROLLBAR ─────────────────────────────────────── */
-::-webkit-scrollbar       { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: var(--bg-base); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar       { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-card2); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 1px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ── TOAST ─────────────────────────────────────────── */
 .toast {

@@ -1428,19 +1428,19 @@ const Dashboard = (() => {
             updatePeriodLabel(d.periodo);
             renderKPIs(d);
             renderTablaSucursales(d.tabla_sucursales);
-            // Async — no bloquean el render inicial
-            apiFetch('kpis.php', { action: 'serie' })
-                .then(sd => { if (sd?.serie) renderSparklines(sd.serie); })
-                .catch(() => {});
-            apiFetch('kpis.php', { action: 'benchmark' })
-                .then(bd => { if (bd?.benchmark) { _lastBenchData = bd.benchmark; renderBenchmark(bd.benchmark); } })
-                .catch(() => {});
-            apiFetch('kpis.php', { action: 'conversion' })
-                .then(cd => { if (cd) { _lastConvData = cd; renderConversion(cd); } })
-                .catch(() => {});
-            loadDonuts();
-            MediosPago.loadAll();
-            if (typeof Analisis !== 'undefined') Analisis.loadRankingUnidades().catch(e => console.error('[Dashboard] ranking_unidades:', e));
+            // Async — no bloquean el render inicial; se ejecutan de a uno para no saturar el servidor
+            (async () => {
+                try { const sd = await apiFetch('kpis.php', { action: 'serie' });
+                      if (sd?.serie) renderSparklines(sd.serie); } catch(e) {}
+                try { const bd = await apiFetch('kpis.php', { action: 'benchmark' });
+                      if (bd?.benchmark) { _lastBenchData = bd.benchmark; renderBenchmark(bd.benchmark); } } catch(e) {}
+                try { const cd = await apiFetch('kpis.php', { action: 'conversion' });
+                      if (cd) { _lastConvData = cd; renderConversion(cd); } } catch(e) {}
+                await loadDonuts().catch(() => {});
+                await MediosPago.loadAll().catch(() => {});
+                if (typeof Analisis !== 'undefined')
+                    await Analisis.loadRankingUnidades().catch(e => console.error('[Dashboard] ranking_unidades:', e));
+            })();
         } catch(e) {
             console.error('[Dashboard]', e);
         } finally {

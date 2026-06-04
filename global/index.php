@@ -762,10 +762,11 @@ $ultimaAct = date('d/m/Y H:i:s');
                                     <th style="min-width:85px;text-align:right">% 3er Prod.</th>
                                     <th style="min-width:85px;text-align:right">% Cambios</th>
                                     <th style="min-width:95px;text-align:right">% Incremental</th>
+                                    <th style="min-width:95px;text-align:right">% Presencialidad</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-3);">Cargando...</td></tr>
+                                <tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-3);">Cargando...</td></tr>
                             </tbody>
                         </table>
                     </div>

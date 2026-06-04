@@ -378,6 +378,7 @@ const Dashboard = (() => {
             'spark-tprom'        : 'Ticket Promedio',
             'spark-t3ro'         : 'Tickets 3er. Producto',
             'spark-incr'         : '% Incremental',
+            'spark-presencia'    : '% Presencialidad',
             'spark-conv'         : 'Conversión (Tickets / Ingresos)',
         };
         SparkModal.register(canvasId, values, dates, color, formatFn, titleMap[canvasId] || canvasId, secondary);
@@ -749,6 +750,7 @@ const Dashboard = (() => {
                 <td class="td-num ${colorKPI(v.porc_3ro, kpiSucursal?.porc_3ro)}">${fmt.pct(v.porc_3ro)}</td>
                 <td class="td-num ${colorKPI(v.porc_cambios, kpiSucursal?.porc_cambios)}">${fmt.pct(v.porc_cambios)}</td>
                 <td class="td-num ${colorKPI(v.porc_incremental, kpiSucursal?.porc_incremental)}">${fmt.pct(v.porc_incremental)}</td>
+                <td class="td-num ${colorKPI(v.porc_presencia, kpiSucursal?.porc_presencia)}">${fmt.pct(v.porc_presencia)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -761,6 +763,7 @@ const Dashboard = (() => {
         const t3ro   = kpiSucursal ? `<strong>${fmt.pct(kpiSucursal.porc_3ro)}</strong>`         : '';
         const tcamb  = kpiSucursal ? `<strong>${fmt.pct(kpiSucursal.porc_cambios)}</strong>`     : '';
         const tincr  = kpiSucursal ? `<strong>${fmt.pct(kpiSucursal.porc_incremental)}</strong>` : '';
+        const tpres  = kpiSucursal ? `<strong>${fmt.pct(kpiSucursal.porc_presencia)}</strong>`   : '';
         trTot.innerHTML = `
             <td><strong>Total</strong></td>
             <td class="td-num"><strong>${fmt.num(tot.unidades)}</strong></td>
@@ -771,6 +774,7 @@ const Dashboard = (() => {
             <td class="td-num">${t3ro}</td>
             <td class="td-num">${tcamb}</td>
             <td class="td-num">${tincr}</td>
+            <td class="td-num">${tpres}</td>
         `;
         tbody.appendChild(trTot);
     }
@@ -787,7 +791,8 @@ const Dashboard = (() => {
             'porc_2do',
             'porc_3ro',
             'porc_cambios',
-            'porc_incremental'
+            'porc_incremental',
+            'porc_presencia'
         ];
 
         headers.forEach((th, index) => {
@@ -1274,6 +1279,7 @@ const Dashboard = (() => {
                     { id:'card-tprom',   val: fmt.money(act.ticket_promedio),prevVal: fmt.money(prev.ticket_promedio),varFn: fmt.varPct, var: var_.ticket_promedio,  bench: fmt.money(bench.ticket_promedio),spark: 'spark-tprom' },
                     { id:'card-t3ro',    val: fmt.pct(act.porc_3ro),          prevVal: fmt.pct(prev.porc_3ro),          varFn: fmt.varPp,  var: var_.porc_3ro,         bench: fmt.pct(bench.porc_3ro),          spark: 'spark-t3ro' },
                     { id:'card-incr',    val: fmt.pct(act.porc_incremental),  prevVal: fmt.pct(prev.porc_incremental),  varFn: fmt.varPp,  var: var_.porc_incremental, bench: fmt.pct(bench.porc_incremental),  spark: 'spark-incr' },
+                    { id:'card-presencia',val: fmt.pct(act.porc_presencia),   prevVal: fmt.pct(prev.porc_presencia),   varFn: fmt.varPp,  var: var_.porc_presencia,   bench: fmt.pct(bench.porc_presencia),   spark: 'spark-presencia' },
                 ];
                 cards.forEach(c => {
                     setEl(c.id + '-val',   c.val);
@@ -1298,6 +1304,7 @@ const Dashboard = (() => {
                 const serieCambios     = serieAct.map(r => r.porc_cambios);
                 const serieT3ro        = serieAct.map(r => r.porc_3ro);
                 const serieIncr        = serieAct.map(r => r.porc_incremental);
+                const seriePresencia   = serieAct.map(r => r.porc_presencia);
                 const serieConv        = serieAct.map(r => r.conversion);
                 const serieIngresos    = serieAct.map(r => r.ingresos);
 
@@ -1318,6 +1325,7 @@ const Dashboard = (() => {
                 drawSparkline('spark-tprom',   serieTprom, serieDates, '#a78bfa', fmt.money);
                 drawSparkline('spark-t3ro',    serieT3ro, serieDates, '#34d399', fmt.pct);
                 drawSparkline('spark-incr',    serieIncr, serieDates, '#f472b6', fmt.pct);
+                drawSparkline('spark-presencia', seriePresencia, serieDates, '#14b8a6', fmt.pct);
 
             } catch (err) {
                 if (err.name === 'AbortError') return;
@@ -1337,7 +1345,7 @@ const Dashboard = (() => {
                         console.error('Dashboard vendedores error:', err);
                         showToast('Error al cargar tabla de vendedores: ' + err.message, 'error');
                         const tbody = document.querySelector('#tabla-vendedores tbody');
-                        if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--neg)">Error al cargar</td></tr>';
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:16px;color:var(--neg)">Error al cargar</td></tr>';
                     }
                 })(),
                 (async () => {
