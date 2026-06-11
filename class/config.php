@@ -25,7 +25,7 @@ function getConfig(): array
             return [
                 'db'              => 'power_franquicias',
                 'campo_vendedor'  => 'DESC_VENDEDOR',
-                'tabla_objetivos' => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_FRANQUICIAS',
+                'tabla_objetivos' => 'dbo.BI_OBJETIVOS_FRANQUICIAS',
                 'features'        => ['grupos' => false],
             ];
 
@@ -33,7 +33,8 @@ function getConfig(): array
             return [
                 'db'              => 'power_uy',
                 'campo_vendedor'  => 'DESC_VENDEDOR',
-                'tabla_objetivos' => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_SUCURSALES',
+                // Cross-DB: power_uy (POWER_BI_CONTROL_URUGUAY) y power (POWER_BI_CONTROL) están en el mismo servidor XL-APPS
+                'tabla_objetivos' => 'POWER_BI_CONTROL.dbo.BI_OBJETIVOS_SUCURSALES',
                 'features'        => ['grupos' => false],
             ];
 
@@ -42,7 +43,7 @@ function getConfig(): array
             return [
                 'db'              => 'power',       // default; puede sobreescribirse por origen
                 'campo_vendedor'  => 'DESC_VENDEDOR',
-                'tabla_objetivos' => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_SUCURSALES',
+                'tabla_objetivos' => 'dbo.BI_OBJETIVOS_SUCURSALES',
                 'features'        => ['grupos' => false],
                 'modo'            => 'GLOBAL',
                 'multi_origen'    => true,
@@ -52,9 +53,10 @@ function getConfig(): array
                     'franquicias' => 'power_franquicias',
                 ],
                 'tablas_objetivos' => [
-                    'argentina'   => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_SUCURSALES',
-                    'uruguay'     => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_SUCURSALES',
-                    'franquicias' => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_FRANQUICIAS',
+                    'argentina'   => 'dbo.BI_OBJETIVOS_SUCURSALES',
+                    // Cross-DB: power_uy (POWER_BI_CONTROL_URUGUAY) y power (POWER_BI_CONTROL) en el mismo servidor XL-APPS
+                    'uruguay'     => 'POWER_BI_CONTROL.dbo.BI_OBJETIVOS_SUCURSALES',
+                    'franquicias' => 'dbo.BI_OBJETIVOS_FRANQUICIAS',
                 ],
                 'filtros'         => [
                     'grupo'       => true,     // solo Argentina
@@ -67,7 +69,7 @@ function getConfig(): array
             return [
                 'db'              => 'power',
                 'campo_vendedor'  => 'DESC_VENDEDOR',
-                'tabla_objetivos' => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_SUCURSALES',
+                'tabla_objetivos' => 'dbo.BI_OBJETIVOS_SUCURSALES',
                 'features'        => ['grupos' => true],
             ];
     }
@@ -94,17 +96,18 @@ function getConfigForOrigen(string $origen): array
         'argentina'   => [
             'db'              => 'power',
             'campo_vendedor'  => 'DESC_VENDEDOR',
-            'tabla_objetivos' => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_SUCURSALES',
+            'tabla_objetivos' => 'dbo.BI_OBJETIVOS_SUCURSALES',
         ],
         'uruguay'     => [
             'db'              => 'power_uy',
             'campo_vendedor'  => 'DESC_VENDEDOR',
-            'tabla_objetivos' => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_SUCURSALES',
+            // Cross-DB: power_uy (POWER_BI_CONTROL_URUGUAY) y power (POWER_BI_CONTROL) en el mismo servidor XL-APPS
+            'tabla_objetivos' => 'POWER_BI_CONTROL.dbo.BI_OBJETIVOS_SUCURSALES',
         ],
         'franquicias' => [
             'db'              => 'power_franquicias',
             'campo_vendedor'  => 'DESC_VENDEDOR',
-            'tabla_objetivos' => '[SERVIDORTESTING].dbXLSales.DBO.BI_OBJETIVOS_FRANQUICIAS',
+            'tabla_objetivos' => 'dbo.BI_OBJETIVOS_FRANQUICIAS',
         ],
     ];
     return $map[$origen] ?? $map['argentina'];

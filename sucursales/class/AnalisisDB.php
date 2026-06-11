@@ -547,6 +547,7 @@ class AnalisisDB
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
+        $from = $this->fromVentasSucursales();
         $sql = "
             SELECT
                 ISNULL(s.CATEGORIA, 'SIN CATEGORÍA') AS CATEGORIA,
@@ -584,6 +585,7 @@ class AnalisisDB
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
 
+        $from = $this->fromVentasSucursales();
         return $this->query("
             SELECT
                 s.RUBRO,
@@ -616,6 +618,7 @@ class AnalisisDB
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
 
+        $from = $this->fromVentasSucursales();
         try {
             return $this->query("
                 SELECT
@@ -647,6 +650,7 @@ class AnalisisDB
         $pC  = $categoria !== '%' ? [$categoria] : [];
         [$sfG, $pG] = $this->grupoFiltro('s');
 
+        $from = $this->fromVentasSucursales();
         return $this->query("
             SELECT
                 s.NRO_SUCURS,
@@ -675,6 +679,7 @@ class AnalisisDB
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
 
+        $from = $this->fromVentasSucursales();
         return $this->query("
             SELECT TOP 10
                 s.RUBRO,

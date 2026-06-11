@@ -91,7 +91,43 @@ try {
     $db = new GlobalDashboardDB($origen);
     if ($soloActivas) $db->setSoloActivas(true);
 
+    // ── Debug SQL marks ────────────────────────────────────────────────────
+    // Escribe ANTES de cada paso para sobrevivir al 504.
+    // La tabla se crea automáticamente la primera vez.
+    // Leer con: SELECT * FROM RO_T_DEBUG_TIMING ORDER BY momento DESC
+    $debugConn = null;
+    $reqId     = '';
+    require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
+    try {
+        $_cxn      = new Conexion();
+        $debugConn = $_cxn->conectar('power_franquicias');
+        if ($debugConn) {
+            sqlsrv_query($debugConn,
+                "IF OBJECT_ID('dbo.RO_T_DEBUG_TIMING','U') IS NULL
+                 CREATE TABLE dbo.RO_T_DEBUG_TIMING (
+                     id         INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                     momento    DATETIME          NOT NULL DEFAULT GETDATE(),
+                     etiqueta   VARCHAR(100)      NOT NULL,
+                     request_id VARCHAR(40)       NOT NULL
+                 )"
+            );
+            $reqId = uniqid('kpis_', true);
+        }
+    } catch (Throwable $_) { $debugConn = null; }
+
+    $dbmark = static function(string $etiqueta) use (&$debugConn, $reqId): void {
+        if (!$debugConn) return;
+        $st = sqlsrv_query($debugConn,
+            'INSERT INTO dbo.RO_T_DEBUG_TIMING (etiqueta, request_id) VALUES (?, ?)',
+            [$etiqueta, $reqId]
+        );
+        if ($st !== false) sqlsrv_free_stmt($st);
+    };
+    $dbmark('INICIO');
+    // ──────────────────────────────────────────────────────────────────────
+
     // Pre-materializar datos sin Tango una sola vez para evitar el JOIN triple repetido
+    $dbmark('antes_initTemp');
     if ($origen === 'franquicias') {
         try {
             $db->initTempFranquiciasST($desde_act, $hasta_act, $desde_prev, $hasta_prev);
@@ -183,6 +219,7 @@ try {
     $cotizacion = (new GlobalDashboardDB('argentina'))->getCotizacionDolar();
 
     // ── Períodos actual + previo en 7 queries (bulk) vs 14 separadas ───────
+    $dbmark('antes_getKPIsBulk');
     $bulk = $db->getKPIsBulk(
         $desde_act, $hasta_act, $desde_prev, $hasta_prev,
         $sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal
@@ -205,11 +242,14 @@ try {
     $serie_cumpl = [];
 
     // ── Tabla Facturación vs Objetivos por sucursal ─
+    $dbmark('antes_facturacionPorSucursal');
     try {
         $factPorSuc = $db->getFacturacionPorSucursal($desde_act, $hasta_act, $desde_prev, $hasta_prev, $grupo, $tipoTienda, $sucursal, $canal);
     } catch (Throwable $_) {
         $factPorSuc = [];
     }
+
+    $dbmark('antes_objetivosPorSucursal');
     try {
         $objPorSuc = $db->getObjetivosPorSucursal($desde_act, $hasta_act, $primerDiaMes, $ultimoDiaMes, $grupo, $tipoTienda, $sucursal, $canal);
     } catch (Throwable $_) {
@@ -218,6 +258,7 @@ try {
 
     // Nombres de sucursales (para mostrar en tabla)
     $sucNombres = [];
+    $dbmark('antes_sucursales');
     try {
         $lista = $isGrupo
             ? $db->getSucursalesPorIds($_SESSION['sucursalesGrupo'] ?? [])
@@ -257,6 +298,7 @@ try {
     $var = fn($act, $prev) => $prev != 0 ? ($act - $prev) / $prev : ($act > 0 ? 1 : 0);
     $dias_act  = (new DateTime($desde_act))->diff(new DateTime($hasta_act))->days + 1;
     $dias_prev = (new DateTime($desde_prev))->diff(new DateTime($hasta_prev))->days + 1;
+    $dbmark('antes_jsonFinal');
 
     ob_clean();
     echo json_encode([

@@ -66,12 +66,40 @@ class GlobalDashboardDB
         $haX = (new DateTime($ha))->modify('+1 day')->format('Y-m-d');
         $hpX = (new DateTime($hp))->modify('+1 day')->format('Y-m-d');
 
+        // ── Dimensión PuntosDeVenta (linked server → temp local) ─────────────
+        // SELECT INTO sin parámetros: OPENQUERY es literal estático, no pasa por
+        // sp_prepare/sp_execute, por lo que la tabla queda en el scope de la sesión.
+        $drop = sqlsrv_query($this->conn, 'IF OBJECT_ID(\'tempdb..#pv_st\') IS NOT NULL DROP TABLE #pv_st');
+        if ($drop !== false) sqlsrv_free_stmt($drop);
+
+        $stmt = sqlsrv_query($this->conn,
+            "SELECT id, idTango INTO #pv_st
+             FROM OPENQUERY([SERVIDORTESTING], 'SELECT id, idTango FROM dbXLSales.dbo.PuntosDeVenta')"
+        );
+        if ($stmt === false) {
+            throw new RuntimeException('initTempFranquiciasST #pv_st: ' . (sqlsrv_errors()[0]['message'] ?? 'error'));
+        }
+        sqlsrv_free_stmt($stmt);
+
+        // ── Dimensión SUCURSALES_LAKERS (linked server → temp local) ─────────
+        $drop = sqlsrv_query($this->conn, 'IF OBJECT_ID(\'tempdb..#sl_st\') IS NOT NULL DROP TABLE #sl_st');
+        if ($drop !== false) sqlsrv_free_stmt($drop);
+
+        $stmt = sqlsrv_query($this->conn,
+            "SELECT NRO_SUCURSAL, TANGO INTO #sl_st
+             FROM OPENQUERY([XL-LAKERBIS], 'SELECT NRO_SUCURSAL, TANGO FROM LOCALES_LAKERS.DBO.SUCURSALES_LAKERS WHERE HABILITADO = 1')"
+        );
+        if ($stmt === false) {
+            throw new RuntimeException('initTempFranquiciasST #sl_st: ' . (sqlsrv_errors()[0]['message'] ?? 'error'));
+        }
+        sqlsrv_free_stmt($stmt);
+
+        // ── #fq_st: tabla de hechos (CREATE TABLE para que quede en el scope de sesión) ──
+        // No usar SELECT INTO aquí porque el INSERT siguiente lleva parámetros sqlsrv
+        // y sp_prepare/sp_execute confinaría la tabla al scope de ese execute.
         $drop = sqlsrv_query($this->conn, 'IF OBJECT_ID(\'tempdb..#fq_st\') IS NOT NULL DROP TABLE #fq_st');
         if ($drop !== false) sqlsrv_free_stmt($drop);
 
-        // CREATE TABLE sin parámetros: la tabla queda en el scope de la sesión.
-        // Si usáramos SELECT INTO con params, sqlsrv usaría sp_prepare/sp_execute y
-        // la tabla temporal quedaría confinada a ese scope y desaparecería al terminar.
         $create = sqlsrv_query($this->conn,
             'CREATE TABLE #fq_st (NRO_SUCURS INT, FECHA DATE, IMPORTE DECIMAL(18,4), CANTIDAD INT, RUBRO VARCHAR(50) COLLATE DATABASE_DEFAULT)'
         );
@@ -80,13 +108,13 @@ class GlobalDashboardDB
         }
         sqlsrv_free_stmt($create);
 
-        // INSERT con parámetros: #fq_st ya existe en la sesión, no importa el scope de sp_execute
+        // ── INSERT: join 100 % local contra las dims ya materializadas ────────
         $stmt = sqlsrv_query($this->conn, "
             INSERT INTO #fq_st (NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO)
             SELECT pv.idTango, CAST(fd.fecha AS DATE), fd.importeVentaReal, 0, 'FRANQUICIA_ST'
             FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
-            INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-            INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
+            INNER JOIN #pv_st pv ON fd.idPOS = pv.id
+            INNER JOIN #sl_st sl ON pv.idTango = sl.NRO_SUCURSAL
             WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
               AND ((fd.fecha >= ? AND fd.fecha < ?) OR (fd.fecha >= ? AND fd.fecha < ?))
         ", [$da, $haX, $dp, $hpX]);
@@ -100,10 +128,19 @@ class GlobalDashboardDB
     /**
      * FROM clause para BI_SALES_SUCURSALES.
      * Cuando origen='franquicias' incluye UNION ALL contra los datos sin Tango.
-     * Si ya se llamó a initTempFranquiciasST() usa #fq_st (local, rápido);
-     * de lo contrario cae al JOIN triple inline original.
+     *   - Si initTempFranquiciasST() fue llamado, usa #fq_st (join local, óptimo).
+     *   - Si no, usa el inline con linked servers; $desde/$hasta acotan fd.fecha
+     *     al rango real del request para que el cruce sea rápido (~78 ms vs ~20 s
+     *     sin filtro). Pasar siempre el rango más amplio que cubre la query caller
+     *     (actual ∪ previo); el WHERE externo lo recorta al detalle necesario.
+     *
+     * NOTA: getEvolucionMensual/getEvolucionMensualFacturacion NO usan este método
+     * (necesitan historia completa); su lentitud se resuelve por materialización.
+     *
+     * @param string $desde  Primer día del rango a cubrir (Y-m-d), inclusivo.
+     * @param string $hasta  Último día del rango a cubrir (Y-m-d), inclusivo.
      */
-    private function fromVentasSucursales(): string
+    private function fromVentasSucursales(string $desde = '', string $hasta = ''): string
     {
         if ($this->origen !== 'franquicias') {
             return 'BI_SALES_SUCURSALES s WITH (NOLOCK)';
@@ -116,6 +153,9 @@ class GlobalDashboardDB
                 SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO COLLATE DATABASE_DEFAULT AS RUBRO FROM #fq_st
             ) s";
         }
+        $fechaFiltro = ($desde !== '' && $hasta !== '')
+            ? "AND fd.fecha >= '{$desde}' AND fd.fecha <= '{$hasta}'"
+            : '';
         return "(
             SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO COLLATE DATABASE_DEFAULT AS RUBRO
             FROM BI_SALES_SUCURSALES WITH (NOLOCK)
@@ -124,7 +164,8 @@ class GlobalDashboardDB
             FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
             INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
             INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
-            WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
+            WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1) AND sl.HABILITADO = 1
+              {$fechaFiltro}
         ) s";
     }
 
@@ -455,7 +496,7 @@ class GlobalDashboardDB
         [$sfGI,  $pGI]  = $this->grupoFiltro('ig');
 
         // Ventas: facturación, unidades, unidades positivas y cambios por día
-        $fromSerie = $this->fromVentasSucursales();
+        $fromSerie = $this->fromVentasSucursales($desde, $hasta);
         $rows = $this->query("
             SELECT
                 CAST(s.FECHA AS DATE) AS fecha,
@@ -626,7 +667,7 @@ class GlobalDashboardDB
         [$sfS,  $pS]  = Filters::build($fp, 's', $this->campoVendedor, $this->origen, true, true);
         [$sfGS, $pGS] = $this->grupoFiltro('s');
 
-        $fromSimple = $this->fromVentasSucursales();
+        $fromSimple = $this->fromVentasSucursales($desde, $hasta);
         $rows = $this->query("
             SELECT
                 CAST(s.FECHA AS DATE) AS fecha,
@@ -728,7 +769,7 @@ class GlobalDashboardDB
         // Un solo scan con CASE WHEN en lugar de dos queries separadas
         $haX = (new DateTime($hasta_act))->modify('+1 day')->format('Y-m-d');
         $hpX = (new DateTime($hasta_prev))->modify('+1 day')->format('Y-m-d');
-        $fromFact = $this->fromVentasSucursales();
+        $fromFact = $this->fromVentasSucursales(min($desde_act, $desde_prev), max($hasta_act, $hasta_prev));
         $rows = $this->query("
             SELECT s.NRO_SUCURS,
                 ISNULL(SUM(CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN s.IMPORTE ELSE 0 END), 0) AS fact_act,
@@ -1389,7 +1430,7 @@ class GlobalDashboardDB
         [$sfGO,  $pGO]  = $this->grupoFiltro('o', 'NRO_SUCURSAL');
 
         // ── Q1: BI_SALES_SUCURSALES — facturación, unidades, cambios ──────────
-        $fromQ1 = $this->fromVentasSucursales();
+        $fromQ1 = $this->fromVentasSucursales(min($da, $dp), max($ha, $hp));
         $r1 = $this->queryOne("
             SELECT
                 ISNULL(SUM(CASE WHEN is_a=1 THEN imp ELSE 0 END),0)               AS fact_act,
@@ -1836,7 +1877,7 @@ class GlobalDashboardDB
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
                 INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
                 INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
-                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
+                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1) AND sl.HABILITADO = 1
             ) s
             WHERE s.FECHA IS NOT NULL {$sfSAll}
             GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)";
