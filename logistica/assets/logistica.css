@@ -303,6 +303,35 @@
     .kpi-grid    { grid-template-columns: 1fr; }
 }
 
+/* ── Toggle de país (topbar) ─────────────────────────────────────────── */
+.pais-toggle {
+    display        : flex;
+    align-items    : center;
+    gap            : 2px;
+    margin-left    : auto;
+    margin-right   : 12px;
+    background     : var(--border);
+    border-radius  : 20px;
+    padding        : 3px;
+}
+
+.pais-btn {
+    display        : inline-flex;
+    align-items    : center;
+    gap            : 4px;
+    padding        : 4px 14px;
+    border-radius  : 16px;
+    font-size      : .78rem;
+    font-weight    : 700;
+    letter-spacing : .4px;
+    color          : var(--text-2);
+    text-decoration: none;
+    transition     : background var(--transition), color var(--transition);
+    white-space    : nowrap;
+}
+.pais-btn:hover   { background: rgba(0,168,120,.12); color: var(--accent); }
+.pais-btn.active  { background: var(--accent); color: #fff; box-shadow: 0 1px 4px rgba(0,168,120,.35); }
+
 /* Picking — tabla últimos 7 días */
 .picking-ult7-wrap { max-height: 340px; overflow: auto; }
 #tabla-picking-ult7 { border-collapse: collapse; white-space: nowrap; }
