@@ -18,16 +18,25 @@ const ExcelExporter = (() => {
         const selSuc  = document.getElementById('sel-sucursal');
         const selGrp  = document.getElementById('sel-grupo');
         const selTipo = document.getElementById('sel-tipo-tienda');
+        const selTipoLocal = document.getElementById('sel-tipo-local');
+        const selZona      = document.getElementById('sel-zona');
+        const selGrpEmp    = document.getElementById('sel-grupo-empresario');
 
         const sucText  = selSuc?.options[selSuc.selectedIndex]?.text  ?? '';
         const grpText  = selGrp?.options[selGrp.selectedIndex]?.text  ?? '';
         const tipoText = selTipo?.options[selTipo.selectedIndex]?.text ?? '';
+        const tipoLocalText = selTipoLocal && selTipoLocal.selectedIndex !== -1 ? selTipoLocal.options[selTipoLocal.selectedIndex]?.text : '';
+        const zonaText      = selZona && selZona.selectedIndex !== -1 ? selZona.options[selZona.selectedIndex]?.text : '';
+        const grpEmpText    = selGrpEmp && selGrpEmp.selectedIndex !== -1 ? selGrpEmp.options[selGrpEmp.selectedIndex]?.text : '';
 
         const parts = [];
         if (origen)                               parts.push('Origen: ' + origen);
         if (sucText  && sucText  !== 'Todas')     parts.push('Sucursal: ' + sucText);
         if (grpText  && grpText  !== 'Todos')     parts.push('Grupo: ' + grpText);
         if (tipoText && tipoText !== 'Todos')     parts.push('Tipo tienda: ' + tipoText);
+        if (tipoLocalText && tipoLocalText !== 'Todos') parts.push('Tipo local: ' + tipoLocalText);
+        if (zonaText      && zonaText      !== 'Todos') parts.push('Zona: ' + zonaText);
+        if (grpEmpText    && grpEmpText    !== 'Todos') parts.push('Grupo Empresario: ' + grpEmpText);
 
         return {
             period  : [periodLabel, periodPrev].filter(Boolean).join(' '),

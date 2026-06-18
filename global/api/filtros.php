@@ -69,6 +69,9 @@ try {
         'vendedores'         => $tryCall(fn() => $db->getVendedoresFiltro($desde_act, $hasta_act, $sucursal)),
         'rubros'             => $tryCall(fn() => $db->getRubrosFiltro($desde_act, $hasta_act, $sucursal)),
         'sucursales_activas' => $isGrupo ? [] : $tryCall(fn() => $db->getSucursalesActivasIds()),
+        'zonas'              => ($origen === 'franquicias') ? $tryCall(fn() => $db->getZonasLista()) : [],
+        'grupos_empresario'  => ($origen === 'franquicias') ? $tryCall(fn() => $db->getGruposEmpresarioLista()) : [],
+        'tipos_local'        => ($origen === 'franquicias') ? $tryCall(fn() => $db->getTiposLocalLista()) : [],
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {

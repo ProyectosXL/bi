@@ -31,8 +31,9 @@
 .origen-btn:hover              { background: rgba(255,255,255,.12); color: #fff; }
 .origen-btn.active             { background: var(--accent); color: #fff; font-weight: 600; }
 
-/* ── Filtros solo Argentina ──────────────────────────────── */
-.ar-only-wrap {
+/* ── Filtros solo Argentina/Franquicias ───────────────────── */
+.ar-only-wrap,
+.fran-only-wrap {
     display: inline-flex;
     align-items: center;
     gap: 6px;

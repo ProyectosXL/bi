@@ -234,6 +234,9 @@ class GlobalDashboardDB
             'canal'       => $canal,
             'solo_activas' => $this->soloActivas,
             'activas_ids'  => $this->soloActivas ? $this->getActivasIds() : null,
+            'tipo_local'   => ($this->origen === 'franquicias') ? ($_GET['tipo_local'] ?? null) : null,
+            'zona'         => ($this->origen === 'franquicias') ? ($_GET['zona'] ?? null) : null,
+            'grupo_empresario' => ($this->origen === 'franquicias') ? ($_GET['grupo_empresario'] ?? null) : null,
         ];
     }
 
@@ -974,6 +977,33 @@ class GlobalDashboardDB
             FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
             WHERE sl.TIPO_TIENDA IS NOT NULL AND sl.HABILITADO = 1
             ORDER BY sl.TIPO_TIENDA
+        ");
+    }
+
+    public function getZonasLista(): array
+    {
+        if ($this->origen !== 'franquicias') return [];
+        return $this->query("
+            SELECT DISTINCT ZONA FROM BI_SALES_SUCURSALES WHERE ZONA IS NOT NULL AND ZONA <> '' ORDER BY ZONA
+        ");
+    }
+
+    public function getGruposEmpresarioLista(): array
+    {
+        if ($this->origen !== 'franquicias') return [];
+        return $this->query("
+            SELECT DISTINCT GRUPO_EMPRESARIO FROM BI_SALES_SUCURSALES WHERE GRUPO_EMPRESARIO IS NOT NULL AND GRUPO_EMPRESARIO <> '' ORDER BY GRUPO_EMPRESARIO
+        ");
+    }
+
+    public function getTiposLocalLista(): array
+    {
+        if ($this->origen !== 'franquicias') return [];
+        return $this->query("
+            SELECT DISTINCT sl.TIPO_LOCAL
+            FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
+            WHERE sl.TIPO_LOCAL IS NOT NULL AND sl.HABILITADO = 1 AND sl.CANAL = 'FRANQUICIAS' AND sl.TIPO_LOCAL <> ''
+            ORDER BY sl.TIPO_LOCAL
         ");
     }
 

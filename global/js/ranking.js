@@ -37,6 +37,9 @@ const Ranking = (() => {
             periodo    : ($('sel-periodo')?.value    ?? 'mes_actual'),
             grupo      : ($('sel-grupo')?.value      ?? ''),
             tipo_tienda: ($('sel-tipo-tienda')?.value ?? ''),
+            tipo_local : ($('sel-tipo-local')?.value ?? ''),
+            zona       : ($('sel-zona')?.value       ?? ''),
+            grupo_empresario: ($('sel-grupo-empresario')?.value ?? ''),
         };
         if (p.periodo === 'custom') {
             p.desde     = $('input-desde')?.value     ?? '';
@@ -47,7 +50,7 @@ const Ranking = (() => {
                 p.hasta_comp = $('input-comp-hasta')?.value ?? '';
             }
         }
-        ['grupo', 'tipo_tienda'].forEach(k => { if (!p[k]) delete p[k]; });
+        ['grupo', 'tipo_tienda', 'tipo_local', 'zona', 'grupo_empresario'].forEach(k => { if (!p[k]) delete p[k]; });
         return new URLSearchParams(p).toString();
     }
 

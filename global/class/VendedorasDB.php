@@ -77,6 +77,23 @@ class VendedorasDB
                 elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.NRO_SUCURS IN (1, 9)";
             }
         }
+        if ($this->origen === 'franquicias') {
+            $tipoLocal = $_GET['tipo_local'] ?? null;
+            if ($tipoLocal !== null && $tipoLocal !== '') {
+                $clauses[] = "{$alias}.NRO_SUCURS IN (SELECT sl.NRO_SUCURSAL FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WHERE sl.TIPO_LOCAL = ?)";
+                $params[]  = $tipoLocal;
+            }
+            $zona = $_GET['zona'] ?? null;
+            if ($zona !== null && $zona !== '') {
+                $clauses[] = "{$alias}.NRO_SUCURS IN (SELECT DISTINCT s_z.NRO_SUCURS FROM BI_SALES_SUCURSALES s_z WHERE s_z.ZONA = ?)";
+                $params[]  = $zona;
+            }
+            $grupoEmpresario = $_GET['grupo_empresario'] ?? null;
+            if ($grupoEmpresario !== null && $grupoEmpresario !== '') {
+                $clauses[] = "{$alias}.NRO_SUCURS IN (SELECT DISTINCT s_g.NRO_SUCURS FROM BI_SALES_SUCURSALES s_g WHERE s_g.GRUPO_EMPRESARIO = ?)";
+                $params[]  = $grupoEmpresario;
+            }
+        }
         $sql = $clauses ? 'AND ' . implode(' AND ', $clauses) : '';
         return [$sql, $params];
     }

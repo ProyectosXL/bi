@@ -77,6 +77,23 @@ class ParticipacionDB
             if ($canal === 'PROPIOS') $sfG .= " AND s.CANAL = 'LOCALES PROPIOS'";
             elseif ($canal === 'ECOMMERCE') $sfG .= " AND s.CANAL = 'ECOMMERCE'";
         }
+        if ($this->origen === 'franquicias') {
+            $tipoLocal = $_GET['tipo_local'] ?? null;
+            if ($tipoLocal !== null && $tipoLocal !== '') {
+                $sfG .= " AND s.NRO_SUCURS IN (SELECT sl.NRO_SUCURSAL FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WHERE sl.TIPO_LOCAL = ?)";
+                $pG[]  = $tipoLocal;
+            }
+            $zona = $_GET['zona'] ?? null;
+            if ($zona !== null && $zona !== '') {
+                $sfG .= " AND s.NRO_SUCURS IN (SELECT DISTINCT s_z.NRO_SUCURS FROM BI_SALES_SUCURSALES s_z WHERE s_z.ZONA = ?)";
+                $pG[]  = $zona;
+            }
+            $grupoEmpresario = $_GET['grupo_empresario'] ?? null;
+            if ($grupoEmpresario !== null && $grupoEmpresario !== '') {
+                $sfG .= " AND s.NRO_SUCURS IN (SELECT DISTINCT s_g.NRO_SUCURS FROM BI_SALES_SUCURSALES s_g WHERE s_g.GRUPO_EMPRESARIO = ?)";
+                $pG[]  = $grupoEmpresario;
+            }
+        }
         [$sfGS, $pGS] = $this->grupoFiltro('s');
         $sfG .= ' ' . $sfGS;
         $pG   = array_merge($pG, $pGS);

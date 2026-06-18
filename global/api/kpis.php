@@ -275,13 +275,14 @@ try {
         $o = $objPorSuc[$nro]  ?? ['objetivo_fecha' => 0, 'objetivo_total' => 0];
         $desvio = $o['objetivo_fecha'] > 0 ? ($f['facturacion'] - $o['objetivo_fecha']) / $o['objetivo_fecha'] : null;
         $tablaSucursales[] = [
-            'nro_sucurs'      => $nro,
-            'nombre'          => $sucNombres[$nro] ?? ('Suc. ' . $nro),
-            'facturacion'     => $f['facturacion'],
-            'var_facturacion' => $f['var_fact'],
-            'objetivo_total'  => $o['objetivo_total'],
-            'objetivo_fecha'  => $o['objetivo_fecha'],
-            'desvio'          => $desvio,
+            'nro_sucurs'       => $nro,
+            'nombre'           => $sucNombres[$nro] ?? ('Suc. ' . $nro),
+            'facturacion'      => $f['facturacion'],
+            'facturacion_prev' => $f['facturacion_prev'],
+            'var_facturacion'  => $f['var_fact'],
+            'objetivo_total'   => $o['objetivo_total'],
+            'objetivo_fecha'   => $o['objetivo_fecha'],
+            'desvio'           => $desvio,
         ];
     }
     usort($tablaSucursales, fn($a, $b) => $b['facturacion'] <=> $a['facturacion']);

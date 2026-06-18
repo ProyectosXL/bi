@@ -69,6 +69,9 @@ try {
         'vendedor'    => '%',
         'rubro'       => '%',
         'canal'       => $canal,
+        'tipo_local'  => ($origen === 'franquicias') ? ($_GET['tipo_local'] ?? null) : null,
+        'zona'        => ($origen === 'franquicias') ? ($_GET['zona'] ?? null) : null,
+        'grupo_empresario' => ($origen === 'franquicias') ? ($_GET['grupo_empresario'] ?? null) : null,
     ];
     [$sfS, $pS] = Filters::build($fp, 's', $cv, $origen, false, false);
 

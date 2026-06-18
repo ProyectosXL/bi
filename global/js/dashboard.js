@@ -148,6 +148,9 @@ const Dashboard = (() => {
             grupo       : cfg.isGrupo ? '' : ($('sel-grupo')?.value       ?? ''),
             tipo_tienda : cfg.isGrupo ? '' : ($('sel-tipo-tienda')?.value ?? ''),
             canal       : cfg.isGrupo ? '' : ($('sel-canal')?.value       ?? ''),
+            tipo_local  : ($('sel-tipo-local')?.value  ?? ''),
+            zona        : ($('sel-zona')?.value        ?? ''),
+            grupo_empresario : ($('sel-grupo-empresario')?.value ?? ''),
             solo_activas: (!cfg.isGrupo && isSoloActivas()) ? '1' : '0',
             ...extra
         };
@@ -161,7 +164,7 @@ const Dashboard = (() => {
             }
         }
         // Limpiar vacíos para no enviar param vacío
-        ['sucursal','grupo','tipo_tienda','canal'].forEach(k => { if (!p[k]) delete p[k]; });
+        ['sucursal','grupo','tipo_tienda','canal','tipo_local','zona','grupo_empresario'].forEach(k => { if (!p[k]) delete p[k]; });
         return p;
     }
 
@@ -725,27 +728,31 @@ const Dashboard = (() => {
         if (isSoloActivas() && _sucursalesActivasIds.size) {
             rows = rows.filter(r => _sucursalesActivasIds.has(+r.nro_sucurs));
         }
-        const totFact = rows.reduce((s, r) => s + (r.facturacion    ?? 0), 0);
-        const totObjF = rows.reduce((s, r) => s + (r.objetivo_fecha ?? 0), 0);
-        const totObjT = rows.reduce((s, r) => s + (r.objetivo_total ?? 0), 0);
+        const totFact = rows.reduce((s, r) => s + (r.facturacion      ?? 0), 0);
+        const totPrev = rows.reduce((s, r) => s + (r.facturacion_prev ?? 0), 0);
+        const totObjF = rows.reduce((s, r) => s + (r.objetivo_fecha   ?? 0), 0);
+        const totObjT = rows.reduce((s, r) => s + (r.objetivo_total   ?? 0), 0);
         const totDesv = totObjF > 0 ? (totFact - totObjF) / totObjF : null;
         ExcelExporter.export({
             title     : 'Facturación vs Objetivos por Sucursal',
-            headers   : ['Sucursal', 'Facturación', 'Var. Fact.', 'Objetivo Total', 'Objetivo Fecha', 'Desvío'],
+            headers   : ['Sucursal', 'Fact. Actual', 'Fact. Año Ant.', 'Var. Fact.', 'Objetivo Total', 'Objetivo Fecha', 'Desvío'],
             rows      : rows.map(r => [
                 getSucNombre(r.nro_sucurs),
-                r.facturacion    != null ? convertir(r.facturacion)    : null,
-                r.var_facturacion ?? null,
-                r.objetivo_total  != null ? convertir(r.objetivo_total) : null,
-                r.objetivo_fecha  != null ? convertir(r.objetivo_fecha) : null,
-                r.desvio          ?? null,
+                r.facturacion      != null ? convertir(r.facturacion)      : null,
+                r.facturacion_prev != null ? convertir(r.facturacion_prev) : null,
+                r.var_facturacion  ?? null,
+                r.objetivo_total   != null ? convertir(r.objetivo_total)   : null,
+                r.objetivo_fecha   != null ? convertir(r.objetivo_fecha)   : null,
+                r.desvio           ?? null,
             ]),
             totalsRow : ['TOTAL',
-                convertir(totFact), null,
+                convertir(totFact),
+                totPrev ? convertir(totPrev) : null,
+                null,
                 totObjT ? convertir(totObjT) : null,
                 totObjF ? convertir(totObjF) : null,
                 totDesv ?? null],
-            colFormats: ['text', 'money', 'pct', 'money', 'money', 'pct'],
+            colFormats: ['text', 'money', 'money', 'pct', 'money', 'money', 'pct'],
             filename  : 'facturacion_vs_objetivos',
         });
     }
@@ -755,12 +762,13 @@ const Dashboard = (() => {
     let _tablaSucSort = { col: 'facturacion', asc: false };
 
     const TABLA_SUC_COLS = [
-        { key: 'nombre',         label: 'Sucursal',       sortKey: 'nombre',          align: 'left'  },
-        { key: 'facturacion',    label: 'Facturación',    sortKey: 'facturacion',      align: 'right' },
-        { key: 'var_facturacion',label: 'Var.Fact.',       sortKey: 'var_facturacion',  align: 'right' },
-        { key: 'objetivo_total', label: 'Objetivo Total',  sortKey: 'objetivo_total',   align: 'right' },
-        { key: 'objetivo_fecha', label: 'Objetivo a Fecha',sortKey: 'objetivo_fecha',   align: 'right' },
-        { key: 'desvio',         label: 'Desvío',          sortKey: 'desvio',           align: 'right' },
+        { key: 'nombre',          label: 'Sucursal',        sortKey: 'nombre',           align: 'left'  },
+        { key: 'facturacion',     label: 'Fact. Actual',    sortKey: 'facturacion',       align: 'right' },
+        { key: 'facturacion_prev',label: 'Fact. Año Ant.',  sortKey: 'facturacion_prev',  align: 'right' },
+        { key: 'var_facturacion', label: 'Var. Fact.',      sortKey: 'var_facturacion',   align: 'right' },
+        { key: 'objetivo_total',  label: 'Objetivo Total',  sortKey: 'objetivo_total',    align: 'right' },
+        { key: 'objetivo_fecha',  label: 'Objetivo a Fecha',sortKey: 'objetivo_fecha',    align: 'right' },
+        { key: 'desvio',          label: 'Desvío',          sortKey: 'desvio',            align: 'right' },
     ];
 
     function renderTablaSucursales(rows) {
@@ -783,7 +791,7 @@ const Dashboard = (() => {
         }
 
         if (!allRows?.length) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3)">Sin datos</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-3)">Sin datos</td></tr>`;
             return;
         }
 
@@ -807,6 +815,7 @@ const Dashboard = (() => {
         const dataRows = sorted.map(r => `<tr>
             <td>${getSucNombre(r.nro_sucurs)}</td>
             <td style="text-align:right">${fmt.money(r.facturacion)}</td>
+            <td style="text-align:right">${r.facturacion_prev ? fmt.money(r.facturacion_prev) : '—'}</td>
             <td style="text-align:right">${iconVar(r.var_facturacion)}</td>
             <td style="text-align:right">${r.objetivo_total ? fmt.money(r.objetivo_total) : '—'}</td>
             <td style="text-align:right">${r.objetivo_fecha ? fmt.money(r.objetivo_fecha) : '—'}</td>
@@ -814,13 +823,15 @@ const Dashboard = (() => {
         </tr>`).join('');
 
         // Fila de totales
-        const totFact   = allRows.reduce((s, r) => s + (r.facturacion     ?? 0), 0);
-        const totObjF   = allRows.reduce((s, r) => s + (r.objetivo_fecha  ?? 0), 0);
-        const totObjT   = allRows.reduce((s, r) => s + (r.objetivo_total  ?? 0), 0);
+        const totFact   = allRows.reduce((s, r) => s + (r.facturacion      ?? 0), 0);
+        const totPrev   = allRows.reduce((s, r) => s + (r.facturacion_prev ?? 0), 0);
+        const totObjF   = allRows.reduce((s, r) => s + (r.objetivo_fecha   ?? 0), 0);
+        const totObjT   = allRows.reduce((s, r) => s + (r.objetivo_total   ?? 0), 0);
         const totDesv   = totObjF > 0 ? (totFact - totObjF) / totObjF : null;
         const totalsRow = `<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--surface-1)">
             <td>TOTAL</td>
             <td style="text-align:right">${fmt.money(totFact)}</td>
+            <td style="text-align:right">${totPrev ? fmt.money(totPrev) : '—'}</td>
             <td style="text-align:right">—</td>
             <td style="text-align:right">${totObjT ? fmt.money(totObjT) : '—'}</td>
             <td style="text-align:right">${totObjF ? fmt.money(totObjF) : '—'}</td>
@@ -1129,9 +1140,12 @@ const Dashboard = (() => {
             fill('sel-tipo-tienda', data.tipos_tienda ?? [], 'TIPO_TIENDA',  'TIPO_TIENDA',   'Todos',  '');
             fill('sel-vendedor',    data.vendedores   ?? [], 'DESC_VENDEDOR','DESC_VENDEDOR',  'Todos',  '%');
             fill('sel-rubro',       data.rubros       ?? [], 'RUBRO',        'RUBRO',          'Todos',  '%');
+            fill('sel-tipo-local',  data.tipos_local  ?? [], 'TIPO_LOCAL',   'TIPO_LOCAL',     'Todos',  '');
+            fill('sel-zona',        data.zonas        ?? [], 'ZONA',         'ZONA',           'Todos',  '');
+            fill('sel-grupo-empresario', data.grupos_empresario ?? [], 'GRUPO_EMPRESARIO', 'GRUPO_EMPRESARIO', 'Todos', '');
 
             // Inicializar custom selects (solo la primera vez) y sincronizar texto
-            ['sel-sucursal', 'sel-vendedor', 'sel-rubro'].forEach(id => {
+            ['sel-sucursal', 'sel-vendedor', 'sel-rubro', 'sel-grupo-empresario'].forEach(id => {
                 initSearchableSelect(id);
                 syncSearchableSelect(id);
             });

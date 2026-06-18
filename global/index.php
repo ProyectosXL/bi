@@ -102,28 +102,49 @@ $ultimaAct = date('d/m/Y H:i:s');
         </select>
 
         <?php if (!$isGrupo): ?>
-        <span class="ar-only-wrap" id="grupo-wrap">
+        <div class="ar-only-wrap" id="grupo-wrap">
             <label for="sel-grupo">Grupo</label>
             <select id="sel-grupo">
                 <option value="">Todos</option>
             </select>
-        </span>
+        </div>
 
-        <span class="ar-only-wrap" id="tipo-tienda-wrap">
+        <div class="ar-only-wrap" id="tipo-tienda-wrap">
             <label for="sel-tipo-tienda">Tipo tienda</label>
             <select id="sel-tipo-tienda">
                 <option value="">Todos</option>
             </select>
-        </span>
+        </div>
 
-        <span class="ar-only-wrap" id="canal-wrap">
+        <div class="ar-only-wrap" id="canal-wrap">
             <label for="sel-canal">Canal</label>
             <select id="sel-canal">
                 <option value="">Todos</option>
                 <option value="PROPIOS">Locales propios</option>
                 <option value="ECOMMERCE">Ecommerce</option>
             </select>
-        </span>
+        </div>
+
+        <div class="fran-only-wrap" id="tipo-local-wrap" style="display: none;">
+            <label for="sel-tipo-local">Tipo local</label>
+            <select id="sel-tipo-local">
+                <option value="">Todos</option>
+            </select>
+        </div>
+
+        <div class="fran-only-wrap" id="zona-wrap" style="display: none;">
+            <label for="sel-zona">Zona</label>
+            <select id="sel-zona">
+                <option value="">Todos</option>
+            </select>
+        </div>
+
+        <div class="fran-only-wrap" id="grupo-empresario-wrap" style="display: none;">
+            <label for="sel-grupo-empresario">Grupo Empresario</label>
+            <select id="sel-grupo-empresario">
+                <option value="">Todos</option>
+            </select>
+        </div>
         <?php endif; ?>
 
         <label for="sel-periodo">Período</label>
@@ -434,6 +455,7 @@ $ultimaAct = date('d/m/Y H:i:s');
                                 <tr>
                                     <th>Sucursal</th>
                                     <th style="text-align:right">Facturación</th>
+                                    <th style="text-align:right">Fact. Año Ant.</th>
                                     <th style="text-align:right">Var. Fact.</th>
                                     <th style="text-align:right">Objetivo Total</th>
                                     <th style="text-align:right">Objetivo Fecha</th>
@@ -441,7 +463,7 @@ $ultimaAct = date('d/m/Y H:i:s');
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3);">Cargando...</td></tr>
+                                <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3);">Cargando...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1080,6 +1102,10 @@ window.BI_CONFIG = {
             if (el) el.style.display = isAr ? '' : 'none';
         });
         const isFran = (activeBtn?.dataset.origen ?? '') === 'franquicias';
+        ['tipo-local-wrap', 'zona-wrap', 'grupo-empresario-wrap'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = isFran ? '' : 'none';
+        });
         const tabBtnFran = document.getElementById('tab-btn-franquicias-detalle');
         if (tabBtnFran) tabBtnFran.style.display = isFran ? '' : 'none';
     }

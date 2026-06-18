@@ -40,7 +40,10 @@ class Filters
         ?string $tipoTienda,
         string $alias,
         string $origen = 'argentina',
-        string $sucursalCol = 'NRO_SUCURS'
+        string $sucursalCol = 'NRO_SUCURS',
+        ?string $tipoLocal = null,
+        ?string $zona = null,
+        ?string $grupoEmpresario = null
     ): array {
         $clauses = [];
         $params  = [];
@@ -62,6 +65,26 @@ class Filters
                 FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
                 WHERE sl.TIPO_TIENDA = ?)";
             $params[] = $tipoTienda;
+        }
+
+        if ($tipoLocal !== null && $origen === 'franquicias') {
+            $clauses[] = "{$alias}.{$sucursalCol} IN (
+                SELECT sl.NRO_SUCURSAL
+                FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
+                WHERE sl.TIPO_LOCAL = ?)";
+            $params[] = $tipoLocal;
+        }
+
+        if ($zona !== null && $origen === 'franquicias') {
+            $clauses[] = "{$alias}.{$sucursalCol} IN (
+                SELECT DISTINCT s_z.NRO_SUCURS FROM BI_SALES_SUCURSALES s_z WHERE s_z.ZONA = ?)";
+            $params[] = $zona;
+        }
+
+        if ($grupoEmpresario !== null && $origen === 'franquicias') {
+            $clauses[] = "{$alias}.{$sucursalCol} IN (
+                SELECT DISTINCT s_g.NRO_SUCURS FROM BI_SALES_SUCURSALES s_g WHERE s_g.GRUPO_EMPRESARIO = ?)";
+            $params[] = $grupoEmpresario;
         }
 
         $sql = $clauses ? 'AND ' . implode(' AND ', $clauses) : '';
@@ -117,14 +140,17 @@ class Filters
         $sqls   = [];
         $params = [];
 
-        // Sucursal / Grupo / TipoTienda
+        // Sucursal / Grupo / TipoTienda / TipoLocal / Zona / GrupoEmpresario
         [$s, $ps] = self::sucursal(
             $p['sucursal']    ?? null,
             $p['grupo']       ?? null,
             $p['tipo_tienda'] ?? null,
             $alias,
             $origen,
-            $sucursalCol
+            $sucursalCol,
+            $p['tipo_local']  ?? null,
+            $p['zona']        ?? null,
+            $p['grupo_empresario'] ?? null
         );
         if ($s) { $sqls[] = $s; $params = array_merge($params, $ps); }
 
@@ -203,6 +229,7 @@ class Filters
     public static function fromRequest(array $get, string $origen = 'argentina'): array
     {
         $soloArg = ($origen === 'argentina');
+        $isFran  = ($origen === 'franquicias');
         return [
             'sucursal'    => isset($get['sucursal']) && $get['sucursal'] !== ''
                              ? (int)$get['sucursal'] : null,
@@ -214,6 +241,12 @@ class Filters
             'rubro'       => $get['rubro']    ?? '%',
             'canal'       => ($soloArg && isset($get['canal']) && $get['canal'] !== '')
                              ? $get['canal'] : null,
+            'tipo_local'  => ($isFran && isset($get['tipo_local']) && $get['tipo_local'] !== '')
+                             ? $get['tipo_local'] : null,
+            'zona'        => ($isFran && isset($get['zona']) && $get['zona'] !== '')
+                             ? $get['zona'] : null,
+            'grupo_empresario' => ($isFran && isset($get['grupo_empresario']) && $get['grupo_empresario'] !== '')
+                             ? $get['grupo_empresario'] : null,
         ];
     }
 }
