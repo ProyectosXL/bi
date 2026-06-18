@@ -110,7 +110,7 @@
         try {
             const json = await fetchFiltros();
             if (!json.ok) return;
-            poblarSelect('#sel-canal', json.canales, 'Todos');
+            poblarSelect('#sel-canal', json.canales.filter(c => c.toUpperCase() !== 'DESCONOCIDO'), 'Todos');
             poblarSelect('#sel-rubro', json.rubros,  'Todos');
         } catch (e) { console.error('Filtros UY:', e); }
     }

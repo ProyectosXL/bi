@@ -53,10 +53,10 @@ $mesDesde  = date('Y-m-01');
     <!-- Toggle de país -->
     <div class="pais-toggle" role="group" aria-label="Seleccionar país">
         <a href="?pais=AR" class="pais-btn<?= $pais === 'AR' ? ' active' : '' ?>" aria-pressed="<?= $pais === 'AR' ? 'true' : 'false' ?>">
-            🇦🇷 AR
+            AR
         </a>
         <a href="?pais=UY" class="pais-btn<?= $pais === 'UY' ? ' active' : '' ?>" aria-pressed="<?= $pais === 'UY' ? 'true' : 'false' ?>">
-            🇺🇾 UY
+            UY
         </a>
     </div>
     <div class="topbar-meta">
