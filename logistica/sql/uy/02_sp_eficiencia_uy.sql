@@ -111,6 +111,21 @@ BEGIN
     WHERE CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL)) <> ''
     ORDER BY CANAL;
 
+    -- ── Result set 5: eficiencia semanal — últimas 12 semanas ────────────
+    SELECT
+        DATEPART(ISO_WEEK, e.FECHA_PEDI)                                   AS SEMANA,
+        YEAR(e.FECHA_PEDI)                                                  AS ANIO,
+        MIN(CAST(e.FECHA_PEDI AS DATE))                                     AS FECHA_INICIO,
+        CAST(ISNULL(SUM(e.CANT_FACTURADA), 0) AS DECIMAL(18,2))            AS UNID_FACTURADAS_SEM,
+        CAST(ISNULL(SUM(e.CANT_PEDID),     0) AS DECIMAL(18,2))            AS UNID_PEDIDAS_SEM
+    FROM dbo.BI_T_EFICIENCIA_LOGISTICA_UY e
+    WHERE e.FECHA_PEDI BETWEEN DATEADD(WEEK, -12, @FECHA_HASTA) AND @FECHA_HASTA
+      AND e.ESTADO_TANGO <> 'CANCELADO'
+      AND (@CANAL IS NULL OR e.CANAL COLLATE Modern_Spanish_CI_AI = @CANAL COLLATE Modern_Spanish_CI_AI)
+      AND (@RUBRO IS NULL OR e.RUBRO COLLATE Modern_Spanish_CI_AI = @RUBRO COLLATE Modern_Spanish_CI_AI)
+    GROUP BY DATEPART(ISO_WEEK, e.FECHA_PEDI), YEAR(e.FECHA_PEDI)
+    ORDER BY ANIO, SEMANA;
+
 END;
 GO
 

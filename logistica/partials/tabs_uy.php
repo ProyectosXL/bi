@@ -29,6 +29,13 @@
                 </div>
             </div>
             <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-hourglass-split"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Unidades no cumplidas</div>
+                    <div class="kpi-value" id="kv-uy-unid-pend">—</div>
+                </div>
+            </div>
+            <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-exclamation-triangle"></i></div>
                 <div class="kpi-body">
                     <div class="kpi-label">Pérdida ($UY)</div>
@@ -50,6 +57,26 @@
                     <div class="kpi-label">Pedidos totales</div>
                     <div class="kpi-value" id="kv-uy-pedidos">—</div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Eficiencia semanal -->
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-graph-up-arrow"></i> Eficiencia Semanal — últimas 12 semanas
+            </div>
+            <div class="chart-wrap">
+                <canvas id="chart-uy-efi-semanal" height="220"></canvas>
+            </div>
+        </div>
+
+        <!-- Eficiencia mensual (ex "Evolución anual") -->
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-graph-up"></i> Eficiencia Mensual — mismo mes año anterior
+            </div>
+            <div class="chart-wrap">
+                <canvas id="chart-uy-evolucion" height="220"></canvas>
             </div>
         </div>
 
@@ -75,16 +102,6 @@
                         <tbody id="tbody-uy-efi-rubro"></tbody>
                     </table>
                 </div>
-            </div>
-        </div>
-
-        <!-- Evolución anual -->
-        <div class="analisis-card">
-            <div class="analisis-section-header">
-                <i class="bi bi-graph-up"></i> Evolución eficiencia — mismo mes año anterior
-            </div>
-            <div class="chart-wrap">
-                <canvas id="chart-uy-evolucion" height="260"></canvas>
             </div>
         </div>
 
@@ -168,6 +185,89 @@
                     </thead>
                     <tbody id="tbody-uy-stock"></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- Top 10 Artículos Sobrantes -->
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-arrow-up-circle"></i> Top 10 Artículos Sobrantes
+                <span class="header-sub">Stock WMS &gt; Stock Central</span>
+            </div>
+            <div style="margin-bottom:8px">
+                <input type="text" id="inp-buscar-art" placeholder="Buscar artículo..." style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;width:260px">
+            </div>
+            <div class="table-wrap">
+                <table id="tabla-uy-sobrantes">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>Rubro</th>
+                            <th>Depósito</th>
+                            <th class="col-num">Stock Central</th>
+                            <th class="col-num">Stock WMS</th>
+                            <th class="col-num">Diferencia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-uy-sobrantes"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Top 10 Faltantes Depósito 82 + Gráfico Dif por Rubro -->
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes — Depósito 82 (Central)
+                <span class="header-sub">Stock Jauser &lt; Stock Central</span>
+            </div>
+            <div class="resumen-row">
+                <div class="table-wrap" style="max-height:320px;overflow-y:auto">
+                    <table id="tabla-uy-faltantes-82">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Descripción</th>
+                                <th>Rubro</th>
+                                <th class="col-num">Stock Central</th>
+                                <th class="col-num">Stock WMS</th>
+                                <th class="col-num">Diferencia</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-uy-faltantes-82"></tbody>
+                    </table>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="chart-uy-dif-rubro-82" height="260"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top 10 Faltantes Depósito 83 + Gráfico Dif por Rubro -->
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes — Depósito 83 (Jauser)
+                <span class="header-sub">Stock Jauser &lt; Stock Central</span>
+            </div>
+            <div class="resumen-row">
+                <div class="table-wrap" style="max-height:320px;overflow-y:auto">
+                    <table id="tabla-uy-faltantes-83">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Descripción</th>
+                                <th>Rubro</th>
+                                <th class="col-num">Stock Central</th>
+                                <th class="col-num">Stock WMS</th>
+                                <th class="col-num">Diferencia</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-uy-faltantes-83"></tbody>
+                    </table>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="chart-uy-dif-rubro-83" height="260"></canvas>
+                </div>
             </div>
         </div>
 

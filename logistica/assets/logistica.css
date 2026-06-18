@@ -291,16 +291,27 @@
 /* ── ms-auto util ────────────────────────────────────────────────────── */
 .ms-auto { margin-left: auto; }
 
+/* ── KPI grid con 7 items (UY eficiencia) ────────────────────────────── */
+/* minmax(0,1fr) permite que las columnas encojan sin desbordarse        */
+#kpis-eficiencia-uy {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 1400px) {
+    #kpis-eficiencia-uy { grid-template-columns: repeat(4, 1fr); }
+}
 @media (max-width: 1100px) {
     .resumen-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 700px) {
-    .kpi-grid    { grid-template-columns: 1fr 1fr; }
-    .topbar-meta { display: none; }
+    .kpi-grid           { grid-template-columns: 1fr 1fr; }
+    #kpis-eficiencia-uy { grid-template-columns: repeat(4, 1fr); }
+    .topbar-meta        { display: none; }
 }
 @media (max-width: 450px) {
-    .kpi-grid    { grid-template-columns: 1fr; }
+    .kpi-grid           { grid-template-columns: 1fr; }
+    #kpis-eficiencia-uy { grid-template-columns: 1fr 1fr; }
 }
 
 /* ── Toggle de país (topbar) ─────────────────────────────────────────── */

@@ -12,9 +12,10 @@ try {
     $db = new LogisticaDB_UY();
     ob_clean();
     echo json_encode([
-        'ok'     => true,
-        'canales'=> $db->getCanalesUy(),
-        'rubros' => $db->getRubrosUy(),
+        'ok'       => true,
+        'canales'  => $db->getCanalesUy(),
+        'rubros'   => $db->getRubrosUy(),
+        'depositos'=> $db->getDepositosUy(),
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     ob_clean();

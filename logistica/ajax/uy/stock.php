@@ -9,10 +9,11 @@ header('Cache-Control: no-cache');
 require_once __DIR__ . '/../../class/LogisticaDB_UY.php';
 
 try {
-    $rubro = isset($_GET['rubro']) && $_GET['rubro'] !== '' ? $_GET['rubro'] : null;
+    $rubro    = isset($_GET['rubro'])    && $_GET['rubro']    !== '' ? $_GET['rubro']    : null;
+    $deposito = isset($_GET['deposito']) && $_GET['deposito'] !== '' ? $_GET['deposito'] : null;
 
     $db   = new LogisticaDB_UY();
-    $data = $db->getStockUy($rubro);
+    $data = $db->getStockUy($rubro, $deposito);
 
     ob_clean();
     echo json_encode(['ok' => true, 'data' => $data], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
