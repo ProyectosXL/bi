@@ -59,10 +59,10 @@
             'kv-uy-perdida-uyu'  : ['Pérdida ($UY)', ['Importe pendiente de facturar en pesos uruguayos.', 'El porcentaje muestra el peso de la pérdida sobre el importe pedido total.']],
             'kv-uy-perdida-usd'  : ['Pérdida (U$S)', ['Importe pendiente en dólares, calculado con la última cotización UYU/USD registrada.', 'La cotización aplicada se muestra debajo del valor.']],
             'kv-uy-pedidos'      : ['Pedidos totales', ['Cantidad de pedidos distintos incluidos en el período y filtros.']],
-            'kv-uy-dif-neta'     : ['Diferencia neta', ['Suma de Stock WMS − Stock Central por rubro.', 'Positivo: hay más en WMS que en Central. Negativo: Central tiene más que WMS.']],
-            'kv-uy-dif-abs'      : ['Diferencia absoluta', ['Suma del valor absoluto de (WMS − Central). Mide la magnitud total del desvío sin importar el signo.']],
-            'kv-uy-precision'    : ['Precisión de inventario', ['Proporción del stock que coincide entre ambos sistemas: 1 − dif.abs / Stock Central.', 'Meta ideal: 99% o superior.']],
-            'kv-uy-stock-tango'  : ['Stock Central', ['Total de unidades registradas en el sistema Central (referencia) para los rubros activos.']],
+            'kv-uy-stock-tango'  : ['Stock Tango', ['Total de unidades registradas en el sistema Central (referencia) para los rubros activos.']],
+            'kv-uy-stock-wms'    : ['Stock Jauser', ['Total de unidades registradas en el sistema Jauser (WMS) para los rubros activos.']],
+            'kv-uy-dif-neta'     : ['Diferencia neta', ['Suma de Stock Jauser − Stock Tango por rubro.', 'Positivo: hay más en Jauser que en Tango. Negativo: Tango tiene más que Jauser.']],
+            'kv-uy-precision'    : ['Precisión de inventario', ['Proporción del stock que coincide entre ambos sistemas: 1 − dif.abs / Stock Tango.', 'Meta ideal: 99% o superior.']],
         },
         sections: {
             'chart-uy-efi-semanal': ['Eficiencia semanal', ['Eficiencia de facturación (unidades facturadas / pedidas) agrupada por semana ISO en las últimas 12 semanas.', 'La línea roja punteada marca la meta del 95%.']],
@@ -74,7 +74,7 @@
             'tabla-uy-stock'      : ['Detalle de stock por rubro', ['Stock Central, WMS, diferencia neta, porcentual, diferencia absoluta y precisión por rubro.']],
             'tabla-uy-sobrantes'  : ['Top 10 artículos sobrantes', ['Artículos con mayor stock en WMS respecto a Central (DIFERENCIA > 0).', 'Usá el buscador para filtrar por código o descripción.']],
             'tabla-uy-faltantes-82': ['Top 10 faltantes — Depósito 82 (Central)', ['Artículos donde Jauser WMS registra menos unidades que el sistema Central para el depósito 82 (depósito propio de XL).']],
-            'tabla-uy-faltantes-83': ['Top 10 faltantes — Depósito 83 (Jauser)', ['Artículos donde Jauser WMS registra menos unidades que el sistema Central para el depósito 83 (warehouse de Jauser).']],
+            'tabla-uy-faltantes-83': ['Top 10 faltantes — Depósito 83 (Depósito Fiscal)', ['Artículos donde Jauser WMS registra menos unidades que el sistema Central para el depósito 83 (Depósito Fiscal).']],
         },
         tableHeaders: {
             'tabla-uy-efi-rubro': [
@@ -363,15 +363,15 @@
         const k = data.kpis || {};
 
         // KPIs
+        $('#kv-uy-stock-tango').text(fmt.num(k.STOCK_TANGO));
+        $('#kv-uy-stock-wms').text(fmt.num(k.STOCK_WMS));
         $('#kv-uy-dif-neta').text(fmt.num(k.DIFERENCIA));
         const difPct = parseFloat(k.DIF_PCT || 0);
         setVar('#kvar-uy-dif-neta-pct', {
             text: fmt.pct(k.DIF_PCT),
             cls : Math.abs(difPct) < 0.01 ? 'pos' : 'neg',
         });
-        $('#kv-uy-dif-abs').text(fmt.num(k.DIFERENCIA_ABS));
         $('#kv-uy-precision').text(fmt.pct(k.PRECISION_INVENTARIO));
-        $('#kv-uy-stock-tango').text(fmt.num(k.STOCK_TANGO));
 
         // Rubro-level: top 15 con stock
         const rubros = (data.rubros || [])
@@ -435,13 +435,11 @@
 
         // Top 10 Faltantes Depo 82 + gráfico
         renderTablaArticulos('#tbody-uy-faltantes-82', data.faltantes_82 || [], 6, false);
-        renderGraficoDifRubro('chart-uy-dif-rubro-82', chartDifRubro82, data.dif_rubro_82 || [], 'Depósito 82');
-        chartDifRubro82 = window._chartDifRubro82;
+        chartDifRubro82 = renderGraficoDifRubro('chart-uy-dif-rubro-82', chartDifRubro82, data.dif_rubro_82 || [], 'Depósito 82');
 
         // Top 10 Faltantes Depo 83 + gráfico
         renderTablaArticulos('#tbody-uy-faltantes-83', data.faltantes_83 || [], 6, false);
-        renderGraficoDifRubro('chart-uy-dif-rubro-83', chartDifRubro83, data.dif_rubro_83 || [], 'Depósito 83');
-        chartDifRubro83 = window._chartDifRubro83;
+        chartDifRubro83 = renderGraficoDifRubro('chart-uy-dif-rubro-83', chartDifRubro83, data.dif_rubro_83 || [], 'Depósito Fiscal');
     }
 
     // Renderiza tabla de artículos (sobrantes o faltantes)
@@ -467,11 +465,11 @@
         }).join(''));
     }
 
-    // Renderiza gráfico de barras horizontales de diferencia por rubro
+    // Renderiza gráfico de barras horizontales de diferencia por rubro. Retorna la instancia.
     function renderGraficoDifRubro(canvasId, chartInst, rows, titulo) {
         if (chartInst) chartInst.destroy();
         const top = rows.slice(0, 15);
-        const chart = new Chart(document.getElementById(canvasId), {
+        return new Chart(document.getElementById(canvasId), {
             type: 'bar',
             data: {
                 labels  : top.map(r => r.RUBRO),
@@ -492,8 +490,6 @@
                 },
             },
         });
-        // Guarda referencia en window para recuperarla post-llamada
-        window['_chart' + canvasId.replace(/-/g, '_').replace(/chart_uy_/i, 'DifRubro')] = chart;
     }
 
     // ── Buscador de artículos sobrantes ──────────────────────────────────

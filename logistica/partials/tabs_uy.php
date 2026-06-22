@@ -115,7 +115,21 @@
         <!-- KPIs stock -->
         <div class="kpi-grid" id="kpis-stock-uy">
             <div class="kpi-card">
-                <div class="kpi-icon"><i class="bi bi-arrow-left-right"></i></div>
+                <div class="kpi-icon"><i class="bi bi-database"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Stock Tango</div>
+                    <div class="kpi-value" id="kv-uy-stock-tango">—</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-boxes"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Stock Jauser</div>
+                    <div class="kpi-value" id="kv-uy-stock-wms">—</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-arrow-left-right"></i></div>
                 <div class="kpi-body">
                     <div class="kpi-label">Diferencia neta</div>
                     <div class="kpi-value" id="kv-uy-dif-neta">—</div>
@@ -123,24 +137,10 @@
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-exclamation-diamond"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-label">Diferencia absoluta</div>
-                    <div class="kpi-value" id="kv-uy-dif-abs">—</div>
-                </div>
-            </div>
-            <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-shield-check"></i></div>
                 <div class="kpi-body">
                     <div class="kpi-label">Precisión inventario</div>
                     <div class="kpi-value" id="kv-uy-precision">—</div>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-database"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-label">Stock Central</div>
-                    <div class="kpi-value" id="kv-uy-stock-tango">—</div>
                 </div>
             </div>
         </div>
@@ -246,7 +246,7 @@
         <!-- Top 10 Faltantes Depósito 83 + Gráfico Dif por Rubro -->
         <div class="analisis-card">
             <div class="analisis-section-header">
-                <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes — Depósito 83 (Jauser)
+                <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes — Depósito 83 (Depósito Fiscal)
                 <span class="header-sub">Stock Jauser &lt; Stock Central</span>
             </div>
             <div class="resumen-row">
