@@ -41,6 +41,10 @@
     let chartProdPicking = null;
     let chartPedidos     = null;
 
+    // Detalle de artículos con diferencia (drill-down del detalle por rubro)
+    let stockDetalleArticulos = [];
+    let stockExportInit = false;
+
     const BASE = '/bi/logistica/ajax/';
 
     const TAB_SLICERS = {
@@ -477,15 +481,19 @@
             options: chartOptions('Unidades', {}, { integer: true }),
         });
 
+        stockDetalleArticulos = data.detalle_articulos || [];
         const $tbody = $('#tbody-stock').empty();
         if (!rubros.length) {
-            $tbody.append('<tr><td colspan="8"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>');
+            $tbody.append('<tr><td colspan="6"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>');
+            initStockExport();
             return;
         }
         $tbody.html(rubros.map(r => {
-            const dif = parseFloat(r.DIFERENCIA || 0);
-            return `<tr>
-                <td>${r.RUBRO}</td>
+            const dif    = parseFloat(r.DIFERENCIA || 0);
+            const nArts  = stockDetalleArticulos.filter(a => a.RUBRO === r.RUBRO).length;
+            const expand = nArts > 0;
+            return `<tr class="rubro-row${expand ? ' expandible' : ''}" data-rubro="${escapeHtml(r.RUBRO || '')}">
+                <td>${expand ? '<i class="bi bi-chevron-right caret"></i> ' : ''}${escapeHtml(r.RUBRO || '')}${expand ? ` <span class="badge-arts">${nArts}</span>` : ''}</td>
                 <td class="col-num">${fmt.num(r.STOCK_TANGO)}</td>
                 <td class="col-num">${fmt.num(r.STOCK_WMS)}</td>
                 <td class="col-num ${dif !== 0 ? (dif < 0 ? 'var-neg' : 'var-pos') : ''}">${fmt.num(dif)}</td>
@@ -493,6 +501,81 @@
                 <td class="col-num ${parseFloat(r.PRECISION||0) >= 0.99 ? 'var-pos' : 'var-neg'}">${fmt.pct(r.PRECISION)}</td>
             </tr>`;
         }).join(''));
+
+        // Botón "Exportar a Excel" del detalle por rubro (se inserta una sola vez)
+        initStockExport();
+    }
+
+    // ── Drill-down: artículos con diferencia de un rubro ──────────────────
+    function toggleDrillRubro($row) {
+        const rubro = $row.data('rubro');
+        const $next = $row.next('.detalle-row');
+        if ($next.length) { $next.remove(); $row.removeClass('abierto'); return; }
+
+        const arts = stockDetalleArticulos
+            .filter(a => a.RUBRO === rubro)
+            .sort((a, b) => Math.abs(parseFloat(b.DIFERENCIA || 0)) - Math.abs(parseFloat(a.DIFERENCIA || 0)));
+
+        const filas = arts.map(a => {
+            const dif = parseFloat(a.DIFERENCIA || 0);
+            return `<tr>
+                <td>${escapeHtml(a.COD_ARTICU || '—')}</td>
+                <td>${escapeHtml(a.DESCRIPCION || '—')}</td>
+                <td class="col-num">${fmt.num(a.STOCK_TANGO)}</td>
+                <td class="col-num">${fmt.num(a.STOCK_WMS)}</td>
+                <td class="col-num ${dif < 0 ? 'var-neg' : 'var-pos'}">${fmt.num(dif)}</td>
+            </tr>`;
+        }).join('');
+
+        const sub = `<tr class="detalle-row"><td colspan="6">
+            <table class="tabla-sub">
+                <thead><tr>
+                    <th>Código</th><th>Descripción</th>
+                    <th class="col-num">Stock Tango</th>
+                    <th class="col-num">Stock WMS</th>
+                    <th class="col-num">Diferencia</th>
+                </tr></thead>
+                <tbody>${filas}</tbody>
+            </table>
+        </td></tr>`;
+
+        $row.addClass('abierto').after(sub);
+    }
+
+    // ── Exportar a Excel: detalle de artículos con diferencias ────────────
+    function initStockExport() {
+        if (stockExportInit || typeof ExcelExporter === 'undefined') return;
+        const hdr = document.getElementById('hdr-stock-detalle');
+        if (!hdr) return;
+        ExcelExporter.addExportButton(hdr, exportDetalleArticulos);
+        stockExportInit = true;
+    }
+
+    function exportDetalleArticulos() {
+        if (!stockDetalleArticulos.length) {
+            alert('No hay artículos con diferencias para exportar.');
+            return;
+        }
+        const rows = stockDetalleArticulos
+            .slice()
+            .sort((a, b) =>
+                (a.RUBRO || '').localeCompare(b.RUBRO || '') ||
+                Math.abs(parseFloat(b.DIFERENCIA || 0)) - Math.abs(parseFloat(a.DIFERENCIA || 0)))
+            .map(a => [
+                a.RUBRO || '',
+                a.COD_ARTICU || '',
+                a.DESCRIPCION || '',
+                parseFloat(a.STOCK_TANGO || 0),
+                parseFloat(a.STOCK_WMS   || 0),
+                parseFloat(a.DIFERENCIA  || 0),
+            ]);
+        ExcelExporter.export({
+            title     : 'Stock Tango vs WMS — Artículos con diferencias',
+            headers   : ['Rubro', 'Código', 'Descripción', 'Stock Tango', 'Stock WMS', 'Diferencia'],
+            rows,
+            colFormats: ['text', 'text', 'text', 'num', 'num', 'num'],
+            filename  : 'stock_articulos_con_diferencias',
+        });
     }
 
     // ── Área 4: Productividad Facturación ─────────────────────────────────
@@ -843,6 +926,11 @@
             State.usuario = $('#sel-usuario').val() || '';
             delete Cache[State.activeTab];
             loadTab(State.activeTab);
+        });
+
+        // Drill-down del detalle por rubro (delegado: el tbody se re-renderiza)
+        $('#tbody-stock').on('click', 'tr.rubro-row.expandible', function () {
+            toggleDrillRubro($(this));
         });
     }
 

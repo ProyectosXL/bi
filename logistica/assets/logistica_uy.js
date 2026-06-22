@@ -43,6 +43,10 @@
     // Filas originales de la tabla sobrantes (para el buscador)
     let sobrantesRows = [];
 
+    // Detalle de artículos con diferencia (drill-down del detalle por rubro)
+    let stockDetalleArticulos = [];
+    let stockExportInit = false;
+
     const BASE = '/bi/logistica/ajax/uy/';
 
     const TAB_SLICERS = {
@@ -73,8 +77,8 @@
             'tabla-uy-efi-rubro'  : ['Detalle de eficiencia por rubro', ['Unidades pedidas, facturadas y porcentaje de eficiencia por rubro.']],
             'tabla-uy-stock'      : ['Detalle de stock por rubro', ['Stock Central, WMS, diferencia neta, porcentual, diferencia absoluta y precisión por rubro.']],
             'tabla-uy-sobrantes'  : ['Top 10 artículos sobrantes', ['Artículos con mayor stock en WMS respecto a Central (DIFERENCIA > 0).', 'Usá el buscador para filtrar por código o descripción.']],
-            'tabla-uy-faltantes-82': ['Top 10 faltantes — Depósito 82 (Central)', ['Artículos donde Jauser WMS registra menos unidades que el sistema Central para el depósito 82 (depósito propio de XL).']],
-            'tabla-uy-faltantes-83': ['Top 10 faltantes — Depósito 83 (Depósito Fiscal)', ['Artículos donde Jauser WMS registra menos unidades que el sistema Central para el depósito 83 (Depósito Fiscal).']],
+            'tabla-uy-faltantes-82': ['Top 10 Artículos Faltantes', ['Depósito 82 — Central (depósito propio de XL).', 'Artículos donde Jauser WMS registra menos unidades que el sistema Central.']],
+            'tabla-uy-faltantes-83': ['Top 10 Artículos Faltantes', ['Depósito 83 — Depósito Fiscal.', 'Artículos donde Jauser WMS registra menos unidades que el sistema Central.']],
         },
         tableHeaders: {
             'tabla-uy-efi-rubro': [
@@ -409,16 +413,19 @@
             options: { ...chartOptions('Unidades', {}, { integer: true }), plugins: { legend: { display: false } } },
         });
 
-        // Tabla detalle por rubro
+        // Tabla detalle por rubro (con drill-down de artículos con diferencias)
+        stockDetalleArticulos = data.detalle_articulos || [];
         const $tbody = $('#tbody-uy-stock').empty();
         if (!rubros.length) {
             $tbody.html('<tr><td colspan="7"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>');
         } else {
             $tbody.html(rubros.map(r => {
-                const dif  = parseFloat(r.DIFERENCIA || 0);
-                const prec = parseFloat(r.PRECISION  || 0);
-                return `<tr>
-                    <td>${escapeHtml(limpiarRubro(r))}</td>
+                const dif    = parseFloat(r.DIFERENCIA || 0);
+                const prec   = parseFloat(r.PRECISION  || 0);
+                const nArts  = stockDetalleArticulos.filter(a => a.RUBRO === r.RUBRO).length;
+                const expand = nArts > 0;
+                return `<tr class="rubro-row${expand ? ' expandible' : ''}" data-rubro="${escapeHtml(r.RUBRO || '')}">
+                    <td>${expand ? '<i class="bi bi-chevron-right caret"></i> ' : ''}${escapeHtml(limpiarRubro(r))}${expand ? ` <span class="badge-arts">${nArts}</span>` : ''}</td>
                     <td class="col-num">${fmt.num(r.STOCK_TANGO)}</td>
                     <td class="col-num">${fmt.num(r.STOCK_WMS)}</td>
                     <td class="col-num ${dif !== 0 ? (dif < 0 ? 'var-neg' : 'var-pos') : ''}">${fmt.num(dif)}</td>
@@ -428,6 +435,9 @@
                 </tr>`;
             }).join(''));
         }
+
+        // Botón "Exportar a Excel" del detalle por rubro (se inserta una sola vez)
+        initStockExport();
 
         // Top 10 Sobrantes
         renderTablaArticulos('#tbody-uy-sobrantes', data.sobrantes || [], 7, true);
@@ -489,6 +499,82 @@
                     y: { ticks: { font: { size: 10 } } },
                 },
             },
+        });
+    }
+
+    // ── Drill-down: artículos con diferencia de un rubro ──────────────────
+    // Inserta/quita una fila de detalle debajo de la fila de rubro clickeada.
+    function toggleDrillRubro($row) {
+        const rubro = $row.data('rubro');
+        const $next = $row.next('.detalle-row');
+        if ($next.length) {                       // ya abierto → cerrar
+            $next.remove();
+            $row.removeClass('abierto');
+            return;
+        }
+        const arts = stockDetalleArticulos
+            .filter(a => a.RUBRO === rubro)
+            .sort((a, b) => Math.abs(parseFloat(b.DIFERENCIA || 0)) - Math.abs(parseFloat(a.DIFERENCIA || 0)));
+
+        const filas = arts.map(a => {
+            const dif = parseFloat(a.DIFERENCIA || 0);
+            return `<tr>
+                <td>${escapeHtml(a.COD_ARTICU || '—')}</td>
+                <td>${escapeHtml(a.DESCRIPCION || '—')}</td>
+                <td class="col-num">${fmt.num(a.STOCK_TANGO)}</td>
+                <td class="col-num">${fmt.num(a.STOCK_WMS)}</td>
+                <td class="col-num ${dif < 0 ? 'var-neg' : 'var-pos'}">${fmt.num(dif)}</td>
+            </tr>`;
+        }).join('');
+
+        const sub = `<tr class="detalle-row"><td colspan="7">
+            <table class="tabla-sub">
+                <thead><tr>
+                    <th>Código</th><th>Descripción</th>
+                    <th class="col-num">Stock Tango</th>
+                    <th class="col-num">Stock WMS</th>
+                    <th class="col-num">Diferencia</th>
+                </tr></thead>
+                <tbody>${filas}</tbody>
+            </table>
+        </td></tr>`;
+
+        $row.addClass('abierto').after(sub);
+    }
+
+    // ── Exportar a Excel: detalle de artículos con diferencias ────────────
+    function initStockExport() {
+        if (stockExportInit || typeof ExcelExporter === 'undefined') return;
+        const hdr = document.getElementById('hdr-uy-stock-detalle');
+        if (!hdr) return;
+        ExcelExporter.addExportButton(hdr, exportDetalleArticulos);
+        stockExportInit = true;
+    }
+
+    function exportDetalleArticulos() {
+        if (!stockDetalleArticulos.length) {
+            alert('No hay artículos con diferencias para exportar.');
+            return;
+        }
+        const rows = stockDetalleArticulos
+            .slice()
+            .sort((a, b) =>
+                (a.RUBRO || '').localeCompare(b.RUBRO || '') ||
+                Math.abs(parseFloat(b.DIFERENCIA || 0)) - Math.abs(parseFloat(a.DIFERENCIA || 0)))
+            .map(a => [
+                a.RUBRO || '',
+                a.COD_ARTICU || '',
+                a.DESCRIPCION || '',
+                parseFloat(a.STOCK_TANGO || 0),
+                parseFloat(a.STOCK_WMS   || 0),
+                parseFloat(a.DIFERENCIA  || 0),
+            ]);
+        ExcelExporter.export({
+            title     : 'Stock Tango vs WMS — Artículos con diferencias',
+            headers   : ['Rubro', 'Código', 'Descripción', 'Stock Tango', 'Stock WMS', 'Diferencia'],
+            rows,
+            colFormats: ['text', 'text', 'text', 'num', 'num', 'num'],
+            filename  : 'stock_uy_articulos_con_diferencias',
         });
     }
 
@@ -598,6 +684,11 @@
         // Buscador de artículos sobrantes (client-side)
         $('#inp-buscar-art').on('input', function () {
             filtrarSobrantes($(this).val());
+        });
+
+        // Drill-down del detalle por rubro (delegado: el tbody se re-renderiza)
+        $('#tbody-uy-stock').on('click', 'tr.rubro-row.expandible', function () {
+            toggleDrillRubro($(this));
         });
     }
 

@@ -120,9 +120,13 @@ El cache de AR y UY está separado por diseño: `LogisticaDBBase` incluye la cla
 
 ### Pestaña 1: Eficiencia
 
+> **Universo:** solo pedidos *tocados* (al menos 1 unidad facturada). Los pedidos
+> con `SUM(CANT_FACTURADA)=0` en todas sus líneas se excluyen de los KPIs — equivale
+> al estado `SIN FACTURAR` que ya filtra el SP de AR.
+
 | Indicador | Descripción |
 |-----------|-------------|
-| % Eficiencia global | `SUM(CANT_FACTURADA) / SUM(CANT_PEDID)` |
+| % Eficiencia global | `SUM(CANT_FACTURADA) / SUM(CANT_PEDID)` (solo pedidos tocados) |
 | % Eficiencia por rubro | Idem agrupado por RUBRO (chart barras horizontales + tabla) |
 | Pérdida ($UY) | `SUM(IMPORTE_PENDIENTE)` |
 | Pérdida (U$S) | Pérdida / cotización USD activa |

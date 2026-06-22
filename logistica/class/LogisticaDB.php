@@ -56,6 +56,7 @@ class LogisticaDB extends LogisticaDBBase
             'kpis'         => $sets[0][0] ?? [],
             'rubros'       => $sets[1] ?? [],
             'lista_rubros' => array_column($sets[2] ?? [], 'RUBRO'),
+            'detalle_articulos' => $sets[3] ?? [],   // drill-down del detalle por rubro
         ];
     }
 

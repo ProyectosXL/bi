@@ -178,11 +178,12 @@
         </div>
 
         <div class="analisis-card">
-            <div class="analisis-section-header">
+            <div class="analisis-section-header" id="hdr-stock-detalle">
                 <i class="bi bi-table"></i> Detalle por Rubro
+                <span class="header-sub">Clic en un rubro para ver los artículos con diferencias</span>
             </div>
             <div class="table-wrap">
-                <table id="tabla-stock">
+                <table id="tabla-stock" class="tabla-drill">
                     <thead>
                         <tr>
                             <th>Rubro</th>

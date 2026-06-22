@@ -155,6 +155,8 @@ $mesDesde  = date('Y-m-01');
 
 <script>window.LOGISTICA_PAIS = '<?= $pais ?>';</script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="/bi/global/components/ExcelExporter.js?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/components/ExcelExporter.js') ?>"></script>
 <script src="/bi/logistica/assets/logistica_core.js?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/logistica/assets/logistica_core.js') ?>"></script>
 <?php if ($pais === 'AR'): ?>
 <script src="/bi/logistica/assets/logistica_ar.js?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/logistica/assets/logistica_ar.js') ?>"></script>

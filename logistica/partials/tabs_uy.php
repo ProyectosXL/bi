@@ -167,11 +167,12 @@
 
         <!-- Tabla detalle por rubro -->
         <div class="analisis-card">
-            <div class="analisis-section-header">
+            <div class="analisis-section-header" id="hdr-uy-stock-detalle">
                 <i class="bi bi-table"></i> Detalle por Rubro
+                <span class="header-sub">Clic en un rubro para ver los artículos con diferencias</span>
             </div>
             <div class="table-wrap">
-                <table id="tabla-uy-stock">
+                <table id="tabla-uy-stock" class="tabla-drill">
                     <thead>
                         <tr>
                             <th>Rubro</th>
@@ -218,7 +219,7 @@
         <!-- Top 10 Faltantes Depósito 82 + Gráfico Dif por Rubro -->
         <div class="analisis-card">
             <div class="analisis-section-header">
-                <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes — Depósito 82 (Central)
+                <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes
                 <span class="header-sub">Stock Jauser &lt; Stock Central</span>
             </div>
             <div class="resumen-row">
@@ -246,7 +247,7 @@
         <!-- Top 10 Faltantes Depósito 83 + Gráfico Dif por Rubro -->
         <div class="analisis-card">
             <div class="analisis-section-header">
-                <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes — Depósito 83 (Depósito Fiscal)
+                <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes
                 <span class="header-sub">Stock Jauser &lt; Stock Central</span>
             </div>
             <div class="resumen-row">

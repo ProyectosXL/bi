@@ -166,6 +166,42 @@ BEGIN
     GROUP BY RUBRO
     ORDER BY SUM(DIFERENCIA_ABS) DESC;
 
+    -- ════════════════════════════════════════════════════════════════════
+    -- RS9: detalle de artículos con diferencia (drill-down del "Detalle por
+    --      Rubro" de RS2). Misma fuente que RS1–RS3: vista Central vs Jauser.
+    --      Roll-up a nivel artículo (suma sobre depósitos 82/83). Solo
+    --      artículos con diferencia neta <> 0. Respeta el filtro @RUBRO.
+    -- ════════════════════════════════════════════════════════════════════
+    ;WITH base_art AS (
+        SELECT
+            ISNULL(r.RUBRO COLLATE Modern_Spanish_CI_AI, '(Sin rubro)')  AS RUBRO,
+            v.COD_ARTICU  COLLATE Modern_Spanish_CI_AI                   AS COD_ARTICU,
+            v.DESCRIPCION COLLATE Modern_Spanish_CI_AI                   AS DESCRIPCION,
+            ISNULL(TRY_CAST(v.STOCK_CENTRAL AS DECIMAL(18,2)), 0)        AS STOCK_CENTRAL,
+            ISNULL(TRY_CAST(v.STOCK_JAUSER  AS DECIMAL(18,2)), 0)        AS STOCK_JAUSER,
+            ISNULL(TRY_CAST(v.DIFERENCIA    AS DECIMAL(18,2)), 0)        AS DIFERENCIA
+        FROM [XL-TANGO].[TASKY_SA].[dbo].[EB_V_STOCK_JAUSER_CENTRAL] v
+        LEFT JOIN [XL-TANGO].[TASKY_SA].[dbo].[SOF_RUBROS] r
+            ON v.COD_ARTICU COLLATE Modern_Spanish_CI_AI
+             = r.CODIGO     COLLATE Modern_Spanish_CI_AI
+        WHERE @RUBRO IS NULL
+           OR ISNULL(r.RUBRO, '') COLLATE Modern_Spanish_CI_AI
+            = @RUBRO              COLLATE Modern_Spanish_CI_AI
+    )
+    SELECT
+        RUBRO,
+        COD_ARTICU,
+        MAX(DESCRIPCION)                                                 AS DESCRIPCION,
+        CAST(SUM(STOCK_CENTRAL)   AS DECIMAL(18,2))                      AS STOCK_TANGO,
+        CAST(SUM(STOCK_JAUSER)    AS DECIMAL(18,2))                      AS STOCK_WMS,
+        CAST(SUM(DIFERENCIA)      AS DECIMAL(18,2))                      AS DIFERENCIA,
+        CAST(SUM(ABS(DIFERENCIA)) AS DECIMAL(18,2))                      AS DIFERENCIA_ABS
+    FROM base_art
+    WHERE RUBRO NOT IN ('(Sin rubro)')
+    GROUP BY RUBRO, COD_ARTICU
+    HAVING SUM(DIFERENCIA) <> 0
+    ORDER BY RUBRO, ABS(SUM(DIFERENCIA)) DESC;
+
 END;
 GO
 

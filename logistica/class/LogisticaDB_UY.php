@@ -50,6 +50,7 @@ class LogisticaDB_UY extends LogisticaDBBase
             'dif_rubro_82'    => $sets[5] ?? [],
             'faltantes_83'    => $sets[6] ?? [],
             'dif_rubro_83'    => $sets[7] ?? [],
+            'detalle_articulos' => $sets[8] ?? [],   // drill-down del detalle por rubro
         ];
     }
 

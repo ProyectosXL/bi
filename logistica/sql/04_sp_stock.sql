@@ -63,5 +63,22 @@ BEGIN
     FROM dbo.BI_STOCK_WMS_TANGO
     WHERE RUBRO IS NOT NULL AND LTRIM(RTRIM(RUBRO)) <> ''
     ORDER BY RUBRO;
+
+    -- ── Result set 4: detalle de artículos con diferencia (drill-down RS2) ─
+    -- Roll-up a nivel artículo (suma sobre depósitos). Solo artículos con
+    -- diferencia neta <> 0. Respeta el filtro @RUBRO. Misma fuente que RS2.
+    SELECT
+        RUBRO,
+        COD_ARTICU,
+        MAX(DESCRIPCION)                                   AS DESCRIPCION,
+        CAST(SUM(STOCK_TANGO) AS DECIMAL(18,2))            AS STOCK_TANGO,
+        CAST(SUM(STOCK_UBIC)  AS DECIMAL(18,2))            AS STOCK_WMS,
+        CAST(SUM(DIFERENCIA)  AS DECIMAL(18,2))            AS DIFERENCIA
+    FROM dbo.BI_STOCK_WMS_TANGO
+    WHERE (@RUBRO IS NULL OR RUBRO = @RUBRO)
+      AND RUBRO IS NOT NULL AND LTRIM(RTRIM(RUBRO)) <> ''
+    GROUP BY RUBRO, COD_ARTICU
+    HAVING SUM(DIFERENCIA) <> 0
+    ORDER BY RUBRO, ABS(SUM(DIFERENCIA)) DESC;
 END;
 GO

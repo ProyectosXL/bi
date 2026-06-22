@@ -48,13 +48,15 @@ BEGIN
         HAVING SUM(MINUTOS) >= 180
     ) t;
 
-    -- Unidades pendientes del próximo día hábil
+    -- Unidades pendientes a cubrir en el próximo día hábil (la "próxima entrega").
+    -- Se agrupa por FECHA_ENTREGA (fecha comprometida de entrega), NO por
+    -- FECHA_PEDIDO (fecha de carga, siempre en el pasado → daba 0). Las unidades
+    -- pendientes se miden con CANT_PEDIDO sobre ESTADO = 'PENDIENTE'.
     DECLARE @UNID_PEND_PROX DECIMAL(18,2);
     SELECT @UNID_PEND_PROX = ISNULL(SUM(CAST(CANT_PEDIDO AS DECIMAL(18,2))), 0)
     FROM dbo.BI_T_DESPACHO_PEDIDOS
     WHERE ESTADO = 'PENDIENTE'
-      AND FECHA_PEDIDO >= @PROX_HABIL
-      AND FECHA_PEDIDO <  DATEADD(DAY, 1, @PROX_HABIL);
+      AND FECHA_ENTREGA = @PROX_HABIL;
 
     -- ── Result set 1: KPIs demanda + despacho ────────────────────────────
     SELECT
@@ -81,18 +83,19 @@ BEGIN
     FROM dbo.BI_T_DESPACHO_PEDIDOS
     WHERE FECHA_PEDIDO BETWEEN @FECHA_DESDE AND @FECHA_HASTA;
 
-    -- ── Result set 2: pendientes hoy ──────────────────────────────────────
+    -- ── Result set 2: pendientes a entregar HOY ───────────────────────────
+    -- Por FECHA_ENTREGA (no FECHA_PEDIDO): son las unidades comprometidas a
+    -- entregar hoy que siguen pendientes, igual criterio que la tarjeta HOY.
     SELECT TOP 500
         NRO_PEDIDO,
         COD_CLIENT,
         NOMBRE_CLIENTE,
-        CAST(FECHA_PEDIDO AS DATE) AS FECHA_PEDIDO,
+        CAST(FECHA_ENTREGA AS DATE) AS FECHA_ENTREGA,
         CAST(ISNULL(SUM(CANT_PEDIDO),0) AS DECIMAL(18,2)) AS UNIDADES
     FROM dbo.BI_T_DESPACHO_PEDIDOS
     WHERE ESTADO = 'PENDIENTE'
-      AND FECHA_PEDIDO >= @HOY
-      AND FECHA_PEDIDO <  @HOY_FIN
-    GROUP BY NRO_PEDIDO, COD_CLIENT, NOMBRE_CLIENTE, CAST(FECHA_PEDIDO AS DATE)
+      AND FECHA_ENTREGA = @HOY
+    GROUP BY NRO_PEDIDO, COD_CLIENT, NOMBRE_CLIENTE, CAST(FECHA_ENTREGA AS DATE)
     ORDER BY UNIDADES DESC;
 
     -- ── Result set 3: pedidos demorados ───────────────────────────────────
