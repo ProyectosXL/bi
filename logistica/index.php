@@ -85,14 +85,6 @@ $mesDesde  = date('Y-m-01');
         <select id="sel-rubro"><option value="">Todos</option></select>
     </span>
 
-    <?php if ($pais === 'UY'): ?>
-    <!-- Slicer Depósito (solo UY — tab Stock) -->
-    <span class="slicer-wrap" id="wrap-deposito" style="display:none">
-        <label for="sel-deposito">Depósito</label>
-        <select id="sel-deposito"><option value="">Todos</option></select>
-    </span>
-    <?php endif; ?>
-
     <?php if ($pais === 'AR'): ?>
     <!-- Slicer Usuario (solo AR) -->
     <span class="slicer-wrap" id="wrap-usuario" style="display:none">

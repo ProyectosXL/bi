@@ -193,7 +193,7 @@
         <div class="analisis-card">
             <div class="analisis-section-header">
                 <i class="bi bi-arrow-up-circle"></i> Top 10 Artículos Sobrantes
-                <span class="header-sub">Stock WMS &gt; Stock Central</span>
+                <span class="header-sub">Stock Jauser &gt; Stock Central</span>
             </div>
             <div style="margin-bottom:8px">
                 <input type="text" id="inp-buscar-art" placeholder="Buscar artículo..." style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;width:260px">
@@ -205,7 +205,6 @@
                             <th>Código</th>
                             <th>Descripción</th>
                             <th>Rubro</th>
-                            <th>Depósito</th>
                             <th class="col-num">Stock Central</th>
                             <th class="col-num">Stock WMS</th>
                             <th class="col-num">Diferencia</th>
@@ -216,59 +215,26 @@
             </div>
         </div>
 
-        <!-- Top 10 Faltantes Depósito 82 + Gráfico Dif por Rubro -->
+        <!-- Top 10 Artículos Faltantes -->
         <div class="analisis-card">
             <div class="analisis-section-header">
                 <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes
                 <span class="header-sub">Stock Jauser &lt; Stock Central</span>
             </div>
-            <div class="resumen-row">
-                <div class="table-wrap" style="max-height:320px;overflow-y:auto">
-                    <table id="tabla-uy-faltantes-82">
-                        <thead>
-                            <tr>
-                                <th>Código</th>
-                                <th>Descripción</th>
-                                <th>Rubro</th>
-                                <th class="col-num">Stock Central</th>
-                                <th class="col-num">Stock WMS</th>
-                                <th class="col-num">Diferencia</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-uy-faltantes-82"></tbody>
-                    </table>
-                </div>
-                <div class="chart-wrap">
-                    <canvas id="chart-uy-dif-rubro-82" height="260"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Top 10 Faltantes Depósito 83 + Gráfico Dif por Rubro -->
-        <div class="analisis-card">
-            <div class="analisis-section-header">
-                <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes
-                <span class="header-sub">Stock Jauser &lt; Stock Central</span>
-            </div>
-            <div class="resumen-row">
-                <div class="table-wrap" style="max-height:320px;overflow-y:auto">
-                    <table id="tabla-uy-faltantes-83">
-                        <thead>
-                            <tr>
-                                <th>Código</th>
-                                <th>Descripción</th>
-                                <th>Rubro</th>
-                                <th class="col-num">Stock Central</th>
-                                <th class="col-num">Stock WMS</th>
-                                <th class="col-num">Diferencia</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-uy-faltantes-83"></tbody>
-                    </table>
-                </div>
-                <div class="chart-wrap">
-                    <canvas id="chart-uy-dif-rubro-83" height="260"></canvas>
-                </div>
+            <div class="table-wrap">
+                <table id="tabla-uy-faltantes">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>Rubro</th>
+                            <th class="col-num">Stock Central</th>
+                            <th class="col-num">Stock WMS</th>
+                            <th class="col-num">Diferencia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-uy-faltantes"></tbody>
+                </table>
             </div>
         </div>
 

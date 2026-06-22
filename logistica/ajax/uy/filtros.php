@@ -15,7 +15,6 @@ try {
         'ok'       => true,
         'canales'  => $db->getCanalesUy(),
         'rubros'   => $db->getRubrosUy(),
-        'depositos'=> $db->getDepositosUy(),
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     ob_clean();

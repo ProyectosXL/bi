@@ -25,7 +25,6 @@
         activeTab   : 'eficiencia-uy',
         canal       : '',
         rubro       : '',
-        deposito    : '',
         forceRefresh: false,
     };
 
@@ -37,8 +36,6 @@
     let chartEfiSemanal = null;
     let chartStockComp  = null;
     let chartStockDif   = null;
-    let chartDifRubro82 = null;
-    let chartDifRubro83 = null;
 
     // Filas originales de la tabla sobrantes (para el buscador)
     let sobrantesRows = [];
@@ -51,7 +48,7 @@
 
     const TAB_SLICERS = {
         'eficiencia-uy': ['wrap-canal', 'wrap-rubro'],
-        'stock-uy'     : ['wrap-rubro', 'wrap-deposito'],
+        'stock-uy'     : ['wrap-rubro'],
     };
 
     const HELP = {
@@ -76,9 +73,8 @@
             'chart-uy-stock-dif'  : ['Diferencia absoluta por rubro', ['Magnitud del desvío (|WMS − Central|) por rubro. Mayor barra = mayor urgencia de auditoría.']],
             'tabla-uy-efi-rubro'  : ['Detalle de eficiencia por rubro', ['Unidades pedidas, facturadas y porcentaje de eficiencia por rubro.']],
             'tabla-uy-stock'      : ['Detalle de stock por rubro', ['Stock Central, WMS, diferencia neta, porcentual, diferencia absoluta y precisión por rubro.']],
-            'tabla-uy-sobrantes'  : ['Top 10 artículos sobrantes', ['Artículos con mayor stock en WMS respecto a Central (DIFERENCIA > 0).', 'Usá el buscador para filtrar por código o descripción.']],
-            'tabla-uy-faltantes-82': ['Top 10 Artículos Faltantes', ['Depósito 82 — Central (depósito propio de XL).', 'Artículos donde Jauser WMS registra menos unidades que el sistema Central.']],
-            'tabla-uy-faltantes-83': ['Top 10 Artículos Faltantes', ['Depósito 83 — Depósito Fiscal.', 'Artículos donde Jauser WMS registra menos unidades que el sistema Central.']],
+            'tabla-uy-sobrantes'  : ['Top 10 artículos sobrantes', ['Artículos donde Jauser (WMS) registra MÁS unidades que el sistema Central (DIFERENCIA > 0).', 'Usá el buscador para filtrar por código o descripción.']],
+            'tabla-uy-faltantes'  : ['Top 10 artículos faltantes', ['Artículos donde Jauser (WMS) registra MENOS unidades que el sistema Central (DIFERENCIA < 0).']],
         },
         tableHeaders: {
             'tabla-uy-efi-rubro': [
@@ -100,26 +96,17 @@
                 'Código de artículo.',
                 'Descripción del artículo.',
                 'Rubro.',
-                'Depósito.',
                 'Stock en sistema Central.',
-                'Stock en WMS.',
-                'Diferencia (WMS − Central).',
+                'Stock en WMS (Jauser).',
+                'Diferencia (Jauser − Central, positiva = sobrante).',
             ],
-            'tabla-uy-faltantes-82': [
+            'tabla-uy-faltantes': [
                 'Código de artículo.',
                 'Descripción del artículo.',
                 'Rubro.',
                 'Stock en sistema Central.',
-                'Stock en WMS.',
-                'Diferencia (WMS − Central, negativa = faltante).',
-            ],
-            'tabla-uy-faltantes-83': [
-                'Código de artículo.',
-                'Descripción del artículo.',
-                'Rubro.',
-                'Stock en sistema Central.',
-                'Stock en WMS.',
-                'Diferencia (WMS − Central, negativa = faltante).',
+                'Stock en WMS (Jauser).',
+                'Diferencia (Jauser − Central, negativa = faltante).',
             ],
         },
     };
@@ -153,7 +140,6 @@
             if (!json.ok) return;
             poblarSelect('#sel-canal',    json.canales.filter(c => c.toUpperCase() !== 'DESCONOCIDO'), 'Todos');
             poblarSelect('#sel-rubro',    json.rubros,    'Todos');
-            poblarSelect('#sel-deposito', json.depositos, 'Todos');
         } catch (e) { console.error('Filtros UY:', e); }
     }
 
@@ -164,7 +150,7 @@
 
     // ── Slicers por tab ───────────────────────────────────────────────────
     function updateSlicers(tab) {
-        $('#wrap-canal, #wrap-rubro, #wrap-deposito').hide();
+        $('#wrap-canal, #wrap-rubro').hide();
         (TAB_SLICERS[tab] || []).forEach(id => $('#' + id).show());
     }
 
@@ -363,7 +349,7 @@
 
     // ── Pestaña 2: Stock UY ───────────────────────────────────────────────
     async function loadStock() {
-        const data = await apiFetch('stock', { rubro: State.rubro, deposito: State.deposito });
+        const data = await apiFetch('stock', { rubro: State.rubro });
         const k = data.kpis || {};
 
         // KPIs
@@ -439,67 +425,33 @@
         // Botón "Exportar a Excel" del detalle por rubro (se inserta una sola vez)
         initStockExport();
 
-        // Top 10 Sobrantes
-        renderTablaArticulos('#tbody-uy-sobrantes', data.sobrantes || [], 7, true);
+        // Top 10 Sobrantes (Jauser > Central) — nivel artículo
+        renderTablaArticulos('#tbody-uy-sobrantes', data.sobrantes || []);
         sobrantesRows = data.sobrantes || [];
 
-        // Top 10 Faltantes Depo 82 + gráfico
-        renderTablaArticulos('#tbody-uy-faltantes-82', data.faltantes_82 || [], 6, false);
-        chartDifRubro82 = renderGraficoDifRubro('chart-uy-dif-rubro-82', chartDifRubro82, data.dif_rubro_82 || [], 'Depósito 82');
-
-        // Top 10 Faltantes Depo 83 + gráfico
-        renderTablaArticulos('#tbody-uy-faltantes-83', data.faltantes_83 || [], 6, false);
-        chartDifRubro83 = renderGraficoDifRubro('chart-uy-dif-rubro-83', chartDifRubro83, data.dif_rubro_83 || [], 'Depósito Fiscal');
+        // Top 10 Faltantes (Jauser < Central) — nivel artículo
+        renderTablaArticulos('#tbody-uy-faltantes', data.faltantes || []);
     }
 
-    // Renderiza tabla de artículos (sobrantes o faltantes)
-    // cols: 7 = con Depósito, 6 = sin Depósito
-    function renderTablaArticulos(sel, rows, cols, conDeposito) {
+    // Renderiza tabla de artículos (sobrantes o faltantes) — nivel artículo,
+    // 6 columnas: Código, Descripción, Rubro, Stock Central, Stock WMS, Diferencia.
+    function renderTablaArticulos(sel, rows) {
         const $tbody = $(sel).empty();
         if (!rows.length) {
-            $tbody.html(`<tr><td colspan="${cols}"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>`);
+            $tbody.html(`<tr><td colspan="6"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>`);
             return;
         }
         $tbody.html(rows.map(r => {
             const dif = parseFloat(r.DIFERENCIA || 0);
-            const depCol = conDeposito ? `<td>${escapeHtml(r.DEPOSITO || '—')}</td>` : '';
             return `<tr>
                 <td>${escapeHtml(r.COD_ARTICU || '—')}</td>
                 <td>${escapeHtml(r.DESCRIPCION || '—')}</td>
                 <td>${escapeHtml(r.RUBRO || '—')}</td>
-                ${depCol}
                 <td class="col-num">${fmt.num(r.STOCK_TANGO)}</td>
                 <td class="col-num">${fmt.num(r.STOCK_WMS)}</td>
                 <td class="col-num ${dif > 0 ? 'var-pos' : dif < 0 ? 'var-neg' : ''}">${fmt.num(dif)}</td>
             </tr>`;
         }).join(''));
-    }
-
-    // Renderiza gráfico de barras horizontales de diferencia por rubro. Retorna la instancia.
-    function renderGraficoDifRubro(canvasId, chartInst, rows, titulo) {
-        if (chartInst) chartInst.destroy();
-        const top = rows.slice(0, 15);
-        return new Chart(document.getElementById(canvasId), {
-            type: 'bar',
-            data: {
-                labels  : top.map(r => r.RUBRO),
-                datasets: [{
-                    label          : 'Dif. Absoluta',
-                    data           : top.map(r => r.DIFERENCIA_ABS),
-                    backgroundColor: 'rgba(239,68,68,.65)',
-                    borderRadius   : 3,
-                }],
-            },
-            options: {
-                ...chartOptions('Unidades', {}, { integer: true }),
-                indexAxis: 'y',
-                plugins  : { legend: { display: false } },
-                scales   : {
-                    x: { beginAtZero: true, ticks: { font: { size: 11 } } },
-                    y: { ticks: { font: { size: 10 } } },
-                },
-            },
-        });
     }
 
     // ── Drill-down: artículos con diferencia de un rubro ──────────────────
@@ -587,7 +539,7 @@
                 (r.DESCRIPCION || '').toLowerCase().includes(term)
               )
             : sobrantesRows;
-        renderTablaArticulos('#tbody-uy-sobrantes', filtrados, 7, true);
+        renderTablaArticulos('#tbody-uy-sobrantes', filtrados);
     }
 
     // ── Label período topbar ──────────────────────────────────────────────
@@ -604,7 +556,6 @@
         $('#inp-hasta').attr('title', 'Fecha final del período de análisis.');
         $('#sel-canal').attr('title', 'Filtra los datos por canal.');
         $('#sel-rubro').attr('title', 'Filtra los datos por rubro.');
-        $('#sel-deposito').attr('title', 'Filtra los datos de stock por depósito.');
         $('#btn-aplicar').attr({ title: 'Aplicar fechas y filtros seleccionados.', 'aria-label': 'Aplicar filtros' });
         $('#btn-reload').attr({ title: 'Recargar la pestaña activa.', 'aria-label': 'Recargar pestaña activa' });
 
@@ -659,7 +610,6 @@
             State.hasta    = h;
             State.canal    = $('#sel-canal').val()    || '';
             State.rubro    = $('#sel-rubro').val()    || '';
-            State.deposito = $('#sel-deposito').val() || '';
             invalidarCache();
             updatePeriodLabel();
             loadTab(State.activeTab);
@@ -672,11 +622,10 @@
             loadTab(State.activeTab).finally(() => { State.forceRefresh = false; });
         });
 
-        // Cambio slicer canal/rubro/deposito
-        $('#sel-canal, #sel-rubro, #sel-deposito').on('change', function () {
+        // Cambio slicer canal/rubro
+        $('#sel-canal, #sel-rubro').on('change', function () {
             State.canal    = $('#sel-canal').val()    || '';
             State.rubro    = $('#sel-rubro').val()    || '';
-            State.deposito = $('#sel-deposito').val() || '';
             delete Cache[State.activeTab];
             loadTab(State.activeTab);
         });

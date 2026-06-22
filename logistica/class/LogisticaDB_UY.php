@@ -38,19 +38,16 @@ class LogisticaDB_UY extends LogisticaDBBase
     }
 
     // ── Stock WMS vs Tango UY ────────────────────────────────────────────
-    public function getStockUy(?string $rubro, ?string $deposito = null): array
+    public function getStockUy(?string $rubro): array
     {
-        $sets = $this->execSP('EXEC dbo.RO_SP_STOCK_WMS_TANGO_UY ?,?', [$rubro, $deposito]);
+        $sets = $this->execSP('EXEC dbo.RO_SP_STOCK_WMS_TANGO_UY ?', [$rubro]);
         return [
             'kpis'            => $sets[0][0] ?? [],
             'rubros'          => $sets[1] ?? [],
             'lista_rubros'    => array_column($sets[2] ?? [], 'RUBRO'),
-            'sobrantes'       => $sets[3] ?? [],
-            'faltantes_82'    => $sets[4] ?? [],
-            'dif_rubro_82'    => $sets[5] ?? [],
-            'faltantes_83'    => $sets[6] ?? [],
-            'dif_rubro_83'    => $sets[7] ?? [],
-            'detalle_articulos' => $sets[8] ?? [],   // drill-down del detalle por rubro
+            'sobrantes'       => $sets[3] ?? [],   // Jauser > Central (nivel artículo)
+            'faltantes'       => $sets[4] ?? [],   // Jauser < Central (nivel artículo)
+            'detalle_articulos' => $sets[5] ?? [], // drill-down del detalle por rubro
         ];
     }
 
@@ -72,16 +69,6 @@ class LogisticaDB_UY extends LogisticaDBBase
                           WHERE RUBRO IS NOT NULL AND LTRIM(RTRIM(RUBRO)) <> ''
                           ORDER BY RUBRO"),
             'RUBRO'
-        );
-    }
-
-    public function getDepositosUy(): array
-    {
-        return array_column(
-            $this->query("SELECT DISTINCT DEPOSITO FROM dbo.BI_T_STOCK_WMS_TANGO_UY
-                          WHERE DEPOSITO IS NOT NULL AND LTRIM(RTRIM(DEPOSITO)) <> ''
-                          ORDER BY DEPOSITO"),
-            'DEPOSITO'
         );
     }
 
