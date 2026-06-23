@@ -239,6 +239,9 @@ $ultimaAct = date('d/m/Y H:i:s');
         <button class="tab-btn" id="tab-btn-franquicias-detalle" role="tab" aria-controls="tab-franquicias-detalle" aria-selected="false" style="display:none">
             <i class="bi bi-calendar3"></i>&nbsp; Venta día por día
         </button>
+        <button class="tab-btn" id="tab-btn-franquicias-resumen" role="tab" aria-controls="tab-franquicias-resumen" aria-selected="false" style="display:none">
+            <i class="bi bi-grid-3x3-gap"></i>&nbsp; Resumen Anual Anterior
+        </button>
         <button class="tab-reload-btn" id="btn-reload-tab" title="Recargar pestaña">
             <i class="bi bi-arrow-clockwise"></i>
         </button>
@@ -959,7 +962,26 @@ $ultimaAct = date('d/m/Y H:i:s');
                         </button>
                     </div>
                 </div>
-                <div id="franquicias-detalle-wrap" style="overflow-x:auto; padding:12px">
+                <div id="franquicias-detalle-wrap" style="overflow:auto; max-height:calc(100vh - 220px); padding:12px">
+                    <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ══ PESTAÑA: FRANQUICIAS RESUMEN (Resumen Anual Anterior) ════════════ -->
+    <div id="tab-franquicias-resumen" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-franquicias-resumen">
+        <main class="dash-content">
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-grid-3x3-gap"></i> Resumen Anual Anterior — Franquicias
+                    <div style="margin-left:auto; display:flex; gap:10px;">
+                        <button id="btn-export-franquicias-resumen" class="btn-volver" style="background:#16a34a">
+                            <i class="bi bi-file-earmark-excel"></i> Exportar
+                        </button>
+                    </div>
+                </div>
+                <div id="franquicias-resumen-wrap" style="overflow:auto; max-height:calc(100vh - 220px); padding:12px">
                     <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
                 </div>
             </div>
@@ -1022,6 +1044,7 @@ $jsFiles = [
     '/bi/global/js/vendedoras.js',
     '/bi/global/js/ranking.js',
     '/bi/global/js/franquicias_detalle.js',
+    '/bi/global/js/franquicias_resumen.js',
 ];
 foreach ($jsFiles as $f):
     $v = @filemtime($_SERVER['DOCUMENT_ROOT'] . $f) ?: 1;
@@ -1053,9 +1076,10 @@ window.BI_CONFIG = {
         { btn: 'tab-btn-vendedoras',     pane: 'tab-vendedoras',     name: 'vendedoras'    },
         { btn: 'tab-btn-ranking',        pane: 'tab-ranking',        name: 'ranking'       },
         { btn: 'tab-btn-franquicias-detalle', pane: 'tab-franquicias-detalle', name: 'franquiciasDetalle' },
+        { btn: 'tab-btn-franquicias-resumen', pane: 'tab-franquicias-resumen', name: 'franquiciasResumen' },
     ].filter(t => document.getElementById(t.btn) && document.getElementById(t.pane));
 
-    const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false, franquiciasDetalle: false };
+    const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false, franquiciasDetalle: false, franquiciasResumen: false };
 
     const loaders = {
         kpis         : () => Dashboard.loadAll(),
@@ -1066,6 +1090,7 @@ window.BI_CONFIG = {
         vendedoras   : () => Vendedoras.loadAll(),
         ranking      : () => Ranking.loadAll(),
         franquiciasDetalle: () => FranquiciasDetalle.loadAll(),
+        franquiciasResumen: () => FranquiciasResumen.loadAll(),
     };
 
     function loadTab(name) {
@@ -1108,6 +1133,8 @@ window.BI_CONFIG = {
         });
         const tabBtnFran = document.getElementById('tab-btn-franquicias-detalle');
         if (tabBtnFran) tabBtnFran.style.display = isFran ? '' : 'none';
+        const tabBtnFranRes = document.getElementById('tab-btn-franquicias-resumen');
+        if (tabBtnFranRes) tabBtnFranRes.style.display = isFran ? '' : 'none';
     }
     document.querySelectorAll('.origen-btn').forEach(btn => {
         btn.addEventListener('click', () => {
