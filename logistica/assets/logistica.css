@@ -288,6 +288,249 @@
     text-align    : center;
 }
 
+/* ── Planificación: ventanas de entrega ──────────────────────────────── */
+.plan-ventanas {
+    display              : grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap                  : 16px;
+}
+
+.plan-card {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    padding      : 14px 16px 12px;
+    display      : flex;
+    flex-direction: column;
+    gap          : 10px;
+}
+
+.plan-card-head {
+    display       : flex;
+    align-items   : baseline;
+    justify-content: space-between;
+    gap           : 8px;
+    border-bottom : 1px solid var(--border);
+    padding-bottom: 8px;
+}
+.plan-card-title {
+    font-family : var(--font-display);
+    font-weight : 700;
+    font-size   : .95rem;
+    color       : var(--text-1);
+    display     : flex;
+    align-items : center;
+    gap         : 6px;
+}
+.plan-card-title i { color: var(--accent); }
+.plan-card-date {
+    font-size  : .82rem;
+    font-weight: 600;
+    color      : var(--text-2);
+    white-space: nowrap;
+}
+
+.plan-gauge {
+    display        : flex;
+    flex-direction : column;
+    align-items    : center;
+    gap            : 2px;
+}
+.plan-gauge .gauge-wrap { max-width: 200px; }
+.plan-gauge-cap {
+    font-size     : .7rem;
+    font-weight   : 600;
+    color         : var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+
+.plan-stats {
+    display              : grid;
+    grid-template-columns: 1fr 1fr;
+    gap                  : 10px;
+}
+.plan-stat-group {
+    background   : var(--bg-card2);
+    border-radius: var(--radius-sm);
+    padding      : 8px 10px;
+}
+.plan-stat-h {
+    font-size     : .68rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color         : var(--text-3);
+    font-weight   : 600;
+    margin-bottom : 4px;
+}
+.plan-stat-row {
+    display        : flex;
+    align-items    : baseline;
+    justify-content: space-between;
+    font-size      : .82rem;
+    color          : var(--text-2);
+}
+.plan-stat-row b { font-family: var(--font-display); color: var(--text-1); font-size: .95rem; }
+.plan-stat-row b.warn { color: var(--accent3); }
+
+.plan-foot {
+    font-size  : .8rem;
+    color      : var(--text-2);
+    display    : flex;
+    align-items: center;
+    gap        : 4px;
+}
+.plan-foot i { color: var(--accent2); }
+.plan-foot b { font-family: var(--font-display); color: var(--text-1); }
+.plan-foot-warn { color: var(--neg); }
+.plan-foot-warn i { color: var(--neg); }
+.plan-foot-warn b { color: var(--neg); }
+
+/* ── Pills de filtro (ventana de pendientes) ─────────────────────────── */
+.filter-pills {
+    display     : flex;
+    flex-wrap   : wrap;
+    gap         : 6px;
+    margin-left : 14px;
+}
+.filter-pills .pill {
+    background    : transparent;
+    border        : 1px solid var(--border);
+    color         : var(--text-2);
+    border-radius : 14px;
+    padding       : 3px 12px;
+    font-size     : .74rem;
+    font-weight   : 600;
+    cursor        : pointer;
+    white-space   : nowrap;
+    transition    : background var(--transition), color var(--transition), border-color var(--transition);
+}
+.filter-pills .pill:hover  { background: var(--bg-card2); color: var(--text-1); }
+.filter-pills .pill.active {
+    background   : var(--accent);
+    border-color : var(--accent);
+    color        : #fff;
+    box-shadow   : 0 1px 4px rgba(0,168,120,.3);
+}
+
+/* ── Filas de pedido clicables (abren modal de detalle) ──────────────── */
+tr.pedido-row { cursor: pointer; }
+tr.pedido-row:hover > td { background: rgba(0,168,120,.10); }
+tr.pedido-row:hover > td:first-child {
+    box-shadow: inset 3px 0 0 var(--accent);
+    color     : var(--accent);
+    font-weight: 600;
+}
+
+/* ── Modal detalle de pedido ─────────────────────────────────────────── */
+body.modal-open { overflow: hidden; }
+
+.pmodal {
+    position : fixed;
+    inset    : 0;
+    z-index  : 10000;
+    display  : flex;
+    align-items    : center;
+    justify-content: center;
+    padding  : 24px;
+}
+.pmodal[hidden] { display: none; }
+
+.pmodal-backdrop {
+    position  : absolute;
+    inset     : 0;
+    background: rgba(15,23,42,.55);
+    backdrop-filter: blur(2px);
+}
+
+.pmodal-box {
+    position     : relative;
+    background   : var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow   : 0 20px 60px rgba(15,23,42,.35);
+    width        : min(880px, 100%);
+    max-height   : 86vh;
+    display      : flex;
+    flex-direction: column;
+    overflow     : hidden;
+    animation    : pmodalIn .16s ease-out;
+}
+@keyframes pmodalIn {
+    from { opacity: 0; transform: translateY(8px) scale(.99); }
+    to   { opacity: 1; transform: none; }
+}
+
+.pmodal-head {
+    display       : flex;
+    align-items   : center;
+    justify-content: space-between;
+    gap           : 12px;
+    padding       : 14px 18px;
+    border-bottom : 1px solid var(--border);
+    background    : var(--bg-card2);
+}
+.pmodal-title {
+    font-family : var(--font-display);
+    font-weight : 700;
+    font-size   : 1rem;
+    color       : var(--text-1);
+    display     : flex;
+    align-items : center;
+    gap         : 8px;
+}
+.pmodal-title i { color: var(--accent); }
+.pmodal-close {
+    background  : transparent;
+    border      : none;
+    color       : var(--text-3);
+    font-size   : 1.1rem;
+    cursor      : pointer;
+    line-height : 1;
+    padding     : 4px;
+    border-radius: var(--radius-sm);
+    transition  : background var(--transition), color var(--transition);
+}
+.pmodal-close:hover { background: var(--border); color: var(--text-1); }
+
+.pmodal-meta {
+    display      : flex;
+    flex-wrap    : wrap;
+    gap          : 8px 22px;
+    padding      : 12px 18px;
+    border-bottom: 1px solid var(--border);
+}
+.pmeta-item    { display: flex; flex-direction: column; gap: 1px; }
+.pmeta-label   {
+    font-size     : .66rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color         : var(--text-3);
+    font-weight   : 600;
+}
+.pmeta-val     { font-family: var(--font-display); font-weight: 700; color: var(--text-1); font-size: .95rem; }
+.pmeta-efi {
+    margin-left  : auto;
+    align-items  : flex-end;
+    text-align   : right;
+    padding-left : 18px;
+    border-left  : 1px solid var(--border);
+}
+.pmeta-efi .pmeta-val { font-size: 1.5rem; line-height: 1.1; }
+.pmodal-note   { flex-basis: 100%; color: var(--text-3); font-size: .82rem; padding-top: 4px; }
+.pmodal-loading { color: var(--text-2); font-size: .85rem; display: flex; align-items: center; gap: 8px; }
+.pmodal-loading i { animation: spin .8s linear infinite; color: var(--accent); }
+
+.pmodal-body {
+    padding   : 0;
+    overflow-y: auto;
+}
+.pmodal-body .table-wrap thead th { position: sticky; top: 0; }
+
+.pmodal-box-sm { width: min(560px, 100%); }
+.pmodal-body-chart { padding: 16px 18px 20px; }
+.pmodal-body-chart canvas { max-height: 300px; }
+
 /* ── ms-auto util ────────────────────────────────────────────────────── */
 .ms-auto { margin-left: auto; }
 
@@ -302,7 +545,10 @@
     #kpis-eficiencia-uy { grid-template-columns: repeat(4, 1fr); }
 }
 @media (max-width: 1100px) {
-    .resumen-row { grid-template-columns: 1fr; }
+    .resumen-row    { grid-template-columns: 1fr; }
+    .plan-ventanas  { grid-template-columns: 1fr; }
+    .filter-pills   { margin-left: 0; margin-top: 6px; flex-basis: 100%; }
+    .analisis-section-header { flex-wrap: wrap; }
 }
 @media (max-width: 700px) {
     .kpi-grid           { grid-template-columns: 1fr 1fr; }
@@ -345,17 +591,21 @@
 
 /* Picking — tabla últimos 7 días */
 .picking-ult7-wrap { max-height: 340px; overflow: auto; }
-#tabla-picking-ult7 { border-collapse: collapse; white-space: nowrap; }
-#tabla-picking-ult7 th, #tabla-picking-ult7 td { padding: 6px 10px; }
-#tabla-picking-ult7 thead th,
-#tabla-picking-ult7 tbody td { text-align: right; }
-#tabla-picking-ult7 thead th:first-child,
-#tabla-picking-ult7 tbody td:first-child { text-align: left; min-width: 150px; }
-#tabla-picking-ult7 thead th { vertical-align: middle; min-width: 90px; }
-#tabla-picking-ult7 thead th.col-total { border-left: 2px solid rgba(255,255,255,0.3); }
-#tabla-picking-ult7 .pick-sub { font-size: 0.7rem; font-weight: 400; opacity: 0.8; }
-#tabla-picking-ult7 tr.pick-total td { font-weight: 700; border-top: 2px solid var(--border); }
-#tabla-picking-ult7 td.pick-subtotal { font-weight: 600; border-left: 2px solid var(--border); }
+.tabla-ult7 { border-collapse: collapse; white-space: nowrap; }
+.tabla-ult7 th, .tabla-ult7 td { padding: 6px 10px; }
+.tabla-ult7 thead th,
+.tabla-ult7 tbody td { text-align: right; }
+.tabla-ult7 thead th:first-child,
+.tabla-ult7 tbody td:first-child { text-align: left; min-width: 150px; }
+.tabla-ult7 thead th { vertical-align: middle; min-width: 90px; }
+.tabla-ult7 thead th.col-total { border-left: 2px solid rgba(255,255,255,0.3); }
+.tabla-ult7 .pick-sub { font-size: 0.7rem; font-weight: 400; opacity: 0.8; }
+.tabla-ult7 tr.pick-total td { font-weight: 700; border-top: 2px solid var(--border); }
+.tabla-ult7 td.pick-subtotal { font-weight: 600; border-left: 2px solid var(--border); }
+.tabla-ult7 th.pick-day-th { cursor: pointer; }
+.tabla-ult7 th.pick-day-th:hover { background: var(--bg-header2); }
+.pick-day-ico { font-size: .72rem; opacity: .55; }
+.tabla-ult7 th.pick-day-th:hover .pick-day-ico { opacity: 1; }
 
 /* ── Subtítulo de cabecera de card ─────────────────────────────────────── */
 .header-sub {

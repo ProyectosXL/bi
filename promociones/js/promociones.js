@@ -549,6 +549,9 @@ const Promociones = (() => {
                 syncSearchableSelect(id);
             });
 
+            /* Selector de promoción más ancho para nombres largos */
+            $('sel-promocion')?.closest('.ss-wrap')?.classList.add('ss-wide');
+
         } catch (e) {
             console.error('[Promociones] loadFilters error:', e);
         }
@@ -573,6 +576,33 @@ const Promociones = (() => {
         }
     }
 
+    /* ── Modales de ampliación de donuts ── */
+    function initDonutModals() {
+        const overlay  = $('modal-donut');
+        const closeBtn = $('modal-donut-close');
+        const titleEl  = $('modal-donut-title');
+
+        const DONUT_META = {
+            fact : { title: 'Desglose por Facturación', key: 'facturacion' },
+            promo: { title: 'Desglose por Promociones',  key: 'promociones' },
+            banco: { title: 'Desglose por Banco',        key: 'bancos'      },
+        };
+
+        document.querySelectorAll('.donut-expand-btn[data-donut]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const meta = DONUT_META[btn.dataset.donut];
+                if (!meta || !overlay) return;
+                const items = _lastDonuts?.[meta.key] ?? [];
+                if (titleEl) titleEl.textContent = meta.title;
+                renderDonut('donut-modal-canvas', 'donut-modal-legend', items);
+                overlay.hidden = false;
+            });
+        });
+
+        closeBtn?.addEventListener('click', () => { if (overlay) overlay.hidden = true; });
+        overlay?.addEventListener('click', e => { if (e.target === overlay) overlay.hidden = true; });
+    }
+
     return {
         loadAll,
         loadFilters,
@@ -586,6 +616,7 @@ const Promociones = (() => {
         setLoading,
         fmt,
         initMonedaToggle,
+        initDonutModals,
         initSearchableSelect,
         syncSearchableSelect,
         getMoneda        : () => _moneda,

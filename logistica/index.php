@@ -85,6 +85,18 @@ $mesDesde  = date('Y-m-01');
         <select id="sel-rubro"><option value="">Todos</option></select>
     </span>
 
+    <!-- Slicer Cliente (despacho) -->
+    <span class="slicer-wrap" id="wrap-cliente" style="display:none">
+        <label for="sel-cliente">Cliente</label>
+        <select id="sel-cliente"><option value="">Todos</option></select>
+    </span>
+
+    <!-- Slicer Tipo facturación (prod. facturación) -->
+    <span class="slicer-wrap" id="wrap-tipo" style="display:none">
+        <label for="sel-tipo">Tipo facturación</label>
+        <select id="sel-tipo"><option value="">Todas</option></select>
+    </span>
+
     <?php if ($pais === 'AR'): ?>
     <!-- Slicer Usuario (solo AR) -->
     <span class="slicer-wrap" id="wrap-usuario" style="display:none">
@@ -116,8 +128,11 @@ $mesDesde  = date('Y-m-01');
     <button class="tab-btn" data-tab="prod-picking">
         <i class="bi bi-person-lines-fill"></i> Prod. Picking
     </button>
+    <button class="tab-btn" data-tab="planificacion">
+        <i class="bi bi-calendar-week"></i> Planificación
+    </button>
     <button class="tab-btn" data-tab="despacho">
-        <i class="bi bi-truck"></i> Demanda y Despacho
+        <i class="bi bi-truck"></i> Despacho
     </button>
     <button class="tab-btn" data-tab="pedidos">
         <i class="bi bi-card-list"></i> Pedidos
@@ -144,6 +159,53 @@ $mesDesde  = date('Y-m-01');
 <?php endif; ?>
 </div><!-- /main-content -->
 </div><!-- /dash-wrap -->
+
+<!-- ══ MODAL DETALLE DE PEDIDO ═══════════════════════════════════════════ -->
+<div id="pedido-modal" class="pmodal" hidden>
+    <div class="pmodal-backdrop" data-close></div>
+    <div class="pmodal-box" role="dialog" aria-modal="true" aria-labelledby="pmodal-title">
+        <div class="pmodal-head">
+            <div class="pmodal-title" id="pmodal-title"><i class="bi bi-receipt"></i> Detalle del pedido</div>
+            <button class="pmodal-close" type="button" data-close aria-label="Cerrar detalle">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="pmodal-meta" id="pmodal-meta"></div>
+        <div class="pmodal-body">
+            <div class="table-wrap">
+                <table id="tabla-pedido-detalle">
+                    <thead>
+                        <tr>
+                            <th>Rubro</th>
+                            <th class="col-num">Unidades pedidas</th>
+                            <th class="col-num">Unidades facturadas</th>
+                            <th class="col-num">% Eficiencia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-pedido-detalle"></tbody>
+                    <tfoot id="tfoot-pedido-detalle"></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══ MODAL MINI-GRÁFICO PICKING POR DÍA ════════════════════════════════ -->
+<div id="picking-dia-modal" class="pmodal" hidden>
+    <div class="pmodal-backdrop" data-close></div>
+    <div class="pmodal-box pmodal-box-sm" role="dialog" aria-modal="true" aria-labelledby="pdia-title">
+        <div class="pmodal-head">
+            <div class="pmodal-title" id="pdia-title"><i class="bi bi-bar-chart-line"></i> Picking del día</div>
+            <button class="pmodal-close" type="button" data-close aria-label="Cerrar">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="pmodal-meta" id="pdia-meta"></div>
+        <div class="pmodal-body pmodal-body-chart">
+            <canvas id="chart-picking-dia" height="240"></canvas>
+        </div>
+    </div>
+</div>
 
 <script>window.LOGISTICA_PAIS = '<?= $pais ?>';</script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>

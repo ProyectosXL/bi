@@ -139,6 +139,53 @@ IF NOT EXISTS (
 GO
 
 -- ──────────────────────────────────────────────────────────────
+-- 5b. BI_T_DESPACHO_PEDIDOS por FECHA_ENTREGA
+--     Usada en: SP07b (RO_SP_PLANIFICACION) — ventanas HOY/PROX/+1
+--     y tabla de pedidos pendientes por ventana de entrega.
+-- ──────────────────────────────────────────────────────────────
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE object_id = OBJECT_ID('dbo.BI_T_DESPACHO_PEDIDOS')
+      AND name = 'IX_BI_T_DESPACHO_PEDIDOS_ENTREGA_ESTADO'
+)
+    CREATE NONCLUSTERED INDEX IX_BI_T_DESPACHO_PEDIDOS_ENTREGA_ESTADO
+    ON dbo.BI_T_DESPACHO_PEDIDOS (FECHA_ENTREGA, ESTADO)
+    INCLUDE (NRO_PEDIDO, COD_CLIENT, NOMBRE_CLIENTE, CANAL, CANT_PEDIDO);
+GO
+
+-- ──────────────────────────────────────────────────────────────
+-- 5c. RO_T_DESPACHO_PEDIDOS por PROX_DESPACHO
+--     Usada en: RO_SP_PLANIFICACION (demorados últimos 90 días) y
+--     RO_SP_DESPACHO (universo de demorados por fecha comprometida).
+-- ──────────────────────────────────────────────────────────────
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE object_id = OBJECT_ID('dbo.RO_T_DESPACHO_PEDIDOS')
+      AND name = 'IX_RO_T_DESPACHO_PEDIDOS_PROX_ESTADO'
+)
+    CREATE NONCLUSTERED INDEX IX_RO_T_DESPACHO_PEDIDOS_PROX_ESTADO
+    ON dbo.RO_T_DESPACHO_PEDIDOS (PROX_DESPACHO, ESTADO_DESPACHO)
+    INCLUDE (N_COMP, NRO_PEDIDO, CLIENTE, CANAL, FECHA_GUIA);
+GO
+
+-- ──────────────────────────────────────────────────────────────
+-- 5d. BI_EFICIENCIA_LOGISTICA por NRO_PEDIDO
+--     Usada en: detalle de pedido (modal). Seek por NRO_PEDIDO con
+--     todas las columnas del detalle incluidas (covering).
+-- ──────────────────────────────────────────────────────────────
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE object_id = OBJECT_ID('dbo.BI_EFICIENCIA_LOGISTICA')
+      AND name = 'IX_BI_EFICIENCIA_LOGISTICA_NRO_PEDIDO'
+)
+    CREATE NONCLUSTERED INDEX IX_BI_EFICIENCIA_LOGISTICA_NRO_PEDIDO
+    ON dbo.BI_EFICIENCIA_LOGISTICA (NRO_PEDIDO)
+    INCLUDE (COD_ARTICU, MODELO, DESCRIPCIO, RUBRO, CANT_PEDID,
+             CANT_FACTURADA, CANT_PEND, ESTADO_TANGO, CLIENTE, CANAL,
+             FECHA_PEDI, TALON_PED);
+GO
+
+-- ──────────────────────────────────────────────────────────────
 -- 6. BI_KPI_LOG_FACTURACION
 --    Usada en: SP03 (lead time)
 --    Filtros : FECHA_COMP (rango), ESTADO_TANGO (igualdad)

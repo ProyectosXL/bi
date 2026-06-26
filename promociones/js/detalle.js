@@ -11,10 +11,11 @@ const PromoDetalle = (() => {
     const $ = id => document.getElementById(id);
 
     /* Estado */
-    let _lastSucursales  = null;
-    let _lastPromociones = null;
+    let _lastSucursales   = null;
+    let _lastPromociones  = null;
     let _sortSuc  = { key: 'fac_cpromo', dir: -1 };
     let _sortProm = { key: 'fac_cpromo', dir: -1 };
+    let _selectedPromoKey = null;
 
     /* ── Helpers de formato delegados ── */
     function moneyK(n)   { return Promociones.fmt?.moneyK(n)   ?? '—'; }
@@ -26,13 +27,26 @@ const PromoDetalle = (() => {
 
     function esFranquicias() {
         const btn = document.querySelector('.origen-btn.active');
-        return btn ? btn.dataset.origen === 'franquicias' : true; // GRUPO no tiene toggle → siempre franquicias
+        return btn ? btn.dataset.origen === 'franquicias' : true;
     }
 
     function varCls(n, invertir = false) {
         if (n == null) return '';
         const pos = invertir ? n <= 0 : n >= 0;
         return pos ? 'var-pos' : 'var-neg';
+    }
+
+    function escHtml(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    /* Clave compuesta promocion + banco para identificar fila */
+    function promoKey(row) {
+        return `${row.promocion ?? ''}|||${row.banco ?? ''}`;
     }
 
     /* ── COLUMNAS tabla sucursales ── */
@@ -71,7 +85,7 @@ const PromoDetalle = (() => {
     }
 
     /* ── Genérico: render tabla ── */
-    function renderTabla(wrapId, rows, cols, sortState, sortFn, exportFn, showTotal = true) {
+    function renderTabla(wrapId, rows, cols, sortState, sortFn, exportFn, showTotal = true, rowAttrsFn = null) {
         const wrap = $(wrapId);
         if (!wrap) return;
 
@@ -115,7 +129,8 @@ const PromoDetalle = (() => {
         html += '</tr></thead><tbody>';
 
         sorted.forEach(row => {
-            html += '<tr>';
+            const extraAttrs = rowAttrsFn ? rowAttrsFn(row) : '';
+            html += `<tr${extraAttrs ? ' ' + extraAttrs : ''}>`;
             cols.forEach(c => {
                 const v = row[c.key];
                 html += `<td style="text-align:${c.align}">${c.fmt(v)}</td>`;
@@ -145,10 +160,93 @@ const PromoDetalle = (() => {
         });
     }
 
+    /* ── Cross-filter: filtrar sucursales por promoción clickeada ── */
+
+    async function applyPromoFilter(promoName, bancoName) {
+        const wrapSuc = $('detalle-suc-wrap');
+        if (!wrapSuc) return;
+        try {
+            const qs = Promociones.buildQS({ action: 'sucursales', promocion: promoName, banco: bancoName });
+            const data = await fetch(`/bi/promociones/api/detalle.php?${qs}`).then(r => r.json());
+            if (!data.ok) return;
+            const sucConPromo = new Set((data.sucursales ?? []).map(r => r.sucursal));
+            wrapSuc.querySelectorAll('tbody tr[data-suc]').forEach(tr => {
+                const match = sucConPromo.has(tr.dataset.suc);
+                tr.classList.toggle('row-highlighted', match);
+                tr.classList.toggle('row-dimmed', !match);
+            });
+        } catch (e) {
+            console.error('[PromoDetalle] applyPromoFilter:', e);
+        }
+    }
+
+    function clearPromoFilter() {
+        _selectedPromoKey = null;
+        const wrapSuc = $('detalle-suc-wrap');
+        if (wrapSuc) {
+            wrapSuc.querySelectorAll('tbody tr').forEach(tr => {
+                tr.classList.remove('row-highlighted', 'row-dimmed');
+            });
+        }
+        const wrapProm = $('detalle-prom-wrap');
+        if (wrapProm) {
+            wrapProm.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('row-selected'));
+        }
+        const banner = $('detalle-promo-filter-banner');
+        if (banner) banner.hidden = true;
+    }
+
+    function showFilterBanner(label) {
+        let banner = $('detalle-promo-filter-banner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'detalle-promo-filter-banner';
+            banner.className = 'promo-filter-banner';
+            const wrapSuc = $('detalle-suc-wrap');
+            wrapSuc?.parentNode?.insertBefore(banner, wrapSuc);
+        }
+        banner.innerHTML = `<i class="bi bi-funnel-fill"></i> Sucursales con: <strong>${escHtml(label)}</strong><button class="promo-filter-clear-btn" id="btn-clear-promo-filter" title="Limpiar filtro"><i class="bi bi-x-lg"></i></button>`;
+        banner.hidden = false;
+        $('btn-clear-promo-filter')?.addEventListener('click', clearPromoFilter);
+    }
+
+    function bindPromoRowClicks() {
+        const wrap = $('detalle-prom-wrap');
+        if (!wrap) return;
+
+        /* Restaurar clase seleccionada si hay filtro activo */
+        if (_selectedPromoKey) {
+            wrap.querySelectorAll('tbody tr[data-promo-key]').forEach(tr => {
+                tr.classList.toggle('row-selected', tr.dataset.promoKey === _selectedPromoKey);
+            });
+        }
+
+        wrap.querySelectorAll('tbody tr[data-promo-key]').forEach(tr => {
+            tr.addEventListener('click', async () => {
+                const key = tr.dataset.promoKey;
+
+                if (_selectedPromoKey === key) {
+                    clearPromoFilter();
+                    return;
+                }
+
+                _selectedPromoKey = key;
+                wrap.querySelectorAll('tbody tr').forEach(r => r.classList.remove('row-selected'));
+                tr.classList.add('row-selected');
+
+                const [promoName, bancoName] = key.split('|||');
+                const label = `${promoName}${bancoName ? ' / ' + bancoName : ''}`;
+                showFilterBanner(label);
+                await applyPromoFilter(promoName, bancoName);
+            });
+        });
+    }
+
     /* ── Sucursales ── */
     async function loadSucursales() {
         const wrap = $('detalle-suc-wrap');
         if (wrap) wrap.innerHTML = '<div class="promo-loading">Cargando…</div>';
+        clearPromoFilter();
 
         try {
             const data = await fetch(`/bi/promociones/api/detalle.php?${Promociones.buildQS({ action: 'sucursales' })}`).then(r => r.json());
@@ -173,8 +271,16 @@ const PromoDetalle = (() => {
             _sortSuc,
             key => { _sortSuc = { key, dir: _sortSuc.key === key ? -_sortSuc.dir : -1 }; renderSucursales(); },
             exportSucursales,
+            true,
+            row => `data-suc="${escHtml(row.sucursal ?? '')}"`,
         );
         bindExportBtn('btn-export-suc', exportSucursales);
+
+        /* Reaplicar resaltado si hay filtro activo */
+        if (_selectedPromoKey) {
+            const [promoName, bancoName] = _selectedPromoKey.split('|||');
+            applyPromoFilter(promoName, bancoName);
+        }
     }
 
     function exportSucursales() {
@@ -190,6 +296,7 @@ const PromoDetalle = (() => {
     async function loadPromociones() {
         const wrap = $('detalle-prom-wrap');
         if (wrap) wrap.innerHTML = '<div class="promo-loading">Cargando…</div>';
+        clearPromoFilter();
 
         try {
             const data = await fetch(`/bi/promociones/api/detalle.php?${Promociones.buildQS({ action: 'promociones' })}`).then(r => r.json());
@@ -214,8 +321,16 @@ const PromoDetalle = (() => {
             _sortProm,
             key => { _sortProm = { key, dir: _sortProm.key === key ? -_sortProm.dir : -1 }; renderPromociones(); },
             exportPromociones,
+            true,
+            row => {
+                const attrs = `data-promo-key="${escHtml(promoKey(row))}"`;
+                return row.promocion?.includes(' / ')
+                    ? attrs + ' class="row-combinada"'
+                    : attrs;
+            },
         );
         bindExportBtn('btn-export-prom', exportPromociones);
+        bindPromoRowClicks();
     }
 
     function exportPromociones() {

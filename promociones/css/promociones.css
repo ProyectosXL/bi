@@ -726,6 +726,62 @@
     cursor : pointer;
 }
 
+/* ── Cross-filter: highlight / dim rows en tabla sucursales ─── */
+.promo-detalle-table tbody tr[data-promo-key] {
+    cursor: pointer;
+    transition: background .1s;
+}
+.promo-detalle-table tr.row-selected td {
+    background: #eff6ff !important;
+    box-shadow: inset 3px 0 0 #2563eb;
+}
+.promo-detalle-table tr.row-highlighted td {
+    background: #f0fdf4 !important;
+    box-shadow: inset 3px 0 0 #16a34a;
+}
+.promo-detalle-table tr.row-dimmed td {
+    opacity   : 0.32;
+    background: var(--card-bg, #fff) !important;
+}
+.promo-detalle-table tr.row-combinada td {
+    background: #fff5f5;
+}
+.promo-detalle-table tr.row-combinada.row-selected td {
+    background: #ffe4e4 !important;
+}
+
+/* ── Banner de filtro activo ─────────────────────────────────── */
+.promo-filter-banner {
+    display      : flex;
+    align-items  : center;
+    gap          : 7px;
+    padding      : 7px 14px;
+    margin-bottom: 6px;
+    background   : #eff6ff;
+    border       : 1px solid #bfdbfe;
+    border-radius: 6px;
+    font-size    : .83rem;
+    color        : #1d4ed8;
+}
+.promo-filter-banner strong { font-weight: 700; }
+.promo-filter-clear-btn {
+    margin-left  : auto;
+    background   : none;
+    border       : none;
+    cursor       : pointer;
+    color        : #1d4ed8;
+    font-size    : .85rem;
+    padding      : 2px 8px;
+    border-radius: 4px;
+    line-height  : 1;
+    transition   : background .15s;
+}
+.promo-filter-clear-btn:hover { background: #dbeafe; }
+
+/* ── Selector de promoción más ancho ────────────────────────── */
+.ss-wide .ss-btn   { min-width: 220px; max-width: 380px; }
+.ss-wide .ss-panel { min-width: 340px; max-width: 460px; }
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 900px) {
     .promo-summary-row { grid-template-columns: 1fr 1fr; }

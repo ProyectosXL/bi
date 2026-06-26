@@ -9,11 +9,13 @@ header('Cache-Control: no-cache');
 require_once __DIR__ . '/../class/LogisticaDB.php';
 
 try {
-    $desde = isset($_GET['desde']) && $_GET['desde'] !== '' ? $_GET['desde'] : date('Y-m-01');
-    $hasta = isset($_GET['hasta']) && $_GET['hasta'] !== '' ? $_GET['hasta'] : date('Y-m-d');
+    $pedido = isset($_GET['pedido']) ? trim((string)$_GET['pedido']) : '';
+    if ($pedido === '') {
+        throw new InvalidArgumentException('Falta el número de pedido.');
+    }
 
     $db   = new LogisticaDB();
-    $data = $db->getDemandaDespacho($desde, $hasta);
+    $data = $db->getPedidoDetalle($pedido);
 
     ob_clean();
     echo json_encode(['ok' => true, 'data' => $data], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

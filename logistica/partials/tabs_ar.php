@@ -208,46 +208,56 @@
 
         <div class="kpi-grid" id="kpis-prod-fact">
             <div class="kpi-card">
-                <div class="kpi-icon"><i class="bi bi-receipt"></i></div>
+                <div class="kpi-icon"><i class="bi bi-calculator"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Unidades facturadas</div>
-                    <div class="kpi-value" id="kv-pf-unid">—</div>
+                    <div class="kpi-label">Promedio por día</div>
+                    <div class="kpi-value" id="kv-pf-prom-dia">—</div>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-calendar3"></i></div>
+                <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-graph-up-arrow"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Días productivos</div>
-                    <div class="kpi-value" id="kv-pf-dias">—</div>
+                    <div class="kpi-label">Pico x día</div>
+                    <div class="kpi-value" id="kv-pf-pico-dia">—</div>
+                    <div class="kpi-var neu" id="kv-pf-pico-dia-fecha"></div>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(0,168,120,.1);color:var(--accent)"><i class="bi bi-calculator"></i></div>
+                <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-trophy"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Promedio u/día</div>
-                    <div class="kpi-value" id="kv-pf-prom">—</div>
+                    <div class="kpi-label">Pico x usuario</div>
+                    <div class="kpi-value" id="kv-pf-pico-user">—</div>
+                    <div class="kpi-var neu" id="kv-pf-pico-user-nombre"></div>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-activity"></i></div>
+                <div class="kpi-icon" style="background:rgba(0,168,120,.1);color:var(--accent)"><i class="bi bi-activity"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Mediana u/día</div>
-                    <div class="kpi-value" id="kv-pf-mediana">—</div>
+                    <div class="kpi-label">Tendencia x día x usuario</div>
+                    <div class="kpi-value" id="kv-pf-tendencia">—</div>
                 </div>
             </div>
-            <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-graph-up-arrow"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-label">Máximo u/día</div>
-                    <div class="kpi-value" id="kv-pf-moda">—</div>
-                </div>
+        </div>
+
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-people"></i> Indicadores por usuario
             </div>
-            <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-calendar-week"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-label">Unidades últ. 30 días</div>
-                    <div class="kpi-value" id="kv-pf-ult30">—</div>
-                </div>
+            <div class="table-wrap">
+                <table id="tabla-usuarios-fact">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th class="col-num">Unidades facturadas</th>
+                            <th class="col-num">% Unidades facturadas</th>
+                            <th class="col-num">Pico facturación</th>
+                            <th class="col-num">Tendencia facturación</th>
+                            <th class="col-num">Días productivos</th>
+                            <th class="col-num">Unid. fact. últ. 30 días</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-usuarios-fact"></tbody>
+                </table>
             </div>
         </div>
 
@@ -262,21 +272,13 @@
 
         <div class="analisis-card">
             <div class="analisis-section-header">
-                <i class="bi bi-people"></i> Productividad por Usuario
+                <i class="bi bi-calendar-week"></i> Unidades facturadas por usuario (Últ. 7 días)
+                <span class="header-sub">Clic en un día para ver el gráfico</span>
             </div>
-            <div class="table-wrap">
-                <table id="tabla-usuarios-fact">
-                    <thead>
-                        <tr>
-                            <th>Usuario</th>
-                            <th class="col-num">Unidades</th>
-                            <th class="col-num">Días productivos</th>
-                            <th class="col-num">Promedio/día</th>
-                            <th class="col-num">Mediana/día</th>
-                            <th class="col-num">Máximo/día</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-usuarios-fact"></tbody>
+            <div class="table-wrap picking-ult7-wrap">
+                <table id="tabla-fact-ult7" class="tabla-ult7">
+                    <thead id="thead-fact-ult7"></thead>
+                    <tbody id="tbody-fact-ult7"></tbody>
                 </table>
             </div>
         </div>
@@ -333,6 +335,13 @@
                     <div class="kpi-value" id="kv-pp-hs">—</div>
                 </div>
             </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(0,168,120,.1);color:var(--accent)"><i class="bi bi-stopwatch"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Promedio tiempo prod. (hs.)</div>
+                    <div class="kpi-value" id="kv-pp-prom-hs">—</div>
+                </div>
+            </div>
         </div>
 
         <div class="analisis-card">
@@ -372,7 +381,7 @@
                 <i class="bi bi-calendar-week"></i> Productividad picking por usuario (Últ. 7 días)
             </div>
             <div class="table-wrap picking-ult7-wrap">
-                <table id="tabla-picking-ult7">
+                <table id="tabla-picking-ult7" class="tabla-ult7">
                     <thead id="thead-picking-ult7"></thead>
                     <tbody id="tbody-picking-ult7"></tbody>
                 </table>
@@ -382,53 +391,195 @@
     </div>
 </div>
 
-<!-- ─────────────────── TAB 6: DEMANDA Y DESPACHO ─────────────────────── -->
+<!-- ─────────────────── TAB 6: PLANIFICACIÓN ──────────────────────────── -->
+<div class="tab-pane" id="tab-planificacion">
+    <div class="dash-content">
+
+        <!-- Ventanas de entrega: HOY / PRÓXIMA / +1 -->
+        <div class="plan-ventanas">
+            <?php
+            $ventanas = [
+                'hoy' => ['t' => 'Hoy',                 'i' => 'bi-calendar-check', 'dem' => true],
+                'prox'=> ['t' => 'Próxima entrega',     'i' => 'bi-calendar-event', 'dem' => false],
+                'mas' => ['t' => 'Próxima entrega +1',  'i' => 'bi-calendar-plus',  'dem' => false],
+            ];
+            foreach ($ventanas as $k => $v): ?>
+            <div class="plan-card" id="plan-<?= $k ?>">
+                <div class="plan-card-head">
+                    <span class="plan-card-title"><i class="bi <?= $v['i'] ?>"></i> <?= $v['t'] ?></span>
+                    <span class="plan-card-date" id="pl-<?= $k ?>-fecha">—</span>
+                </div>
+                <div class="plan-gauge">
+                    <div class="gauge-wrap">
+                        <canvas id="gauge-plan-<?= $k ?>" class="gauge-canvas"></canvas>
+                        <div class="gauge-pct" id="pl-<?= $k ?>-pct">—</div>
+                    </div>
+                    <div class="plan-gauge-cap">% unidades pickeadas</div>
+                </div>
+                <div class="plan-stats">
+                    <div class="plan-stat-group">
+                        <div class="plan-stat-h">Pedidos</div>
+                        <div class="plan-stat-row"><span>Total</span><b id="pl-<?= $k ?>-ped-tot">—</b></div>
+                        <div class="plan-stat-row"><span>Pendiente</span><b class="warn" id="pl-<?= $k ?>-ped-pend">—</b></div>
+                    </div>
+                    <div class="plan-stat-group">
+                        <div class="plan-stat-h">Unidades</div>
+                        <div class="plan-stat-row"><span>Total</span><b id="pl-<?= $k ?>-unid-tot">—</b></div>
+                        <div class="plan-stat-row"><span>Pendiente</span><b class="warn" id="pl-<?= $k ?>-unid-pend">—</b></div>
+                    </div>
+                </div>
+                <div class="plan-foot">
+                    <i class="bi bi-people-fill"></i>
+                    <b id="pl-<?= $k ?>-pickers">—</b>&nbsp;pickers para unidades pendientes
+                </div>
+                <?php if ($v['dem']): ?>
+                <div class="plan-foot plan-foot-warn">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <b id="pl-<?= $k ?>-dem">—</b>&nbsp;pedidos demorados
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+        </div>
+
+        <!-- Pedidos pendientes (filtrable por ventana) -->
+        <div class="analisis-card">
+            <div class="analisis-section-header" id="hdr-pend">
+                <i class="bi bi-hourglass-split"></i> Pedidos pendientes
+                <span class="header-sub">Clic en un pedido para ver el detalle</span>
+                <div class="filter-pills" id="pend-filtros" role="group" aria-label="Filtrar por ventana de entrega">
+                    <button type="button" class="pill active" data-f="HOY">Hoy</button>
+                    <button type="button" class="pill" data-f="PROX">Próxima entrega</button>
+                    <button type="button" class="pill" data-f="MAS_UNO">Próxima entrega +1</button>
+                    <button type="button" class="pill" data-f="ALL">Todos</button>
+                </div>
+            </div>
+            <div class="table-wrap" style="max-height:360px;overflow-y:auto">
+                <table id="tabla-pend">
+                    <thead>
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Cód. cliente</th>
+                            <th>Cliente</th>
+                            <th>Canal</th>
+                            <th>Fecha entrega</th>
+                            <th class="col-num">Unidades</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-pend"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pedidos demorados -->
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-exclamation-triangle"></i> Pedidos demorados
+                <span class="header-sub">Vencidos sin despachar — últimos 30 días · clic para ver detalle</span>
+            </div>
+            <div class="table-wrap" style="max-height:360px;overflow-y:auto">
+                <table id="tabla-plan-demorados">
+                    <thead>
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Cliente</th>
+                            <th>Canal</th>
+                            <th>Fecha entrega</th>
+                            <th class="col-num">Días</th>
+                            <th class="col-num">Unidades</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-plan-demorados"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ─────────────────── TAB 6b: DESPACHO ──────────────────────────────── -->
 <div class="tab-pane" id="tab-despacho">
     <div class="dash-content">
 
         <div class="kpi-grid" id="kpis-despacho">
             <div class="kpi-card">
-                <div class="kpi-icon"><i class="bi bi-clipboard-data"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-label">Pedidos totales</div>
-                    <div class="kpi-value" id="kv-dd-ped-tot">—</div>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-hourglass"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-label">Pedidos pendientes</div>
-                    <div class="kpi-value" id="kv-dd-ped-pend">—</div>
-                    <div class="kpi-var" id="kvar-dd-ped-pend"></div>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-percent"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-label">Cumplimiento unidades</div>
-                    <div class="kpi-value" id="kv-dd-cumpl">—</div>
-                    <div class="kpi-var semaforo" id="kvar-dd-cumpl"></div>
-                </div>
-            </div>
-            <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-check2-all"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Eficacia despacho</div>
-                    <div class="kpi-value" id="kv-dd-eficacia">—</div>
+                    <div class="kpi-label">Eficacia despacho total</div>
+                    <div class="kpi-value" id="kv-dsp-efi">—</div>
+                    <div class="kpi-var semaforo" id="kvar-dsp-efi"></div>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(0,168,120,.1);color:var(--accent)"><i class="bi bi-calendar-check"></i></div>
+                <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-clock-history"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Próximo día hábil</div>
-                    <div class="kpi-value" id="kv-dd-prox-habil">—</div>
+                    <div class="kpi-label">Prom. días pedidos demorados</div>
+                    <div class="kpi-value" id="kv-dsp-dem-dias">—</div>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-people"></i></div>
+                <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-truck"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Pickers necesarios</div>
-                    <div class="kpi-value" id="kv-dd-pickers">—</div>
+                    <div class="kpi-label">Prom. días guía vs despacho</div>
+                    <div class="kpi-value" id="kv-dsp-guia-dias">—</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-sliders2"></i> Eficacia de despacho por canal
+            </div>
+            <div class="gauges-wrap" id="gauges-despacho-canal"></div>
+        </div>
+
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-graph-up"></i> Evolución eficacia de despacho
+            </div>
+            <div class="chart-wrap">
+                <canvas id="chart-despacho-evol" height="260"></canvas>
+            </div>
+        </div>
+
+        <div class="resumen-row">
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-people"></i> % Eficacia despacho — por cliente
+                </div>
+                <div class="table-wrap" style="max-height:360px;overflow-y:auto">
+                    <table id="tabla-efi-cliente">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th class="col-num">% Eficacia</th>
+                                <th class="col-num">Desvío prom. (días)</th>
+                                <th class="col-num">Comprob.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-efi-cliente"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-list-ul"></i> Eficacia — desglose por pedido
+                    <span class="header-sub">Fuera de plazo · clic para ver detalle</span>
+                </div>
+                <div class="table-wrap" style="max-height:360px;overflow-y:auto">
+                    <table id="tabla-efi-pedido">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Pedido</th>
+                                <th>Comp.</th>
+                                <th>Prox. desp.</th>
+                                <th>Fecha guía</th>
+                                <th class="col-num">Desvío</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-efi-pedido"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -436,59 +587,41 @@
         <div class="resumen-row">
             <div class="analisis-card">
                 <div class="analisis-section-header">
-                    <i class="bi bi-hourglass-split"></i> Pendientes hoy
+                    <i class="bi bi-person-x"></i> Pedidos demorados promedio — por cliente
                 </div>
-                <div class="table-wrap" style="max-height:320px;overflow-y:auto">
-                    <table id="tabla-pend-hoy">
+                <div class="table-wrap" style="max-height:360px;overflow-y:auto">
+                    <table id="tabla-dem-cliente">
                         <thead>
                             <tr>
-                                <th>Pedido</th>
                                 <th>Cliente</th>
-                                <th class="col-num">Unidades</th>
+                                <th class="col-num">Días prom.</th>
+                                <th class="col-num">Pedidos</th>
                             </tr>
                         </thead>
-                        <tbody id="tbody-pend-hoy"></tbody>
+                        <tbody id="tbody-dem-cliente"></tbody>
                     </table>
                 </div>
             </div>
             <div class="analisis-card">
                 <div class="analisis-section-header">
-                    <i class="bi bi-exclamation-triangle"></i> Demorados
+                    <i class="bi bi-list-ul"></i> Pedidos demorados — desglose por pedido
+                    <span class="header-sub">Clic para ver detalle</span>
                 </div>
-                <div class="table-wrap" style="max-height:320px;overflow-y:auto">
-                    <table id="tabla-demorados">
+                <div class="table-wrap" style="max-height:360px;overflow-y:auto">
+                    <table id="tabla-dem-pedido">
                         <thead>
                             <tr>
-                                <th>Pedido</th>
                                 <th>Cliente</th>
+                                <th>Pedido</th>
+                                <th>Comp.</th>
+                                <th>Prox. desp.</th>
                                 <th>Estado</th>
-                                <th class="col-num">Unidades</th>
+                                <th class="col-num">Días</th>
                             </tr>
                         </thead>
-                        <tbody id="tbody-demorados"></tbody>
+                        <tbody id="tbody-dem-pedido"></tbody>
                     </table>
                 </div>
-            </div>
-        </div>
-
-        <div class="analisis-card">
-            <div class="analisis-section-header">
-                <i class="bi bi-truck"></i> Cola de pedidos pendientes
-                <span class="header-sub" id="prox-habil-label"></span>
-            </div>
-            <div class="table-wrap">
-                <table id="tabla-prox-entrega">
-                    <thead>
-                        <tr>
-                            <th>Pedido</th>
-                            <th>Cod. Cliente</th>
-                            <th>Nombre</th>
-                            <th>Fecha pedido</th>
-                            <th class="col-num">Unidades</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-prox-entrega"></tbody>
-                </table>
             </div>
         </div>
 
@@ -550,6 +683,7 @@
         <div class="analisis-card">
             <div class="analisis-section-header">
                 <i class="bi bi-table"></i> Pedidos consolidados
+                <span class="header-sub">Clic en un pedido para ver el detalle</span>
             </div>
             <div class="table-wrap">
                 <table id="tabla-pedidos">

@@ -17,6 +17,9 @@ try {
         'rubros_stock'     => $db->getRubrosStock(),
         'usuarios_fact'    => $db->getUsuariosFact(),
         'usuarios_picking' => $db->getUsuariosPicking(),
+        'clientes_despacho'=> $db->getClientesDespacho(),
+        'tipos_fact'       => $db->getTiposFact(),
+        'rubros_fact'      => $db->getRubrosFact(),
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     ob_clean();

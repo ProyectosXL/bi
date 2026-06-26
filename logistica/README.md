@@ -36,9 +36,15 @@ Ejecutar en SQL Server Management Studio sobre `POWER_BI_CONTROL`, en orden:
 | 4 | `sql/04_sp_stock.sql` | SP Área 3: Stock WMS vs Tango |
 | 5 | `sql/05_sp_productividad_fact.sql` | SP Área 4: Productividad facturación |
 | 6 | `sql/06_sp_productividad_picking.sql` | SP Área 5: Productividad picking |
-| 7 | `sql/07_sp_demanda_despacho.sql` | SP Área 6: Demanda y despacho |
-| 8 | `sql/08_sp_pedidos_consolidados.sql` | SP Área 7: Pedidos consolidados |
-| 9 | `sql/00_indices.sql` | Índices cubrientes (ejecutar en cualquier momento) |
+| 7 | `sql/07_sp_planificacion.sql` | SP Área 6a: Planificación (`RO_SP_PLANIFICACION`) — ventanas HOY / próxima entrega / +1 |
+| 8 | `sql/09_sp_despacho.sql` | SP Área 6b: Despacho (`RO_SP_DESPACHO`) — eficacia por canal/cliente/pedido, demorados, evolución |
+| 9 | `sql/08_sp_pedidos_consolidados.sql` | SP Área 7: Pedidos consolidados |
+| 10 | `sql/00_indices.sql` | Índices cubrientes (ejecutar en cualquier momento) |
+
+> **Nota:** el antiguo `RO_SP_DEMANDA_DESPACHO` quedó reemplazado por
+> `RO_SP_PLANIFICACION` + `RO_SP_DESPACHO` (la pestaña "Demanda y Despacho" se
+> dividió en "Planificación" y "Despacho"). Se puede eliminar el SP viejo si ya
+> no lo usa otro proceso.
 
 ---
 
@@ -76,7 +82,7 @@ logistica/
 │   ├── LogisticaDB_UY.php  Datos UY (extiende base, clave 'power_uy')
 │   └── LogisticaDBFactory.php  Fábrica: make($pais) → LogisticaDBBase
 ├── partials/
-│   ├── tabs_ar.php         7 tab-panes AR (incluido desde index.php)
+│   ├── tabs_ar.php         8 tab-panes AR (incluido desde index.php)
 │   └── tabs_uy.php         2 tab-panes UY (incluido desde index.php)
 ├── ajax/                   Endpoints AR (sin cambios)
 │   ├── filtros.php
@@ -85,7 +91,9 @@ logistica/
 │   ├── stock.php
 │   ├── productividad_fact.php
 │   ├── productividad_picking.php
-│   ├── demanda_despacho.php
+│   ├── planificacion.php
+│   ├── despacho.php
+│   ├── pedido_detalle.php  Detalle de un pedido (eficiencia por rubro) — modal
 │   └── pedidos_consolidados.php
 ├── ajax/uy/                Endpoints UY
 │   ├── filtros.php         { canales, rubros }

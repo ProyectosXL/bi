@@ -61,18 +61,17 @@ class LogisticaDB extends LogisticaDBBase
     }
 
     // ── Área 4: Productividad facturación ────────────────────────────────
-    public function getProductividadFact(string $desde, string $hasta, ?string $usuario): array
+    public function getProductividadFact(string $desde, string $hasta, ?string $tipo, ?string $rubro): array
     {
         $sets = $this->execSP(
-            'EXEC dbo.RO_SP_PRODUCTIVIDAD_FACTURACION ?,?,?',
-            [$desde, $hasta, $usuario]
+            'EXEC dbo.RO_SP_PRODUCTIVIDAD_FACTURACION ?,?,?,?',
+            [$desde, $hasta, $tipo, $rubro]
         );
         return [
             'kpis'     => $sets[0][0] ?? [],
             'evolucion'=> $sets[1] ?? [],
             'usuarios' => $sets[2] ?? [],
             'ultimos7' => $sets[3] ?? [],
-            'horas'    => $sets[4] ?? [],
         ];
     }
 
@@ -92,18 +91,38 @@ class LogisticaDB extends LogisticaDBBase
     }
 
     // ── Área 6: Demanda y despacho ───────────────────────────────────────
-    public function getDemandaDespacho(string $desde, string $hasta): array
+    // ── Área 6a: Planificación de despacho ───────────────────────────────
+    public function getPlanificacion(?string $canal): array
     {
-        $sets = $this->execSP('EXEC dbo.RO_SP_DEMANDA_DESPACHO ?,?', [$desde, $hasta]);
-        $kpi  = $sets[0][0] ?? [];
-        $totUnid  = (float)($kpi['UNID_TOTALES']    ?? 0);
-        $pendUnid = (float)($kpi['UNID_PENDIENTES'] ?? 0);
-        $kpi['PCT_UNID_CUMPLIDAS'] = $totUnid > 0 ? 1 - ($pendUnid / $totUnid) : null;
+        $sets = $this->execSP('EXEC dbo.RO_SP_PLANIFICACION ?', [$canal]);
+        // Result set 1 (ventanas) re-indexado por VENTANA para acceso directo.
+        $ventanas = [];
+        foreach (($sets[1] ?? []) as $row) {
+            $ventanas[$row['VENTANA']] = $row;
+        }
         return [
-            'kpis'           => $kpi,
-            'pendientes_hoy' => $sets[1] ?? [],
-            'demorados'      => $sets[2] ?? [],
-            'prox_entrega'   => $sets[3] ?? [],
+            'kpis'       => $sets[0][0] ?? [],
+            'ventanas'   => $ventanas,
+            'pendientes' => $sets[2] ?? [],
+            'demorados'  => $sets[3] ?? [],
+        ];
+    }
+
+    // ── Área 6b: Eficacia de despacho ────────────────────────────────────
+    public function getDespacho(string $desde, string $hasta, ?string $canal, ?string $cliente): array
+    {
+        $sets = $this->execSP(
+            'EXEC dbo.RO_SP_DESPACHO ?,?,?,?',
+            [$desde, $hasta, $canal, $cliente]
+        );
+        return [
+            'kpis'             => $sets[0][0] ?? [],
+            'canal'            => $sets[1] ?? [],
+            'eficacia_cliente' => $sets[2] ?? [],
+            'eficacia_pedido'  => $sets[3] ?? [],
+            'demorados_cliente'=> $sets[4] ?? [],
+            'demorados_pedido' => $sets[5] ?? [],
+            'evolucion'        => $sets[6] ?? [],
         ];
     }
 
@@ -119,6 +138,71 @@ class LogisticaDB extends LogisticaDBBase
             'evolucion'=> $sets[1] ?? [],
             'tabla'    => $sets[2] ?? [],
             'canales'  => array_column($sets[3] ?? [], 'CANAL'),
+        ];
+    }
+
+    // ── Detalle de un pedido (eficiencia por rubro) ──────────────────────
+    public function getPedidoDetalle(string $pedido): array
+    {
+        // El front recibe NRO_PEDIDO ya "numerizado" por JSON_NUMERIC_CHECK
+        // (se pierden el espacio inicial y los ceros a la izquierda). El
+        // formato canónico almacenado es ' ' + 13 dígitos (14 chars). Se
+        // reconstruyen las variantes posibles para que el match use el índice.
+        $digits = preg_replace('/\D/', '', $pedido);
+        $params = [];
+        if ($digits !== '') {
+            $pad13 = str_pad($digits, 13, '0', STR_PAD_LEFT);
+            $params[] = ' ' . $pad13;   // canónico (espacio + 13 dígitos)
+            $params[] = $pad13;         // sin espacio
+            $params[] = $digits;        // crudo
+        }
+        $raw = trim($pedido);
+        if ($raw !== '' && !in_array($raw, $params, true)) {
+            $params[] = $raw;
+        }
+        if (!$params) {
+            return ['header' => null, 'lineas' => []];
+        }
+        $in = implode(',', array_fill(0, count($params), '?'));
+
+        $header = $this->queryOne(
+            "SELECT TOP 1 LTRIM(RTRIM(NRO_PEDIDO)) AS NRO_PEDIDO, CLIENTE, CANAL,
+                    FECHA_PEDI, TALON_PED
+             FROM dbo.BI_EFICIENCIA_LOGISTICA
+             WHERE NRO_PEDIDO IN ($in)",
+            $params
+        );
+
+        // Detalle agrupado por RUBRO: unidades pedidas, facturadas y eficiencia.
+        $rubros = $this->query(
+            "SELECT ISNULL(NULLIF(LTRIM(RTRIM(RUBRO)), ''), 'SIN RUBRO') AS RUBRO,
+                    CAST(SUM(CANT_PEDID)     AS DECIMAL(18,2)) AS CANT_PEDID,
+                    CAST(SUM(CANT_FACTURADA) AS DECIMAL(18,2)) AS CANT_FACT
+             FROM dbo.BI_EFICIENCIA_LOGISTICA
+             WHERE NRO_PEDIDO IN ($in)
+             GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(RUBRO)), ''), 'SIN RUBRO')
+             ORDER BY RUBRO",
+            $params
+        );
+
+        // Totales + eficiencia por rubro (calculada en PHP para evitar /0).
+        $totPed = 0.0; $totFac = 0.0;
+        foreach ($rubros as &$r) {
+            $ped = (float)$r['CANT_PEDID'];
+            $fac = (float)$r['CANT_FACT'];
+            $r['EFICIENCIA'] = $ped > 0 ? $fac / $ped : null;
+            $totPed += $ped; $totFac += $fac;
+        }
+        unset($r);
+
+        return [
+            'header' => $header,
+            'rubros' => $rubros,
+            'totales' => [
+                'CANT_PEDID'  => $totPed,
+                'CANT_FACT'   => $totFac,
+                'EFICIENCIA'  => $totPed > 0 ? $totFac / $totPed : null,
+            ],
         ];
     }
 
@@ -160,6 +244,36 @@ class LogisticaDB extends LogisticaDBBase
                           WHERE CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL)) <> ''
                           ORDER BY CANAL"),
             'CANAL'
+        );
+    }
+
+    public function getTiposFact(): array
+    {
+        return array_column(
+            $this->query("SELECT DISTINCT TIPO_FACTURACION FROM dbo.BI_FACTURACION_LOGISTICA
+                          WHERE TIPO_FACTURACION IS NOT NULL AND LTRIM(RTRIM(TIPO_FACTURACION)) <> ''
+                          ORDER BY TIPO_FACTURACION"),
+            'TIPO_FACTURACION'
+        );
+    }
+
+    public function getRubrosFact(): array
+    {
+        return array_column(
+            $this->query("SELECT DISTINCT RUBRO FROM dbo.BI_FACTURACION_LOGISTICA
+                          WHERE RUBRO IS NOT NULL AND LTRIM(RTRIM(RUBRO)) <> ''
+                          ORDER BY RUBRO"),
+            'RUBRO'
+        );
+    }
+
+    public function getClientesDespacho(): array
+    {
+        return array_column(
+            $this->query("SELECT DISTINCT CLIENTE FROM dbo.RO_T_DESPACHO_PEDIDOS
+                          WHERE CLIENTE IS NOT NULL AND LTRIM(RTRIM(CLIENTE)) <> ''
+                          ORDER BY CLIENTE"),
+            'CLIENTE'
         );
     }
 }
