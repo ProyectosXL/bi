@@ -3,8 +3,9 @@ GO
 -- ============================================================
 -- 04_sp_stock.sql
 -- RO_SP_STOCK_WMS_TANGO
--- Área 3: Comparación stock WMS vs Tango.
--- Sin filtro de fecha (snapshot actual); slicer por RUBRO.
+-- Área 3: Comparación stock WMS vs Tango (Inventario).
+-- Sin filtro de fecha (snapshot actual); slicers por RUBRO y DEPOSITO.
+-- @DEPOSITO = NULL -> todos los depósitos.
 -- ============================================================
 
 IF OBJECT_ID('dbo.RO_SP_STOCK_WMS_TANGO','P') IS NOT NULL
@@ -12,7 +13,8 @@ IF OBJECT_ID('dbo.RO_SP_STOCK_WMS_TANGO','P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.RO_SP_STOCK_WMS_TANGO
-    @RUBRO NVARCHAR(100) = NULL
+    @RUBRO    NVARCHAR(100) = NULL,
+    @DEPOSITO NVARCHAR(50)  = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -22,6 +24,8 @@ BEGIN
         CAST(ISNULL(SUM(STOCK_TANGO), 0) AS DECIMAL(18,2))  AS STOCK_TANGO,
         CAST(ISNULL(SUM(STOCK_UBIC),  0) AS DECIMAL(18,2))  AS STOCK_WMS,
         CAST(ISNULL(SUM(DIFERENCIA),  0) AS DECIMAL(18,2))  AS DIFERENCIA,
+        -- Diferencia absoluta: magnitud total del desvío (suma de |diferencia|)
+        CAST(ISNULL(SUM(ABS(DIFERENCIA)), 0) AS DECIMAL(18,2)) AS DIFERENCIA_ABS,
         -- DIF_PCT: diferencia relativa sobre stock Tango
         CAST(
             ISNULL(
@@ -37,7 +41,8 @@ BEGIN
             ) AS DECIMAL(10,4)
         )                                                    AS PRECISION_INVENTARIO
     FROM dbo.BI_STOCK_WMS_TANGO
-    WHERE (@RUBRO IS NULL OR RUBRO = @RUBRO);
+    WHERE (@RUBRO    IS NULL OR RUBRO    = @RUBRO)
+      AND (@DEPOSITO IS NULL OR DEPOSITO = @DEPOSITO);
 
     -- ── Result set 2: detalle por rubro ───────────────────────────────────
     SELECT
@@ -54,7 +59,8 @@ BEGIN
             AS DECIMAL(10,4)
         )                                                   AS PRECISION
     FROM dbo.BI_STOCK_WMS_TANGO
-    WHERE (@RUBRO IS NULL OR RUBRO = @RUBRO)
+    WHERE (@RUBRO    IS NULL OR RUBRO    = @RUBRO)
+      AND (@DEPOSITO IS NULL OR DEPOSITO = @DEPOSITO)
     GROUP BY RUBRO
     ORDER BY ABS(SUM(DIFERENCIA)) DESC;
 
@@ -75,7 +81,8 @@ BEGIN
         CAST(SUM(STOCK_UBIC)  AS DECIMAL(18,2))            AS STOCK_WMS,
         CAST(SUM(DIFERENCIA)  AS DECIMAL(18,2))            AS DIFERENCIA
     FROM dbo.BI_STOCK_WMS_TANGO
-    WHERE (@RUBRO IS NULL OR RUBRO = @RUBRO)
+    WHERE (@RUBRO    IS NULL OR RUBRO    = @RUBRO)
+      AND (@DEPOSITO IS NULL OR DEPOSITO = @DEPOSITO)
       AND RUBRO IS NOT NULL AND LTRIM(RTRIM(RUBRO)) <> ''
     GROUP BY RUBRO, COD_ARTICU
     HAVING SUM(DIFERENCIA) <> 0

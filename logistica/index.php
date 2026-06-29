@@ -85,6 +85,12 @@ $mesDesde  = date('Y-m-01');
         <select id="sel-rubro"><option value="">Todos</option></select>
     </span>
 
+    <!-- Slicer Depósito (Inventario) -->
+    <span class="slicer-wrap" id="wrap-deposito" style="display:none">
+        <label for="sel-deposito">Depósito</label>
+        <select id="sel-deposito"><option value="">Todos</option></select>
+    </span>
+
     <!-- Slicer Cliente (despacho) -->
     <span class="slicer-wrap" id="wrap-cliente" style="display:none">
         <label for="sel-cliente">Cliente</label>
@@ -120,7 +126,7 @@ $mesDesde  = date('Y-m-01');
         <i class="bi bi-clock-history"></i> Lead Time
     </button>
     <button class="tab-btn" data-tab="stock">
-        <i class="bi bi-boxes"></i> Stock WMS
+        <i class="bi bi-boxes"></i> Inventario
     </button>
     <button class="tab-btn" data-tab="prod-fact">
         <i class="bi bi-receipt"></i> Prod. Facturación

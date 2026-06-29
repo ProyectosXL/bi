@@ -248,6 +248,13 @@
                 </div>
             </div>
             <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-rulers"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Diferencia absoluta</div>
+                    <div class="kpi-value" id="kv-stock-dif-abs">—</div>
+                </div>
+            </div>
+            <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-shield-check"></i></div>
                 <div class="kpi-body">
                     <div class="kpi-label">Precisión inventario</div>

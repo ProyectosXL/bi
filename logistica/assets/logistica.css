@@ -58,7 +58,7 @@
     box-shadow   : var(--shadow);
     padding      : 16px 18px;
     display      : flex;
-    align-items  : stretch;
+    align-items  : center;   /* centra ícono + datos: sin hueco abajo cuando la fila es alta */
     gap          : 12px;
     transition   : box-shadow var(--transition), transform var(--transition);
 }
@@ -151,9 +151,11 @@
     box-shadow : none;
     overflow   : visible;
     perspective: 1000px;
-    min-height : 118px;
+    min-height : 132px;
 }
 .kpi-card.kpi-flip:hover { transform: none; box-shadow: none; }
+/* El monto de pérdida es largo: fuente algo menor para que respire */
+.kpi-flip-front .kpi-value { font-size: 1.4rem; }
 .kpi-flip-inner {
     position       : absolute;
     inset          : 0;
@@ -172,21 +174,28 @@
     box-shadow    : var(--shadow);
     padding       : 16px 18px;
 }
-.kpi-flip-front { display: flex; align-items: stretch; gap: 12px; cursor: pointer; }
+.kpi-flip-front { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .kpi-flip-front:hover { box-shadow: 0 4px 20px rgba(26,35,64,0.16); }
 .kpi-flip-back  { transform: rotateY(180deg); display: flex; flex-direction: column; gap: 6px; }
 
 /* Pie del frente: variación + botón de giro, sin amontonar */
-.kpi-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; }
-.kpi-foot .kpi-var {
-    flex         : 1;
-    min-width    : 0;
-    display      : block;
-    margin-top   : 0;
-    overflow     : hidden;
-    text-overflow: ellipsis;
-    white-space  : nowrap;
+.kpi-foot {
+    display      : flex;
+    align-items  : center;
+    gap          : 8px;
+    margin-top   : 6px;
+    padding-top  : 8px;
+    border-top   : 1px solid var(--border);
 }
+.kpi-foot .kpi-var {
+    flex       : 1;
+    min-width  : 0;
+    display    : block;
+    margin-top : 0;
+    line-height: 1.3;
+    white-space: normal;       /* permite que "prev" baje de línea */
+}
+.kpi-foot .kpi-var .kpi-var-sub { display: block; font-weight: 500; }
 .kpi-flip-front-btn {
     flex-shrink   : 0;
     width         : 26px;

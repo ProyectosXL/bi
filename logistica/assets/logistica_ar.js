@@ -25,6 +25,7 @@
         activeTab: 'eficiencia',
         canal    : '',
         rubro    : '',
+        deposito : '01',   // Inventario: depósito por defecto
         rubroFact: '',
         usuario  : '',
         cliente  : '',
@@ -64,7 +65,7 @@
     const TAB_SLICERS = {
         'eficiencia'   : ['wrap-canal'],
         'leadtime'     : [],
-        'stock'        : ['wrap-rubro'],
+        'stock'        : ['wrap-rubro', 'wrap-deposito'],
         'prod-fact'    : ['wrap-tipo', 'wrap-rubro'],
         'prod-picking' : ['wrap-usuario'],
         'planificacion': ['wrap-canal'],
@@ -87,6 +88,7 @@
             'kv-stock-tango'    : ['Stock Tango', ['Stock registrado en el sistema Tango para los rubros filtrados.']],
             'kv-stock-wms'      : ['Stock WMS', ['Stock registrado en el sistema WMS para los rubros filtrados.']],
             'kv-stock-dif'      : ['Diferencia neta', ['Diferencia entre stock WMS y stock Tango (WMS − Tango).', 'Desviaciones distintas de cero requieren revisión de inventario.']],
+            'kv-stock-dif-abs'  : ['Diferencia absoluta', ['Suma del valor absoluto de las diferencias por artículo (|WMS − Tango|).', 'Mide la magnitud total del desvío sin que los positivos y negativos se compensen.']],
             'kv-stock-prec'     : ['Precisión de inventario', ['Porcentaje de artículos donde WMS y Tango coinciden exactamente.', 'Meta ideal: 99% o superior.']],
             'kv-pf-prom-dia'    : ['Promedio por día', ['Promedio de unidades facturadas por día en el período, según el tipo de facturación y rubro seleccionados.']],
             'kv-pf-pico-dia'    : ['Pico x día', ['Mayor cantidad de unidades facturadas en un único día del período (respeta los filtros).']],
@@ -125,7 +127,7 @@
             'tabla-usuarios-picking': ['Productividad por picker', ['Resumen de unidades, porcentaje del equipo, pico, mediana, horas y promedio por hora para cada picker.']],
             'tabla-picking-ult7'    : ['Últimos 7 días por picker', ['Unidades pickeadas por día y picker en los últimos 7 días con actividad.', 'Las columnas de totales suman unidades y horas del período completo.']],
             'gauges-despacho-canal' : ['Eficacia de despacho por canal', ['Cada gauge muestra la eficacia de despacho (comprobantes en término / despachados) por canal.', 'La marca negra indica la meta del 95%. Verde ≥ 95%, amarillo ≥ 85%, rojo < 85%.']],
-            'chart-despacho-evol'   : ['Evolución eficacia de despacho', ['Eficacia de despacho mensual, una línea por año.', 'La línea roja punteada marca la meta del 95%.']],
+            'chart-despacho-evol'   : ['Evolución eficacia de despacho', ['Eficacia de despacho mensual: una línea por año (actual vs. anterior).', 'Bandas de color = umbrales: verde ≥ 95%, amarillo 85–95%, rojo < 85%.', 'La línea roja punteada marca la meta del 95%.']],
             'tabla-pend'            : ['Pedidos pendientes', ['Pedidos con unidades pendientes de despacho, filtrables por ventana de entrega: Hoy, Próxima entrega, Próxima entrega +1 día o Todos.']],
             'tabla-plan-demorados'  : ['Pedidos demorados', ['Pedidos pendientes cuya fecha de entrega comprometida ya venció, dentro de los últimos 30 días, ordenados por fecha de entrega.']],
             'tabla-efi-cliente'     : ['% Eficacia despacho por cliente', ['Eficacia de despacho y desvío promedio de días por cliente, ordenado de menor a mayor eficacia.']],
@@ -280,7 +282,7 @@
 
     // ── Slicers por tab ───────────────────────────────────────────────────
     function updateSlicers(tab) {
-        $('#wrap-canal, #wrap-rubro, #wrap-usuario, #wrap-cliente, #wrap-tipo').hide();
+        $('#wrap-canal, #wrap-rubro, #wrap-deposito, #wrap-usuario, #wrap-cliente, #wrap-tipo').hide();
         (TAB_SLICERS[tab] || []).forEach(id => $('#' + id).show());
         if (tab === 'prod-picking') {
             fetchFiltros()
@@ -298,9 +300,15 @@
                 })
                 .catch(() => {});
         } else if (tab === 'stock') {
-            // Stock usa los rubros de stock.
+            // Inventario usa los rubros y depósitos de stock.
             fetchFiltros()
-                .then(json => { if (json.ok) { poblarSelect('#sel-rubro', json.rubros_stock, 'Todos'); $('#sel-rubro').val(State.rubro || ''); } })
+                .then(json => {
+                    if (!json.ok) return;
+                    poblarSelect('#sel-rubro', json.rubros_stock, 'Todos');
+                    $('#sel-rubro').val(State.rubro || '');
+                    poblarSelect('#sel-deposito', json.depositos_stock, 'Todos');
+                    $('#sel-deposito').val(State.deposito || '');
+                })
                 .catch(() => {});
         }
     }
@@ -363,10 +371,13 @@
 
         $('#kv-unid-fact').text(fmt.num(k.UNID_FACTURADAS));
 
-        $('#kv-perdida').text(fmt.money(k.PERDIDA_FACT));
+        // Monto sin centavos (el importe es grande) para que no se amontone.
+        $('#kv-perdida').text(
+            (k.PERDIDA_FACT == null || isNaN(k.PERDIDA_FACT)) ? '—' : '$ ' + fmt.num(k.PERDIDA_FACT, 0)
+        );
         $('#kvar-perdida')
             .html('% Pérd.: ' + fmt.pct(k.PCT_PERDIDA) +
-                  ' <span class="kpi-var-sub">· prev ' + fmt.pct(k.PCT_PERDIDA_AA) + '</span>')
+                  '<span class="kpi-var-sub">prev. ' + fmt.pct(k.PCT_PERDIDA_AA) + '</span>')
             .removeClass('pos neg neu')
             .addClass('kpi-var ' + (k.PCT_PERDIDA > 0.05 ? 'neg' : 'neu'));
 
@@ -768,7 +779,7 @@
 
     // ── Área 3: Stock WMS vs Tango ────────────────────────────────────────
     async function loadStock() {
-        const data = await apiFetch('stock', { rubro: State.rubro });
+        const data = await apiFetch('stock', { rubro: State.rubro, deposito: State.deposito });
         const k = data.kpis || {};
 
         $('#kv-stock-tango').text(fmt.num(k.STOCK_TANGO));
@@ -778,6 +789,7 @@
             text: fmt.pct(k.DIF_PCT),
             cls : Math.abs(parseFloat(k.DIF_PCT || 0)) < 0.01 ? 'pos' : 'neg',
         });
+        $('#kv-stock-dif-abs').text(fmt.num(k.DIFERENCIA_ABS));
         $('#kv-stock-prec').text(fmt.pct(k.PRECISION_INVENTARIO));
 
         const rubros = (data.rubros || []).slice(0, 15);
@@ -1291,26 +1303,53 @@
             });
         }
 
-        // Evolución (una línea por año, eje X = meses)
+        // Evolución (una línea por año, eje X = meses) + umbrales
         const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
         const evol  = data.evolucion || [];
         const years = [...new Set(evol.map(r => parseInt(r.ANIO)))].sort();
+        const yearColors = { prev: '#2563eb', curr: '#f59e0b' };
         const datasets = years.map((y, idx) => {
+            const isCurrent = idx === years.length - 1;
             const arr = Array(12).fill(null);
             evol.filter(r => parseInt(r.ANIO) === y).forEach(r => {
                 arr[parseInt(r.MES) - 1] = r.EFICACIA == null ? null : parseFloat((parseFloat(r.EFICACIA) * 100).toFixed(1));
             });
-            const col = PALETTE[idx % PALETTE.length];
-            return { label: String(y), data: arr, borderColor: col, backgroundColor: col + '22',
-                     borderWidth: 2, pointRadius: 3, tension: 0.3, fill: false };
+            return {
+                label          : String(y),
+                data           : arr,
+                borderColor    : isCurrent ? yearColors.curr : yearColors.prev,
+                backgroundColor : isCurrent ? 'rgba(245,158,11,.10)' : 'rgba(37,99,235,.05)',
+                borderWidth    : isCurrent ? 2.5 : 2,
+                pointRadius    : 3,
+                tension        : 0.3,
+                fill           : isCurrent,
+                spanGaps       : true,
+            };
         });
         datasets.push({ label: 'Meta (95%)', data: Array(12).fill(95), borderColor: '#dc2626',
                         borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, fill: false });
+
+        // Eje Y con zoom dinámico (piso 5 pts bajo el mínimo, tope 85%)
+        const valoresDsp = datasets
+            .filter(d => d.label !== 'Meta (95%)')
+            .flatMap(d => d.data)
+            .filter(v => v != null && isFinite(v));
+        const yMinDsp = valoresDsp.length
+            ? Math.max(0, Math.min(85, Math.floor((Math.min(...valoresDsp) - 5) / 5) * 5))
+            : 0;
+
+        const optsDsp = chartOptions('Eficacia (%)', { min: yMinDsp, max: 100 }, { pct: true });
+        optsDsp.interaction = { mode: 'index', intersect: false };
+        optsDsp.plugins.tooltip.mode = 'index';
+        optsDsp.plugins.tooltip.intersect = false;
+        optsDsp.plugins.tooltip.filter = item => item.dataset.label !== 'Meta (95%)' && item.parsed.y != null;
+
         if (chartDespEvol) chartDespEvol.destroy();
         chartDespEvol = new Chart($('#chart-despacho-evol')[0], {
             type: 'line',
+            plugins: [umbralesBands],
             data: { labels: MESES, datasets },
-            options: chartOptions('Eficacia (%)', { min: 0, max: 100, suggestedMax: 105 }, { pct: true }),
+            options: optsDsp,
         });
 
         // Tablas
@@ -1492,6 +1531,7 @@
         $('#inp-hasta').attr('title', 'Fecha final del periodo de analisis.');
         $('#sel-canal').attr('title', 'Filtra los datos por canal.');
         $('#sel-rubro').attr('title', 'Filtra los datos por rubro.');
+        $('#sel-deposito').attr('title', 'Filtra el inventario por depósito.');
         $('#sel-usuario').attr('title', 'Filtra los datos por usuario.');
         $('#sel-cliente').attr('title', 'Filtra los datos por cliente.');
         $('#sel-tipo').attr('title', 'Filtra por tipo de facturación.');
@@ -1552,6 +1592,7 @@
             // El slicer Rubro es compartido: Facturación y Stock usan listas distintas.
             if (State.activeTab === 'prod-fact') State.rubroFact = $('#sel-rubro').val() || '';
             else                                 State.rubro     = $('#sel-rubro').val() || '';
+            if (State.activeTab === 'stock')     State.deposito  = $('#sel-deposito').val() || '';
             invalidarCache();
             updatePeriodLabel();
             loadTab(State.activeTab);
@@ -1563,13 +1604,14 @@
             loadTab(State.activeTab).finally(() => { State.forceRefresh = false; });
         });
 
-        $('#sel-canal, #sel-rubro, #sel-usuario, #sel-cliente, #sel-tipo').on('change', function () {
+        $('#sel-canal, #sel-rubro, #sel-deposito, #sel-usuario, #sel-cliente, #sel-tipo').on('change', function () {
             State.canal   = $('#sel-canal').val()   || '';
             State.usuario = $('#sel-usuario').val() || '';
             State.cliente = $('#sel-cliente').val() || '';
             State.tipo    = $('#sel-tipo').val()    || '';
             if (State.activeTab === 'prod-fact') State.rubroFact = $('#sel-rubro').val() || '';
             else                                 State.rubro     = $('#sel-rubro').val() || '';
+            if (State.activeTab === 'stock')     State.deposito  = $('#sel-deposito').val() || '';
             delete Cache[State.activeTab];
             loadTab(State.activeTab);
         });

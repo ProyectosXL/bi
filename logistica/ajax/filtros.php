@@ -15,6 +15,7 @@ try {
         'ok'               => true,
         'canales'          => $db->getCanalesEficiencia(),
         'rubros_stock'     => $db->getRubrosStock(),
+        'depositos_stock'  => $db->getDepositosStock(),
         'usuarios_fact'    => $db->getUsuariosFact(),
         'usuarios_picking' => $db->getUsuariosPicking(),
         'clientes_despacho'=> $db->getClientesDespacho(),

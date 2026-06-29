@@ -57,9 +57,9 @@ class LogisticaDB extends LogisticaDBBase
     }
 
     // ── Área 3: Stock WMS vs Tango ───────────────────────────────────────
-    public function getStock(?string $rubro): array
+    public function getStock(?string $rubro, ?string $deposito = null): array
     {
-        $sets = $this->execSP('EXEC dbo.RO_SP_STOCK_WMS_TANGO ?', [$rubro]);
+        $sets = $this->execSP('EXEC dbo.RO_SP_STOCK_WMS_TANGO ?,?', [$rubro, $deposito]);
         return [
             'kpis'         => $sets[0][0] ?? [],
             'rubros'       => $sets[1] ?? [],
@@ -243,6 +243,22 @@ class LogisticaDB extends LogisticaDBBase
                           ORDER BY RUBRO"),
             'RUBRO'
         );
+    }
+
+    public function getDepositosStock(): array
+    {
+        $rows = $this->query(
+            "SELECT DISTINCT DEPOSITO FROM dbo.BI_STOCK_WMS_TANGO
+             WHERE DEPOSITO IS NOT NULL AND LTRIM(RTRIM(DEPOSITO)) <> ''
+             ORDER BY DEPOSITO"
+        );
+        // Mostrar el número de depósito con cero a la izquierda (01, 02, …)
+        // cuando es numérico de un solo dígito. El valor padded igual matchea
+        // en el SP: contra columna int, '01' se convierte a 1.
+        return array_map(static function ($r) {
+            $d = trim((string)($r['DEPOSITO'] ?? ''));
+            return ctype_digit($d) ? str_pad($d, 2, '0', STR_PAD_LEFT) : $d;
+        }, $rows);
     }
 
     public function getCanalesEficiencia(): array
