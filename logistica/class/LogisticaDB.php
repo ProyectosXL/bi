@@ -25,11 +25,19 @@ class LogisticaDB extends LogisticaDBBase
         $pedidasAA = (float)($kpi['UNID_PEDIDAS_AA']    ?? 0);
         $factAA    = (float)($kpi['UNID_FACTURADAS_AA'] ?? 0);
         $kpi['EFI_UNIDADES_AA'] = $pedidasAA > 0 ? $factAA / $pedidasAA : null;
+        // Pérdida año anterior — % sobre importe pedido del año anterior.
+        $perdidaAA    = (float)($kpi['PERDIDA_FACT_AA']  ?? 0);
+        $importePedAA = (float)($kpi['IMPORTE_PEDIDO_AA'] ?? 0);
+        $kpi['PCT_PERDIDA_AA'] = $importePedAA > 0 ? $perdidaAA / $importePedAA : null;
         return [
             'kpis'             => $kpi,
             'evolucion'        => $sets[1] ?? [],
             'canales'          => array_column($sets[2] ?? [], 'CANAL'),
             'eficiencia_canal' => $sets[3] ?? [],
+            'efi_cliente'      => $sets[4] ?? [],   // peores 10 por cliente
+            'efi_rubro'        => $sets[5] ?? [],   // por rubro
+            'efi_pedidos'      => $sets[6] ?? [],   // por pedido y cliente (drill)
+            'perdida_12m'      => $sets[7] ?? [],   // proporción e importe pérdida 12m
         ];
     }
 

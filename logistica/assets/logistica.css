@@ -58,7 +58,7 @@
     box-shadow   : var(--shadow);
     padding      : 16px 18px;
     display      : flex;
-    align-items  : flex-start;
+    align-items  : stretch;
     gap          : 12px;
     transition   : box-shadow var(--transition), transform var(--transition);
 }
@@ -80,7 +80,7 @@
     color        : var(--accent);
 }
 
-.kpi-body  { flex: 1; min-width: 0; }
+.kpi-body  { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
 .kpi-label {
     font-size     : .72rem;
@@ -136,10 +136,113 @@
 .kpi-var.pos { color: var(--pos); }
 .kpi-var.neg { color: var(--neg); }
 .kpi-var.neu { color: var(--text-3); }
+.kpi-var .kpi-var-sub { color: var(--text-3); font-weight: 500; }
 
 /* Semáforo con ícono de meta ─────────────────────────────────────────── */
 .kpi-var.semaforo.alcanza { color: var(--pos); }
 .kpi-var.semaforo.no-alcanza { color: var(--neg); }
+
+/* ── KPI tipo flip (frente: KPI · dorso: mini-gráfico) ────────────────── */
+.kpi-card.kpi-flip {
+    position   : relative;
+    padding    : 0;
+    background : transparent;
+    border     : 0;
+    box-shadow : none;
+    overflow   : visible;
+    perspective: 1000px;
+    min-height : 118px;
+}
+.kpi-card.kpi-flip:hover { transform: none; box-shadow: none; }
+.kpi-flip-inner {
+    position       : absolute;
+    inset          : 0;
+    transition     : transform .55s cubic-bezier(.4,.2,.2,1);
+    transform-style: preserve-3d;
+}
+.kpi-flip.flipped .kpi-flip-inner { transform: rotateY(180deg); }
+.kpi-flip-face {
+    position      : absolute;
+    inset         : 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    background    : var(--bg-card);
+    border        : 1px solid var(--border);
+    border-radius : var(--radius);
+    box-shadow    : var(--shadow);
+    padding       : 16px 18px;
+}
+.kpi-flip-front { display: flex; align-items: stretch; gap: 12px; cursor: pointer; }
+.kpi-flip-front:hover { box-shadow: 0 4px 20px rgba(26,35,64,0.16); }
+.kpi-flip-back  { transform: rotateY(180deg); display: flex; flex-direction: column; gap: 6px; }
+
+/* Pie del frente: variación + botón de giro, sin amontonar */
+.kpi-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; }
+.kpi-foot .kpi-var {
+    flex         : 1;
+    min-width    : 0;
+    display      : block;
+    margin-top   : 0;
+    overflow     : hidden;
+    text-overflow: ellipsis;
+    white-space  : nowrap;
+}
+.kpi-flip-front-btn {
+    flex-shrink   : 0;
+    width         : 26px;
+    height        : 26px;
+    display       : inline-flex;
+    align-items   : center;
+    justify-content: center;
+    border        : 0;
+    border-radius : 50%;
+    background    : rgba(37,99,235,.12);
+    color         : var(--accent2);
+    font-size     : .9rem;
+    cursor        : pointer;
+    transition    : background var(--transition), color var(--transition), transform var(--transition);
+}
+.kpi-flip-front:hover .kpi-flip-front-btn {
+    background: var(--accent2);
+    color     : #fff;
+    transform : rotate(-18deg);
+}
+
+.kpi-flip-btn {
+    border       : 0;
+    background    : transparent;
+    color         : var(--text-3);
+    cursor        : pointer;
+    font-size     : .9rem;
+    line-height   : 1;
+    padding       : 4px;
+    border-radius : var(--radius-sm);
+    transition    : background var(--transition), color var(--transition);
+}
+.kpi-flip-btn:hover { background: var(--bg-card2); color: var(--text-1); }
+
+.kpi-flip-back-head {
+    display        : flex;
+    align-items    : center;
+    justify-content: space-between;
+    gap            : 6px;
+}
+.kpi-flip-back-title {
+    font-size     : .72rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color         : var(--text-3);
+    font-weight   : 600;
+    overflow      : hidden;
+    text-overflow : ellipsis;
+    white-space   : nowrap;
+}
+.kpi-flip-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.kpi-flip-chart { position: relative; flex: 1; min-height: 0; }
+.kpi-flip-chart canvas { position: absolute; inset: 0; display: block; }
+
+/* N° de pedido en el drill de eficiencia por cliente */
+.efi-ped-nro { font-variant-numeric: tabular-nums; color: var(--text-2); padding-left: 18px; }
 
 /* ── Resumen row (2 columnas iguales) ────────────────────────────────── */
 .resumen-row {

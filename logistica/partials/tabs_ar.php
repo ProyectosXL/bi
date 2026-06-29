@@ -29,12 +29,40 @@
                     <div class="kpi-var neu" id="kvar-unid-fact"></div>
                 </div>
             </div>
-            <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-exclamation-triangle"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-label">Pérdida facturación</div>
-                    <div class="kpi-value" id="kv-perdida">—</div>
-                    <div class="kpi-var" id="kvar-perdida"></div>
+            <div class="kpi-card kpi-flip" id="card-perdida">
+                <div class="kpi-flip-inner">
+                    <!-- Frente: KPI -->
+                    <div class="kpi-flip-face kpi-flip-front">
+                        <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-exclamation-triangle"></i></div>
+                        <div class="kpi-body">
+                            <div class="kpi-label">Pérdida facturación</div>
+                            <div class="kpi-value" id="kv-perdida">—</div>
+                            <div class="kpi-foot">
+                                <div class="kpi-var" id="kvar-perdida"></div>
+                                <button type="button" class="kpi-flip-front-btn" data-flip
+                                        title="Ver evolución (últ. 12 meses)" aria-label="Ver gráfico de pérdida">
+                                    <i class="bi bi-graph-down-arrow"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Dorso: mini-gráfico -->
+                    <div class="kpi-flip-face kpi-flip-back">
+                        <div class="kpi-flip-back-head">
+                            <span class="kpi-flip-back-title">Pérdida — últ. 12 meses</span>
+                            <span class="kpi-flip-actions">
+                                <button type="button" class="kpi-flip-btn" id="btn-perdida-expand"
+                                        title="Ampliar" aria-label="Ampliar gráfico de pérdida">
+                                    <i class="bi bi-arrows-fullscreen"></i>
+                                </button>
+                                <button type="button" class="kpi-flip-btn" data-flip-back
+                                        title="Volver" aria-label="Volver al indicador">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                            </span>
+                        </div>
+                        <div class="kpi-flip-chart"><canvas id="spark-perdida"></canvas></div>
+                    </div>
                 </div>
             </div>
             <div class="kpi-card">
@@ -60,6 +88,66 @@
                 <i class="bi bi-sliders2"></i> Eficiencia por Canal
             </div>
             <div class="gauges-wrap" id="gauges-canal"></div>
+        </div>
+
+        <div class="resumen-row">
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-people"></i> % Eficiencia unidades por cliente (Peores 10)
+                </div>
+                <div class="table-wrap">
+                    <table id="tabla-efi-unid-cliente">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th class="col-num">Unid. pedidas</th>
+                                <th class="col-num">Unid. facturadas</th>
+                                <th class="col-num">% Eficiencia</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-efi-unid-cliente"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-tags"></i> % Eficiencia unidades (Rubros)
+                </div>
+                <div class="table-wrap" style="max-height:360px;overflow-y:auto">
+                    <table id="tabla-efi-unid-rubro">
+                        <thead>
+                            <tr>
+                                <th>Rubro</th>
+                                <th class="col-num">Unid. pedidas</th>
+                                <th class="col-num">Unid. facturadas</th>
+                                <th class="col-num">% Eficiencia</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-efi-unid-rubro"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-card-list"></i> % Eficiencia (Pedidos por cliente)
+                <span class="header-sub">Clic en un cliente para ver sus pedidos · clic en un pedido para el detalle</span>
+            </div>
+            <div class="table-wrap" style="max-height:440px;overflow-y:auto">
+                <table id="tabla-efi-pedidos" class="tabla-drill">
+                    <thead>
+                        <tr>
+                            <th>Cliente / N° pedido</th>
+                            <th>Fecha</th>
+                            <th class="col-num">Unid. pedidas</th>
+                            <th class="col-num">Unid. facturadas</th>
+                            <th class="col-num">% Eficiencia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-efi-pedidos"></tbody>
+                </table>
+            </div>
         </div>
 
         <div class="analisis-card">

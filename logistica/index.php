@@ -207,6 +207,23 @@ $mesDesde  = date('Y-m-01');
     </div>
 </div>
 
+<!-- ══ MODAL PROPORCIÓN E IMPORTE DE PÉRDIDA FACT. (ÚLT. 12 MESES) ════════ -->
+<div id="perdida-12m-modal" class="pmodal" hidden>
+    <div class="pmodal-backdrop" data-close></div>
+    <div class="pmodal-box" role="dialog" aria-modal="true" aria-labelledby="perdida12-title">
+        <div class="pmodal-head">
+            <div class="pmodal-title" id="perdida12-title"><i class="bi bi-graph-down-arrow"></i> Proporción e importe de pérdida fact. — últ. 12 meses</div>
+            <button class="pmodal-close" type="button" data-close aria-label="Cerrar">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="pmodal-meta" id="perdida12-meta"></div>
+        <div class="pmodal-body pmodal-body-chart">
+            <canvas id="chart-perdida-12m" height="300"></canvas>
+        </div>
+    </div>
+</div>
+
 <script>window.LOGISTICA_PAIS = '<?= $pais ?>';</script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

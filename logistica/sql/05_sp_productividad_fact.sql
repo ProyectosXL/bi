@@ -80,9 +80,12 @@ BEGIN
         (SELECT TOP 1 FECHA_COMP
          FROM (SELECT FECHA_COMP, SUM(Unidades) dt FROM #A GROUP BY FECHA_COMP) d
          ORDER BY dt DESC, FECHA_COMP DESC)                             AS PICO_DIA_FECHA,
-        -- Pico x usuario = máx. usuario-día (IGNORA tipo) + nombre
-        CAST(ISNULL((SELECT MAX(Unidades) FROM #B), 0) AS DECIMAL(18,2)) AS PICO_USUARIO,
+        -- Pico x usuario = máx. usuario-día (IGNORA tipo) + nombre.
+        -- Se omite el usuario REMISION (no es un operador real).
+        CAST(ISNULL((SELECT MAX(Unidades) FROM #B
+                     WHERE UMAJ NOT IN (N'REMISION', N'REMISIÓN')), 0) AS DECIMAL(18,2)) AS PICO_USUARIO,
         (SELECT TOP 1 n.USUARIO FROM #B b JOIN #N n ON n.UMAJ = b.UMAJ
+         WHERE b.UMAJ NOT IN (N'REMISION', N'REMISIÓN')
          ORDER BY b.Unidades DESC)                                      AS PICO_USUARIO_NOMBRE,
         -- Tendencia x día x usuario = mediana de usuario-días con >200 (IGNORA tipo)
         CAST((SELECT TOP 1 PERCENTILE_CONT(0.5) WITHIN GROUP (

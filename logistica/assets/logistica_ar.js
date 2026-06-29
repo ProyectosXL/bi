@@ -39,6 +39,10 @@
 
     let chartEfi         = null;
     let chartsCanalEfi   = [];
+    let chartPerdidaSpark = null;   // mini-gráfico dentro del KPI de pérdida
+    let chartPerdidaModal = null;   // versión ampliada (modal)
+    let perdida12mData    = [];     // serie proporción/importe pérdida (últ. 12 meses)
+    let efiPedidosGroups  = [];     // pedidos agrupados por cliente (tabla drill)
     let chartLtHist      = null;
     let chartLtEvol      = null;
     let chartStock       = null;
@@ -73,7 +77,7 @@
             'kv-efi'            : ['Eficiencia de facturación', ['Unidades facturadas sobre unidades pedidas en el período.', 'Meta: 95%. Verde si se alcanza, rojo si está por debajo.']],
             'kv-unid-ped'       : ['Unidades pedidas', ['Total de unidades solicitadas en los pedidos del período.', 'La variación compara contra el mismo período del año anterior.']],
             'kv-unid-fact'      : ['Unidades facturadas', ['Unidades efectivamente facturadas dentro del período y filtros activos.']],
-            'kv-perdida'        : ['Pérdida de facturación', ['Unidades pedidas que no fueron facturadas.', 'El porcentaje muestra el peso de la pérdida sobre el importe pedido.']],
+            'kv-perdida'        : ['Pérdida de facturación', ['Importe de los pedidos que no se llegó a facturar (importe pendiente).', '% Pérdida: peso sobre el importe pedido. "prev": mismo período del año anterior.', 'Tocá el ícono de gráfico para dar vuelta la tarjeta y ver la evolución de los últimos 12 meses (ampliable).']],
             'kv-importe'        : ['Importe facturado', ['Importe total facturado en el período y filtros activos, expresado en pesos.']],
             'kv-pedidos'        : ['Pedidos totales', ['Cantidad de pedidos incluidos en el cálculo de eficiencia.', 'La variación compara contra el mismo período del año anterior.']],
             'kv-lt-total'       : ['Comprobantes facturados', ['Total de comprobantes de facturación emitidos en el período seleccionado.']],
@@ -106,7 +110,10 @@
         },
         sections: {
             'gauges-canal'          : ['Eficiencia por canal', ['Cada gauge muestra la eficiencia (unidades facturadas / unidades pedidas) por canal.', 'La marca negra indica la meta del 95%. Verde ≥ 95%, amarillo ≥ 85%, rojo < 85%.']],
-            'chart-eficiencia'      : ['Evolución mensual de eficiencia', ['Eficiencia mensual de facturación en los últimos 12 meses.', 'La línea roja punteada marca la meta del 95%.']],
+            'chart-eficiencia'      : ['Evolución mensual de eficiencia', ['Eficiencia mensual de facturación: una línea por año (año actual vs. año anterior).', 'Bandas de color = umbrales: verde ≥ 95%, amarillo 85–95%, rojo < 85%.', 'La línea roja punteada marca la meta del 95%.']],
+            'tabla-efi-unid-cliente': ['% Eficiencia unidades por cliente', ['Los 10 clientes con menor eficiencia (unidades facturadas / pedidas) en el período.']],
+            'tabla-efi-unid-rubro'  : ['% Eficiencia unidades por rubro', ['Eficiencia de unidades por rubro, ordenada de menor a mayor.']],
+            'tabla-efi-pedidos'     : ['% Eficiencia por pedido y cliente', ['Eficiencia por pedido, agrupada por cliente. Clic en un cliente para desplegar sus pedidos.', 'Clic en un pedido para ver el detalle por rubro.']],
             'chart-leadtime-hist'   : ['Distribución de lead times', ['Cantidad de comprobantes agrupados por días de demora entre pedido y facturación.', 'Barras rojas: más de 5 días (demorados). Barras verdes: en término.']],
             'chart-leadtime-evol'   : ['Evolución de facturación demorada', ['Porcentaje mensual de comprobantes con lead time mayor a 5 días.', 'Muestra la tendencia de demoras en los últimos 12 meses.']],
             'chart-stock'           : ['Diferencia de stock por rubro', ['Compara stock Tango vs. WMS en los principales rubros logísticos.', 'Diferencias significativas entre barras indican desvíos de inventario.']],
@@ -129,6 +136,25 @@
             'tabla-pedidos'         : ['Pedidos consolidados', ['Detalle de pedidos con estado, canal, talón y unidades pedidas, pendientes y facturadas.']],
         },
         tableHeaders: {
+            'tabla-efi-unid-cliente': [
+                'Cliente.',
+                'Unidades pedidas en el período.',
+                'Unidades facturadas en el período.',
+                'Eficiencia: facturadas / pedidas. Verde ≥ 95%, amarillo 85–95%, rojo < 85%.',
+            ],
+            'tabla-efi-unid-rubro': [
+                'Rubro.',
+                'Unidades pedidas en el período.',
+                'Unidades facturadas en el período.',
+                'Eficiencia: facturadas / pedidas. Verde ≥ 95%, amarillo 85–95%, rojo < 85%.',
+            ],
+            'tabla-efi-pedidos': [
+                'Cliente (agrupado) / número de pedido al desplegar.',
+                'Fecha del pedido.',
+                'Unidades pedidas.',
+                'Unidades facturadas.',
+                'Eficiencia: facturadas / pedidas.',
+            ],
             'tabla-stock': [
                 'Rubro logístico.',
                 'Stock registrado en Tango.',
@@ -337,9 +363,12 @@
 
         $('#kv-unid-fact').text(fmt.num(k.UNID_FACTURADAS));
 
-        $('#kv-perdida').text(fmt.num(k.PERDIDA_FACT));
-        const pctPerd = fmt.pct(k.PCT_PERDIDA);
-        $('#kvar-perdida').text(pctPerd).removeClass('pos neg neu').addClass('kpi-var ' + (k.PCT_PERDIDA > 0.05 ? 'neg' : 'neu'));
+        $('#kv-perdida').text(fmt.money(k.PERDIDA_FACT));
+        $('#kvar-perdida')
+            .html('% Pérd.: ' + fmt.pct(k.PCT_PERDIDA) +
+                  ' <span class="kpi-var-sub">· prev ' + fmt.pct(k.PCT_PERDIDA_AA) + '</span>')
+            .removeClass('pos neg neu')
+            .addClass('kpi-var ' + (k.PCT_PERDIDA > 0.05 ? 'neg' : 'neu'));
 
         $('#kv-importe').text(fmt.money(k.IMPORTE_FACTURADO));
 
@@ -416,42 +445,272 @@
             $gw.html('<div class="empty-state"><i class="bi bi-inbox"></i>Sin datos de canal</div>');
         }
 
-        // Gráfico evolución
-        const evol = data.evolucion || [];
-        const multiAnio = evol.length > 1 && evol[0].ANIO !== evol[evol.length - 1].ANIO;
-        const labels = evol.map(r => multiAnio ? r.NOMBRE_MES.substring(0,3) + ' ' + r.ANIO : r.NOMBRE_MES);
-        const efiData = evol.map(r => {
+        // Tablas de eficiencia por unidades
+        renderEfiUnidTabla('#tbody-efi-unid-cliente', data.efi_cliente || [], 'CLIENTE');
+        renderEfiUnidTabla('#tbody-efi-unid-rubro',   data.efi_rubro   || [], 'RUBRO');
+        renderEfiPedidos(data.efi_pedidos || []);
+
+        // Mini-gráfico de pérdida (últ. 12 meses) dentro del KPI
+        perdida12mData = data.perdida_12m || [];
+        buildPerdidaSpark(perdida12mData);
+
+        // Gráfico evolución interanual + umbrales
+        renderEvolucionEfi(data.evolucion || []);
+    }
+
+    // Etiqueta corta de mes ("Ene 25") para series de 12 / 24 meses.
+    function mesAbbr(r) {
+        return String(r.NOMBRE_MES || '').substring(0, 3) + ' ' + String(r.ANIO || '').slice(-2);
+    }
+
+    // Plugin: bandas de umbral (verde ≥95, amarillo 85–95, rojo <85) en el área del gráfico.
+    const umbralesBands = {
+        id: 'umbralesBands',
+        beforeDatasetsDraw(chart) {
+            const y = chart.scales.y;
+            const area = chart.chartArea;
+            if (!y || !area) return;
+            const bands = [
+                { from: 0,  to: 85,  color: 'rgba(220,38,38,0.06)' },
+                { from: 85, to: 95,  color: 'rgba(245,158,11,0.07)' },
+                { from: 95, to: 100, color: 'rgba(22,163,74,0.08)' },
+            ];
+            const { ctx } = chart;
+            ctx.save();
+            bands.forEach(b => {
+                const yTop = y.getPixelForValue(Math.min(b.to, y.max));
+                const yBot = y.getPixelForValue(Math.max(b.from, y.min));
+                ctx.fillStyle = b.color;
+                ctx.fillRect(area.left, yTop, area.right - area.left, yBot - yTop);
+            });
+            ctx.restore();
+        },
+    };
+
+    // Evolución mensual interanual de eficiencia (una línea por año) + umbrales.
+    function renderEvolucionEfi(evol) {
+        const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        const byYear = {};
+        (evol || []).forEach(r => {
+            const y   = String(r.ANIO);
+            const m   = parseInt(r.MES, 10);
             const ped = parseFloat(r.UNID_PEDIDAS_MES) || 0;
             const fct = parseFloat(r.UNID_FACTURADAS_MES) || 0;
-            return ped > 0 ? parseFloat((fct / ped * 100).toFixed(1)) : null;
+            (byYear[y] = byYear[y] || {})[m] = ped > 0 ? parseFloat((fct / ped * 100).toFixed(1)) : null;
         });
+        const years = Object.keys(byYear).sort();
+        const yearColors = { prev: '#2563eb', curr: '#f59e0b' };
+        const datasets = years.map((y, idx) => {
+            const isCurrent = idx === years.length - 1;
+            return {
+                label          : y,
+                data           : MESES.map((_, i) => byYear[y][i + 1] ?? null),
+                borderColor    : isCurrent ? yearColors.curr : yearColors.prev,
+                backgroundColor : isCurrent ? 'rgba(245,158,11,.10)' : 'rgba(37,99,235,.05)',
+                borderWidth    : isCurrent ? 2.5 : 2,
+                pointRadius    : 3,
+                tension        : 0.3,
+                fill           : isCurrent,
+                spanGaps       : true,
+            };
+        });
+        datasets.push({
+            label: 'Meta (95%)', data: MESES.map(() => 95),
+            borderColor: '#dc2626', borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, fill: false,
+        });
+
+        // Eje Y con zoom dinámico al rango real (las líneas suelen estar 90–99%).
+        // Piso redondeado 5 pts por debajo del mínimo, pero nunca por encima de
+        // 85% para conservar el contexto de los umbrales y la meta.
+        const valores = datasets
+            .filter(d => d.label !== 'Meta (95%)')
+            .flatMap(d => d.data)
+            .filter(v => v != null && isFinite(v));
+        const dataMin = valores.length ? Math.min(...valores) : 0;
+        const yMin = valores.length
+            ? Math.max(0, Math.min(85, Math.floor((dataMin - 5) / 5) * 5))
+            : 0;
+
+        // Tooltip agrupado: al pasar el mouse por un mes, una sola tarjeta con
+        // el valor de todas las líneas (años) de ese punto.
+        const opts = chartOptions('Eficiencia (%)', { min: yMin, max: 100 }, { pct: true });
+        opts.interaction = { mode: 'index', intersect: false };
+        opts.plugins.tooltip.mode = 'index';
+        opts.plugins.tooltip.intersect = false;
+        opts.plugins.tooltip.filter = item => item.dataset.label !== 'Meta (95%)' && item.parsed.y != null;
 
         if (chartEfi) chartEfi.destroy();
         chartEfi = new Chart($('#chart-eficiencia')[0], {
             type: 'line',
-            data: {
-                labels,
-                datasets: [{
-                    label      : 'Eficiencia (%)',
-                    data       : efiData,
-                    borderColor: PALETTE[0],
-                    backgroundColor: 'rgba(0,168,120,.08)',
-                    borderWidth: 2,
-                    pointRadius: 4,
-                    tension    : 0.3,
-                    fill       : true,
-                }, {
-                    label      : 'Meta (95%)',
-                    data       : labels.map(() => 95),
-                    borderColor: '#dc2626',
-                    borderWidth: 1.5,
-                    borderDash : [6, 4],
-                    pointRadius: 0,
-                    fill       : false,
-                }],
-            },
-            options: chartOptions('Eficiencia (%)', { min: 0, max: 100, suggestedMax: 105 }, { pct: true }),
+            plugins: [umbralesBands],
+            data: { labels: MESES, datasets },
+            options: opts,
         });
+    }
+
+    // ── Tablas de eficiencia por unidades (cliente / rubro) ───────────────
+    function renderEfiUnidTabla(sel, rows, nameKey) {
+        const $tb = $(sel).empty();
+        if (!rows || !rows.length) {
+            $tb.append('<tr><td colspan="4"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>');
+            return;
+        }
+        $tb.html(rows.map(r => {
+            const ped = parseFloat(r.UNID_PEDIDAS)     || 0;
+            const fac = parseFloat(r.UNID_FACTURADAS)  || 0;
+            const efi = ped > 0 ? fac / ped : null;
+            return `<tr><td title="${escapeHtml(r[nameKey] || '')}">${escapeHtml(r[nameKey] || '—')}</td>` +
+                   `<td class="col-num">${fmt.num(ped)}</td>` +
+                   `<td class="col-num">${fmt.num(fac)}</td>` +
+                   `<td class="col-num">${efiCell(efi)}</td></tr>`;
+        }).join(''));
+    }
+
+    // ── Tabla drill: % Eficiencia por pedido, agrupada por cliente ────────
+    function renderEfiPedidos(rows) {
+        const map = new Map();
+        (rows || []).forEach(r => {
+            const cli = (r.CLIENTE || '—');
+            let g = map.get(cli);
+            if (!g) { g = { cliente: cli, ped: 0, fact: 0, pedidos: [] }; map.set(cli, g); }
+            const ped = parseFloat(r.UNID_PEDIDAS)    || 0;
+            const fac = parseFloat(r.UNID_FACTURADAS) || 0;
+            g.ped += ped; g.fact += fac;
+            g.pedidos.push({ nro: r.NRO_PEDIDO, fecha: r.FECHA_PEDI, ped, fac });
+        });
+        efiPedidosGroups = [...map.values()]
+            .map(g => ({ ...g, efi: g.ped > 0 ? g.fact / g.ped : null }))
+            .sort((a, b) => (a.efi == null ? 99 : a.efi) - (b.efi == null ? 99 : b.efi));
+
+        const $tb = $('#tbody-efi-pedidos').empty();
+        if (!efiPedidosGroups.length) {
+            $tb.append('<tr><td colspan="5"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>');
+            return;
+        }
+        $tb.html(efiPedidosGroups.map((g, i) =>
+            `<tr class="rubro-row expandible efi-cli-row" data-cli="${i}">
+                <td><i class="bi bi-chevron-right caret"></i> ${escapeHtml(g.cliente)} <span class="badge-arts">${g.pedidos.length}</span></td>
+                <td>—</td>
+                <td class="col-num">${fmt.num(g.ped)}</td>
+                <td class="col-num">${fmt.num(g.fact)}</td>
+                <td class="col-num">${efiCell(g.efi)}</td>
+            </tr>`
+        ).join(''));
+    }
+
+    function toggleEfiPedidos($row) {
+        const idx   = parseInt($row.data('cli'), 10);
+        const $next = $row.next('.detalle-row');
+        if ($next.length) { $next.remove(); $row.removeClass('abierto'); return; }
+        const g = efiPedidosGroups[idx];
+        if (!g) return;
+        const filas = g.pedidos
+            .map(p => ({ ...p, efi: p.ped > 0 ? p.fac / p.ped : null }))
+            .sort((a, b) => (a.efi == null ? 99 : a.efi) - (b.efi == null ? 99 : b.efi))
+            .map(p => `<tr class="pedido-row" data-pedido="${escapeHtml(String(p.nro).trim())}">
+                <td class="efi-ped-nro">${escapeHtml(String(p.nro).trim())}</td>
+                <td>${fmt.date(p.fecha)}</td>
+                <td class="col-num">${fmt.num(p.ped)}</td>
+                <td class="col-num">${fmt.num(p.fac)}</td>
+                <td class="col-num">${efiCell(p.efi)}</td>
+            </tr>`).join('');
+        const sub = `<tr class="detalle-row"><td colspan="5">
+            <table class="tabla-sub">
+                <tbody>${filas}</tbody>
+            </table>
+        </td></tr>`;
+        $row.addClass('abierto').after(sub);
+    }
+
+    // ── Mini-gráfico de pérdida (sparkline dentro del KPI) ────────────────
+    function buildPerdidaSpark(rows) {
+        if (chartPerdidaSpark) { chartPerdidaSpark.destroy(); chartPerdidaSpark = null; }
+        const el = document.getElementById('spark-perdida');
+        if (!el || !rows || !rows.length) return;
+        const imp  = rows.map(r => parseFloat(r.PERDIDA_FACT) || 0);
+        const prop = rows.map(r => {
+            const ped = parseFloat(r.IMPORTE_PEDIDO) || 0;
+            return ped > 0 ? (parseFloat(r.PERDIDA_FACT) || 0) / ped * 100 : null;
+        });
+        chartPerdidaSpark = new Chart(el, {
+            type: 'line',
+            data: {
+                labels: rows.map(mesAbbr),
+                datasets: [
+                    { data: imp,  borderColor: '#f59e0b', borderWidth: 1.5, pointRadius: 0, tension: .35, yAxisID: 'y',  spanGaps: true },
+                    { data: prop, borderColor: '#2563eb', borderWidth: 1.5, pointRadius: 0, tension: .35, yAxisID: 'y2', spanGaps: true },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                scales: { x: { display: false }, y: { display: false }, y2: { display: false } },
+            },
+        });
+    }
+
+    // ── Modal: proporción e importe de pérdida fact. (últ. 12 meses) ──────
+    function openPerdidaModal() {
+        const rows = perdida12mData || [];
+        $('#perdida-12m-modal').removeAttr('hidden');
+        $('body').addClass('modal-open');
+
+        const totImp = rows.reduce((s, r) => s + (parseFloat(r.PERDIDA_FACT)  || 0), 0);
+        const totPed = rows.reduce((s, r) => s + (parseFloat(r.IMPORTE_PEDIDO) || 0), 0);
+        $('#perdida12-meta').html(
+            pmetaItem('Meses', fmt.num(rows.length)) +
+            pmetaItem('Pérdida total', fmt.money(totImp)) +
+            pmetaItem('% Pérdida prom.', totPed > 0 ? fmt.pct(totImp / totPed) : '—')
+        );
+
+        if (chartPerdidaModal) { chartPerdidaModal.destroy(); chartPerdidaModal = null; }
+        const el = document.getElementById('chart-perdida-12m');
+        if (!el || !rows.length) {
+            if (!rows.length) $('#perdida12-meta').append('<div class="pmodal-note">Sin datos en los últimos 12 meses.</div>');
+            return;
+        }
+        const imp  = rows.map(r => parseFloat(r.PERDIDA_FACT) || 0);
+        const prop = rows.map(r => {
+            const ped = parseFloat(r.IMPORTE_PEDIDO) || 0;
+            return ped > 0 ? parseFloat(((parseFloat(r.PERDIDA_FACT) || 0) / ped * 100).toFixed(2)) : null;
+        });
+        chartPerdidaModal = new Chart(el, {
+            data: {
+                labels: rows.map(mesAbbr),
+                datasets: [
+                    { type: 'bar',  label: 'Importe pérdida ($)', data: imp,  backgroundColor: 'rgba(245,158,11,.55)', borderRadius: 4, yAxisID: 'y',  order: 2 },
+                    { type: 'line', label: '% Pérdida',           data: prop, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.10)', borderWidth: 2, pointRadius: 3, tension: .3, yAxisID: 'y2', order: 1, spanGaps: true },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'top', labels: { boxWidth: 14, font: { size: 12 } } },
+                    tooltip: {
+                        backgroundColor: 'rgba(15,23,42,0.92)', titleColor: '#f8fafc', bodyColor: '#cbd5e1',
+                        callbacks: {
+                            label(ctx) {
+                                const v = ctx.parsed.y;
+                                if (v == null) return null;
+                                return ctx.dataset.yAxisID === 'y2'
+                                    ? ' ' + ctx.dataset.label + ': ' + fmt.num(v, 1) + '%'
+                                    : ' ' + ctx.dataset.label + ': ' + fmt.money(v);
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    x:  { ticks: { font: { size: 11 } } },
+                    y:  { position: 'left',  beginAtZero: true, title: { display: true, text: 'Importe ($)' }, ticks: { callback: v => fmt.num(v, 0) } },
+                    y2: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: '% Pérdida' }, ticks: { callback: v => fmt.num(v, 0) + '%' } },
+                },
+            },
+        });
+    }
+    function closePerdidaModal() {
+        $('#perdida-12m-modal').attr('hidden', '');
+        if (chartPerdidaModal) { chartPerdidaModal.destroy(); chartPerdidaModal = null; }
+        if (!$('.pmodal:not([hidden])').length) $('body').removeClass('modal-open');
     }
 
     // ── Área 2: Lead Time ─────────────────────────────────────────────────
@@ -1340,10 +1599,29 @@
         });
         $('#picking-dia-modal').on('click', '[data-close]', closePickingDia);
 
+        // Drill de % Eficiencia por cliente (delegado: el tbody se re-renderiza)
+        $('#tbody-efi-pedidos').on('click', 'tr.efi-cli-row.expandible', function () {
+            toggleEfiPedidos($(this));
+        });
+
+        // Card de pérdida: flip (frente KPI ⇄ dorso mini-gráfico) + ampliar.
+        // Toda la cara delantera da vuelta la tarjeta (salvo el botón de ayuda).
+        $('#card-perdida').on('click', '.kpi-flip-front', function (e) {
+            if ($(e.target).closest('.info-btn').length) return;
+            $('#card-perdida').addClass('flipped');
+        });
+        $('#card-perdida').on('click', '[data-flip-back]', function (e) {
+            e.stopPropagation();
+            $('#card-perdida').removeClass('flipped');
+        });
+        $('#btn-perdida-expand').on('click', function (e) { e.stopPropagation(); openPerdidaModal(); });
+        $('#perdida-12m-modal').on('click', '[data-close]', closePerdidaModal);
+
         $(document).on('keydown', function (e) {
             if (e.key !== 'Escape') return;
             if (!$('#pedido-modal').attr('hidden'))      closeModal();
             if (!$('#picking-dia-modal').attr('hidden')) closePickingDia();
+            if (!$('#perdida-12m-modal').attr('hidden')) closePerdidaModal();
         });
     }
 
