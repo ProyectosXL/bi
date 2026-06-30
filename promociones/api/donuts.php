@@ -30,9 +30,10 @@ try {
     $periodo = $_GET['periodo'] ?? 'mes_actual';
 
     $fp = [
-        'banco'     => isset($_GET['banco'])     && $_GET['banco']     !== '' ? $_GET['banco']          : null,
-        'sucursal'  => isset($_GET['sucursal'])  && $_GET['sucursal']  !== '' ? (int)$_GET['sucursal']  : null,
-        'promocion' => isset($_GET['promocion']) && $_GET['promocion'] !== '' ? $_GET['promocion']       : null,
+        'banco'               => isset($_GET['banco'])               && $_GET['banco']               !== '' ? $_GET['banco']                : null,
+        'sucursal'            => isset($_GET['sucursal'])            && $_GET['sucursal']            !== '' ? (int)$_GET['sucursal']        : null,
+        'promocion'           => isset($_GET['promocion'])           && $_GET['promocion']           !== '' ? $_GET['promocion']             : null,
+        'excluir_promociones' => isset($_GET['excluir_promociones']) && $_GET['excluir_promociones'] !== '' ? $_GET['excluir_promociones']   : null,
     ];
 
     if ($isGrupo && $fp['sucursal'] !== null) {

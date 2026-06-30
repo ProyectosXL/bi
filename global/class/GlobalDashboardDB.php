@@ -183,7 +183,11 @@ class GlobalDashboardDB
 
         $cid        = new Conexion();
         $this->conn = $cid->conectar($cfg['db']);
-        // Lectura sin bloqueo de escrituras (equivalente a WITH NOLOCK global)
+        if ($this->conn === false) {
+            $errors = sqlsrv_errors() ?? [];
+            $msg    = $errors[0]['message'] ?? 'sin detalle';
+            throw new RuntimeException('No se pudo conectar a [' . $cfg['db'] . ']: ' . $msg);
+        }
         sqlsrv_query($this->conn, 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
     }
 
@@ -193,6 +197,10 @@ class GlobalDashboardDB
 
     private function query(string $sql, array $params = []): array
     {
+        if (defined('DEBUG_SQL')) {
+            echo "--- SQL QUERY ---\n$sql\n";
+            echo "--- PARAMS ---\n" . json_encode($params) . "\n\n";
+        }
         sqlsrv_configure('WarningsReturnAsErrors', 0);
         $stmt = sqlsrv_query($this->conn, $sql, $params);
         if ($stmt === false) {
@@ -806,17 +814,44 @@ class GlobalDashboardDB
     {
         // Franquicias: incluir las 11 sin Tango aunque no estén en BI_SALES_SUCURSALES
         if ($this->origen === 'franquicias') {
-            return $this->query("
-                SELECT DISTINCT sl.NRO_SUCURSAL AS NRO_SUCURS, sl.DESC_SUCURSAL
-                FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
-                WHERE sl.HABILITADO = 1
-                  AND sl.CANAL = 'FRANQUICIAS'
-                  AND (
-                      EXISTS (SELECT 1 FROM BI_SALES_SUCURSALES s WHERE s.NRO_SUCURS = sl.NRO_SUCURSAL)
-                      OR sl.TANGO IS NULL
-                  )
-                ORDER BY sl.DESC_SUCURSAL
+            // Query remote active franchises (no joins/subqueries)
+            $remoteRows = $this->query("
+                SELECT NRO_SUCURSAL AS NRO_SUCURS, DESC_SUCURSAL, TANGO
+                FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS
+                WHERE HABILITADO = 1
+                  AND CANAL = 'FRANQUICIAS'
             ");
+
+            // Query local distinct sucursales from the current database
+            $localRows = $this->query("
+                SELECT DISTINCT NRO_SUCURS
+                FROM BI_SALES_SUCURSALES
+            ");
+
+            $localIds = [];
+            foreach ($localRows as $r) {
+                $localIds[(int)$r['NRO_SUCURS']] = true;
+            }
+
+            // Filter in PHP: keep if exists locally OR sl.TANGO is null
+            $result = [];
+            foreach ($remoteRows as $row) {
+                $id = (int)$row['NRO_SUCURS'];
+                $tango = $row['TANGO'];
+                if (isset($localIds[$id]) || $tango === null) {
+                    $result[] = [
+                        'NRO_SUCURS' => $id,
+                        'DESC_SUCURSAL' => $row['DESC_SUCURSAL'],
+                    ];
+                }
+            }
+
+            // Sort alphabetically by DESC_SUCURSAL
+            usort($result, function ($a, $b) {
+                return strcasecmp($a['DESC_SUCURSAL'] ?? '', $b['DESC_SUCURSAL'] ?? '');
+            });
+
+            return $result;
         }
         if ($soloActivas) {
             return $this->query("

@@ -782,6 +782,33 @@
 .ss-wide .ss-btn   { min-width: 220px; max-width: 380px; }
 .ss-wide .ss-panel { min-width: 340px; max-width: 460px; }
 
+.ss-checkbox-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+.ss-checkbox {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: var(--accent, #2563eb);
+}
+.ss-label-chk {
+    flex: 1;
+    cursor: pointer;
+    font-size: .82rem;
+    color: #1a2340;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ss-item:has(.ss-checkbox) {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 900px) {
     .promo-summary-row { grid-template-columns: 1fr 1fr; }

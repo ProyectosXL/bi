@@ -30,6 +30,19 @@ try {
 
     $db = new PromocionesDB($origen);
 
+    // Calcular fechas si se pasa período
+    $desde = $_GET['desde'] ?? null;
+    $hasta = $_GET['hasta'] ?? null;
+    if (isset($_GET['periodo']) && !$desde) {
+        [$da, $ha] = PromocionesDB::calcularPeriodo($_GET['periodo']);
+        $desde = $da;
+        $hasta = $ha;
+    }
+
+    $obtenPromociones = function() use ($db, $desde, $hasta) {
+        return $db->getPromocionesLista($desde, $hasta);
+    };
+
     $tryCall = function(callable $fn) {
         try { return $fn(); } catch (Throwable $e) {
             error_log('[promociones/filtros.php] ' . $e->getMessage());
@@ -41,7 +54,7 @@ try {
     echo json_encode([
         'ok'                => true,
         'bancos'            => $tryCall(fn() => $db->getBancosLista()),
-        'promociones'       => $tryCall(fn() => $db->getPromocionesLista()),
+        'promociones'       => $tryCall($obtenPromociones),
         'sucursales'        => $tryCall(fn() => $db->getSucursalesLista()),
         'sucursales_activas'=> $isGrupo ? [] : $tryCall(fn() => $db->getSucursalesActivasIds()),
     ], JSON_UNESCAPED_UNICODE);

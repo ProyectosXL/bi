@@ -60,10 +60,14 @@ const PromoDetalle = (() => {
         { key: 'pct_promo_fac',    label: '% Promo/FAC',   align: 'right', fmt: n => pct(n, 2),     xlFmt: 'pct1',   sortKey: 'pct_promo_fac' },
     ];
 
+    const COL_COD_CLIENT = { key: 'cod_client', label: 'Cod. Cliente', align: 'left', fmt: v => v ?? '—', xlFmt: null, sortKey: 'cod_client' };
     const COL_RECONOCIMIENTO_SUC = { key: 'reconocimiento', label: 'Reconocimiento $', align: 'right', fmt: moneyInt, xlFmt: 'money', sortKey: 'reconocimiento' };
 
     function getActiveCOLS_SUC() {
-        return esFranquicias() ? [...COLS_SUC, COL_RECONOCIMIENTO_SUC] : COLS_SUC;
+        if (esFranquicias()) {
+            return [COL_COD_CLIENT, ...COLS_SUC, COL_RECONOCIMIENTO_SUC];
+        }
+        return COLS_SUC;
     }
 
     /* ── COLUMNAS tabla promociones ── */
@@ -139,10 +143,20 @@ const PromoDetalle = (() => {
         });
 
         if (showTotal && rows.length > 1) {
-            html += '<tr class="row-total"><td style="text-align:left">Total</td>';
-            cols.slice(1).forEach(c => {
-                const v = total[c.key];
-                html += `<td style="text-align:${c.align}">${c.fmt(v ?? null)}</td>`;
+            html += '<tr class="row-total">';
+            let totalLabelPlaced = false;
+            cols.forEach((c, idx) => {
+                if (c.align === 'left') {
+                    if (!totalLabelPlaced) {
+                        html += `<td style="text-align:left">Total</td>`;
+                        totalLabelPlaced = true;
+                    } else {
+                        html += `<td style="text-align:left">—</td>`;
+                    }
+                } else {
+                    const v = total[c.key];
+                    html += `<td style="text-align:${c.align}">${c.fmt(v ?? null)}</td>`;
+                }
             });
             html += '</tr>';
         }

@@ -136,12 +136,28 @@ const Promociones = (() => {
         const cfg          = window.BI_CONFIG ?? { isGrupo: false, sucursalesGrupo: [] };
         const origenActive = document.querySelector('.origen-btn.active');
 
+        // Obtener promociones excluidas (no seleccionadas)
+        let excluirProm = '';
+        const ssWrapProm = $('sel-promocion')?.closest('.ss-wrap');
+        if (ssWrapProm && ssWrapProm.classList.contains('ss-multi')) {
+            const excluidasArr = [];
+            ssWrapProm.querySelectorAll('.ss-checkbox').forEach(chk => {
+                if (!chk.checked && chk.value) {
+                    excluidasArr.push(chk.value);
+                }
+            });
+            if (excluidasArr.length > 0) {
+                excluirProm = excluidasArr.join(',');
+            }
+        }
+
         const p = {
             origen      : cfg.isGrupo ? 'franquicias' : (origenActive?.dataset.origen ?? 'argentina'),
             periodo     : ($('sel-periodo')?.value   ?? 'mes_actual'),
             sucursal    : ($('sel-sucursal')?.value  ?? ''),
             banco       : ($('sel-banco')?.value     ?? ''),
             promocion   : ($('sel-promocion')?.value ?? ''),
+            excluir_promociones: excluirProm,
             solo_activas: isSoloActivas() ? '1' : '0',
             ...extra
         };
@@ -154,7 +170,7 @@ const Promociones = (() => {
                 p.hasta_comp = $('input-comp-hasta')?.value ?? '';
             }
         }
-        ['sucursal', 'banco', 'promocion'].forEach(k => { if (!p[k]) delete p[k]; });
+        ['sucursal', 'banco', 'promocion', 'excluir_promociones'].forEach(k => { if (!p[k]) delete p[k]; });
         return p;
     }
 
@@ -500,6 +516,148 @@ const Promociones = (() => {
         };
     }
 
+    /* ── Custom multiselect with checkboxes ── */
+    function initSearchableSelectMulti(selId) {
+        const sel = $(selId);
+        if (!sel || sel._ssInit) return;
+        sel._ssInit = true;
+        sel.style.display = 'none';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'ss-wrap ss-multi';
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ss-btn';
+        btn.innerHTML = `<span class="ss-txt">Todas</span><span class="ss-arrow">▾</span>`;
+        wrap.insertBefore(btn, sel);
+
+        const panel = document.createElement('div');
+        panel.className = 'ss-panel';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'ss-input';
+        input.placeholder = 'Buscar...';
+        
+        // Select All / Deselect All Bar
+        const actionsBar = document.createElement('div');
+        actionsBar.style.cssText = 'display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #e5e9f2;font-size:0.75rem;font-weight:600;';
+        const linkAll = document.createElement('a');
+        linkAll.href = '#';
+        linkAll.textContent = 'Seleccionar todas';
+        linkAll.style.color = 'var(--accent, #2563eb)';
+        const linkNone = document.createElement('a');
+        linkNone.href = '#';
+        linkNone.textContent = 'Excluir todas';
+        linkNone.style.color = '#dc2626';
+        actionsBar.appendChild(linkAll);
+        actionsBar.appendChild(linkNone);
+
+        const list = document.createElement('div');
+        list.className = 'ss-list';
+        panel.appendChild(input);
+        panel.appendChild(actionsBar);
+        panel.appendChild(list);
+        wrap.appendChild(panel);
+
+        // Keep track of checkbox states (key=value, value=checked boolean)
+        // Initialize everything as checked (Todas visualizadas, nada excluido)
+        const checkStates = {};
+        Array.from(sel.options).forEach(opt => {
+            if (opt.value) {
+                checkStates[opt.value] = true;
+            }
+        });
+
+        function updateButtonText() {
+            const totalOptions = Array.from(sel.options).filter(o => o.value).length;
+            const selected = Object.values(checkStates).filter(Boolean).length;
+            if (selected === totalOptions || selected === 0) {
+                btn.querySelector('.ss-txt').textContent = selected === 0 ? 'Ninguna' : 'Todas';
+            } else if (selected === 1) {
+                const oneKey = Object.keys(checkStates).find(k => checkStates[k]);
+                const oneOpt = Array.from(sel.options).find(o => o.value === oneKey);
+                btn.querySelector('.ss-txt').textContent = oneOpt ? oneOpt.text : '1 promo';
+            } else {
+                btn.querySelector('.ss-txt').textContent = `${selected} seleccionadas`;
+            }
+        }
+
+        function buildList(q) {
+            const opts = Array.from(sel.options).filter(o => o.value !== '');
+            const filtered = q ? opts.filter(o => o.text.toLowerCase().includes(q.toLowerCase())) : opts;
+            list.innerHTML = '';
+            filtered.forEach(opt => {
+                const item = document.createElement('div');
+                item.className = 'ss-item';
+                
+                const cbWrap = document.createElement('label');
+                cbWrap.className = 'ss-checkbox-wrap';
+                
+                const chk = document.createElement('input');
+                chk.type = 'checkbox';
+                chk.className = 'ss-checkbox';
+                chk.value = opt.value;
+                chk.checked = checkStates[opt.value] !== false;
+                
+                chk.addEventListener('change', () => {
+                    checkStates[opt.value] = chk.checked;
+                    updateButtonText();
+                });
+
+                const lbl = document.createElement('span');
+                lbl.className = 'ss-label-chk';
+                lbl.textContent = opt.text;
+                
+                cbWrap.appendChild(chk);
+                cbWrap.appendChild(lbl);
+                item.appendChild(cbWrap);
+                list.appendChild(item);
+            });
+        }
+
+        linkAll.addEventListener('click', e => {
+            e.preventDefault();
+            list.querySelectorAll('.ss-checkbox').forEach(chk => {
+                chk.checked = true;
+                checkStates[chk.value] = true;
+            });
+            updateButtonText();
+        });
+
+        linkNone.addEventListener('click', e => {
+            e.preventDefault();
+            list.querySelectorAll('.ss-checkbox').forEach(chk => {
+                chk.checked = false;
+                checkStates[chk.value] = false;
+            });
+            updateButtonText();
+        });
+
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const opening = !wrap.classList.contains('open');
+            document.querySelectorAll('.ss-wrap.open').forEach(w => w.classList.remove('open'));
+            if (opening) { wrap.classList.add('open'); buildList(''); input.value = ''; input.focus(); }
+        });
+        panel.addEventListener('click', e => e.stopPropagation()); // Evita que se cierre al hacer clic adentro del panel
+        input.addEventListener('input', () => buildList(input.value.trim()));
+        input.addEventListener('click', e => e.stopPropagation());
+        document.addEventListener('click', () => { if (wrap.classList.contains('open')) wrap.classList.remove('open'); });
+
+        sel._ssSync = () => {
+            // Re-initialize checkbox states based on selection if populated
+            Array.from(sel.options).forEach(opt => {
+                if (opt.value && checkStates[opt.value] === undefined) {
+                    checkStates[opt.value] = true;
+                }
+            });
+            updateButtonText();
+        };
+    }
+
     function syncSearchableSelect(selId) {
         const sel = $(selId);
         if (sel?._ssSync) sel._ssSync();
@@ -544,10 +702,12 @@ const Promociones = (() => {
                 'Todas'
             );
 
-            ['sel-sucursal', 'sel-banco', 'sel-promocion'].forEach(id => {
+            ['sel-sucursal', 'sel-banco'].forEach(id => {
                 initSearchableSelect(id);
                 syncSearchableSelect(id);
             });
+            initSearchableSelectMulti('sel-promocion');
+            syncSearchableSelect('sel-promocion');
 
             /* Selector de promoción más ancho para nombres largos */
             $('sel-promocion')?.closest('.ss-wrap')?.classList.add('ss-wide');

@@ -11,6 +11,7 @@ if (!class_exists('Conexion')) {
         private $database_suc_uy;
         private $host_apps;
         private $database_power;
+        private $database_power_franquicias;
         private $database_power_uy;
         private $database_apps;
         private $host_locales;

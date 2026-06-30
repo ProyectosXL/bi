@@ -176,8 +176,8 @@ try {
         if ($isGrupo) {
             $bench = $noBench;
         } else {
-            $dbBench = new GlobalDashboardDB($origen);
             try {
+                $dbBench = new GlobalDashboardDB($origen);
                 $bench = $dbBench->getKPIsCompletos($desde_act, $hasta_act, null, '%', '%', null, null);
             } catch (Throwable $_) {
                 $bench = $noBench;

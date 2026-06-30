@@ -79,6 +79,17 @@ class PromocionesDB
             $sqls[]   = "AND {$alias}.DESC_PROMOCION_TARJETA = ?";
             $params[] = $fp['promocion'];
         }
+        if (!empty($fp['excluir_promociones'])) {
+            $excluidas = is_array($fp['excluir_promociones']) ? $fp['excluir_promociones'] : explode(',', $fp['excluir_promociones']);
+            $excluidas = array_filter(array_map('trim', $excluidas));
+            if (!empty($excluidas)) {
+                $placeholders = implode(',', array_fill(0, count($excluidas), '?'));
+                $sqls[] = "AND {$alias}.DESC_PROMOCION_TARJETA NOT IN ($placeholders)";
+                foreach ($excluidas as $ep) {
+                    $params[] = $ep;
+                }
+            }
+        }
 
         return [implode(' ', $sqls), $params];
     }
@@ -463,7 +474,7 @@ class PromocionesDB
 
         $params = array_merge($cpParams, [$da, $haX], $pF, $pG);
 
-        $rows = $this->query("
+        $sql = "
             SELECT
                 s.NRO_SUCURSAL,
                 MAX(s.SUCURSAL) COLLATE Modern_Spanish_CI_AI AS sucursal_nombre,
@@ -472,23 +483,38 @@ class PromocionesDB
                 ISNULL(SUM(CASE WHEN cp=1 THEN s.IMPORTE_TO ELSE 0 END),0) AS fact_cpromo,
                 ISNULL(SUM(CASE WHEN cp=1 THEN ISNULL(s.COSTO,0) ELSE 0 END),0) AS costo_promo,
                 ISNULL(SUM(ISNULL(s.COSTO_PROMO_BANCARIA,0)),0) AS costo_banc,
-                ISNULL(SUM(ISNULL(s.COSTO_PROMO_VENTAS,0)),0)   AS costo_ventas
+                ISNULL(SUM(ISNULL(s.COSTO_PROMO_VENTAS,0)),0)   AS costo_ventas";
+
+        if ($this->origen === 'franquicias') {
+            $sql .= ", MAX(sl.cod_client) AS cod_client";
+        }
+
+        $sql .= "
             FROM (
                 SELECT s.*,
                     {$cpSql} AS cp
                 FROM BI_PROMOCIONES s WITH (NOLOCK)
                 WHERE s.FECHA >= ? AND s.FECHA < ? {$sfF} {$sfG}
-            ) s
+            ) s";
+
+        if ($this->origen === 'franquicias') {
+            $sql .= "
+            LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK)
+                ON sl.NRO_SUCURSAL = s.NRO_SUCURSAL";
+        }
+
+        $sql .= "
             GROUP BY s.NRO_SUCURSAL
             HAVING SUM(CASE WHEN cp=1 THEN s.IMPORTE_TO ELSE 0 END) > 0
-            ORDER BY fact_total DESC
-        ", $params);
+            ORDER BY fact_total DESC";
+
+        $rows = $this->query($sql, $params);
 
         return array_map(function($r): array {
             $ft  = (float)$r['fact_total'];
             $fc  = (float)$r['fact_cpromo'];
             $cto = (float)$r['costo_promo'];
-            return [
+            $res = [
                 'nro_sucursal'    => (int)$r['NRO_SUCURSAL'],
                 'sucursal'        => $r['sucursal_nombre'],
                 'fac_total'       => $ft,
@@ -500,6 +526,10 @@ class PromocionesDB
                 'pct_costo_total' => $ft > 0 ? $cto / $ft : 0,
                 'pct_promo_fac'   => $ft > 0 ? $fc  / $ft : 0,
             ];
+            if ($this->origen === 'franquicias') {
+                $res['cod_client'] = $r['cod_client'] ?? '—';
+            }
+            return $res;
         }, $rows);
     }
 
@@ -599,17 +629,24 @@ class PromocionesDB
         ", $pG);
     }
 
-    public function getPromocionesLista(): array
+    public function getPromocionesLista(?string $desde = null, ?string $hasta = null): array
     {
         [$sfG, $pG] = $this->grupoFiltro('s');
+        $dateFilter = "";
+        $params = $pG;
+        if ($desde && $hasta) {
+            $dateFilter = "AND s.FECHA >= ? AND s.FECHA < ?";
+            $params = array_merge([$desde, $hasta], $params);
+        }
         return $this->query("
             SELECT DISTINCT s.DESC_PROMOCION_TARJETA AS promocion
             FROM BI_PROMOCIONES s WITH (NOLOCK)
             WHERE s.DESC_PROMOCION_TARJETA IS NOT NULL
               AND s.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
+              $dateFilter
               {$sfG}
             ORDER BY s.DESC_PROMOCION_TARJETA
-        ", $pG);
+        ", $params);
     }
 
     public function getSucursalesLista(): array

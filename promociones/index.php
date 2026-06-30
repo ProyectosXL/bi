@@ -166,6 +166,11 @@ $ultimaAct = date('d/m/Y H:i:s');
         <button class="tab-btn" id="tab-btn-detalle" role="tab" aria-controls="tab-detalle" aria-selected="false">
             <i class="bi bi-table"></i>&nbsp; Detalle
         </button>
+        <?php if (!$isGrupo): ?>
+        <button class="tab-btn" id="tab-btn-envio" role="tab" aria-controls="tab-envio" aria-selected="false">
+            <i class="bi bi-envelope-at-fill"></i>&nbsp; Envíos Mensuales
+        </button>
+        <?php endif; ?>
         <button class="tab-reload-btn" id="btn-reload-tab" title="Recargar pestaña">
             <i class="bi bi-arrow-clockwise"></i>
         </button>
@@ -358,6 +363,67 @@ $ultimaAct = date('d/m/Y H:i:s');
     </div>
     <!-- /tab-detalle -->
 
+    <?php if (!$isGrupo): ?>
+    <!-- ══ PESTAÑA: ENVÍOS MENSUALES ═══════════════════════════════════ -->
+    <div id="tab-envio" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-envio">
+        <main class="dash-content">
+            <div class="promo-section-header">
+                <i class="bi bi-envelope-at-fill"></i>&nbsp; Automatización y Envío de Reportes
+            </div>
+            
+            <div class="envio-config-container" style="display:grid; grid-template-columns:320px 1fr; gap:20px; margin-top:16px;">
+                <!-- Panel lateral de sucursales -->
+                <div class="envio-panel-sucursales" style="background:var(--card-bg, #fff); border:1px solid var(--border, #e2e8f0); border-radius:10px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,.06);">
+                    <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:12px; color:var(--text-1); border-bottom:1px solid var(--border); padding-bottom:8px;">Sucursales Franquicia</h3>
+                    <div id="envio-lista-sucursales" style="max-height:550px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
+                        <div class="promo-loading">Cargando sucursales…</div>
+                    </div>
+                </div>
+
+                <!-- Panel de edición -->
+                <div class="envio-panel-edicion" style="background:var(--card-bg, #fff); border:1px solid var(--border, #e2e8f0); border-radius:10px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; flex-direction:column; gap:16px;">
+                    <div id="envio-edicion-vacio" style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-3); text-align:center; padding:40px 0;">
+                        <i class="bi bi-arrow-left-circle" style="font-size:2.5rem; margin-bottom:12px; color:var(--border);"></i>
+                        <p style="font-weight:600;">Selecciona una sucursal para preestablecer los correos y las exclusiones de promociones.</p>
+                    </div>
+
+                    <div id="envio-edicion-formulario" hidden style="display:flex; flex-direction:column; gap:16px;">
+                        <div style="border-bottom:1px solid var(--border); padding-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <h2 id="envio-form-sucursal-nombre" style="font-size:1.25rem; font-weight:700; color:var(--text-1); margin:0;">—</h2>
+                                <span id="envio-form-sucursal-meta" style="font-size:0.8rem; color:var(--text-3); font-weight:600;">—</span>
+                            </div>
+                            <div style="display:flex; gap:8px;">
+                                <button id="btn-envio-manual" class="btn-aplicar" style="background:#00a878; border-color:#009468; padding:6px 12px; font-size:0.8rem;">
+                                    <i class="bi bi-send-fill"></i> Enviar Ahora
+                                </button>
+                                <button id="btn-envio-guardar" class="btn-aplicar" style="padding:6px 12px; font-size:0.8rem;">
+                                    <i class="bi bi-save-fill"></i> Guardar Configuración
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Configuración de Destinatarios -->
+                        <div>
+                            <label style="font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-3); display:block; margin-bottom:6px;">Correos Electrónicos Destinatarios (separados por coma)</label>
+                            <input type="text" id="envio-input-emails" placeholder="ejemplo1@xl.com.ar, ejemplo2@xl.com.ar" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; font-size:0.9rem; outline:none; background:#f8fafc;">
+                        </div>
+
+                        <!-- Configuración de Promociones a Excluir -->
+                        <div>
+                            <label style="font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-3); display:block; margin-bottom:6px;">Promociones Excluidas de la Comunicación (Marcá las que NO querés enviar)</label>
+                            <div id="envio-lista-promociones" style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; flex-direction:column; gap:8px; background:#f8fafc;">
+                                <div class="promo-loading">Cargando promociones…</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <!-- /tab-envio -->
+    <?php endif; ?>
+
     <!-- ══ MODAL DONUT (ampliar gráfico) ════════════════════════════════ -->
     <div id="modal-donut" class="promo-modal-overlay" hidden>
         <div class="promo-modal promo-modal-donut">
@@ -399,10 +465,12 @@ $ultimaAct = date('d/m/Y H:i:s');
 
 <?php
 $jsFiles = [
+    '/bi/promociones/js/notify.js',
     '/bi/promociones/components/ExcelExporter.js',
     '/bi/promociones/js/promociones.js',
     '/bi/promociones/js/mensual.js',
     '/bi/promociones/js/detalle.js',
+    '/bi/promociones/js/envio.js',
 ];
 foreach ($jsFiles as $f):
     $v = @filemtime($_SERVER['DOCUMENT_ROOT'] . $f) ?: 1;
@@ -427,20 +495,23 @@ window.BI_CONFIG = {
         { btn: 'tab-btn-resumen',  pane: 'tab-resumen',  name: 'resumen'  },
         { btn: 'tab-btn-mensual',  pane: 'tab-mensual',  name: 'mensual'  },
         { btn: 'tab-btn-detalle',  pane: 'tab-detalle',  name: 'detalle'  },
+        { btn: 'tab-btn-envio',    pane: 'tab-envio',    name: 'envio'    },
     ].filter(t => document.getElementById(t.btn) && document.getElementById(t.pane));
 
-    const loaded = { resumen: false, mensual: false, detalle: false };
+    const loaded = { resumen: false, mensual: false, detalle: false, envio: false };
 
     const SPINNER_MSGS = {
         resumen : 'Cargando Resumen…',
         mensual : 'Cargando Evolución Mensual…',
         detalle : 'Cargando Detalle…',
+        envio   : 'Cargando Envíos Mensuales…',
     };
 
     const loaders = {
         resumen : () => Promociones.loadAll(),
         mensual : () => PromoMensual.load(),
         detalle : () => Promise.all([PromoDetalle.loadSucursales(), PromoDetalle.loadPromociones()]),
+        envio   : () => PromoEnvio.load(),
     };
 
     function loadTab(name) {
