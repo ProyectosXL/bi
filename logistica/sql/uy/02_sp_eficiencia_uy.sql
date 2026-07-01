@@ -152,6 +152,24 @@ BEGIN
     GROUP BY DATEPART(ISO_WEEK, e.FECHA_PEDI), YEAR(e.FECHA_PEDI)
     ORDER BY ANIO, SEMANA;
 
+    -- ── Result set 6: % Eficiencia por pedido y cliente ──────────────────
+    SELECT
+        LTRIM(RTRIM(e.CLIENTE))                                            AS CLIENTE,
+        LTRIM(RTRIM(e.NRO_PEDIDO))                                         AS NRO_PEDIDO,
+        MIN(e.FECHA_PEDI)                                                  AS FECHA_PEDI,
+        CAST(ISNULL(SUM(e.CANT_PEDID),     0) AS DECIMAL(18,2))            AS UNID_PEDIDAS,
+        CAST(ISNULL(SUM(e.CANT_FACTURADA), 0) AS DECIMAL(18,2))            AS UNID_FACTURADAS
+    FROM dbo.BI_T_EFICIENCIA_LOGISTICA_UY e
+    INNER JOIN #PedidosTocados t ON t.NRO_PEDIDO = e.NRO_PEDIDO
+    WHERE e.ESTADO_TANGO <> 'CANCELADO'
+      AND e.FECHA_PEDI BETWEEN @FECHA_DESDE AND @FECHA_HASTA
+      AND (@CANAL IS NULL OR e.CANAL COLLATE Modern_Spanish_CI_AI = @CANAL COLLATE Modern_Spanish_CI_AI)
+      AND (@RUBRO IS NULL OR e.RUBRO COLLATE Modern_Spanish_CI_AI = @RUBRO COLLATE Modern_Spanish_CI_AI)
+      AND e.CLIENTE IS NOT NULL AND LTRIM(RTRIM(e.CLIENTE)) <> ''
+    GROUP BY LTRIM(RTRIM(e.CLIENTE)), LTRIM(RTRIM(e.NRO_PEDIDO))
+    HAVING SUM(e.CANT_PEDID) > 0 AND SUM(e.CANT_FACTURADA) > 0
+    ORDER BY CLIENTE, NRO_PEDIDO;
+
     DROP TABLE #PedidosTocados;
 END;
 GO

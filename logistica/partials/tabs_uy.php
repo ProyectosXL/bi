@@ -80,28 +80,45 @@
             </div>
         </div>
 
+        <!-- % Eficiencia pedidos por cliente -->
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-card-list"></i> % Eficiencia (Pedidos por cliente)
+                <span class="header-sub">Clic en un cliente para ver sus pedidos</span>
+            </div>
+            <div class="table-wrap" style="max-height:440px;overflow-y:auto">
+                <table id="tabla-uy-efi-pedidos" class="tabla-drill">
+                    <thead>
+                        <tr>
+                            <th>Cliente / N° pedido</th>
+                            <th>Fecha</th>
+                            <th class="col-num">Unid. pedidas</th>
+                            <th class="col-num">Unid. facturadas</th>
+                            <th class="col-num">% Eficiencia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-uy-efi-pedidos"></tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- Eficiencia por rubro: gráfico horizontal + tabla -->
         <div class="analisis-card">
             <div class="analisis-section-header">
                 <i class="bi bi-bar-chart-steps"></i> Eficiencia por Rubro
             </div>
-            <div class="resumen-row">
-                <div class="chart-wrap">
-                    <canvas id="chart-uy-efi-rubro" height="300"></canvas>
-                </div>
-                <div class="table-wrap" style="max-height:340px;overflow-y:auto">
-                    <table id="tabla-uy-efi-rubro">
-                        <thead>
-                            <tr>
-                                <th>Rubro</th>
-                                <th class="col-num">U. pedidas</th>
-                                <th class="col-num">U. facturadas</th>
-                                <th class="col-num">Eficiencia</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-uy-efi-rubro"></tbody>
-                    </table>
-                </div>
+            <div class="table-wrap" style="max-height:340px;overflow-y:auto">
+                <table id="tabla-uy-efi-rubro">
+                    <thead>
+                        <tr>
+                            <th>Rubro</th>
+                            <th class="col-num">U. pedidas</th>
+                            <th class="col-num">U. facturadas</th>
+                            <th class="col-num">Eficiencia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-uy-efi-rubro"></tbody>
+                </table>
             </div>
         </div>
 
@@ -134,6 +151,13 @@
                     <div class="kpi-label">Diferencia neta</div>
                     <div class="kpi-value" id="kv-uy-dif-neta">—</div>
                     <div class="kpi-var" id="kvar-uy-dif-neta-pct"></div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(245,158,11,.08);color:var(--accent3)"><i class="bi bi-rulers"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Diferencia absoluta</div>
+                    <div class="kpi-value" id="kv-uy-dif-abs">—</div>
                 </div>
             </div>
             <div class="kpi-card">
@@ -181,7 +205,6 @@
                             <th class="col-num">Diferencia</th>
                             <th class="col-num">Dif. %</th>
                             <th class="col-num">Dif. Absoluta</th>
-                            <th class="col-num">Precisión</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-uy-stock"></tbody>
@@ -189,17 +212,21 @@
             </div>
         </div>
 
-        <!-- Top 10 Artículos Sobrantes -->
+        <!-- Top 10 Artículos con diferencia (sobrantes / faltantes) -->
         <div class="analisis-card">
-            <div class="analisis-section-header">
-                <i class="bi bi-arrow-up-circle"></i> Top 10 Artículos Sobrantes
-                <span class="header-sub">Stock Jauser &gt; Stock Central</span>
+            <div class="analisis-section-header" id="hdr-uy-top-arts">
+                <i class="bi bi-arrow-left-right"></i> Top 10 Artículos con diferencia
+                <span class="header-sub" id="lbl-top-arts-sub">Stock Jauser &gt; Stock Central</span>
             </div>
-            <div style="margin-bottom:8px">
-                <input type="text" id="inp-buscar-art" placeholder="Buscar artículo..." style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;width:260px">
+            <div class="top-arts-toolbar">
+                <div class="seg-control" id="seg-top-arts">
+                    <button class="seg-btn active" data-tipo="sobrantes"><i class="bi bi-arrow-up-circle"></i> Sobrantes</button>
+                    <button class="seg-btn" data-tipo="faltantes"><i class="bi bi-arrow-down-circle"></i> Faltantes</button>
+                </div>
+                <input type="text" id="inp-buscar-art" placeholder="Buscar artículo..." class="inp-buscar-art">
             </div>
             <div class="table-wrap">
-                <table id="tabla-uy-sobrantes">
+                <table id="tabla-uy-top-arts">
                     <thead>
                         <tr>
                             <th>Código</th>
@@ -210,30 +237,7 @@
                             <th class="col-num">Diferencia</th>
                         </tr>
                     </thead>
-                    <tbody id="tbody-uy-sobrantes"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Top 10 Artículos Faltantes -->
-        <div class="analisis-card">
-            <div class="analisis-section-header">
-                <i class="bi bi-arrow-down-circle"></i> Top 10 Artículos Faltantes
-                <span class="header-sub">Stock Jauser &lt; Stock Central</span>
-            </div>
-            <div class="table-wrap">
-                <table id="tabla-uy-faltantes">
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Descripción</th>
-                            <th>Rubro</th>
-                            <th class="col-num">Stock Central</th>
-                            <th class="col-num">Stock WMS</th>
-                            <th class="col-num">Diferencia</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-uy-faltantes"></tbody>
+                    <tbody id="tbody-uy-top-arts"></tbody>
                 </table>
             </div>
         </div>

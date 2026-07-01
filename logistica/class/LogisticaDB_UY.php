@@ -29,11 +29,12 @@ class LogisticaDB_UY extends LogisticaDBBase
         $kpi['EFI_UNIDADES'] = $pedidas > 0 ? $facturadas / $pedidas : null;
         $kpi['PCT_PERDIDA']  = $importePed > 0 ? $perdida / $importePed : null;
         return [
-            'kpis'      => $kpi,
-            'por_rubro' => $sets[1] ?? [],
-            'evolucion' => $sets[2] ?? [],
-            'canales'   => array_column($sets[3] ?? [], 'CANAL'),
-            'semanal'   => $sets[4] ?? [],
+            'kpis'        => $kpi,
+            'por_rubro'   => $sets[1] ?? [],
+            'evolucion'   => $sets[2] ?? [],
+            'canales'     => array_column($sets[3] ?? [], 'CANAL'),
+            'semanal'     => $sets[4] ?? [],
+            'efi_pedidos' => $sets[5] ?? [],
         ];
     }
 

@@ -286,7 +286,6 @@
                             <th class="col-num">Stock WMS</th>
                             <th class="col-num">Diferencia</th>
                             <th class="col-num">Dif. %</th>
-                            <th class="col-num">Precisión</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-stock"></tbody>
@@ -424,13 +423,6 @@
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-bar-chart-line"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-label">Tiempo productivo (hs.)</div>
-                    <div class="kpi-value" id="kv-pp-hs">—</div>
-                </div>
-            </div>
-            <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(0,168,120,.1);color:var(--accent)"><i class="bi bi-stopwatch"></i></div>
                 <div class="kpi-body">
                     <div class="kpi-label">Promedio tiempo prod. (hs.)</div>
@@ -491,6 +483,14 @@
     <div class="dash-content">
 
         <!-- Ventanas de entrega: HOY / PRÓXIMA / +1 -->
+        <div class="plan-ventanas-header">
+            <span class="plan-ventanas-title"><i class="bi bi-calendar-week"></i> Ventanas de entrega</span>
+            <span class="plan-prom-badge">
+                <i class="bi bi-person-lines-fill"></i>
+                Promedio picking / día (últ. 7d):
+                <strong id="kv-pl-prom-dia">—</strong> unid.
+            </span>
+        </div>
         <div class="plan-ventanas">
             <?php
             $ventanas = [

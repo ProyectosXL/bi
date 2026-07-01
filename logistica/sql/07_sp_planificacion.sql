@@ -40,6 +40,16 @@ BEGIN
     WHERE FECHA > @PROX_HABIL AND DIA_LABORAL = 1
     ORDER BY FECHA;
 
+    -- ── Pedidos sin ninguna actividad de facturación (excluir de demanda) ──
+    -- Mismo criterio que RO_SP_EFICIENCIA_LOGISTICA: SUM(CANT_PEDID)=SUM(CANT_PEND)
+    SELECT NRO_PEDIDO
+    INTO #PedSinFacturar
+    FROM dbo.BI_KPI_LOG_FACTURACION
+    GROUP BY NRO_PEDIDO
+    HAVING SUM(CANT_PEDID) = SUM(CANT_PEND);
+
+    CREATE NONCLUSTERED INDEX IX_PedSF ON #PedSinFacturar (NRO_PEDIDO);
+
     -- ── Promedio últimos 7 días de picking (para pickers necesarios) ──────
     DECLARE @PROM_PICK_7D FLOAT;
     SELECT @PROM_PICK_7D = AVG(CAST(Unidades AS FLOAT))
@@ -64,10 +74,13 @@ BEGIN
          WHERE ESTADO = 'PENDIENTE'
            AND FECHA_ENTREGA <  @HOY
            AND FECHA_ENTREGA >= DATEADD(DAY, -30, @HOY)
-           AND (@CANAL IS NULL OR CANAL = @CANAL))      AS PED_DEMORADOS,
+           AND (@CANAL IS NULL OR CANAL = @CANAL)
+           AND NOT EXISTS (SELECT 1 FROM #PedSinFacturar sf WHERE sf.NRO_PEDIDO = NRO_PEDIDO))
+                                                         AS PED_DEMORADOS,
         @PROX_HABIL                                      AS PROX_HABIL,
         @MAS_UNO                                         AS MAS_UNO,
-        CAST(0.97 AS DECIMAL(5,2))                       AS META;
+        CAST(0.97 AS DECIMAL(5,2))                       AS META,
+        CAST(ISNULL(@PROM_PICK_7D, 0) AS DECIMAL(18,2)) AS PROM_UNID_DIA;
 
     -- ── Result set 2: ventanas (3 filas: HOY / PROX / MAS_UNO) ────────────
     ;WITH V AS (
@@ -99,6 +112,7 @@ BEGIN
         FROM dbo.BI_T_DESPACHO_PEDIDOS b
         WHERE b.FECHA_ENTREGA = V.FECHA
           AND (@CANAL IS NULL OR b.CANAL = @CANAL)
+          AND NOT EXISTS (SELECT 1 FROM #PedSinFacturar sf WHERE sf.NRO_PEDIDO = b.NRO_PEDIDO)
     ) agg
     ORDER BY V.ORD;
 
@@ -121,6 +135,7 @@ BEGIN
     WHERE b.ESTADO = 'PENDIENTE'
       AND b.FECHA_ENTREGA >= @HOY
       AND (@CANAL IS NULL OR b.CANAL = @CANAL)
+      AND NOT EXISTS (SELECT 1 FROM #PedSinFacturar sf WHERE sf.NRO_PEDIDO = b.NRO_PEDIDO)
     GROUP BY b.NRO_PEDIDO, b.COD_CLIENT, b.NOMBRE_CLIENTE, b.CANAL,
              CAST(b.FECHA_ENTREGA AS DATE)
     ORDER BY CAST(b.FECHA_ENTREGA AS DATE) ASC, UNIDADES DESC;
@@ -140,7 +155,10 @@ BEGIN
       AND b.FECHA_ENTREGA <  @HOY
       AND b.FECHA_ENTREGA >= DATEADD(DAY, -30, @HOY)
       AND (@CANAL IS NULL OR b.CANAL = @CANAL)
+      AND NOT EXISTS (SELECT 1 FROM #PedSinFacturar sf WHERE sf.NRO_PEDIDO = b.NRO_PEDIDO)
     GROUP BY b.NRO_PEDIDO, b.NOMBRE_CLIENTE, b.CANAL, CAST(b.FECHA_ENTREGA AS DATE)
     ORDER BY b.FECHA_ENTREGA ASC, UNIDADES DESC;
+
+    DROP TABLE #PedSinFacturar;
 END;
 GO

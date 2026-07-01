@@ -99,7 +99,6 @@
             'kv-pp-pico-usuario': ['Pico por usuario', ['Mayor cantidad de unidades preparadas por un único picker en un solo día del período.']],
             'kv-pp-prom'        : ['Promedio por picker', ['Promedio de unidades por día, considerando solo pickers con más de 3 horas productivas registradas.']],
             'kv-pp-u-hora'      : ['Promedio unid./hora', ['Unidades pickeadas por hora productiva registrada en el período.']],
-            'kv-pp-hs'          : ['Tiempo productivo', ['Total de horas de picking registradas en el período y filtros activos.']],
             'kv-pp-prom-hs'     : ['Promedio tiempo productivo', ['Promedio de horas productivas por picker y día, considerando solo días con más de 3 horas registradas.']],
             'kv-dsp-efi'        : ['Eficacia de despacho total', ['Comprobantes despachados en término sobre el total de comprobantes despachados en el período.', 'Meta: 95%. Verde si se alcanza, rojo por debajo.']],
             'kv-dsp-dem-dias'   : ['Promedio días pedidos demorados', ['Promedio de días de demora de los pedidos demorados (vencidos) del período. Negativo = atraso respecto a la fecha comprometida.']],
@@ -823,7 +822,6 @@
                 <td class="col-num">${fmt.num(r.STOCK_WMS)}</td>
                 <td class="col-num ${dif !== 0 ? (dif < 0 ? 'var-neg' : 'var-pos') : ''}">${fmt.num(dif)}</td>
                 <td class="col-num ${dif !== 0 ? 'var-neg' : ''}">${fmt.pct(r.DIF_PCT)}</td>
-                <td class="col-num ${parseFloat(r.PRECISION||0) >= 0.99 ? 'var-pos' : 'var-neg'}">${fmt.pct(r.PRECISION)}</td>
             </tr>`;
         }).join(''));
 
@@ -986,7 +984,6 @@
         $('#kv-pp-pico-dia-fecha').text(fmt.date(k.PICO_DIA_FECHA));
         $('#kv-pp-pico-usuario').text(fmt.num(k.PICO_USUARIO_UNIDADES));
         $('#kv-pp-pico-usuario-nombre').text(k.PICO_USUARIO || '—');
-        $('#kv-pp-hs').text(fmt.num(k.TIEMPO_PRODUCTIVO_HS, 1));
         $('#kv-pp-prom-hs').text(fmt.num(k.PROM_TIEMPO_PROD_HS, 2));
         $('#kv-pp-u-hora').text(fmt.num(k.PROM_UNID_HORA, 1));
         $('#kv-pp-prom').text(fmt.num(k.PROM_UNID_PICKERS, 1));
@@ -1245,6 +1242,7 @@
             chartsPlanGauges.push(renderGauge(`gauge-plan-${dom}`, pct || 0, color, meta));
         });
         $('#pl-hoy-dem').text(fmt.num(k.PED_DEMORADOS));
+        $('#kv-pl-prom-dia').text(fmt.num(k.PROM_UNID_DIA, 0));
 
         State.pendientes = data.pendientes || [];
         renderPendientes();

@@ -31,14 +31,18 @@
     const Cache = {};
     let filtrosPromise = null;
 
-    let chartEfiRubro   = null;
+
     let chartEvolucion  = null;
     let chartEfiSemanal = null;
     let chartStockComp  = null;
     let chartStockDif   = null;
 
-    // Filas originales de la tabla sobrantes (para el buscador)
-    let sobrantesRows = [];
+    let efiPedidosGroupsUY = [];   // pedidos agrupados por cliente (drill-down UY)
+
+    // Datos de artículos sobrantes/faltantes (para el buscador y el toggle)
+    let sobrantesRows  = [];
+    let faltantesRows  = [];
+    let topArtsActivo  = 'sobrantes';   // 'sobrantes' | 'faltantes'
 
     // Detalle de artículos con diferencia (drill-down del detalle por rubro)
     let stockDetalleArticulos = [];
@@ -63,18 +67,18 @@
             'kv-uy-stock-tango'  : ['Stock Tango', ['Total de unidades registradas en el sistema Central (referencia) para los rubros activos.']],
             'kv-uy-stock-wms'    : ['Stock Jauser', ['Total de unidades registradas en el sistema Jauser (WMS) para los rubros activos.']],
             'kv-uy-dif-neta'     : ['Diferencia neta', ['Suma de Stock Jauser − Stock Tango por rubro.', 'Positivo: hay más en Jauser que en Tango. Negativo: Tango tiene más que Jauser.']],
-            'kv-uy-precision'    : ['Precisión de inventario', ['Proporción del stock que coincide entre ambos sistemas: 1 − dif.abs / Stock Tango.', 'Meta ideal: 99% o superior.']],
+            'kv-uy-dif-abs'      : ['Diferencia absoluta', ['Suma del valor absoluto de las diferencias por artículo: |Jauser − Central|.', 'A diferencia de la diferencia neta, aquí los positivos y negativos no se compensan — mide la magnitud total real del desvío.']],
+            'kv-uy-precision'    : ['Precisión de inventario', ['Proporción del stock que coincide entre ambos sistemas: 1 − dif.abs / Stock Tango.', 'Meta ideal: 99% o superior. Mínimo 0%.']],
         },
         sections: {
             'chart-uy-efi-semanal': ['Eficiencia semanal', ['Eficiencia de facturación (unidades facturadas / pedidas) agrupada por semana ISO en las últimas 12 semanas.', 'La línea roja punteada marca la meta del 95%.']],
             'chart-uy-evolucion'  : ['Eficiencia mensual', ['Eficiencia mensual de facturación desde el mismo mes del año anterior hasta el mes actual.', 'La línea roja punteada marca la meta del 95%.']],
-            'chart-uy-efi-rubro'  : ['Eficiencia por rubro', ['Barras horizontales: unidades pedidas vs. facturadas por rubro, ordenadas por volumen.', 'Verde ≥ 95%, amarillo ≥ 85%, rojo < 85%.']],
             'chart-uy-stock-comp' : ['Stock Central vs WMS por rubro', ['Barras agrupadas: azul = Stock Central, verde = Stock WMS. Diferencias entre pares indican desvíos.']],
             'chart-uy-stock-dif'  : ['Diferencia absoluta por rubro', ['Magnitud del desvío (|WMS − Central|) por rubro. Mayor barra = mayor urgencia de auditoría.']],
             'tabla-uy-efi-rubro'  : ['Detalle de eficiencia por rubro', ['Unidades pedidas, facturadas y porcentaje de eficiencia por rubro.']],
-            'tabla-uy-stock'      : ['Detalle de stock por rubro', ['Stock Central, WMS, diferencia neta, porcentual, diferencia absoluta y precisión por rubro.']],
-            'tabla-uy-sobrantes'  : ['Top 10 artículos sobrantes', ['Artículos donde Jauser (WMS) registra MÁS unidades que el sistema Central (DIFERENCIA > 0).', 'Usá el buscador para filtrar por código o descripción.']],
-            'tabla-uy-faltantes'  : ['Top 10 artículos faltantes', ['Artículos donde Jauser (WMS) registra MENOS unidades que el sistema Central (DIFERENCIA < 0).']],
+            'tabla-uy-efi-pedidos': ['% Eficiencia por pedido (por cliente)', ['Pedidos del período agrupados por cliente. Clic en un cliente para ver el detalle de cada pedido y su eficiencia.']],
+            'tabla-uy-stock'      : ['Detalle de stock por rubro', ['Stock Central, WMS, diferencia neta, porcentual y diferencia absoluta por rubro.']],
+            'tabla-uy-top-arts'   : ['Top 10 artículos con diferencia', ['Sobrantes: Jauser registra MÁS unidades que Central (DIFERENCIA > 0).', 'Faltantes: Jauser registra MENOS unidades que Central (DIFERENCIA < 0).', 'Usá el toggle para cambiar entre sobrantes y faltantes, y el buscador para filtrar por código o descripción.']],
         },
         tableHeaders: {
             'tabla-uy-efi-rubro': [
@@ -83,6 +87,13 @@
                 'Unidades facturadas en el período.',
                 'Eficiencia (facturadas / pedidas).',
             ],
+            'tabla-uy-efi-pedidos': [
+                'Cliente / N° de pedido. Clic para desplegar los pedidos del cliente.',
+                'Fecha del pedido.',
+                'Unidades solicitadas en el pedido.',
+                'Unidades facturadas en el pedido.',
+                'Eficiencia del pedido (facturadas / pedidas).',
+            ],
             'tabla-uy-stock': [
                 'Rubro del artículo.',
                 'Unidades registradas en el sistema Central (referencia).',
@@ -90,23 +101,14 @@
                 'Diferencia neta: WMS − Central. Positivo = más en WMS.',
                 'Diferencia neta como porcentaje sobre el stock Central.',
                 'Diferencia absoluta: |WMS − Central|.',
-                'Precisión: 1 − dif.abs / Central.',
             ],
-            'tabla-uy-sobrantes': [
+            'tabla-uy-top-arts': [
                 'Código de artículo.',
                 'Descripción del artículo.',
                 'Rubro.',
                 'Stock en sistema Central.',
                 'Stock en WMS (Jauser).',
-                'Diferencia (Jauser − Central, positiva = sobrante).',
-            ],
-            'tabla-uy-faltantes': [
-                'Código de artículo.',
-                'Descripción del artículo.',
-                'Rubro.',
-                'Stock en sistema Central.',
-                'Stock en WMS (Jauser).',
-                'Diferencia (Jauser − Central, negativa = faltante).',
+                'Diferencia (Jauser − Central). Verde = sobrante, rojo = faltante.',
             ],
         },
     };
@@ -296,40 +298,12 @@
             options: chartOptions('Eficiencia (%)', { min: 0, max: 100, suggestedMax: 105 }, { pct: true }),
         });
 
-        // Gráfico barras horizontales — eficiencia por rubro
-        const porRubro = (data.por_rubro || []).slice(0, 20);
-        if (chartEfiRubro) chartEfiRubro.destroy();
-        chartEfiRubro = new Chart($('#chart-uy-efi-rubro')[0], {
-            type: 'bar',
-            data: {
-                labels  : porRubro.map(r => r.RUBRO),
-                datasets: [
-                    {
-                        label          : 'Pedidas',
-                        data           : porRubro.map(r => r.UNID_PEDIDAS),
-                        backgroundColor: 'rgba(37,99,235,.55)',
-                        borderRadius   : 3,
-                    },
-                    {
-                        label          : 'Facturadas',
-                        data           : porRubro.map(r => r.UNID_FACTURADAS),
-                        backgroundColor: 'rgba(0,168,120,.7)',
-                        borderRadius   : 3,
-                    },
-                ],
-            },
-            options: {
-                ...chartOptions('Unidades', {}, { integer: true }),
-                indexAxis: 'y',
-                plugins: { legend: { position: 'top', labels: { font: { size: 12 }, boxWidth: 14 } } },
-                scales: {
-                    x: { beginAtZero: true, ticks: { font: { size: 11 } } },
-                    y: { ticks: { font: { size: 11 } } },
-                },
-            },
-        });
-
         // Tabla eficiencia por rubro
+        const porRubro = (data.por_rubro || []).slice(0, 20);
+
+        // Tabla drill: % Eficiencia por pedido (agrupada por cliente)
+        renderEfiPedidosUY(data.efi_pedidos || []);
+
         const $tbody = $('#tbody-uy-efi-rubro').empty();
         if (!porRubro.length) {
             $tbody.html('<tr><td colspan="4"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>');
@@ -347,6 +321,66 @@
         }
     }
 
+    // ── Tabla drill: % Eficiencia por pedido, agrupada por cliente (UY) ────
+    function renderEfiPedidosUY(rows) {
+        const map = new Map();
+        (rows || []).forEach(r => {
+            const cli = (r.CLIENTE || '—');
+            let g = map.get(cli);
+            if (!g) { g = { cliente: cli, ped: 0, fact: 0, pedidos: [] }; map.set(cli, g); }
+            const ped = parseFloat(r.UNID_PEDIDAS) || 0;
+            const fac = parseFloat(r.UNID_FACTURADAS) || 0;
+            g.ped += ped; g.fact += fac;
+            g.pedidos.push({ nro: r.NRO_PEDIDO, fecha: r.FECHA_PEDI, ped, fac });
+        });
+        efiPedidosGroupsUY = [...map.values()]
+            .map(g => ({ ...g, efi: g.ped > 0 ? g.fact / g.ped : null }))
+            .sort((a, b) => (a.efi == null ? 99 : a.efi) - (b.efi == null ? 99 : b.efi));
+
+        const $tb = $('#tbody-uy-efi-pedidos').empty();
+        if (!efiPedidosGroupsUY.length) {
+            $tb.append('<tr><td colspan="5"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>');
+            return;
+        }
+        $tb.html(efiPedidosGroupsUY.map((g, i) => {
+            const cls = g.efi == null ? '' : g.efi >= 0.95 ? 'var-pos' : g.efi >= 0.85 ? '' : 'var-neg';
+            return `<tr class="rubro-row expandible efi-cli-row" data-cli="${i}">
+                <td><i class="bi bi-chevron-right caret"></i> ${escapeHtml(g.cliente)} <span class="badge-arts">${g.pedidos.length}</span></td>
+                <td>—</td>
+                <td class="col-num">${fmt.num(g.ped)}</td>
+                <td class="col-num">${fmt.num(g.fact)}</td>
+                <td class="col-num ${cls}">${g.efi != null ? fmt.pct(g.efi) : '—'}</td>
+            </tr>`;
+        }).join(''));
+    }
+
+    function toggleEfiPedidosUY($row) {
+        const idx   = parseInt($row.data('cli'), 10);
+        const $next = $row.next('.detalle-row');
+        if ($next.length) { $next.remove(); $row.removeClass('abierto'); return; }
+        const g = efiPedidosGroupsUY[idx];
+        if (!g) return;
+        const filas = g.pedidos
+            .map(p => ({ ...p, efi: p.ped > 0 ? p.fac / p.ped : null }))
+            .sort((a, b) => (a.efi == null ? 99 : a.efi) - (b.efi == null ? 99 : b.efi))
+            .map(p => {
+                const cls = p.efi == null ? '' : p.efi >= 0.95 ? 'var-pos' : p.efi >= 0.85 ? '' : 'var-neg';
+                return `<tr>
+                    <td class="efi-ped-nro">${escapeHtml(String(p.nro).trim())}</td>
+                    <td>${fmt.date(p.fecha)}</td>
+                    <td class="col-num">${fmt.num(p.ped)}</td>
+                    <td class="col-num">${fmt.num(p.fac)}</td>
+                    <td class="col-num ${cls}">${p.efi != null ? fmt.pct(p.efi) : '—'}</td>
+                </tr>`;
+            }).join('');
+        const sub = `<tr class="detalle-row"><td colspan="5">
+            <table class="tabla-sub">
+                <tbody>${filas}</tbody>
+            </table>
+        </td></tr>`;
+        $row.addClass('abierto').after(sub);
+    }
+
     // ── Pestaña 2: Stock UY ───────────────────────────────────────────────
     async function loadStock() {
         const data = await apiFetch('stock', { rubro: State.rubro });
@@ -361,6 +395,7 @@
             text: fmt.pct(k.DIF_PCT),
             cls : Math.abs(difPct) < 0.01 ? 'pos' : 'neg',
         });
+        $('#kv-uy-dif-abs').text(fmt.num(k.DIFERENCIA_ABS));
         $('#kv-uy-precision').text(fmt.pct(k.PRECISION_INVENTARIO));
 
         // Rubro-level: top 15 con stock
@@ -403,11 +438,10 @@
         stockDetalleArticulos = data.detalle_articulos || [];
         const $tbody = $('#tbody-uy-stock').empty();
         if (!rubros.length) {
-            $tbody.html('<tr><td colspan="7"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>');
+            $tbody.html('<tr><td colspan="6"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>');
         } else {
             $tbody.html(rubros.map(r => {
                 const dif    = parseFloat(r.DIFERENCIA || 0);
-                const prec   = parseFloat(r.PRECISION  || 0);
                 const nArts  = stockDetalleArticulos.filter(a => a.RUBRO === r.RUBRO).length;
                 const expand = nArts > 0;
                 return `<tr class="rubro-row${expand ? ' expandible' : ''}" data-rubro="${escapeHtml(r.RUBRO || '')}">
@@ -417,7 +451,6 @@
                     <td class="col-num ${dif !== 0 ? (dif < 0 ? 'var-neg' : 'var-pos') : ''}">${fmt.num(dif)}</td>
                     <td class="col-num ${dif !== 0 ? 'var-neg' : ''}">${fmt.pct(r.DIF_PCT)}</td>
                     <td class="col-num var-neg">${fmt.num(r.DIFERENCIA_ABS)}</td>
-                    <td class="col-num ${prec >= 0.99 ? 'var-pos' : 'var-neg'}">${fmt.pct(prec)}</td>
                 </tr>`;
             }).join(''));
         }
@@ -425,18 +458,26 @@
         // Botón "Exportar a Excel" del detalle por rubro (se inserta una sola vez)
         initStockExport();
 
-        // Top 10 Sobrantes (Jauser > Central) — nivel artículo
-        renderTablaArticulos('#tbody-uy-sobrantes', data.sobrantes || []);
+        // Top 10 con diferencia (sobrantes/faltantes) — nivel artículo
         sobrantesRows = data.sobrantes || [];
-
-        // Top 10 Faltantes (Jauser < Central) — nivel artículo
-        renderTablaArticulos('#tbody-uy-faltantes', data.faltantes || []);
+        faltantesRows = data.faltantes || [];
+        topArtsActivo = 'sobrantes';
+        $('#seg-top-arts .seg-btn').removeClass('active');
+        $('#seg-top-arts .seg-btn[data-tipo="sobrantes"]').addClass('active');
+        $('#lbl-top-arts-sub').html('Stock Jauser &gt; Stock Central');
+        renderTopArts();
     }
 
-    // Renderiza tabla de artículos (sobrantes o faltantes) — nivel artículo,
-    // 6 columnas: Código, Descripción, Rubro, Stock Central, Stock WMS, Diferencia.
-    function renderTablaArticulos(sel, rows) {
-        const $tbody = $(sel).empty();
+    // Renderiza la tabla unificada top-arts según el tipo activo y el buscador.
+    function renderTopArts() {
+        const base = topArtsActivo === 'sobrantes' ? sobrantesRows : faltantesRows;
+        const term = ($('#inp-buscar-art').val() || '').toLowerCase().trim();
+        const rows = term
+            ? base.filter(r =>
+                (r.COD_ARTICU  || '').toLowerCase().includes(term) ||
+                (r.DESCRIPCION || '').toLowerCase().includes(term))
+            : base;
+        const $tbody = $('#tbody-uy-top-arts').empty();
         if (!rows.length) {
             $tbody.html(`<tr><td colspan="6"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>`);
             return;
@@ -479,7 +520,7 @@
             </tr>`;
         }).join('');
 
-        const sub = `<tr class="detalle-row"><td colspan="7">
+        const sub = `<tr class="detalle-row"><td colspan="6">
             <table class="tabla-sub">
                 <thead><tr>
                     <th>Código</th><th>Descripción</th>
@@ -530,17 +571,6 @@
         });
     }
 
-    // ── Buscador de artículos sobrantes ──────────────────────────────────
-    function filtrarSobrantes(q) {
-        const term = (q || '').toLowerCase().trim();
-        const filtrados = term
-            ? sobrantesRows.filter(r =>
-                (r.COD_ARTICU  || '').toLowerCase().includes(term) ||
-                (r.DESCRIPCION || '').toLowerCase().includes(term)
-              )
-            : sobrantesRows;
-        renderTablaArticulos('#tbody-uy-sobrantes', filtrados);
-    }
 
     // ── Label período topbar ──────────────────────────────────────────────
     function updatePeriodLabel() {
@@ -630,14 +660,34 @@
             loadTab(State.activeTab);
         });
 
-        // Buscador de artículos sobrantes (client-side)
+        // Toggle sobrantes / faltantes
+        $('#seg-top-arts').on('click', '.seg-btn', function () {
+            const tipo = $(this).data('tipo');
+            if (tipo === topArtsActivo) return;
+            topArtsActivo = tipo;
+            $('#seg-top-arts .seg-btn').removeClass('active');
+            $(this).addClass('active');
+            $('#inp-buscar-art').val('');
+            const esSobrante = tipo === 'sobrantes';
+            $('#lbl-top-arts-sub').html(
+                esSobrante ? 'Stock Jauser &gt; Stock Central' : 'Stock Jauser &lt; Stock Central'
+            );
+            renderTopArts();
+        });
+
+        // Buscador de artículos (client-side, aplica al tipo activo)
         $('#inp-buscar-art').on('input', function () {
-            filtrarSobrantes($(this).val());
+            renderTopArts();
         });
 
         // Drill-down del detalle por rubro (delegado: el tbody se re-renderiza)
         $('#tbody-uy-stock').on('click', 'tr.rubro-row.expandible', function () {
             toggleDrillRubro($(this));
+        });
+
+        // Drill-down de % Eficiencia por cliente UY
+        $('#tbody-uy-efi-pedidos').on('click', 'tr.efi-cli-row.expandible', function () {
+            toggleEfiPedidosUY($(this));
         });
     }
 
