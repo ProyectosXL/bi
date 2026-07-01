@@ -42,20 +42,16 @@ try {
         [$desde_act, $hasta_act] = array_slice(GlobalDashboardDB::calcularPeriodo($periodo), 0, 2);
     }
 
-    $db   = new ParticipacionDB($origen);
-    $data = $db->getPivot($desde_act, $hasta_act, $topRubros, $grupo, $tipoTienda, $canal);
-
-    // Filtro "solo activas"
-    if ($soloActivas && !empty($data['sucursales'])) {
+    $activasIds = null;
+    if ($soloActivas) {
         try {
             $dbG = new GlobalDashboardDB($origen);
-            $activasFlip = array_flip($dbG->getSucursalesActivasIds());
-            $data['sucursales'] = array_values(array_filter(
-                $data['sucursales'],
-                fn($s) => isset($activasFlip[$s['nro_sucurs']])
-            ));
+            $activasIds = $dbG->getSucursalesActivasIds();
         } catch (Throwable $_) {}
     }
+
+    $db   = new ParticipacionDB($origen);
+    $data = $db->getPivot($desde_act, $hasta_act, $topRubros, $grupo, $tipoTienda, $canal, $activasIds);
 
     ob_clean();
     echo json_encode(array_merge(['ok' => true], $data), JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

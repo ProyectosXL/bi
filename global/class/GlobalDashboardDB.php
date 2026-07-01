@@ -385,12 +385,12 @@ class GlobalDashboardDB
                 ISNULL(SUM(tt.IMP_TOTAL_TICKET), 0) AS facturacion_con_2do
             FROM BI_SALES_TOTAL_TICKETS tt
             INNER JOIN (
-                SELECT DISTINCT N_COMP
+                SELECT DISTINCT N_COMP, FECHA
                 FROM BI_SALES_TICKETS tk
                 WHERE tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE))
                   {$sfTk} {$sfGTk}
                   AND tk.CANTIDAD > 1
-            ) t2 ON t2.N_COMP = tt.N_COMP
+            ) t2 ON t2.N_COMP = tt.N_COMP AND t2.FECHA = tt.FECHA
             WHERE tt.FECHA >= ? AND tt.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND tt.T_COMP = 'FAC' {$sfTt} {$sfGTt}
         ", array_merge([$desde, $hasta], $pTk, $pGTk, [$desde, $hasta], $pTt, $pGTt));
@@ -484,6 +484,75 @@ class GlobalDashboardDB
     }
 
     /* ──────────────────────────────────────────────
+     *  CONVERSIÓN POR HORA
+     * ────────────────────────────────────────────── */
+
+    public function getConversionPorHora(
+        string $desde, string $hasta,
+        ?int $sucursal = null,
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
+    ): array {
+        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
+        [$sfI, $pI]   = Filters::build($fp, 'i', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURS', false);
+        [$sfT, $pT]   = Filters::build($fp, 't', $this->campoVendedor, $this->origen, false, false);
+        [$sfGI, $pGI] = $this->grupoFiltro('i');
+        [$sfGT, $pGT] = $this->grupoFiltro('t');
+
+        $ingRows = $this->query("
+            SELECT
+                DATEPART(HOUR, i.FECHA_HORA) AS hora,
+                ISNULL(SUM(i.INGRESOS), 0) AS ingresos
+            FROM BI_T_INGRESOS_SUCURSALES i
+            WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND i.INGRESOS > 0 {$sfI} {$sfGI}
+            GROUP BY DATEPART(HOUR, i.FECHA_HORA)
+        ", array_merge([$desde, $hasta], $pI, $pGI));
+
+        $ingByHour = array_fill(0, 24, 0);
+        foreach ($ingRows as $r) {
+            $h = (int)$r['hora'];
+            if ($h >= 0 && $h < 24) $ingByHour[$h] = (int)$r['ingresos'];
+        }
+
+        $tickRows = $this->query("
+            SELECT
+                (t.HORA_EMIS / 10000) AS hora,
+                COUNT(DISTINCT t.N_COMP) AS tickets
+            FROM BI_SALES_TOTAL_TICKETS t
+            WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND t.T_COMP = 'FAC'
+              AND t.HORA_EMIS IS NOT NULL AND t.HORA_EMIS >= 0
+              {$sfT} {$sfGT}
+              AND EXISTS (
+                  SELECT 1 FROM BI_T_INGRESOS_SUCURSALES i2
+                  WHERE i2.NRO_SUCURS = t.NRO_SUCURS
+                    AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
+                    AND i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                    AND i2.INGRESOS > 0
+              )
+            GROUP BY (t.HORA_EMIS / 10000)
+        ", array_merge([$desde, $hasta], $pT, $pGT, [$desde, $hasta]));
+
+        $tickByHour = array_fill(0, 24, 0);
+        foreach ($tickRows as $r) {
+            $h = (int)$r['hora'];
+            if ($h >= 0 && $h < 24) $tickByHour[$h] = (int)$r['tickets'];
+        }
+
+        $result = [];
+        for ($h = 0; $h < 24; $h++) {
+            $result[] = [
+                'hora'       => $h,
+                'label'      => str_pad($h, 2, '0', STR_PAD_LEFT) . 'h',
+                'tickets'    => $tickByHour[$h],
+                'ingresos'   => $ingByHour[$h],
+                'conversion' => $ingByHour[$h] > 0 ? $tickByHour[$h] / $ingByHour[$h] : 0,
+            ];
+        }
+        return $result;
+    }
+
+    /* ──────────────────────────────────────────────
      *  SERIE TEMPORAL (sparklines)
      * ────────────────────────────────────────────── */
 
@@ -531,7 +600,7 @@ class GlobalDashboardDB
                 COUNT(DISTINCT CASE WHEN tk.CANTIDAD > 2 THEN t.N_COMP END) AS tickets_3ro
             FROM BI_SALES_TOTAL_TICKETS t
             LEFT JOIN BI_SALES_TICKETS tk
-                ON t.N_COMP = tk.N_COMP
+                ON t.N_COMP = tk.N_COMP AND tk.FECHA = t.FECHA
                AND tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE))
                {$sfTk} {$sfGTk}
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day,1,CAST(? AS DATE))
@@ -551,10 +620,11 @@ class GlobalDashboardDB
                   SELECT 1 FROM BI_T_INGRESOS_SUCURSALES i2
                   WHERE i2.NRO_SUCURS = t.NRO_SUCURS
                     AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
+                    AND i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
                     AND i2.INGRESOS > 0
               )
             GROUP BY CAST(t.FECHA AS DATE)
-        ", array_merge([$desde, $hasta], $pT, $pGT));
+        ", array_merge([$desde, $hasta], $pT, $pGT, [$desde, $hasta]));
 
         $tickConvMap = [];
         foreach ($tickConvRows as $tr) {
@@ -579,12 +649,12 @@ class GlobalDashboardDB
                 ISNULL(SUM(tt2.IMP_TOTAL_TICKET), 0) AS facturacion_con_2do
             FROM BI_SALES_TOTAL_TICKETS tt2
             INNER JOIN (
-                SELECT DISTINCT N_COMP
+                SELECT DISTINCT N_COMP, FECHA
                 FROM BI_SALES_TICKETS tk2
                 WHERE tk2.FECHA >= ? AND tk2.FECHA < DATEADD(day,1,CAST(? AS DATE))
                   {$sfTk2} {$sfGTk2}
                   AND tk2.CANTIDAD > 1
-            ) t2 ON t2.N_COMP = tt2.N_COMP
+            ) t2 ON t2.N_COMP = tt2.N_COMP AND t2.FECHA = tt2.FECHA
             WHERE tt2.FECHA >= ? AND tt2.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND tt2.T_COMP = 'FAC' {$sfTt2} {$sfGTt2}
             GROUP BY CAST(tt2.FECHA AS DATE)
@@ -812,6 +882,17 @@ class GlobalDashboardDB
 
     public function getSucursalesLista(bool $soloActivas = false): array
     {
+        if (session_status() === PHP_SESSION_NONE) {
+            @session_start();
+        }
+        $key = 'sucursales_lista_cache_' . $this->origen . '_' . ($soloActivas ? '1' : '0');
+        if (isset($_SESSION[$key]) && is_array($_SESSION[$key])) {
+            $res = $_SESSION[$key];
+            session_write_close();
+            return $res;
+        }
+
+        $result = [];
         // Franquicias: incluir las 11 sin Tango aunque no estén en BI_SALES_SUCURSALES
         if ($this->origen === 'franquicias') {
             // Query remote active franchises (no joins/subqueries)
@@ -834,7 +915,6 @@ class GlobalDashboardDB
             }
 
             // Filter in PHP: keep if exists locally OR sl.TANGO is null
-            $result = [];
             foreach ($remoteRows as $row) {
                 $id = (int)$row['NRO_SUCURS'];
                 $tango = $row['TANGO'];
@@ -850,37 +930,53 @@ class GlobalDashboardDB
             usort($result, function ($a, $b) {
                 return strcasecmp($a['DESC_SUCURSAL'] ?? '', $b['DESC_SUCURSAL'] ?? '');
             });
+        } else {
+            if ($soloActivas) {
+                $result = $this->query("
+                    SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL
+                    FROM BI_SALES_SUCURSALES s
+                    INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
+                      ON sl.NRO_SUCURSAL = s.NRO_SUCURS
+                    WHERE sl.HABILITADO = 1
+                    ORDER BY sl.DESC_SUCURSAL
+                ");
+            } else {
+                $result = $this->query("
+                    SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL
+                    FROM BI_SALES_SUCURSALES s
+                    LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
+                      ON sl.NRO_SUCURSAL = s.NRO_SUCURS
+                    WHERE sl.HABILITADO = 1 OR sl.HABILITADO IS NULL
+                    ORDER BY sl.DESC_SUCURSAL
+                ");
+            }
+        }
 
-            return $result;
-        }
-        if ($soloActivas) {
-            return $this->query("
-                SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL
-                FROM BI_SALES_SUCURSALES s
-                INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
-                  ON sl.NRO_SUCURSAL = s.NRO_SUCURS
-                WHERE sl.HABILITADO = 1
-                ORDER BY sl.DESC_SUCURSAL
-            ");
-        }
-        return $this->query("
-            SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL
-            FROM BI_SALES_SUCURSALES s
-            LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
-              ON sl.NRO_SUCURSAL = s.NRO_SUCURS
-            WHERE sl.HABILITADO = 1 OR sl.HABILITADO IS NULL
-            ORDER BY sl.DESC_SUCURSAL
-        ");
+        $_SESSION[$key] = $result;
+        session_write_close();
+        return $result;
     }
 
     public function getSucursalesActivasIds(): array
     {
+        if (session_status() === PHP_SESSION_NONE) {
+            @session_start();
+        }
+        $key = 'activas_ids_cache_' . $this->origen;
+        if (isset($_SESSION[$key]) && is_array($_SESSION[$key])) {
+            $res = $_SESSION[$key];
+            session_write_close();
+            return $res;
+        }
         $rows = $this->query("
             SELECT NRO_SUCURSAL
             FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS
             WHERE HABILITADO = 1
         ");
-        return array_values(array_map(fn($r) => (int)$r['NRO_SUCURSAL'], $rows));
+        $ids = array_values(array_map(fn($r) => (int)$r['NRO_SUCURSAL'], $rows));
+        $_SESSION[$key] = $ids;
+        session_write_close();
+        return $ids;
     }
 
     /* ──────────────────────────────────────────────

@@ -106,7 +106,7 @@ class AnalisisDB
                                 THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
             FROM {$from} s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS} {$sfRS}
             GROUP BY
@@ -129,7 +129,7 @@ class AnalisisDB
                                     THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                     ISNULL(SUM(s.IMPORTE), 0) AS facturacion
                 FROM {$from} s
-                WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+                WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
                   AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                   {$sfS} {$sfVS} {$sfRS}
                 GROUP BY s.RUBRO, s.CATEGORIA
@@ -259,7 +259,7 @@ class AnalisisDB
                                 THEN s.CANTIDAD ELSE 0 END), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0) AS facturacion
             FROM {$from} s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS} {$sfRS}
             GROUP BY s.COD_VENDED
@@ -347,7 +347,7 @@ class AnalisisDB
                 ISNULL(SUM(CASE WHEN s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                                 THEN s.CANTIDAD ELSE 0 END), 0) AS unidades
             FROM {$from} s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO IN ({$placeholders})
               {$sfS} {$sfVS}
             GROUP BY s.RUBRO
@@ -519,7 +519,7 @@ class AnalisisDB
                 ISNULL(SUM(s.CANTIDAD), 0)  AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0)   AS facturacion
             FROM {$from} s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS}
             GROUP BY s.RUBRO
@@ -554,7 +554,7 @@ class AnalisisDB
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE), 0)  AS facturacion
             FROM {$from} s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO = ?
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS}
@@ -593,7 +593,7 @@ class AnalisisDB
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE),  0) AS facturacion
             FROM {$from} s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfV} {$sfR} {$sfC}
             GROUP BY s.RUBRO, ISNULL(s.CATEGORIA, 'SIN CATEGORÍA')
@@ -626,7 +626,7 @@ class AnalisisDB
                     ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                     ISNULL(SUM(s.IMPORTE),  0) AS facturacion
                 FROM {$from} s
-                WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+                WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
                   AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                   {$sfS} {$sfV} {$sfR} {$sfC}
                 GROUP BY ISNULL(s.COLOR, 'SIN COLOR')
@@ -657,7 +657,7 @@ class AnalisisDB
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE),  0) AS facturacion
             FROM {$from} s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfV} {$sfR} {$sfC} {$sfG}
             GROUP BY s.NRO_SUCURS
@@ -687,7 +687,7 @@ class AnalisisDB
                 ISNULL(SUM(s.CANTIDAD), 0) AS unidades,
                 ISNULL(SUM(s.IMPORTE),  0) AS facturacion
             FROM {$from} s
-            WHERE CAST(s.FECHA AS DATE) BETWEEN ? AND ?
+            WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfV} {$sfR}
             GROUP BY s.RUBRO, ISNULL(s.CATEGORIA, 'SIN CATEGORÍA')

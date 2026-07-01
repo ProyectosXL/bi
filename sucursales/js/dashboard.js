@@ -148,12 +148,45 @@ const Dashboard = (() => {
         // Registro de series: canvasId → { values, dates, color, formatFn, title, secondary? }
         const registry = {};
         let _modalChart = null;
+        let _openCanvasId = null;  // tracks which canvas is currently open
 
         function register(canvasId, values, dates, color, formatFn, title, secondary = null) {
-            registry[canvasId] = { values, dates, color, formatFn, title, secondary };
+            registry[canvasId] = { values, dates, color, formatFn, title, secondary, horas: registry[canvasId]?.horas || null };
+        }
+
+        function setHoras(canvasId, horas) {
+            if (!registry[canvasId]) {
+                registry[canvasId] = { horas };
+            } else {
+                registry[canvasId].horas = horas;
+            }
+            // Si el modal de este canvas ya está abierto, inyectar el selector ahora
+            if (_openCanvasId === canvasId) {
+                const header = document.querySelector('#spark-overlay .spark-modal-header');
+                if (header && !document.getElementById('conv-view-switch')) {
+                    const entry = registry[canvasId];
+                    const sw = document.createElement('div');
+                    sw.className = 'conv-view-switch';
+                    sw.id = 'conv-view-switch';
+                    sw.style.marginRight = '15px';
+                    sw.innerHTML = '<button class="conv-view-btn active" data-view="dia">Por día</button><button class="conv-view-btn" data-view="hora">Por hora</button>';
+                    // Insertar antes del botón de cerrar
+                    const closeBtn = header.querySelector('.spark-modal-close');
+                    header.insertBefore(sw, closeBtn);
+                    sw.addEventListener('click', e => {
+                        const btn = e.target.closest('.conv-view-btn');
+                        if (!btn) return;
+                        const view = btn.dataset.view;
+                        sw.querySelectorAll('.conv-view-btn').forEach(b => b.classList.toggle('active', b === btn));
+                        if (view === 'hora') renderHoraView(entry);
+                        else renderDiaView(entry, canvasId);
+                    });
+                }
+            }
         }
 
         function open(canvasId) {
+            _openCanvasId = canvasId;
             const entry = registry[canvasId];
             if (!entry) return;
             const { values, dates, color, formatFn, title, secondary } = entry;
@@ -188,12 +221,19 @@ const Dashboard = (() => {
                     <span class="spark-modal-stat-val">${fmt.num(Math.round(sec.values.reduce((a, b) => a + b, 0) / sec.values.length))}</span>
                 </div>`).join('');
 
+            const toggleHtml = entry.horas ? `
+                <div class="conv-view-switch" id="conv-view-switch" style="margin-right: 15px;">
+                    <button class="conv-view-btn active" data-view="dia">Por día</button>
+                    <button class="conv-view-btn" data-view="hora">Por hora</button>
+                </div>` : '';
+
             const root = document.getElementById('spark-modal-root');
             root.innerHTML = `
                 <div class="spark-modal-overlay" id="spark-overlay">
                     <div class="spark-modal">
                         <div class="spark-modal-header">
                             <span class="spark-modal-title">${title}</span>
+                            ${toggleHtml}
                             <button class="spark-modal-close" id="spark-modal-close-btn"><i class="bi bi-x-lg"></i></button>
                         </div>
                         <div class="spark-modal-stats">
@@ -263,12 +303,12 @@ const Dashboard = (() => {
 
             const scales = {
                 x: {
-                    grid : { color: 'rgba(255,255,255,.05)' },
-                    ticks: { color: '#9ba8c8', font: { size: 11 }, maxTicksLimit: 12 }
+                    grid : { color: 'rgba(0,0,0,.06)' },
+                    ticks: { color: '#6b7280', font: { size: 11 }, maxTicksLimit: 12 }
                 },
                 y: {
                     position: 'left',
-                    grid    : { color: 'rgba(255,255,255,.07)' },
+                    grid    : { color: 'rgba(0,0,0,.06)' },
                     ticks   : { color, font: { size: 11 }, callback: v => formatFn(v) }
                 }
             };
@@ -296,6 +336,7 @@ const Dashboard = (() => {
                     position : 'right',
                     grid     : { drawOnChartArea: false },
                     ticks    : { color: secArr[0].color, font: { size: 11 }, callback: v => secArr[0].formatFn(v) },
+                    border   : { dash: [4,4] },
                 };
             }
 
@@ -331,7 +372,7 @@ const Dashboard = (() => {
                         maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
-                            legend: { display: secArr.length > 0, labels: { color: '#9ba8c8', font: { size: 11 }, boxWidth: 12 } },
+                            legend: { display: secArr.length > 0, labels: { color: '#374151', font: { size: 11 }, boxWidth: 12 } },
                             tooltip: {
                                 backgroundColor: '#1a2340',
                                 titleColor: '#9ba8c8',
@@ -348,9 +389,67 @@ const Dashboard = (() => {
                     plugins: [ChartDataLabels]
                 }
             );
+
+            if (entry.horas) {
+                document.getElementById('conv-view-switch')?.addEventListener('click', e => {
+                    const btn = e.target.closest('.conv-view-btn');
+                    if (!btn) return;
+                    const view = btn.dataset.view;
+                    document.querySelectorAll('.conv-view-btn').forEach(b => b.classList.toggle('active', b === btn));
+                    if (view === 'hora') renderHoraView(entry);
+                    else renderDiaView(entry, canvasId);
+                });
+            }
+        }
+
+        function renderDiaView(entry, canvasId) {
+            if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+            open(canvasId);
+        }
+
+        function renderHoraView(entry) {
+            if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+            const { horas, formatFn, color } = entry;
+            const labels = horas.map(h => h.label);
+            const values = horas.map(h => h.conversion);
+            _modalChart = new Chart(
+                document.getElementById('spark-modal-canvas').getContext('2d'),
+                {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{ data: values, backgroundColor: color + '77', borderColor: color, borderWidth: 1, borderRadius: 3 }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend    : { display: false },
+                            datalabels: { display: false },
+                            tooltip   : {
+                                backgroundColor: '#1a2340',
+                                titleColor     : '#9ba8c8',
+                                bodyColor      : '#ffffff',
+                                borderColor    : color,
+                                borderWidth    : 1,
+                                padding        : 8,
+                                callbacks: {
+                                    title: items => 'A las ' + items[0].label,
+                                    label: ctx => ' Tasa de conversión: ' + formatFn(ctx.parsed.y),
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { grid: { color: 'rgba(0,0,0,.06)' }, ticks: { color: '#6b7280', font: { size: 10 } } },
+                            y: { grid: { color: 'rgba(0,0,0,.06)' }, ticks: { color: color, font: { size: 10 }, callback: v => formatFn(v) } }
+                        }
+                    }
+                }
+            );
         }
 
         function close() {
+            _openCanvasId = null;
             if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
             document.removeEventListener('keydown', _onKeyDown);
             const root = document.getElementById('spark-modal-root');
@@ -359,7 +458,7 @@ const Dashboard = (() => {
 
         function _onKeyDown(e) { if (e.key === 'Escape') close(); }
 
-        return { register, open };
+        return { register, open, setHoras };
     })();
 
     /* ── Mini sparkline con tooltip (Canvas API) ──── */
@@ -1320,6 +1419,10 @@ const Dashboard = (() => {
                     { values: serieIngresos, color: '#38bdf8', label: 'Ingresos', formatFn: fmt.num },
                     { values: serieTickets,  color: '#8b5cf6', label: 'Tickets',  formatFn: fmt.num, hideStats: true },
                 ]);
+
+                apiFetch('kpis.php', { action: 'conversion_horas' })
+                    .then(hd => { if (hd?.horas?.length) SparkModal.setHoras('spark-conv', hd.horas); })
+                    .catch(e => console.error('Error al cargar conversion por hora:', e));
                 drawSparkline('spark-t2do',    serieT2do, serieDates, '#60a5fa', fmt.pct);
                 drawSparkline('spark-cambios', serieCambios, serieDates, '#fb923c', fmt.pct);
                 drawSparkline('spark-tprom',   serieTprom, serieDates, '#a78bfa', fmt.money);

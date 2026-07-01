@@ -215,6 +215,23 @@ try {
         exit;
     }
 
+    // ── Endpoint diferido: conversión por hora ─────────────────────────────
+    if (($_GET['action'] ?? '') === 'conversion_horas') {
+        if ($origen === 'franquicias') {
+            ob_clean();
+            echo json_encode(['ok' => true, 'horas' => []], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $dbConv = new GlobalDashboardDB($origen);
+        if ($soloActivas) $dbConv->setSoloActivas(true);
+        try {
+            $horas = $dbConv->getConversionPorHora($desde_act, $hasta_act, $sucursal, $grupo, $tipoTienda, $canal);
+        } catch (Throwable $_) { $horas = []; }
+        ob_clean();
+        echo json_encode(['ok' => true, 'horas' => $horas], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
+        exit;
+    }
+
     // Cotización dólar (siempre desde argentina, no depende del origen)
     $cotizacion = (new GlobalDashboardDB('argentina'))->getCotizacionDolar();
 

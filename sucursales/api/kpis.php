@@ -49,6 +49,14 @@ try {
         [$desde_act, $hasta_act, $desde_prev, $hasta_prev] = DashboardDB::calcularPeriodo($periodo);
     }
 
+    if (($_GET['action'] ?? '') === 'conversion_horas') {
+        $db = new DashboardDB();
+        $horas = $db->getConversionPorHora($desde_act, $hasta_act, $nroSucurs);
+        ob_clean();
+        echo json_encode(['ok' => true, 'horas' => $horas], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
+        exit;
+    }
+
     $db = new DashboardDB();
 
     // ── KPIs actual + previo + benchmark en 5 queries (vs 9+ antes) ──

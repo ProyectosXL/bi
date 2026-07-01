@@ -60,8 +60,14 @@ class PeriodHelper
             case 'mes_actual':
                 $da   = (clone $hoy)->modify('first day of this month')->format('Y-m-d');
                 $ha   = $ayer->format('Y-m-d');
+                if ($ha < $da) {
+                    $ha = $da;
+                }
                 $da_p = (clone $hoy)->modify('first day of this month')->modify('-1 year')->format('Y-m-d');
                 $ha_p = (clone $ayer)->modify('-1 year')->format('Y-m-d');
+                if ($ha_p < $da_p) {
+                    $ha_p = $da_p;
+                }
                 return [$da, $ha, $da_p, $ha_p];
 
             case 'mes_pasado':
@@ -78,8 +84,14 @@ class PeriodHelper
             case 'año_actual':
                 $da   = (clone $hoy)->modify('first day of january this year')->format('Y-m-d');
                 $ha   = $ayer->format('Y-m-d');
+                if ($ha < $da) {
+                    $ha = $da;
+                }
                 $da_p = (clone $hoy)->modify('first day of january last year')->format('Y-m-d');
                 $ha_p = (clone $ayer)->modify('-1 year')->format('Y-m-d');
+                if ($ha_p < $da_p) {
+                    $ha_p = $da_p;
+                }
                 return [$da, $ha, $da_p, $ha_p];
 
             case 'año_pasado':

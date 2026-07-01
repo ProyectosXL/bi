@@ -61,7 +61,8 @@ class ParticipacionDB
     public function getPivot(
         string $desde, string $hasta,
         int $topRubros = 15,
-        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
+        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null,
+        ?array $activasIds = null
     ): array {
         $sfG = '';
         $pG  = [];
@@ -93,6 +94,11 @@ class ParticipacionDB
                 $sfG .= " AND s.NRO_SUCURS IN (SELECT DISTINCT s_g.NRO_SUCURS FROM BI_SALES_SUCURSALES s_g WHERE s_g.GRUPO_EMPRESARIO = ?)";
                 $pG[]  = $grupoEmpresario;
             }
+        }
+        if ($activasIds !== null && is_array($activasIds) && !empty($activasIds)) {
+            $placeholders = implode(',', array_fill(0, count($activasIds), '?'));
+            $sfG .= " AND s.NRO_SUCURS IN ({$placeholders})";
+            $pG = array_merge($pG, $activasIds);
         }
         [$sfGS, $pGS] = $this->grupoFiltro('s');
         $sfG .= ' ' . $sfGS;
@@ -143,13 +149,24 @@ class ParticipacionDB
         ", array_merge([$desde, $hasta], $pG));
 
         // Descripción de sucursales
-        $rowsDesc = $this->query("
-            SELECT sl.NRO_SUCURSAL, sl.DESC_SUCURSAL
-            FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
-        ");
-        $descMap = [];
-        foreach ($rowsDesc as $r) {
-            $descMap[(int)$r['NRO_SUCURSAL']] = $r['DESC_SUCURSAL'];
+        if (session_status() === PHP_SESSION_NONE) {
+            @session_start();
+        }
+        $key = 'sucursales_desc_cache_' . $this->origen;
+        if (isset($_SESSION[$key]) && is_array($_SESSION[$key])) {
+            $descMap = $_SESSION[$key];
+            session_write_close();
+        } else {
+            $rowsDesc = $this->query("
+                SELECT sl.NRO_SUCURSAL, sl.DESC_SUCURSAL
+                FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
+            ");
+            $descMap = [];
+            foreach ($rowsDesc as $r) {
+                $descMap[(int)$r['NRO_SUCURSAL']] = $r['DESC_SUCURSAL'];
+            }
+            $_SESSION[$key] = $descMap;
+            session_write_close();
         }
 
         // Grupo por sucursal (solo Argentina)

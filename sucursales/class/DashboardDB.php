@@ -1184,4 +1184,62 @@ class DashboardDB
         ";
         return $this->query($sql, array_merge([$desde, $hasta], $suc));
     }
+
+    public function getConversionPorHora(
+        string $desde, string $hasta,
+        ?int $nroSucurs = null
+    ): array {
+        $haX = (new DateTime($hasta))->modify('+1 day')->format('Y-m-d');
+        $sfI = $nroSucurs !== null ? 'AND NRO_SUCURS = ?'   : '';
+        $sfT = $nroSucurs !== null ? 'AND t.NRO_SUCURS = ?' : '';
+        $suc = $nroSucurs !== null ? [$nroSucurs] : [];
+
+        // Total ingresos del período (denominador común)
+        $ingTotal = (int)($this->queryOne("
+            SELECT ISNULL(SUM(INGRESOS), 0) AS total
+            FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
+            WHERE FECHA >= ? AND FECHA < ?
+              AND INGRESOS > 0 {$sfI}
+        ", array_merge([$desde, $haX], $suc))['total'] ?? 0);
+
+        if ($ingTotal === 0) return [];   // sin datos → no mostrar selector
+
+        // Tickets agrupados por hora
+        $tickRows = $this->query("
+            SELECT
+                (t.HORA_EMIS / 10000) AS hora,
+                COUNT(DISTINCT t.N_COMP) AS tickets
+            FROM BI_SALES_TOTAL_TICKETS t WITH (NOLOCK)
+            WHERE t.FECHA >= ? AND t.FECHA < ?
+              AND t.T_COMP = 'FAC'
+              AND t.HORA_EMIS IS NOT NULL AND t.HORA_EMIS >= 0
+              {$sfT}
+              AND EXISTS (
+                  SELECT 1 FROM BI_T_INGRESOS_SUCURSALES i2 WITH (NOLOCK)
+                  WHERE i2.NRO_SUCURS = t.NRO_SUCURS
+                    AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
+                    AND i2.FECHA >= ? AND i2.FECHA < ?
+                    AND i2.INGRESOS > 0
+              )
+            GROUP BY (t.HORA_EMIS / 10000)
+        ", array_merge([$desde, $haX], $suc, [$desde, $haX]));
+
+        $tickByHour = array_fill(0, 24, 0);
+        foreach ($tickRows as $r) {
+            $h = (int)$r['hora'];
+            if ($h >= 0 && $h < 24) $tickByHour[$h] = (int)$r['tickets'];
+        }
+
+        $result = [];
+        for ($h = 0; $h < 24; $h++) {
+            $result[] = [
+                'hora'       => $h,
+                'label'      => str_pad($h, 2, '0', STR_PAD_LEFT) . 'h',
+                'tickets'    => $tickByHour[$h],
+                'ingresos'   => $ingTotal,
+                'conversion' => $ingTotal > 0 ? $tickByHour[$h] / $ingTotal : 0,
+            ];
+        }
+        return $result;
+    }
 }

@@ -556,6 +556,10 @@ const Dashboard = (() => {
             registry[canvasId] = { values, dates, color, formatFn, title };
         }
 
+        function setHoras(canvasId, horas) {
+            if (registry[canvasId]) registry[canvasId].horas = horas;
+        }
+
         function open(canvasId) {
             const entry = registry[canvasId];
             if (!entry) return;
@@ -573,12 +577,19 @@ const Dashboard = (() => {
             const trendCls  = trend >= 0 ? 'pos' : 'neg';
             const trendTitle = `Último: ${formatFn(last)} | Promedio: ${formatFn(avg)} | Var: ${trendSign}${(trend*100).toFixed(1)}%`;
 
+            const toggleHtml = entry.horas ? `
+                <div class="conv-view-switch" id="conv-view-switch">
+                    <button class="conv-view-btn active" data-view="dia">Por día</button>
+                    <button class="conv-view-btn" data-view="hora">Por hora</button>
+                </div>` : '';
+
             const root = $('spark-modal-root');
             root.innerHTML = `
                 <div class="spark-modal-overlay" id="spark-overlay">
                     <div class="spark-modal">
                         <div class="spark-modal-header">
                             <span class="spark-modal-title">${title}</span>
+                            ${toggleHtml}
                             <button class="spark-modal-close" id="spark-modal-close-btn"><i class="bi bi-x-lg"></i></button>
                         </div>
                         <div class="spark-modal-stats">
@@ -690,6 +701,57 @@ const Dashboard = (() => {
                     scales    : { x: { ticks: { maxRotation: 45, font: { size: 10 }, color: '#9ba8c8' } }, y: { ticks: { callback: v => formatFn(v), font: { size: 10 } } } },
                 }
             });
+
+            if (entry.horas) {
+                document.getElementById('conv-view-switch')?.addEventListener('click', e => {
+                    const btn = e.target.closest('.conv-view-btn');
+                    if (!btn) return;
+                    const view = btn.dataset.view;
+                    document.querySelectorAll('.conv-view-btn').forEach(b => b.classList.toggle('active', b === btn));
+                    if (view === 'hora') renderHoraView(entry);
+                    else renderDiaView(entry, canvasId);
+                });
+            }
+        }
+
+        function renderDiaView(entry, canvasId) {
+            if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+            open(canvasId);
+        }
+
+        function renderHoraView(entry) {
+            if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+            const { horas, formatFn, color } = entry;
+            const labels = horas.map(h => h.label);
+            const values = horas.map(h => h.conversion);
+            _modalChart = new Chart($('spark-modal-canvas'), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{ data: values, backgroundColor: color + '77', borderColor: color, borderWidth: 1, borderRadius: 3 }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend    : { display: false },
+                        datalabels: { display: false },
+                        tooltip   : {
+                            backgroundColor: '#1a2340',
+                            titleColor     : '#9ba8c8',
+                            bodyColor      : '#ffffff',
+                            padding        : 8,
+                            callbacks: {
+                                title: items => horas[items[0].dataIndex].label,
+                                label: ctx => ` ${formatFn(ctx.parsed.y)}  (${horas[ctx.dataIndex].tickets} tickets / ${horas[ctx.dataIndex].ingresos} ingresos)`,
+                            },
+                        },
+                    },
+                    scales: {
+                        x: { ticks: { font: { size: 10 }, color: '#9ba8c8' } },
+                        y: { ticks: { callback: v => formatFn(v), font: { size: 10 } } },
+                    },
+                }
+            });
         }
 
         function close() {
@@ -698,7 +760,7 @@ const Dashboard = (() => {
             if (root) root.innerHTML = '';
         }
 
-        return { register, open, _registry: registry };
+        return { register, open, setHoras, _registry: registry };
     })();
 
     /* ── Expandir sparklines ─────────────────── */
@@ -1241,6 +1303,8 @@ const Dashboard = (() => {
             const vCamb  = sa.map(x => x.porc_cambios ?? 0);
             const vIncr  = sa.map(x => x.porc_incremental ?? 0);
             const vConv  = sa.map(x => x.conversion ?? 0);
+            console.log('[renderSparklines] sa:', sa);
+            console.log('[renderSparklines] vConv:', vConv);
 
             sparkLine('spark-fact',          vFact,  '#00a878', vPFact, dates);
             sparkLine('spark-unid',          vUnid,  '#f59e0b', null,   dates);
@@ -1443,13 +1507,15 @@ const Dashboard = (() => {
             renderKPIs(d);
             renderTablaSucursales(d.tabla_sucursales);
             // Async — no bloquean el render inicial; se ejecutan de a uno para no saturar el servidor
-            (async () => {
+            await (async () => {
                 try { const sd = await apiFetch('kpis.php', { action: 'serie' });
                       if (sd?.serie) renderSparklines(sd.serie); } catch(e) {}
                 try { const bd = await apiFetch('kpis.php', { action: 'benchmark' });
                       if (bd?.benchmark) { _lastBenchData = bd.benchmark; renderBenchmark(bd.benchmark); } } catch(e) {}
                 try { const cd = await apiFetch('kpis.php', { action: 'conversion' });
                       if (cd) { _lastConvData = cd; renderConversion(cd); } } catch(e) {}
+                try { const hd = await apiFetch('kpis.php', { action: 'conversion_horas' });
+                      if (hd?.horas?.length) SparkModal.setHoras('spark-conv', hd.horas); } catch(e) {}
                 await loadDonuts().catch(() => {});
                 await MediosPago.loadAll().catch(() => {});
                 if (typeof Analisis !== 'undefined')
