@@ -61,16 +61,59 @@ const PromoDetalle = (() => {
     ];
 
     const COL_COD_CLIENT = { key: 'cod_client', label: 'Cod. Cliente', align: 'left', fmt: v => v ?? '—', xlFmt: null, sortKey: 'cod_client' };
-    const COL_RECONOCIMIENTO_SUC = { key: 'reconocimiento', label: 'Reconocimiento $', align: 'right', fmt: moneyInt, xlFmt: 'money', sortKey: 'reconocimiento' };
+    const COL_RECONOCIMIENTO_SUC = { key: 'reconocimiento', label: 'Reconocimiento $ (s/IVA)', align: 'right', fmt: moneyInt, xlFmt: 'money', sortKey: 'reconocimiento' };
+    const COL_CON_DIFERENCIAS = {
+        key: 'con_diferencias',
+        label: 'Con Diferencias',
+        align: 'center',
+        xlFmt: null,
+        sortKey: 'con_diferencias',
+        fmt: (v, row) => {
+            if (row && row.sin_tango === true) {
+                return '<span class="badge-dif-sintango">Sin Tango</span>';
+            }
+            if (v === true)  return '<span class="badge-dif-si">&#9888; Sí</span>';
+            if (v === false) return '<span class="badge-dif-no">&#10003; No</span>';
+            return '<span style="color:var(--text-3)">—</span>';
+        }
+    };
+    const COL_COMUNICADO = {
+        key: 'comunicado',
+        label: 'Comunicado?',
+        align: 'center',
+        xlFmt: null,
+        sortKey: 'comunicado',
+        fmt: v => {
+            if (v === true)  return '<span class="badge-com-si">&#10003; Sí</span>';
+            if (v === false) return '<span class="badge-com-no">&#215; No</span>';
+            return '<span style="color:var(--text-3)">—</span>';
+        }
+    };
 
     function getActiveCOLS_SUC() {
         if (esFranquicias()) {
-            return [COL_COD_CLIENT, ...COLS_SUC, COL_RECONOCIMIENTO_SUC];
+            return [COL_COD_CLIENT, ...COLS_SUC, COL_RECONOCIMIENTO_SUC, COL_CON_DIFERENCIAS, COL_COMUNICADO];
         }
         return COLS_SUC;
     }
 
     /* ── COLUMNAS tabla promociones ── */
+    const COL_TIPO_PROM = {
+        key: 'tipo_prom',
+        label: 'Tipo',
+        align: 'center',
+        xlFmt: null,
+        sortKey: 'banco',
+        fmt: (v, row) => {
+            if (!row) return '—';
+            const esBancaria = row.banco && row.banco.trim() !== '' && row.banco.toUpperCase() !== 'DESCONOCIDO';
+            if (esBancaria) {
+                return '<span class="badge-prom-bancaria">Bancaria</span>';
+            }
+            return '<span class="badge-prom-interna">Interna</span>';
+        }
+    };
+
     const COLS_PROM = [
         { key: 'promocion',       label: 'Promoción',      align: 'left',  fmt: v => v ?? '—',     xlFmt: null,     sortKey: 'promocion'    },
         { key: 'banco',           label: 'Banco',          align: 'left',  fmt: v => v ?? '—',     xlFmt: null,     sortKey: 'banco'        },
@@ -82,10 +125,11 @@ const PromoDetalle = (() => {
         { key: 'pct_costo_total', label: '% Costo/FAC',    align: 'right', fmt: n => pct(n, 2),     xlFmt: 'pct1',   sortKey: 'pct_costo_total', invertVar: true },
     ];
 
-    const COL_RECONOCIMIENTO_PROM = { key: 'reconocimiento', label: 'Reconocimiento $', align: 'right', fmt: moneyInt, xlFmt: 'money', sortKey: 'reconocimiento' };
+    const COL_RECONOCIMIENTO_PROM = { key: 'reconocimiento', label: 'Reconocimiento $ (s/IVA)', align: 'right', fmt: moneyInt, xlFmt: 'money', sortKey: 'reconocimiento' };
 
     function getActiveCOLS_PROM() {
-        return esFranquicias() ? [...COLS_PROM, COL_RECONOCIMIENTO_PROM] : COLS_PROM;
+        const base = esFranquicias() ? [...COLS_PROM, COL_RECONOCIMIENTO_PROM] : COLS_PROM;
+        return [COL_TIPO_PROM, ...base];
     }
 
     /* ── Genérico: render tabla ── */
@@ -134,10 +178,12 @@ const PromoDetalle = (() => {
 
         sorted.forEach(row => {
             const extraAttrs = rowAttrsFn ? rowAttrsFn(row) : '';
-            html += `<tr${extraAttrs ? ' ' + extraAttrs : ''}>`;
+            // Fila en rojo si tiene diferencias de ventas y NO es sin Tango
+            const rowStyle = (row.con_diferencias === true && row.sin_tango !== true) ? ' style="background:rgba(220,38,38,0.07);"' : '';
+            html += `<tr${extraAttrs ? ' ' + extraAttrs : ''}${rowStyle}>`;
             cols.forEach(c => {
                 const v = row[c.key];
-                html += `<td style="text-align:${c.align}">${c.fmt(v)}</td>`;
+                html += `<td style="text-align:${c.align}">${c.fmt(v, row)}</td>`;
             });
             html += '</tr>';
         });
@@ -265,14 +311,57 @@ const PromoDetalle = (() => {
         try {
             const data = await fetch(`/bi/promociones/api/detalle.php?${Promociones.buildQS({ action: 'sucursales' })}`).then(r => r.json());
             if (!data.ok) throw new Error(data.error ?? 'Error en detalle sucursales');
+
             _lastSucursales = (data.sucursales ?? []).map(r => ({
                 ...r,
-                reconocimiento: (r.costo_total ?? 0) * 0.5,
+                // Reconocimiento s/IVA: (costo_total / 1.21) * 0.5
+                reconocimiento: ((r.costo_total ?? 0) / 1.21) * 0.5,
+                con_diferencias: null,  // se llena luego si es franquicias
+                comunicado: null,
             }));
+
+            // Para franquicias: enriquecer con estado de diferencias y comunicados
+            if (esFranquicias() && _lastSucursales.length) {
+                await enrichWithDiferencias();
+            }
+
             renderSucursales();
         } catch (e) {
             console.error('[PromoDetalle] loadSucursales:', e);
             if (wrap) wrap.innerHTML = `<div class="promo-loading" style="color:var(--red)">Error: ${e.message}</div>`;
+        }
+    }
+
+    /**
+     * Llama a los endpoints de diferencias y log de envíos para enriquecer
+     * _lastSucursales con los campos con_diferencias y comunicado.
+     */
+    async function enrichWithDiferencias() {
+        try {
+            const lastPeriodo = Promociones.getLastPeriodo();
+            const desde       = lastPeriodo?.desde_act || '';
+            const hasta       = lastPeriodo?.hasta_act || '';
+            if (!desde || !hasta) return;
+
+            const nros   = _lastSucursales.map(r => r.nro_sucursal).join(',');
+            const difUrl = `/bi/promociones/api/diferencias_ventas.php?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&sucursales=${nros}`;
+            const logUrl = `/bi/promociones/api/log_envios.php?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&sucursales=${nros}`;
+
+            const [difData, logData] = await Promise.all([
+                fetch(difUrl).then(r => r.json()).catch(() => ({ ok: false })),
+                fetch(logUrl).then(r => r.json()).catch(() => ({ ok: false })),
+            ]);
+
+            const difMap = difData.ok  ? difData.diferencias ?? {} : {};
+            const logMap = logData.ok  ? logData.comunicados  ?? {} : {};
+
+            _lastSucursales = _lastSucursales.map(r => ({
+                ...r,
+                con_diferencias: difMap[r.nro_sucursal] ?? null,
+                comunicado:      logMap[r.nro_sucursal] ?? false,
+            }));
+        } catch (e) {
+            console.warn('[PromoDetalle] enrichWithDiferencias error:', e);
         }
     }
 
@@ -312,12 +401,30 @@ const PromoDetalle = (() => {
         if (wrap) wrap.innerHTML = '<div class="promo-loading">Cargando…</div>';
         clearPromoFilter();
 
+        const params     = Promociones.getParams();
+        const selectedId = params.sucursal ? Number(params.sucursal) : null;
+        const selectedSuc = selectedId ? _lastSucursales.find(s => s.nro_sucursal === selectedId) : null;
+
+        if (selectedSuc && selectedSuc.sin_tango === true) {
+            if (wrap) {
+                wrap.innerHTML = `
+                    <div style="background:rgba(79,70,229,0.06); border:1px solid rgba(79,70,229,0.2); border-radius:8px; padding:24px; text-align:center; color:#4338ca; font-size:0.9rem; font-weight:600; margin:10px 0;">
+                        <i class="bi bi-info-circle-fill" style="font-size:1.5rem; display:block; margin-bottom:8px;"></i>
+                        La sucursal ${selectedSuc.sucursal} es una nueva franquicia sin Tango. Su facturación se lee del portal de objetivos y su costo se estima en base al promedio global.
+                    </div>
+                `;
+            }
+            _lastPromociones = [];
+            return;
+        }
+
         try {
             const data = await fetch(`/bi/promociones/api/detalle.php?${Promociones.buildQS({ action: 'promociones' })}`).then(r => r.json());
             if (!data.ok) throw new Error(data.error ?? 'Error en detalle promociones');
             _lastPromociones = (data.promociones ?? []).map(r => ({
                 ...r,
-                reconocimiento: (r.costo_total ?? 0) * 0.5,
+                // Reconocimiento s/IVA: (costo_total / 1.21) * 0.5
+                reconocimiento: ((r.costo_total ?? 0) / 1.21) * 0.5,
             }));
             renderPromociones();
         } catch (e) {
@@ -327,10 +434,21 @@ const PromoDetalle = (() => {
     }
 
     function renderPromociones() {
+        const searchInput = $('search-promocion');
+        const searchTerm  = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+        let filtered = _lastPromociones;
+        if (searchTerm) {
+            filtered = _lastPromociones.filter(r => 
+                (r.promocion && r.promocion.toLowerCase().includes(searchTerm)) ||
+                (r.banco && r.banco.toLowerCase().includes(searchTerm))
+            );
+        }
+
         const cols = getActiveCOLS_PROM();
         renderTabla(
             'detalle-prom-wrap',
-            _lastPromociones,
+            filtered,
             cols,
             _sortProm,
             key => { _sortProm = { key, dir: _sortProm.key === key ? -_sortProm.dir : -1 }; renderPromociones(); },
@@ -346,6 +464,15 @@ const PromoDetalle = (() => {
         bindExportBtn('btn-export-prom', exportPromociones);
         bindPromoRowClicks();
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchInput = $('search-promocion');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                renderPromociones();
+            });
+        }
+    });
 
     function exportPromociones() {
         if (!_lastPromociones?.length) return;

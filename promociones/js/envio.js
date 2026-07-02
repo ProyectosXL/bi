@@ -9,6 +9,7 @@ const PromoEnvio = (() => {
 
     let _sucursales = [];
     let _config     = {};
+    let _globalExcluidas = [];
     let _selectedSuc = null;
     let _promociones = [];
 
@@ -17,6 +18,7 @@ const PromoEnvio = (() => {
         if (listWrap) listWrap.innerHTML = '<div class="promo-loading">Cargando sucursales…</div>';
         $('envio-edicion-vacio').hidden = false;
         $('envio-edicion-formulario').hidden = true;
+        $('envio-global-formulario').hidden = true;
 
         try {
             // Cargar datos de sucursales franquicias y la config JSON
@@ -25,6 +27,7 @@ const PromoEnvio = (() => {
 
             _sucursales = data.sucursales ?? [];
             _config     = data.config ?? {};
+            _globalExcluidas = data.global_excluidas ?? [];
             
             // Cargar promociones para el formulario de exclusión usando el mismo período/filtro del dashboard arriba
             const params = Promociones.getParams();
@@ -53,10 +56,10 @@ const PromoEnvio = (() => {
 
         listWrap.innerHTML = _sucursales.map(suc => {
             const nro = suc.NRO_SUCURSAL;
-            const hasConfig = _config[nro] && _config[nro].emails;
+            const hasConfig = (_config[nro] && _config[nro].emails) || (suc.MAIL && suc.MAIL.trim() !== '');
             const badge = hasConfig 
                 ? '<span style="background:#d1fae5;color:#065f46;font-size:0.65rem;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:auto;">Configurado</span>'
-                : '<span style="background:#f1f5f9;color:#64748b;font-size:0.65rem;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:auto;">Sin config</span>';
+                : '<span style="background:#fee2e2;color:#991b1b;font-size:0.65rem;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:auto;">Sin email</span>';
 
             return `<div class="suc-envio-item" data-nro="${nro}" style="display:flex;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:#f8fafc;transition:all 0.15s;">
                 <div style="display:flex;flex-direction:column;gap:2px;">
@@ -83,6 +86,7 @@ const PromoEnvio = (() => {
         if (!_selectedSuc) return;
 
         $('envio-edicion-vacio').hidden = true;
+        $('envio-global-formulario').hidden = true;
         $('envio-edicion-formulario').hidden = false;
 
         $('envio-form-sucursal-nombre').textContent = _selectedSuc.DESC_SUCURSAL;
@@ -95,8 +99,48 @@ const PromoEnvio = (() => {
         renderPromocionesExclusion(config.excluidas ?? []);
     }
 
+    function selectGlobalConfig() {
+        _selectedSuc = null;
+        // Quitar selección visual de sucursales
+        const listWrap = $('envio-lista-sucursales');
+        if (listWrap) {
+            listWrap.querySelectorAll('.suc-envio-item').forEach(i => i.style.borderColor = 'var(--border)');
+        }
+
+        $('envio-edicion-vacio').hidden = true;
+        $('envio-edicion-formulario').hidden = true;
+        $('envio-global-formulario').hidden = false;
+
+        renderPromocionesExclusionGlobal(_globalExcluidas);
+    }
+
     function renderPromocionesExclusion(excluidas) {
         const wrap = $('envio-lista-promociones');
+        if (!wrap) return;
+
+        if (!_promociones.length) {
+            wrap.innerHTML = '<div style="color:var(--text-3);font-size:0.8rem;">No hay promociones registradas</div>';
+            return;
+        }
+
+        const globalExcluidasSet = new Set(_globalExcluidas);
+        const excluidasSet = new Set(excluidas);
+
+        wrap.innerHTML = _promociones.map(promo => {
+            const val = promo.promocion;
+            const isGlobal = globalExcluidasSet.has(val);
+            const checked = (isGlobal || excluidasSet.has(val)) ? 'checked' : '';
+            const disabled = isGlobal ? 'disabled' : '';
+            const globalLabel = isGlobal ? ' <span style="color:#4f46e5;font-size:0.7rem;font-weight:700;">(General)</span>' : '';
+            return `<label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--text-1);cursor:pointer;padding:4px 0;opacity:${isGlobal ? 0.75 : 1}">
+                <input type="checkbox" class="envio-chk-excluir" value="${val}" ${checked} ${disabled} style="width:14px;height:14px;accent-color:${isGlobal ? '#4f46e5' : '#dc2626'};">
+                <span>${val}${globalLabel}</span>
+            </label>`;
+        }).join('');
+    }
+
+    function renderPromocionesExclusionGlobal(excluidas) {
+        const wrap = $('envio-lista-promociones-global');
         if (!wrap) return;
 
         if (!_promociones.length) {
@@ -110,7 +154,7 @@ const PromoEnvio = (() => {
             const val = promo.promocion;
             const checked = excluidasSet.has(val) ? 'checked' : '';
             return `<label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--text-1);cursor:pointer;padding:4px 0;">
-                <input type="checkbox" class="envio-chk-excluir" value="${val}" ${checked} style="width:14px;height:14px;accent-color:#dc2626;">
+                <input type="checkbox" class="envio-global-chk-excluir" value="${val}" ${checked} style="width:14px;height:14px;accent-color:#4f46e5;">
                 <span>${val}</span>
             </label>`;
         }).join('');
@@ -147,6 +191,32 @@ const PromoEnvio = (() => {
             if (item) item.style.borderColor = 'var(--accent, #2563eb)';
 
             PromoNotify.success('Configuración guardada correctamente.');
+        } catch (e) {
+            console.error(e);
+            PromoNotify.error('Error: ' + e.message);
+        } finally {
+            Promociones.setLoading(false);
+        }
+    }
+
+    async function guardarGlobalConfig() {
+        const excluidas = Array.from(document.querySelectorAll('.envio-global-chk-excluir:checked')).map(cb => cb.value);
+
+        Promociones.setLoading(true, 'Guardando exclusión general…');
+        try {
+            const res = await fetch('/bi/promociones/api/envio_config.php?action=save_global', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    excluidas: excluidas
+                })
+            }).then(r => r.json());
+
+            if (!res.ok) throw new Error(res.error ?? 'Error al guardar configuración global');
+
+            _globalExcluidas = excluidas;
+
+            PromoNotify.success('Configuración general guardada correctamente.');
         } catch (e) {
             console.error(e);
             PromoNotify.error('Error: ' + e.message);
@@ -197,6 +267,8 @@ const PromoEnvio = (() => {
     document.addEventListener('DOMContentLoaded', () => {
         $('btn-envio-guardar')?.addEventListener('click', guardarConfig);
         $('btn-envio-manual')?.addEventListener('click', enviarManual);
+        $('btn-envio-global-config')?.addEventListener('click', selectGlobalConfig);
+        $('btn-envio-global-guardar')?.addEventListener('click', guardarGlobalConfig);
     });
 
     return {

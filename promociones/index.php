@@ -349,9 +349,10 @@ $ultimaAct = date('d/m/Y H:i:s');
             </div>
 
             <!-- Tabla por Promoción -->
-            <div class="promo-section-header" style="margin-top:24px">
+            <div class="promo-section-header" style="margin-top:24px; display:flex; align-items:center; gap:16px;">
                 <i class="bi bi-tag-fill"></i>&nbsp; Detalle por Promoción
-                <button class="btn-export-excel" id="btn-export-prom">
+                <input type="text" id="search-promocion" placeholder="Buscar promoción..." class="filter-select" style="width:240px; margin-left:auto; margin-top:0; margin-bottom:0; height:32px; padding:4px 10px; font-size:0.85rem;" />
+                <button class="btn-export-excel" id="btn-export-prom" style="margin-left:0">
                     <i class="bi bi-file-earmark-excel"></i> Excel
                 </button>
             </div>
@@ -373,8 +374,13 @@ $ultimaAct = date('d/m/Y H:i:s');
             
             <div class="envio-config-container" style="display:grid; grid-template-columns:320px 1fr; gap:20px; margin-top:16px;">
                 <!-- Panel lateral de sucursales -->
-                <div class="envio-panel-sucursales" style="background:var(--card-bg, #fff); border:1px solid var(--border, #e2e8f0); border-radius:10px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,.06);">
-                    <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:12px; color:var(--text-1); border-bottom:1px solid var(--border); padding-bottom:8px;">Sucursales Franquicia</h3>
+                <div class="envio-panel-sucursales" style="background:var(--card-bg, #fff); border:1px solid var(--border, #e2e8f0); border-radius:10px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; flex-direction:column; gap:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:8px;">
+                        <h3 style="font-size:0.95rem; font-weight:700; margin:0; color:var(--text-1);">Sucursales Franquicia</h3>
+                        <button id="btn-envio-global-config" class="btn-aplicar" style="padding:4px 8px; font-size:0.75rem; background:#4f46e5; border-color:#4338ca;">
+                            <i class="bi bi-gear-fill"></i> General
+                        </button>
+                    </div>
                     <div id="envio-lista-sucursales" style="max-height:550px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
                         <div class="promo-loading">Cargando sucursales…</div>
                     </div>
@@ -384,7 +390,28 @@ $ultimaAct = date('d/m/Y H:i:s');
                 <div class="envio-panel-edicion" style="background:var(--card-bg, #fff); border:1px solid var(--border, #e2e8f0); border-radius:10px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; flex-direction:column; gap:16px;">
                     <div id="envio-edicion-vacio" style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-3); text-align:center; padding:40px 0;">
                         <i class="bi bi-arrow-left-circle" style="font-size:2.5rem; margin-bottom:12px; color:var(--border);"></i>
-                        <p style="font-weight:600;">Selecciona una sucursal para preestablecer los correos y las exclusiones de promociones.</p>
+                        <p style="font-weight:600;">Selecciona una sucursal para preestablecer los correos y las exclusiones de promociones, o haz clic en "General" para configurar exclusiones generales.</p>
+                    </div>
+
+                    <!-- Formulario de Exclusión Global -->
+                    <div id="envio-global-formulario" hidden style="display:flex; flex-direction:column; gap:16px;">
+                        <div style="border-bottom:1px solid var(--border); padding-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <h2 style="font-size:1.25rem; font-weight:700; color:var(--text-1); margin:0;">Exclusiones Generales</h2>
+                                <span style="font-size:0.8rem; color:var(--text-3); font-weight:600;">Estas promociones se excluirán en TODOS los envíos de franquicias</span>
+                            </div>
+                            <div>
+                                <button id="btn-envio-global-guardar" class="btn-aplicar" style="padding:6px 12px; font-size:0.8rem; background:#4f46e5; border-color:#4338ca;">
+                                    <i class="bi bi-save-fill"></i> Guardar Exclusión General
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label style="font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-3); display:block; margin-bottom:6px;">Promociones Excluidas de Forma General</label>
+                            <div id="envio-lista-promociones-global" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; flex-direction:column; gap:8px; background:#f8fafc;">
+                                <div class="promo-loading">Cargando promociones…</div>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="envio-edicion-formulario" hidden style="display:flex; flex-direction:column; gap:16px;">

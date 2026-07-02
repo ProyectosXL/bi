@@ -510,7 +510,7 @@ class PromocionesDB
 
         $rows = $this->query($sql, $params);
 
-        return array_map(function($r): array {
+        $sucursalesTradicionales = array_map(function($r): array {
             $ft  = (float)$r['fact_total'];
             $fc  = (float)$r['fact_cpromo'];
             $cto = (float)$r['costo_promo'];
@@ -525,12 +525,91 @@ class PromocionesDB
                 'costo_ventas'    => (float)$r['costo_ventas'],
                 'pct_costo_total' => $ft > 0 ? $cto / $ft : 0,
                 'pct_promo_fac'   => $ft > 0 ? $fc  / $ft : 0,
+                'sin_tango'       => false,
             ];
             if ($this->origen === 'franquicias') {
                 $res['cod_client'] = $r['cod_client'] ?? '—';
             }
             return $res;
         }, $rows);
+
+        // Si el origen es franquicias y no hay filtros restrictivos de Promoción/Banco, sumamos las franquicias sin Tango
+        if ($this->origen === 'franquicias' && empty($fp['promocion']) && empty($fp['banco'])) {
+            // 1. Calcular el % Costo / FAC promedio general de las tradicionales
+            $sumaFactTotalTradicional = 0;
+            $sumaCostoTotalTradicional = 0;
+            foreach ($sucursalesTradicionales as $st) {
+                $sumaFactTotalTradicional  += $st['fac_total'];
+                $sumaCostoTotalTradicional += $st['costo_total'];
+            }
+            // Valor por defecto en caso de no haber tradicionales
+            $pctCostoPromedio = $sumaFactTotalTradicional > 0 ? ($sumaCostoTotalTradicional / $sumaFactTotalTradicional) : 0.0171;
+
+            // 2. Consultar facturación total en la base de objetivos (sistemas.dbo.FP_ObjetivosFinalesDetalle)
+            // Filtro por sucursal específica si está seleccionado
+            $sucFilter = "";
+            $sqlParams = [$da, $haX];
+            if (!empty($fp['sucursal'])) {
+                $sucFilter = "AND PV.idTango = ?";
+                $sqlParams[] = (int)$fp['sucursal'];
+            }
+
+            $sqlObjetivos = "
+                SELECT PV.idTango AS nro_sucursal, 
+                       MAX(sl.DESC_SUCURSAL) COLLATE Modern_Spanish_CI_AI AS sucursal_nombre,
+                       MAX(sl.cod_client) AS cod_client,
+                       SUM(ISNULL(FD.importeVentaReal, 0)) AS fact_total
+                FROM sistemas.dbo.FP_ObjetivosFinalesDetalle FD WITH (NOLOCK)
+                INNER JOIN sistemas.dbo.PuntosDeVenta PV WITH (NOLOCK) ON FD.idPOS = PV.id
+                INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON PV.idTango = sl.NRO_SUCURSAL
+                WHERE FD.fecha >= ? AND FD.fecha < ? AND sl.HABILITADO = 1
+                {$sucFilter}
+                GROUP BY PV.idTango
+                HAVING SUM(ISNULL(FD.importeVentaReal, 0)) > 0
+            ";
+
+            try {
+                $rowsObjs = $this->query($sqlObjetivos, $sqlParams);
+                
+                // Mapear tradicionales para rápida búsqueda
+                $tradicionalesIds = array_column($sucursalesTradicionales, 'nro_sucursal');
+                $tradicionalesIdsSet = array_flip($tradicionalesIds);
+
+                foreach ($rowsObjs as $ro) {
+                    $nro = (int)$ro['nro_sucursal'];
+                    
+                    // Si no está en el listado tradicional, es una franquicia sin Tango -> la agregamos
+                    if (!isset($tradicionalesIdsSet[$nro])) {
+                        $ft = (float)$ro['fact_total'];
+                        $ctoEstimado = $ft * $pctCostoPromedio;
+
+                        $sucursalesTradicionales[] = [
+                            'nro_sucursal'    => $nro,
+                            'sucursal'        => $ro['sucursal_nombre'] ?? 'Sucursal ' . $nro,
+                            'fac_total'       => $ft,
+                            'fac_cpromo'      => 0, // no posee Tango
+                            'tickets_cpromo'  => 0,
+                            'costo_total'     => $ctoEstimado,
+                            'costo_banc'      => 0,
+                            'costo_ventas'    => 0,
+                            'pct_costo_total' => $pctCostoPromedio,
+                            'pct_promo_fac'   => 0,
+                            'cod_client'      => $ro['cod_client'] ?? '—',
+                            'sin_tango'       => true,
+                        ];
+                    }
+                }
+            } catch (Throwable $e) {
+                error_log("[PromocionesDB] Error querying objectives sales: " . $e->getMessage());
+            }
+
+            // Volver a ordenar por facturación total descendente
+            usort($sucursalesTradicionales, function($a, $b) {
+                return $b['fac_total'] <=> $a['fac_total'];
+            });
+        }
+
+        return $sucursalesTradicionales;
     }
 
     /* ──────────────────────────────────────────────
@@ -671,5 +750,93 @@ class PromocionesDB
             WHERE HABILITADO = 1
         ");
         return array_values(array_map(fn($r) => (int)$r['NRO_SUCURSAL'], $rows));
+    }
+
+    /* ──────────────────────────────────────────────
+     *  DIFERENCIAS DE VENTAS (controlGestion/compararVentas)
+     *  Solo aplica para el origen 'franquicias'.
+     *  Consulta la tabla RO_T_COMPARA_VENTAS_FRANQ que mantiene
+     *  el comparador de ventas central vs. local.
+     * ────────────────────────────────────────────── */
+
+    /**
+     * Retorna un mapa NRO_SUCURSAL => bool indicando si la sucursal
+     * tiene estado 'Con Diferencias' en el período dado.
+     * Si no hay datos para el período (tabla vacía o período sin procesar),
+     * retorna array vacío (sin diferencias conocidas).
+     *
+     * @param string $desde  'Y-m-d' primer día del mes a verificar
+     * @param string $hasta  'Y-m-d' último día del mes a verificar
+     * @param array|null $nrosSucursal  null = todas las franquicias
+     * @return array  [nro_sucursal => bool, ...]
+     */
+    public function getDiferenciaVentas(string $desde, string $hasta, ?array $nrosSucursal = null): array
+    {
+        sqlsrv_configure('WarningsReturnAsErrors', 0);
+
+        $sucWhere = '';
+        $params   = [$desde, $hasta];
+        if (!empty($nrosSucursal)) {
+            $ph       = implode(',', array_fill(0, count($nrosSucursal), '?'));
+            $sucWhere = "AND r.NRO_SUC_MADRE IN ($ph)";
+            foreach ($nrosSucursal as $n) $params[] = (int)$n;
+        }
+
+        // Obtener los registros de comparación existentes
+        $sql = "
+            SELECT r.NRO_SUC_MADRE AS nro_sucursal, r.ESTADO AS estado, ISNULL(r.estado_conexion, 0) AS estado_conexion
+            FROM [XL-LAKERBIS].FRANQUICIAS_LAKERS.dbo.RO_T_COMPARA_VENTAS_FRANQ r WITH (NOLOCK)
+            WHERE CAST(r.DESDE AS DATE) = CAST(? AS DATE) AND CAST(r.HASTA AS DATE) = CAST(? AS DATE)
+              {$sucWhere}
+        ";
+
+        $stmt = sqlsrv_query($this->conn, $sql, $params);
+        if (!$stmt) return [];
+
+        $dbRecords = [];
+        while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            $nro = (int)$row['nro_sucursal'];
+            $dbRecords[$nro] = [
+                'estado'          => strtoupper(trim($row['estado'] ?? '')),
+                'estado_conexion' => (int)$row['estado_conexion']
+            ];
+        }
+        sqlsrv_free_stmt($stmt);
+
+        // Si se nos pasó una lista específica de sucursales, usamos esa.
+        // Si no, obtenemos todas las sucursales franquicias activas desde la base.
+        $targetSucursales = $nrosSucursal;
+        if (empty($targetSucursales)) {
+            $sqlSuc = "
+                SELECT DISTINCT sl.NRO_SUCURSAL
+                FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK)
+                INNER JOIN BI_PROMOCIONES s WITH (NOLOCK)
+                    ON sl.NRO_SUCURSAL = s.NRO_SUCURSAL AND sl.HABILITADO = 1 AND sl.NRO_SUC_MADRE IS NULL
+            ";
+            $stmtSuc = sqlsrv_query($this->conn, $sqlSuc);
+            $targetSucursales = [];
+            if ($stmtSuc) {
+                while ($row = sqlsrv_fetch_array($stmtSuc, SQLSRV_FETCH_ASSOC)) {
+                    $targetSucursales[] = (int)$row['NRO_SUCURSAL'];
+                }
+                sqlsrv_free_stmt($stmtSuc);
+            }
+        }
+
+        $result = [];
+        foreach ($targetSucursales as $nro) {
+            // Si no hay registro en la tabla de comparación, significa que no se pudo comparar (ej. Sin Conexión / Pendiente) -> con diferencias/bloquear.
+            if (!isset($dbRecords[$nro])) {
+                $result[$nro] = true;
+                continue;
+            }
+
+            $rec = $dbRecords[$nro];
+            // Si el estado es DIFIERE o ERROR, o la conexión falló (estado_conexion == 0) -> con diferencias/bloquear.
+            $conDif = ($rec['estado'] === 'DIFIERE' || $rec['estado'] === 'ERROR' || $rec['estado_conexion'] === 0);
+            $result[$nro] = $conDif;
+        }
+
+        return $result;
     }
 }

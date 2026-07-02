@@ -809,6 +809,74 @@
     padding: 6px 12px;
 }
 
+/* ── Badges de Diferencias de Ventas y Comunicados ──────────────── */
+.badge-dif-si, .badge-dif-no, .badge-com-si, .badge-com-no {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.badge-dif-si {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.badge-dif-no {
+    background: #f0fdf4;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+}
+
+.badge-dif-sintango {
+    background: #f8fafc;
+    color: #4f46e5;
+    border: 1px solid #e0e7ff;
+}
+
+.badge-prom-interna {
+    background: #f0fdfa;
+    color: #0d9488;
+    border: 1px solid #ccfbf1;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    display: inline-block;
+}
+
+.badge-prom-bancaria {
+    background: #eff6ff;
+    color: #3b82f6;
+    border: 1px solid #dbeafe;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    display: inline-block;
+}
+
+.badge-com-si {
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+}
+
+.badge-com-no {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 900px) {
     .promo-summary-row { grid-template-columns: 1fr 1fr; }
