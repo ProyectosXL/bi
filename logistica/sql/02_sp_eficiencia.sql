@@ -28,15 +28,20 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- FILTRO_EFICIENCIA — replica la medida DAX de Power BI.
-    -- En Power BI, ESTADO es una columna calculada en Power Query:
-    --   origen : BI_KPI_LOG_FACTURACION GROUP BY (TALON_PED, NRO_PEDIDO)
-    --   lógica : SIN FACTURAR = SUM(CANT_PEDID)=SUM(CANT_PEND)
-    --            COMPLETO     = SUM(CANT_PEND)=0
-    --            PARCIAL      = resto
-    -- Se une a BI_EFICIENCIA_LOGISTICA por (TALON_PED, NRO_PEDIDO).
-    -- Filtros completos: ESTADO<>'SIN FACTURAR', ESTADO_TANGO<>'CANCELADO',
-    --                    TIPO_FACTURACION<>'DIST. INICIAL'
+    -- FILTRO_EFICIENCIA — replica la query de referencia de "Pérdida fact. $":
+    --   ESTADO se calcula agrupando BI_EFICIENCIA_LOGISTICA contra sí misma
+    --   por (FECHA_PEDI, TALON_PED, NRO_PEDIDO, CANAL):
+    --     SIN FACTURAR = SUM(CANT_PEDID)=SUM(CANT_PEND)
+    --     COMPLETO     = SUM(CANT_PEND)=0
+    --     PARCIAL      = resto
+    --   y se vuelve a unir a BI_EFICIENCIA_LOGISTICA por esas 4 columnas
+    --   (INNER JOIN — el match siempre existe, es un self-aggregate).
+    --   Filtros finales: ESTADO<>'SIN FACTURAR', ESTADO_TANGO<>'CANCELADO',
+    --                     TIPO_FACTURACION<>'DIST. INICIAL' (sin ISNULL: la
+    --   query de referencia usa NULL SQL estándar, no compensa blanks).
+    --
+    -- OJO: NO usar BI_KPI_LOG_FACTURACION para esto — es una tabla distinta
+    -- y da un universo/agrupación diferente al de la query de referencia.
 
     DECLARE @AA_DESDE DATE = DATEADD(YEAR, -1, @FECHA_DESDE);
     DECLARE @AA_HASTA DATE = DATEADD(YEAR, -1, @FECHA_HASTA);
@@ -54,37 +59,26 @@ BEGIN
     IF @AA_DESDE   < @BASE_DESDE SET @BASE_DESDE = @AA_DESDE;
     IF @PERD_DESDE < @BASE_DESDE SET @BASE_DESDE = @PERD_DESDE;
 
-    -- Limitar el universo antes de reconstruir estado. Evita agrupar toda la
-    -- tabla BI_KPI_LOG_FACTURACION en cada ejecucion del dashboard.
-    SELECT DISTINCT
-        e.TALON_PED,
-        e.NRO_PEDIDO
-    INTO #PedidosPeriodo
-    FROM dbo.BI_EFICIENCIA_LOGISTICA e
-    WHERE (@CANAL IS NULL OR e.CANAL = @CANAL)
-      AND e.FECHA_PEDI BETWEEN @BASE_DESDE AND @FECHA_HASTA
-      AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND ISNULL(e.TIPO_FACTURACION,'') <> 'DIST. INICIAL';
-
-    CREATE NONCLUSTERED INDEX IX_Ped ON #PedidosPeriodo (TALON_PED, NRO_PEDIDO);
-
-    -- Pre-calcular ESTADO solo para pedidos dentro del rango relevante.
+    -- ESTADO: self-aggregate de BI_EFICIENCIA_LOGISTICA por (FECHA_PEDI,
+    -- TALON_PED, NRO_PEDIDO, CANAL) — igual que la query de referencia.
+    -- Sin filtro de canal acá: CANAL es parte de la clave, no un filtro:
+    -- el filtro @CANAL se sigue aplicando en cada result set más abajo.
     SELECT
-        k.TALON_PED,
-        k.NRO_PEDIDO,
+        e.FECHA_PEDI,
+        e.TALON_PED,
+        e.NRO_PEDIDO,
+        e.CANAL,
         CASE
-            WHEN SUM(k.CANT_PEDID) = SUM(k.CANT_PEND) THEN 'SIN FACTURAR'
-            WHEN SUM(k.CANT_PEND)  = 0                THEN 'COMPLETO'
+            WHEN SUM(e.CANT_PEDID) = SUM(e.CANT_PEND) THEN 'SIN FACTURAR'
+            WHEN SUM(e.CANT_PEND)  = 0                THEN 'COMPLETO'
             ELSE                                       'PARCIAL'
         END AS ESTADO
     INTO #EstadosPedidos
-    FROM dbo.BI_KPI_LOG_FACTURACION k
-    JOIN #PedidosPeriodo p
-      ON p.TALON_PED  = k.TALON_PED
-     AND p.NRO_PEDIDO = k.NRO_PEDIDO
-    GROUP BY k.TALON_PED, k.NRO_PEDIDO;
+    FROM dbo.BI_EFICIENCIA_LOGISTICA e
+    WHERE e.FECHA_PEDI BETWEEN @BASE_DESDE AND @FECHA_HASTA
+    GROUP BY e.FECHA_PEDI, e.TALON_PED, e.NRO_PEDIDO, e.CANAL;
 
-    CREATE NONCLUSTERED INDEX IX_Est ON #EstadosPedidos (TALON_PED, NRO_PEDIDO);
+    CREATE NONCLUSTERED INDEX IX_Est ON #EstadosPedidos (FECHA_PEDI, TALON_PED, NRO_PEDIDO, CANAL);
 
     -- ── Result set 1: KPIs período actual + año anterior ──────────────────
     SELECT
@@ -131,14 +125,16 @@ BEGIN
         CAST(0.95 AS DECIMAL(5,2)) AS META_EFICIENCIA
 
     FROM dbo.BI_EFICIENCIA_LOGISTICA e
-    LEFT JOIN #EstadosPedidos est
-           ON est.TALON_PED  = e.TALON_PED
-          AND est.NRO_PEDIDO = e.NRO_PEDIDO
+    JOIN #EstadosPedidos est
+      ON est.FECHA_PEDI  = e.FECHA_PEDI
+     AND est.TALON_PED   = e.TALON_PED
+     AND est.NRO_PEDIDO  = e.NRO_PEDIDO
+     AND est.CANAL       = e.CANAL
     WHERE (@CANAL IS NULL OR e.CANAL = @CANAL)
       AND e.FECHA_PEDI BETWEEN @AA_DESDE AND @FECHA_HASTA
       AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND ISNULL(e.TIPO_FACTURACION,'') <> 'DIST. INICIAL'
-      AND est.ESTADO <> 'SIN FACTURAR';   -- excluye SF y NULLs (sin match)
+      AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
+      AND est.ESTADO <> 'SIN FACTURAR';
 
     -- ── Result set 2: evolución mensual interanual ────────────────────────
     -- Año anterior completo + año actual hasta la fecha. El front pivota por
@@ -154,10 +150,12 @@ BEGIN
         SELECT e.FECHA_PEDI, e.CANAL, e.CANT_FACTURADA, e.CANT_PEDID
         FROM dbo.BI_EFICIENCIA_LOGISTICA e
         JOIN #EstadosPedidos est
-               ON est.TALON_PED  = e.TALON_PED
-              AND est.NRO_PEDIDO = e.NRO_PEDIDO
+          ON est.FECHA_PEDI  = e.FECHA_PEDI
+         AND est.TALON_PED   = e.TALON_PED
+         AND est.NRO_PEDIDO  = e.NRO_PEDIDO
+         AND est.CANAL       = e.CANAL
         WHERE e.ESTADO_TANGO <> 'CANCELADO'
-          AND ISNULL(e.TIPO_FACTURACION,'') <> 'DIST. INICIAL'
+          AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
           AND est.ESTADO <> 'SIN FACTURAR'
     ) fe ON fe.FECHA_PEDI = c.FECHA
         AND (@CANAL IS NULL OR fe.CANAL = @CANAL)
@@ -177,12 +175,14 @@ BEGIN
         CAST(ISNULL(SUM(e.CANT_FACTURADA), 0) AS DECIMAL(18,2)) AS UNID_FACTURADAS,
         CAST(ISNULL(SUM(e.CANT_PEDID),     0) AS DECIMAL(18,2)) AS UNID_PEDIDAS
     FROM dbo.BI_EFICIENCIA_LOGISTICA e
-    LEFT JOIN #EstadosPedidos est
-           ON est.TALON_PED  = e.TALON_PED
-          AND est.NRO_PEDIDO = e.NRO_PEDIDO
+    JOIN #EstadosPedidos est
+      ON est.FECHA_PEDI  = e.FECHA_PEDI
+     AND est.TALON_PED   = e.TALON_PED
+     AND est.NRO_PEDIDO  = e.NRO_PEDIDO
+     AND est.CANAL       = e.CANAL
     WHERE e.FECHA_PEDI BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND ISNULL(e.TIPO_FACTURACION,'') <> 'DIST. INICIAL'
+      AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
       AND est.ESTADO <> 'SIN FACTURAR'
       AND e.CANAL IS NOT NULL AND LTRIM(RTRIM(e.CANAL)) <> ''
     GROUP BY e.CANAL
@@ -194,13 +194,15 @@ BEGIN
         CAST(ISNULL(SUM(e.CANT_PEDID),     0) AS DECIMAL(18,2)) AS UNID_PEDIDAS,
         CAST(ISNULL(SUM(e.CANT_FACTURADA), 0) AS DECIMAL(18,2)) AS UNID_FACTURADAS
     FROM dbo.BI_EFICIENCIA_LOGISTICA e
-    LEFT JOIN #EstadosPedidos est
-           ON est.TALON_PED  = e.TALON_PED
-          AND est.NRO_PEDIDO = e.NRO_PEDIDO
+    JOIN #EstadosPedidos est
+      ON est.FECHA_PEDI  = e.FECHA_PEDI
+     AND est.TALON_PED   = e.TALON_PED
+     AND est.NRO_PEDIDO  = e.NRO_PEDIDO
+     AND est.CANAL       = e.CANAL
     WHERE e.FECHA_PEDI BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND (@CANAL IS NULL OR e.CANAL = @CANAL)
       AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND ISNULL(e.TIPO_FACTURACION,'') <> 'DIST. INICIAL'
+      AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
       AND est.ESTADO <> 'SIN FACTURAR'
       AND e.CLIENTE IS NOT NULL AND LTRIM(RTRIM(e.CLIENTE)) <> ''
     GROUP BY LTRIM(RTRIM(e.CLIENTE))
@@ -214,13 +216,15 @@ BEGIN
         CAST(ISNULL(SUM(e.CANT_PEDID),     0) AS DECIMAL(18,2)) AS UNID_PEDIDAS,
         CAST(ISNULL(SUM(e.CANT_FACTURADA), 0) AS DECIMAL(18,2)) AS UNID_FACTURADAS
     FROM dbo.BI_EFICIENCIA_LOGISTICA e
-    LEFT JOIN #EstadosPedidos est
-           ON est.TALON_PED  = e.TALON_PED
-          AND est.NRO_PEDIDO = e.NRO_PEDIDO
+    JOIN #EstadosPedidos est
+      ON est.FECHA_PEDI  = e.FECHA_PEDI
+     AND est.TALON_PED   = e.TALON_PED
+     AND est.NRO_PEDIDO  = e.NRO_PEDIDO
+     AND est.CANAL       = e.CANAL
     WHERE e.FECHA_PEDI BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND (@CANAL IS NULL OR e.CANAL = @CANAL)
       AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND ISNULL(e.TIPO_FACTURACION,'') <> 'DIST. INICIAL'
+      AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
       AND est.ESTADO <> 'SIN FACTURAR'
     GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(e.RUBRO)), ''), 'SIN RUBRO')
     HAVING SUM(e.CANT_PEDID) > 0 AND SUM(e.CANT_FACTURADA) > 0
@@ -234,13 +238,15 @@ BEGIN
         CAST(ISNULL(SUM(e.CANT_PEDID),     0) AS DECIMAL(18,2)) AS UNID_PEDIDAS,
         CAST(ISNULL(SUM(e.CANT_FACTURADA), 0) AS DECIMAL(18,2)) AS UNID_FACTURADAS
     FROM dbo.BI_EFICIENCIA_LOGISTICA e
-    LEFT JOIN #EstadosPedidos est
-           ON est.TALON_PED  = e.TALON_PED
-          AND est.NRO_PEDIDO = e.NRO_PEDIDO
+    JOIN #EstadosPedidos est
+      ON est.FECHA_PEDI  = e.FECHA_PEDI
+     AND est.TALON_PED   = e.TALON_PED
+     AND est.NRO_PEDIDO  = e.NRO_PEDIDO
+     AND est.CANAL       = e.CANAL
     WHERE e.FECHA_PEDI BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND (@CANAL IS NULL OR e.CANAL = @CANAL)
       AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND ISNULL(e.TIPO_FACTURACION,'') <> 'DIST. INICIAL'
+      AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
       AND est.ESTADO <> 'SIN FACTURAR'
       AND e.CLIENTE IS NOT NULL AND LTRIM(RTRIM(e.CLIENTE)) <> ''
     GROUP BY LTRIM(RTRIM(e.CLIENTE)), LTRIM(RTRIM(e.NRO_PEDIDO))
@@ -261,10 +267,12 @@ BEGIN
                ISNULL(e.IMPORTE_PEDIDO,0)    AS IMPORTE_PEDIDO
         FROM dbo.BI_EFICIENCIA_LOGISTICA e
         JOIN #EstadosPedidos est
-               ON est.TALON_PED  = e.TALON_PED
-              AND est.NRO_PEDIDO = e.NRO_PEDIDO
+          ON est.FECHA_PEDI  = e.FECHA_PEDI
+         AND est.TALON_PED   = e.TALON_PED
+         AND est.NRO_PEDIDO  = e.NRO_PEDIDO
+         AND est.CANAL       = e.CANAL
         WHERE e.ESTADO_TANGO <> 'CANCELADO'
-          AND ISNULL(e.TIPO_FACTURACION,'') <> 'DIST. INICIAL'
+          AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
           AND est.ESTADO <> 'SIN FACTURAR'
     ) fe ON fe.FECHA_PEDI = c.FECHA
         AND (@CANAL IS NULL OR fe.CANAL = @CANAL)
@@ -273,6 +281,5 @@ BEGIN
     ORDER BY c.ANIO, c.MES;
 
     DROP TABLE #EstadosPedidos;
-    DROP TABLE #PedidosPeriodo;
 END;
 GO
