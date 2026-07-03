@@ -1516,10 +1516,6 @@ const Dashboard = (() => {
                       if (cd) { _lastConvData = cd; renderConversion(cd); } } catch(e) {}
                 try { const hd = await apiFetch('kpis.php', { action: 'conversion_horas' });
                       if (hd?.horas?.length) SparkModal.setHoras('spark-conv', hd.horas); } catch(e) {}
-                await loadDonuts().catch(() => {});
-                await MediosPago.loadAll().catch(() => {});
-                if (typeof Analisis !== 'undefined')
-                    await Analisis.loadRankingUnidades().catch(e => console.error('[Dashboard] ranking_unidades:', e));
             })();
         } catch(e) {
             console.error('[Dashboard]', e);
@@ -1534,7 +1530,8 @@ const Dashboard = (() => {
         isSoloActivas, getSucursalesActivasIds,
         convertir, convertirConFecha, moneyPrefix,
         getTCCParaMes, getMoneda: () => _moneda,
-        apiFetch, fmt, setLoading
+        apiFetch, fmt, setLoading,
+        loadDonuts, loadMediosPago: MediosPago.loadAll
     };
 })();
 

@@ -226,6 +226,7 @@ class VendedorasDB
 
         // Consolidar por nombre (varios COD_VENDED pueden ser misma persona)
         $agg = [];
+        $codesWithSales = [];
         foreach ($rowsVentas as $v) {
             $cod = $v['COD_VENDED'];
             $key = $v['nombre'] ?? $cod;
@@ -237,6 +238,65 @@ class VendedorasDB
             $agg[$key]['cambios']     += (float)$v['cambios'];
             $agg[$key]['facturacion'] += (float)$v['facturacion'];
             $agg[$key]['_codes'][]     = $cod;
+            $codesWithSales[]          = (string)$cod;
+        }
+
+        // Obtener todos los códigos con actividad (ventas, tickets, incremental o presencialidad)
+        $allActiveCodes = $codesWithSales;
+        foreach ($rowsTickets as $t) { $allActiveCodes[] = (string)$t['COD_VENDED']; }
+        foreach ($rowsIncr as $i)    { $allActiveCodes[] = (string)$i['COD_VENDED']; }
+        foreach ($rowsPresence as $pr){ $allActiveCodes[] = (string)$pr['COD_VENDED']; }
+        $allActiveCodes = array_unique($allActiveCodes);
+
+        $missingCodes = array_diff($allActiveCodes, $codesWithSales);
+
+        // Si hay códigos sin ventas en el periodo, buscar históricamente su nombre en BI_SALES_SUCURSALES
+        $missingNames = [];
+        if ($cv === 'DESC_VENDEDOR' && !empty($missingCodes)) {
+            $placeholders = implode(',', array_fill(0, count($missingCodes), '?'));
+            $sqlNames = "
+                SELECT s.COD_VENDED, MAX(s.DESC_VENDEDOR) AS nombre
+                FROM BI_SALES_SUCURSALES s
+                WHERE s.COD_VENDED IN ($placeholders)
+                GROUP BY s.COD_VENDED
+            ";
+            try {
+                $rowsNames = $this->query($sqlNames, array_values($missingCodes));
+                foreach ($rowsNames as $rn) {
+                    $missingNames[(string)$rn['COD_VENDED']] = $rn['nombre'];
+                }
+            } catch (Throwable $_) {}
+        }
+
+        // Agregar los códigos faltantes al agrupador
+        foreach ($allActiveCodes as $cod) {
+            $alreadyIncluded = false;
+            foreach ($agg as $key => $a) {
+                if (in_array($cod, $a['_codes'])) {
+                    $alreadyIncluded = true;
+                    break;
+                }
+            }
+            if (!$alreadyIncluded) {
+                $name = $missingNames[$cod] ?? null;
+                if (!$name) {
+                    // Buscar en rowsTickets como último recurso si no está en ventas históricas
+                    foreach ($rowsTickets as $t) {
+                        if ((string)$t['COD_VENDED'] === $cod && !empty($t['vendedora'])) {
+                            $name = $t['vendedora'];
+                            break;
+                        }
+                    }
+                }
+                if (!$name) {
+                    $name = $cod;
+                }
+                $key = $name;
+                if (!isset($agg[$key])) {
+                    $agg[$key] = ['label' => $key, 'unidades' => 0, 'unidades_pos' => 0, 'cambios' => 0, 'facturacion' => 0, '_codes' => []];
+                }
+                $agg[$key]['_codes'][] = $cod;
+            }
         }
 
         $result = [];

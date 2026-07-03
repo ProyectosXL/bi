@@ -374,7 +374,7 @@
 /* ── BOTTOM SECTION (tabla + ranking) ─────────────────── */
 .bottom-section {
     display              : grid;
-    grid-template-columns: minmax(0,820px) 1fr;
+    grid-template-columns: 1fr;
     gap                  : 12px;
     align-items          : start;
 }

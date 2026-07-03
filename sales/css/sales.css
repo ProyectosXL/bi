@@ -1,0 +1,498 @@
+/* ============================================================
+   /bi/sales/css/sales.css
+   Estilos específicos del Dashboard Sales $ Neto.
+   Requiere /bi/css/base.css y /bi/css/components.css.
+   ============================================================ */
+
+/* ── SUMMARY ROW (KPIs superiores) ──────────────────────── */
+.summary-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.summary-card {
+    background   : var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    border       : 1px solid var(--border);
+    padding      : 14px 16px;
+    display      : flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap          : 12px;
+    border-top   : 3px solid var(--accent);
+    transition   : box-shadow .18s;
+}
+.summary-card:hover { box-shadow: 0 4px 20px rgba(26,35,64,.14); }
+.summary-card.fact  { border-top-color: var(--accent); }
+.summary-card.unid  { border-top-color: var(--accent2); }
+.summary-card.chan  { border-top-color: var(--accent3); }
+
+.summary-card-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.summary-sparkline {
+    position: relative;
+    width: 120px;
+    height: 50px;
+}
+
+.summary-label {
+    font-size  : .72rem;
+    color      : var(--text-3);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+
+.summary-value {
+    font-family: var(--font-display);
+    font-size  : 1.6rem;
+    font-weight: 700;
+    color      : var(--text-1);
+    line-height: 1.1;
+}
+
+.summary-var {
+    font-size  : .82rem;
+    font-weight: 600;
+}
+
+.summary-sub {
+    font-size : .72rem;
+    color     : var(--text-3);
+    margin-top: 2px;
+}
+
+/* ── CANAL BREAKDOWN ─────────────────────────────────────── */
+.canal-breakdown-row {
+    display: grid;
+    grid-template-columns: 3.3fr 1.7fr;
+    gap: 16px;
+    align-items: center;
+}
+
+@media (max-width: 1100px) {
+    .canal-breakdown-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.canal-grid {
+    display              : grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap                  : 8px;
+}
+
+.canal-chart-container {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 32px; /* Mayor separación entre el gráfico donut y su leyenda */
+    padding-right: 12px;
+}
+
+.canal-chart-wrap {
+    position: relative;
+    width: 95px;
+    height: 95px;
+    flex-shrink: 0;
+}
+
+.canal-chart-wrap canvas {
+    max-height: 95px !important;
+    max-width: 95px !important;
+}
+
+.canal-chart-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 5px; /* Más espacio vertical entre las leyendas */
+    flex-grow: 1;
+    min-width: 110px; /* Más espacio para evitar truncamiento excesivo */
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.70rem;
+    font-weight: 500;
+    color: var(--text-2);
+}
+
+.legend-color {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.legend-label {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    max-width: 85px;
+}
+
+.legend-pct {
+    margin-left: auto;
+    font-weight: 700;
+    color: var(--text-1);
+}
+
+.canal-card {
+    background   : var(--bg-card2);
+    border-radius: var(--radius-sm);
+    padding      : 10px 12px;
+    border       : 1px solid var(--border);
+    text-align   : center;
+}
+
+.canal-name {
+    font-size     : .7rem;
+    color         : var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    font-weight   : 600;
+    margin-bottom : 4px;
+}
+
+.canal-val {
+    font-family: var(--font-display);
+    font-size  : 1.15rem;
+    font-weight: 700;
+    color      : var(--text-1);
+}
+
+.canal-var {
+    font-size  : .78rem;
+    font-weight: 600;
+    margin-top : 2px;
+}
+
+/* ── TWO-COL LAYOUT (General tab) ───────────────────────── */
+.general-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+@media (max-width: 900px) {
+    .general-two-col { grid-template-columns: 1fr; }
+}
+
+/* ── CHART CARDS ─────────────────────────────────────────── */
+.chart-card {
+    background   : var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    border       : 1px solid var(--border);
+    overflow     : hidden;
+}
+
+.chart-card-header {
+    background   : var(--bg-card2);
+    border-bottom: 1px solid var(--border);
+    padding      : 10px 16px;
+    font-family  : var(--font-display);
+    font-weight  : 600;
+    font-size    : 1rem;
+    color        : var(--text-1);
+    display      : flex;
+    align-items  : center;
+    gap          : 8px;
+    flex-wrap    : wrap;
+}
+
+.chart-canvas-wrap {
+    padding : 12px 14px;
+    position: relative;
+    min-height: 280px;
+}
+
+.chart-canvas-wrap canvas {
+    max-width: 100%;
+}
+
+/* ── TABLA CANAL ACUMULADO ───────────────────────────────── */
+.table-card {
+    background   : var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    border       : 1px solid var(--border);
+    overflow     : hidden;
+}
+
+.table-card-header {
+    background   : var(--bg-header);
+    color        : rgba(255,255,255,.9);
+    padding      : 10px 16px;
+    font-family  : var(--font-display);
+    font-weight  : 600;
+    font-size    : .95rem;
+    display      : flex;
+    align-items  : center;
+    gap          : 8px;
+}
+
+/* ── FILTROS INTERNOS DE PESTAÑA ─────────────────────────── */
+.tab-filters {
+    display    : flex;
+    align-items: center;
+    flex-wrap  : wrap;
+    gap        : 10px;
+    padding    : 10px 14px;
+    background : var(--bg-card2);
+    border-radius: var(--radius-sm);
+    border     : 1px solid var(--border);
+    margin-bottom: 4px;
+}
+
+.tab-filters label {
+    font-size     : .72rem;
+    color         : var(--text-2);
+    font-weight   : 500;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+
+.tab-filters select {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    color        : var(--text-1);
+    border-radius: var(--radius-sm);
+    padding      : 4px 10px;
+    font-family  : var(--font-body);
+    font-size    : .82rem;
+    cursor       : pointer;
+}
+.tab-filters select:focus { outline: none; border-color: var(--accent); }
+
+/* ── TABLA RUBRO (Evolucion / Unidades) ──────────────────── */
+.rubro-table-wrap {
+    overflow-x : auto;
+    max-height : 420px;
+    overflow-y : auto;
+}
+
+/* ── VARIACION: área chart full-width ───────────────────── */
+.variacion-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+@media (max-width: 900px) {
+    .variacion-row { grid-template-columns: 1fr; }
+}
+
+/* ── LOADING OVERLAY ─────────────────────────────────────── */
+#loading-overlay {
+    position  : fixed;
+    inset     : 0;
+    background: rgba(240,242,247,.7);
+    z-index   : 9999;
+    display   : none;
+    align-items: center;
+    justify-content: center;
+}
+#loading-overlay.visible { display: flex; }
+.loading-spinner {
+    width : 36px;
+    height: 36px;
+    border: 4px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+}
+
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+    .canal-grid  { grid-template-columns: repeat(2, 1fr); }
+    .chart-canvas-wrap { min-height: 200px; padding: 8px; }
+}
+
+/* ── SPARK LINE EXPAND BUTTON ────────────────────────────── */
+.summary-sparkline {
+    position: relative;
+}
+.spark-expand-btn {
+    position: absolute;
+    top: -10px;
+    right: -6px;
+    background: rgba(26,35,64,0.06);
+    border: none;
+    color: var(--text-3);
+    font-size: 0.72rem;
+    padding: 3px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+    z-index: 10;
+}
+.summary-card:hover .spark-expand-btn {
+    opacity: 1;
+}
+.spark-expand-btn:hover {
+    background: var(--bg-header);
+    color: #fff;
+}
+
+/* ── SPARK MODAL (IGUAL AL GLOBAL) ────────────────────────── */
+.spark-modal-overlay {
+    position  : fixed;
+    inset     : 0;
+    background: rgba(10,15,35,.65);
+    z-index   : 9500;
+    display   : flex;
+    align-items: center;
+    justify-content: center;
+    animation : fadeIn .15s ease;
+}
+@keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+
+.spark-modal {
+    background   : var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow   : 0 12px 48px rgba(0,0,0,.3);
+    width        : min(720px, 96vw);
+    max-height   : 90vh;
+    overflow     : hidden;
+    display      : flex;
+    flex-direction: column;
+}
+.spark-modal-header {
+    background   : var(--bg-header);
+    padding      : 12px 16px;
+    display      : flex;
+    align-items  : center;
+    justify-content: space-between;
+}
+.spark-modal-title { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: #fff; }
+.spark-modal-close {
+    background: transparent; border: none; color: rgba(255,255,255,.7);
+    font-size: 1.1rem; cursor: pointer; padding: 4px 8px; border-radius: 4px;
+    transition: color var(--transition), background var(--transition);
+}
+.spark-modal-close:hover { color: #fff; background: rgba(255,255,255,.1); }
+
+.spark-modal-stats {
+    display    : flex;
+    align-items: stretch;
+    gap        : 0;
+    border-bottom: 1px solid var(--border);
+    flex-wrap  : wrap;
+}
+.spark-modal-stat {
+    flex       : 1;
+    padding    : 12px 16px;
+    display    : flex;
+    flex-direction: column;
+    gap        : 4px;
+    border-right: 1px solid var(--border);
+    min-width  : 100px;
+}
+.spark-modal-stat:last-child { border-right: none; }
+.spark-modal-stat-label { font-size: .70rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-3); font-weight: 600; }
+.spark-modal-stat-val   { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; color: var(--text-1); }
+.spark-modal-stat-divider { width: 1px; background: var(--border); }
+.stat-date              { font-size: .68rem; color: var(--text-3); }
+.stat-secondary .spark-modal-stat-val { font-size: 1.1rem; color: var(--text-2); }
+
+.spark-modal-chart-wrap {
+    padding : 16px;
+    flex    : 1;
+    min-height: 220px;
+    position: relative;
+}
+.spark-modal-chart-wrap canvas { width: 100% !important; max-height: 280px; }
+
+/* Trend badge */
+.trend-badge {
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+}
+.trend-badge.pos { background: rgba(16,185,129,0.15); color: #10b981; }
+.trend-badge.neg { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+/* ── WIDGET DE TEMPORADAS ────────────────────────────────── */
+.temporadas-block-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 14px;
+    margin-bottom: 14px;
+}
+@media (max-width: 900px) {
+    .temporadas-block-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.temporada-card-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+}
+
+.temporada-item-card {
+    background: var(--bg-card2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.15s;
+}
+.temporada-item-card:hover {
+    background: rgba(26,35,64,0.03);
+}
+
+.temporada-item-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-2);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.temporada-item-label .sub {
+    font-size: 0.68rem;
+    color: var(--text-3);
+    font-weight: 500;
+}
+
+.temporada-item-values {
+    text-align: right;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.temporada-item-val {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-1);
+}
+
+.temporada-item-var {
+    font-size: 0.8rem;
+    font-weight: 700;
+    min-width: 60px;
+    text-align: right;
+}

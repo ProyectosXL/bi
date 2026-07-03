@@ -472,54 +472,6 @@ $ultimaAct = date('d/m/Y H:i:s');
                     </div>
                 </div>
 
-                <div class="analisis-card" style="margin:0;min-height:0">
-                    <div class="analisis-section-header">
-                        <i class="bi bi-bar-chart-fill"></i> Ranking Rubros — Unidades
-                    </div>
-                    <div id="analisis-ranking-unidades" style="padding:8px 12px;max-height:380px;overflow-y:auto">
-                        <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- ── DONUTS: PARTICIPACIÓN + MEDIOS DE PAGO ────────── -->
-            <div class="donuts-row">
-
-                <div class="donut-card">
-                    <div class="donut-card-header">
-                        <i class="bi bi-pie-chart-fill"></i>&nbsp; Participación Unidades
-                        <button class="info-btn"
-                            data-info-title="Participación Unidades"
-                            data-info-tips="Hacé clic en un segmento para ver el detalle|Pasá el cursor sobre cada segmento para ver porcentaje y unidades">
-                            <i class="bi bi-info-circle"></i>
-                        </button>
-                    </div>
-                    <div id="donut-unidades-wrap" class="donut-container"></div>
-                </div>
-
-                <div class="donut-card">
-                    <div class="donut-card-header">
-                        <i class="bi bi-pie-chart-fill"></i>&nbsp; Participación Facturación
-                        <button class="info-btn"
-                            data-info-title="Participación Facturación"
-                            data-info-tips="Hacé clic en un segmento para ver el detalle|Pasá el cursor sobre cada segmento para ver porcentaje e importe">
-                            <i class="bi bi-info-circle"></i>
-                        </button>
-                    </div>
-                    <div id="donut-facturacion-wrap" class="donut-container"></div>
-                </div>
-
-                <div class="donut-card">
-                    <div class="donut-card-header">
-                        <i class="bi bi-credit-card-fill"></i>&nbsp; Medio de Pago
-                        <span style="margin-left:6px;font-size:.70rem;opacity:.8;font-weight:400">clic TARJETA → cuotas</span>
-                    </div>
-                    <div id="medios-pago-wrap" class="donut-container" style="flex-direction:row;align-items:stretch;padding:8px">
-                        <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
-                    </div>
-                </div>
-
             </div>
 
         </main>
@@ -546,6 +498,15 @@ $ultimaAct = date('d/m/Y H:i:s');
                     <i class="bi bi-bar-chart-fill"></i> Ranking Rubros — Facturación
                 </div>
                 <div id="analisis-ranking-facturacion" style="padding:8px 12px;max-height:300px;overflow-y:auto">
+                    <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
+                </div>
+            </div>
+
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-bar-chart-fill"></i> Ranking Rubros — Unidades
+                </div>
+                <div id="analisis-ranking-unidades" style="padding:8px 12px;max-height:300px;overflow-y:auto">
                     <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
                 </div>
             </div>
@@ -616,6 +577,42 @@ $ultimaAct = date('d/m/Y H:i:s');
                     </div>
                     <div class="chart-canvas-wrap">
                         <canvas id="chart-evolucion-unidades"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="donuts-row" style="margin-top:20px">
+                <div class="donut-card">
+                    <div class="donut-card-header">
+                        <i class="bi bi-pie-chart-fill"></i>&nbsp; Participación Unidades
+                        <button class="info-btn"
+                            data-info-title="Participación Unidades"
+                            data-info-tips="Hacé clic en un segmento para ver el detalle|Pasá el cursor sobre cada segmento para ver porcentaje y unidades">
+                            <i class="bi bi-info-circle"></i>
+                        </button>
+                    </div>
+                    <div id="donut-unidades-wrap" class="donut-container"></div>
+                </div>
+
+                <div class="donut-card">
+                    <div class="donut-card-header">
+                        <i class="bi bi-pie-chart-fill"></i>&nbsp; Participación Facturación
+                        <button class="info-btn"
+                            data-info-title="Participación Facturación"
+                            data-info-tips="Hacé clic en un segmento para ver el detalle|Pasá el cursor sobre cada segmento para ver porcentaje e importe">
+                            <i class="bi bi-info-circle"></i>
+                        </button>
+                    </div>
+                    <div id="donut-facturacion-wrap" class="donut-container"></div>
+                </div>
+
+                <div class="donut-card">
+                    <div class="donut-card-header">
+                        <i class="bi bi-credit-card-fill"></i>&nbsp; Medio de Pago
+                        <span style="margin-left:6px;font-size:.70rem;opacity:.8;font-weight:400">clic TARJETA → cuotas</span>
+                    </div>
+                    <div id="medios-pago-wrap" class="donut-container" style="flex-direction:row;align-items:stretch;padding:8px">
+                        <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
                     </div>
                 </div>
             </div>

@@ -698,6 +698,12 @@ const Analisis = (() => {
                         renderEvolucion(d.evolucion, 'chart-evolucion-unidades', _evolucionMetrica);
                     })
                     .catch(e => console.error('[Analisis] evolucion_' + _evolucionMetrica, e)),
+
+                // Cargar Donuts y Medios de Pago movidos a Análisis
+                (async () => {
+                    try { if (typeof Dashboard !== 'undefined') await Dashboard.loadDonuts(); } catch(e) {}
+                    try { if (typeof Dashboard !== 'undefined') await Dashboard.loadMediosPago(); } catch(e) {}
+                })(),
             ]);
         } finally {
             document.body.classList.remove('is-loading');
