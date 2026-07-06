@@ -810,7 +810,7 @@
 }
 
 /* ── Badges de Diferencias de Ventas y Comunicados ──────────────── */
-.badge-dif-si, .badge-dif-no, .badge-com-si, .badge-com-no {
+.badge-dif-si, .badge-dif-no, .badge-com-si, .badge-com-no, .badge-conn-si, .badge-conn-no, .badge-dif-sintango {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -869,6 +869,18 @@
     background: #eff6ff;
     color: #2563eb;
     border: 1px solid #bfdbfe;
+}
+
+.badge-conn-si {
+    background: #f0fdf4;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+}
+
+.badge-conn-no {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
 }
 
 .badge-com-no {

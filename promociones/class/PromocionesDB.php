@@ -825,16 +825,23 @@ class PromocionesDB
 
         $result = [];
         foreach ($targetSucursales as $nro) {
-            // Si no hay registro en la tabla de comparación, significa que no se pudo comparar (ej. Sin Conexión / Pendiente) -> con diferencias/bloquear.
+            // Si no hay registro en la tabla de comparación, asumimos sin conexión (con_conexion = false) pero sin afirmar diferencias (con_diferencias = false).
             if (!isset($dbRecords[$nro])) {
-                $result[$nro] = true;
+                $result[$nro] = [
+                    'con_diferencias' => false,
+                    'con_conexion'    => false
+                ];
                 continue;
             }
 
             $rec = $dbRecords[$nro];
-            // Si el estado es DIFIERE o ERROR, o la conexión falló (estado_conexion == 0) -> con diferencias/bloquear.
-            $conDif = ($rec['estado'] === 'DIFIERE' || $rec['estado'] === 'ERROR' || $rec['estado_conexion'] === 0);
-            $result[$nro] = $conDif;
+            $conDif = ($rec['estado'] === 'DIFIERE' || $rec['estado'] === 'ERROR');
+            $conCon = ($rec['estado_conexion'] === 1);
+            
+            $result[$nro] = [
+                'con_diferencias' => $conDif,
+                'con_conexion'    => $conCon
+            ];
         }
 
         return $result;
