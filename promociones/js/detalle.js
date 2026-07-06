@@ -72,8 +72,8 @@ const PromoDetalle = (() => {
             if (row && row.sin_tango === true) {
                 return '<span class="badge-dif-sintango">Sin Tango</span>';
             }
-            if (v === true)  return '<span class="badge-dif-si">&#9888; Sí</span>';
-            if (v === false) return '<span class="badge-dif-no">&#10003; No</span>';
+            if (v === true)  return '<span class="badge-dif-si">&#9888; SÍ</span>';
+            if (v === false) return '<span class="badge-dif-no">&#10003; NO</span>';
             return '<span style="color:var(--text-3)">—</span>';
         }
     };
@@ -84,15 +84,30 @@ const PromoDetalle = (() => {
         xlFmt: null,
         sortKey: 'comunicado',
         fmt: v => {
-            if (v === true)  return '<span class="badge-com-si">&#10003; Sí</span>';
-            if (v === false) return '<span class="badge-com-no">&#215; No</span>';
+            if (v === true)  return '<span class="badge-com-si">&#10003; SÍ</span>';
+            if (v === false) return '<span class="badge-com-no">&#215; NO</span>';
+            return '<span style="color:var(--text-3)">—</span>';
+        }
+    };
+    const COL_CON_CONEXION = {
+        key: 'con_conexion',
+        label: 'Con Conexión?',
+        align: 'center',
+        xlFmt: null,
+        sortKey: 'con_conexion',
+        fmt: (v, row) => {
+            if (row && row.sin_tango === true) {
+                return '<span style="color:var(--text-3)">—</span>';
+            }
+            if (v === true)  return '<span class="badge-conn-si">&#10003; SÍ</span>';
+            if (v === false) return '<span class="badge-conn-no">&#10007; NO</span>';
             return '<span style="color:var(--text-3)">—</span>';
         }
     };
 
     function getActiveCOLS_SUC() {
         if (esFranquicias()) {
-            return [COL_COD_CLIENT, ...COLS_SUC, COL_RECONOCIMIENTO_SUC, COL_CON_DIFERENCIAS, COL_COMUNICADO];
+            return [COL_COD_CLIENT, ...COLS_SUC, COL_RECONOCIMIENTO_SUC, COL_CON_DIFERENCIAS, COL_COMUNICADO, COL_CON_CONEXION];
         }
         return COLS_SUC;
     }
@@ -178,8 +193,8 @@ const PromoDetalle = (() => {
 
         sorted.forEach(row => {
             const extraAttrs = rowAttrsFn ? rowAttrsFn(row) : '';
-            // Fila en rojo si tiene diferencias de ventas y NO es sin Tango
-            const rowStyle = (row.con_diferencias === true && row.sin_tango !== true) ? ' style="background:rgba(220,38,38,0.07);"' : '';
+            // Fila en rojo si tiene diferencias de ventas o falta de conexión, y NO es sin Tango
+            const rowStyle = ((row.con_diferencias === true || row.con_conexion === false) && row.sin_tango !== true) ? ' style="background:rgba(220,38,38,0.07);"' : '';
             html += `<tr${extraAttrs ? ' ' + extraAttrs : ''}${rowStyle}>`;
             cols.forEach(c => {
                 const v = row[c.key];
@@ -317,6 +332,7 @@ const PromoDetalle = (() => {
                 // Reconocimiento s/IVA: (costo_total / 1.21) * 0.5
                 reconocimiento: ((r.costo_total ?? 0) / 1.21) * 0.5,
                 con_diferencias: null,  // se llena luego si es franquicias
+                con_conexion: null,
                 comunicado: null,
             }));
 
@@ -355,11 +371,15 @@ const PromoDetalle = (() => {
             const difMap = difData.ok  ? difData.diferencias ?? {} : {};
             const logMap = logData.ok  ? logData.comunicados  ?? {} : {};
 
-            _lastSucursales = _lastSucursales.map(r => ({
-                ...r,
-                con_diferencias: difMap[r.nro_sucursal] ?? null,
-                comunicado:      logMap[r.nro_sucursal] ?? false,
-            }));
+            _lastSucursales = _lastSucursales.map(r => {
+                const sDif = difMap[r.nro_sucursal] || { con_diferencias: null, con_conexion: null };
+                return {
+                    ...r,
+                    con_diferencias: sDif.con_diferencias,
+                    con_conexion:    sDif.con_conexion,
+                    comunicado:      logMap[r.nro_sucursal] ?? false,
+                };
+            });
         } catch (e) {
             console.warn('[PromoDetalle] enrichWithDiferencias error:', e);
         }

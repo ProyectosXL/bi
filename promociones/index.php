@@ -604,10 +604,16 @@ window.BI_CONFIG = {
 
     // Aplicar filtros
     document.getElementById('btn-aplicar').addEventListener('click', () => {
-        Object.keys(loaded).forEach(k => loaded[k] = false);
-        const activePane = document.querySelector('.tab-pane.active');
-        const tab = TABS.find(t => t.pane === activePane?.id) ?? TABS[0];
-        loadTab(tab.name);
+        Promociones.setLoading(true, 'Aplicando filtros…');
+        Promociones.loadFilters()
+            .then(() => {
+                Object.keys(loaded).forEach(k => loaded[k] = false);
+                const activePane = document.querySelector('.tab-pane.active');
+                const tab = TABS.find(t => t.pane === activePane?.id) ?? TABS[0];
+                return loadTab(tab.name);
+            })
+            .catch(err => console.error('[Promociones] Error al aplicar filtros:', err))
+            .finally(() => Promociones.setLoading(false));
     });
 
     // Reload pestaña activa

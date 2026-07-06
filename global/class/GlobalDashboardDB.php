@@ -455,6 +455,7 @@ class GlobalDashboardDB
             SELECT ISNULL(SUM(i.INGRESOS), 0) AS total_ingresos
             FROM BI_T_INGRESOS_SUCURSALES i
             WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND i.FECHA_HORA IS NOT NULL
               AND i.INGRESOS > 0 {$sfI} {$sfGI}
         ", array_merge([$desde, $hasta], $pI, $pGI));
 
@@ -469,6 +470,7 @@ class GlobalDashboardDB
                   WHERE i2.NRO_SUCURS = t.NRO_SUCURS
                     AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
                     AND i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                    AND i2.FECHA_HORA IS NOT NULL
                     AND i2.INGRESOS > 0
               )
         ", array_merge([$desde, $hasta], $pT, $pGT, [$desde, $hasta]));
@@ -504,6 +506,7 @@ class GlobalDashboardDB
                 ISNULL(SUM(i.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES i
             WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND i.FECHA_HORA IS NOT NULL
               AND i.INGRESOS > 0 {$sfI} {$sfGI}
             GROUP BY DATEPART(HOUR, i.FECHA_HORA)
         ", array_merge([$desde, $hasta], $pI, $pGI));
@@ -528,6 +531,7 @@ class GlobalDashboardDB
                   WHERE i2.NRO_SUCURS = t.NRO_SUCURS
                     AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
                     AND i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                    AND i2.FECHA_HORA IS NOT NULL
                     AND i2.INGRESOS > 0
               )
             GROUP BY (t.HORA_EMIS / 10000)
@@ -621,6 +625,7 @@ class GlobalDashboardDB
                   WHERE i2.NRO_SUCURS = t.NRO_SUCURS
                     AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
                     AND i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                    AND i2.FECHA_HORA IS NOT NULL
                     AND i2.INGRESOS > 0
               )
             GROUP BY CAST(t.FECHA AS DATE)
@@ -688,6 +693,7 @@ class GlobalDashboardDB
                 ISNULL(SUM(ig.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES ig
             WHERE ig.FECHA >= ? AND ig.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND ig.FECHA_HORA IS NOT NULL
               AND ig.INGRESOS > 0 {$sfI} {$sfGI}
             GROUP BY CAST(ig.FECHA AS DATE)
         ", array_merge([$desde, $hasta], $pI, $pGI));

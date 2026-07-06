@@ -88,9 +88,13 @@ foreach ($config as $nroSucursal => $sucConfig) {
     $nombreSucursal = $sucursalesMap[$nroSucursal] ?? "Sucursal $nroSucursal";
     echo "Procesando $nombreSucursal...\n";
 
-    // ── CAMBIO 3: Validar que no presente diferencias de ventas antes de enviar ──
-    if (!empty($diferenciasVentas[$nroSucursal]) && $diferenciasVentas[$nroSucursal] === true) {
-        echo "-> $nombreSucursal: Omitiendo envío porque presenta DIFERENCIAS DE VENTAS o falta de conexión en el período.\n";
+    // ── CAMBIO 3: Validar que no presente diferencias de ventas y que tenga conexión activa antes de enviar ──
+    $hasDif = !empty($diferenciasVentas[$nroSucursal]) && ($diferenciasVentas[$nroSucursal]['con_diferencias'] === true);
+    $noConn = !empty($diferenciasVentas[$nroSucursal]) && ($diferenciasVentas[$nroSucursal]['con_conexion'] === false);
+
+    if ($hasDif || $noConn) {
+        $reason = $hasDif ? "presenta DIFERENCIAS DE VENTAS" : "no posee CONEXIÓN activa";
+        echo "-> $nombreSucursal: Omitiendo envío porque $reason en el período.\n";
         continue;
     }
 

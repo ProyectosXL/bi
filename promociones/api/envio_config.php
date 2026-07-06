@@ -117,14 +117,21 @@ try {
 
         $db = new PromocionesDB('franquicias');
 
-        // ── CAMBIO 3: Verificar diferencias de ventas antes de enviar ────────
+        // ── CAMBIO 3: Verificar diferencias de ventas o falta de conexión antes de enviar ────────
         $diferencias = $db->getDiferenciaVentas($da, $ha, [$nro]);
-        if (!empty($diferencias[$nro]) && $diferencias[$nro] === true) {
+        $hasDif = !empty($diferencias[$nro]) && ($diferencias[$nro]['con_diferencias'] === true);
+        $noConn = !empty($diferencias[$nro]) && ($diferencias[$nro]['con_conexion'] === false);
+
+        if ($hasDif || $noConn) {
+            $msgErr = $hasDif 
+                ? "La sucursal $nombre presenta diferencias de ventas en el período seleccionado. El email NO fue enviado."
+                : "La sucursal $nombre no posee conexión activa en el período seleccionado. El email NO fue enviado.";
             ob_clean();
             echo json_encode([
                 'ok'    => false,
-                'error' => "La sucursal $nombre presenta diferencias de ventas o no posee conexión en el período seleccionado. El email NO fue enviado.",
-                'con_diferencias' => true,
+                'error' => $msgErr,
+                'con_diferencias' => $hasDif,
+                'sin_conexion' => $noConn,
             ]);
             exit;
         }

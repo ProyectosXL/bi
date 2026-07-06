@@ -596,6 +596,7 @@ class DashboardDB
                 ISNULL(SUM(ig.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES ig WITH (NOLOCK)
             WHERE ig.FECHA >= ? AND ig.FECHA < DATEADD(day, 1, CAST(? AS DATE))
+              AND ig.FECHA_HORA IS NOT NULL
               {$sfIn}
             GROUP BY CAST(ig.FECHA AS DATE)
         ";
@@ -1036,6 +1037,7 @@ class DashboardDB
                 ISNULL(SUM(CASE WHEN FECHA >= ? AND FECHA < ? THEN INGRESOS ELSE 0 END),0) AS ing_prev
             FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
             WHERE ((FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?))
+              AND FECHA_HORA IS NOT NULL
               {$sfI}
         ";
         $pI  = array_merge([$da, $haX, $dp, $hpX, $da, $haX, $dp, $hpX], $suc);
@@ -1048,7 +1050,7 @@ class DashboardDB
             INNER JOIN (
                 SELECT DISTINCT CAST(FECHA AS DATE) AS dia
                 FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
-                WHERE FECHA >= ? AND FECHA < ? {$sfI}
+                WHERE FECHA >= ? AND FECHA < ? AND FECHA_HORA IS NOT NULL {$sfI}
             ) dias ON CAST(t.FECHA AS DATE) = dias.dia
             WHERE t.FECHA >= ? AND t.FECHA < ?
               AND t.T_COMP = 'FAC' {$sfT}
@@ -1092,6 +1094,7 @@ class DashboardDB
             SELECT ISNULL(SUM(i.INGRESOS), 0) AS total_ingresos
             FROM BI_T_INGRESOS_SUCURSALES i WITH (NOLOCK)
             WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day, 1, CAST(? AS DATE))
+              AND i.FECHA_HORA IS NOT NULL
               {$sfI}
         ";
         $rowI = $this->queryOne($sqlI, array_merge([$desde, $hasta], $suc));
@@ -1104,7 +1107,7 @@ class DashboardDB
             INNER JOIN (
                 SELECT DISTINCT CAST(FECHA AS DATE) AS dia
                 FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
-                WHERE FECHA >= ? AND FECHA < ? {$sfI2}
+                WHERE FECHA >= ? AND FECHA < ? AND FECHA_HORA IS NOT NULL {$sfI2}
             ) dias ON CAST(t.FECHA AS DATE) = dias.dia
             WHERE t.FECHA >= ? AND t.FECHA < ?
               AND t.T_COMP = 'FAC' {$sfT}
@@ -1194,15 +1197,29 @@ class DashboardDB
         $sfT = $nroSucurs !== null ? 'AND t.NRO_SUCURS = ?' : '';
         $suc = $nroSucurs !== null ? [$nroSucurs] : [];
 
-        // Total ingresos del período (denominador común)
-        $ingTotal = (int)($this->queryOne("
-            SELECT ISNULL(SUM(INGRESOS), 0) AS total
-            FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
-            WHERE FECHA >= ? AND FECHA < ?
-              AND INGRESOS > 0 {$sfI}
-        ", array_merge([$desde, $haX], $suc))['total'] ?? 0);
+        // Ingresos agrupados por hora
+        $ingRows = $this->query("
+            SELECT
+                DATEPART(HOUR, i.FECHA_HORA) AS hora,
+                ISNULL(SUM(i.INGRESOS), 0) AS ingresos
+            FROM BI_T_INGRESOS_SUCURSALES i WITH (NOLOCK)
+            WHERE i.FECHA >= ? AND i.FECHA < ?
+              AND i.FECHA_HORA IS NOT NULL
+              AND i.INGRESOS > 0 {$sfI}
+            GROUP BY DATEPART(HOUR, i.FECHA_HORA)
+        ", array_merge([$desde, $haX], $suc));
 
-        if ($ingTotal === 0) return [];   // sin datos → no mostrar selector
+        $ingByHour = array_fill(0, 24, 0);
+        $totalIng = 0;
+        foreach ($ingRows as $r) {
+            $h = (int)$r['hora'];
+            if ($h >= 0 && $h < 24) {
+                $ingByHour[$h] = (int)$r['ingresos'];
+                $totalIng += (int)$r['ingresos'];
+            }
+        }
+
+        if ($totalIng === 0) return [];   // sin datos
 
         // Tickets agrupados por hora
         $tickRows = $this->query("
@@ -1219,6 +1236,7 @@ class DashboardDB
                   WHERE i2.NRO_SUCURS = t.NRO_SUCURS
                     AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
                     AND i2.FECHA >= ? AND i2.FECHA < ?
+                    AND i2.FECHA_HORA IS NOT NULL
                     AND i2.INGRESOS > 0
               )
             GROUP BY (t.HORA_EMIS / 10000)
@@ -1236,8 +1254,8 @@ class DashboardDB
                 'hora'       => $h,
                 'label'      => str_pad($h, 2, '0', STR_PAD_LEFT) . 'h',
                 'tickets'    => $tickByHour[$h],
-                'ingresos'   => $ingTotal,
-                'conversion' => $ingTotal > 0 ? $tickByHour[$h] / $ingTotal : 0,
+                'ingresos'   => $ingByHour[$h],
+                'conversion' => $ingByHour[$h] > 0 ? $tickByHour[$h] / $ingByHour[$h] : 0,
             ];
         }
         return $result;

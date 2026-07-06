@@ -249,6 +249,7 @@ class CadenaDB
             SELECT i.NRO_SUCURS, ISNULL(SUM(i.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES i
             WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              AND i.FECHA_HORA IS NOT NULL
               AND i.INGRESOS > 0 {$sfGI}
             GROUP BY i.NRO_SUCURS
         ", array_merge([$desde_act, $hasta_act], $pGI));
@@ -268,6 +269,7 @@ class CadenaDB
                   WHERE ic.NRO_SUCURS = tc.NRO_SUCURS
                     AND CAST(ic.FECHA AS DATE) = CAST(tc.FECHA AS DATE)
                     AND ic.FECHA >= ? AND ic.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                    AND ic.FECHA_HORA IS NOT NULL
                     AND ic.INGRESOS > 0
               )
             GROUP BY tc.NRO_SUCURS

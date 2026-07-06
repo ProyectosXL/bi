@@ -435,7 +435,12 @@ const Dashboard = (() => {
                                 padding        : 8,
                                 callbacks: {
                                     title: items => 'A las ' + items[0].label,
-                                    label: ctx => ' Tasa de conversión: ' + formatFn(ctx.parsed.y),
+                                    label: ctx => {
+                                        const hData = horas[ctx.dataIndex];
+                                        return hData
+                                            ? ` Tasa de conversión: ${formatFn(ctx.parsed.y)} (${hData.tickets} tickets / ${hData.ingresos} ingresos)`
+                                            : ` Tasa de conversión: ${formatFn(ctx.parsed.y)}`;
+                                    },
                                 }
                             }
                         },

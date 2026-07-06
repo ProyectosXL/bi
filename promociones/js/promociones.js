@@ -648,6 +648,13 @@ const Promociones = (() => {
         document.addEventListener('click', () => { if (wrap.classList.contains('open')) wrap.classList.remove('open'); });
 
         sel._ssSync = () => {
+            // Eliminar del checkStates los valores que ya no existen en sel.options
+            const currentVals = new Set(Array.from(sel.options).map(o => o.value).filter(Boolean));
+            Object.keys(checkStates).forEach(k => {
+                if (!currentVals.has(k)) {
+                    delete checkStates[k];
+                }
+            });
             // Re-initialize checkbox states based on selection if populated
             Array.from(sel.options).forEach(opt => {
                 if (opt.value && checkStates[opt.value] === undefined) {

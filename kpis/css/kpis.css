@@ -1,0 +1,112 @@
+/* Estilos generales — calcado de adminProyectos/css/styles.css */
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    border: none;
+}
+
+/* KPI cards — calcado de adminProyectos/estadisticas.php */
+.kpi-card { background: #1e293b; color: #f1f5f9; }
+.kpi-value { font-size: 2.8rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+.kpi-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    opacity: 0.7;
+    margin-bottom: 0.4rem;
+}
+.kpi-info-btn {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.5;
+    cursor: pointer;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+}
+.kpi-info-btn:hover { opacity: 1; }
+.kpi-sub { font-size: 0.78rem; opacity: 0.55; margin-top: 0.35rem; min-height: 1em; }
+
+/* Modal de detalle — calcado de adminProyectos/css/estadisticas.css */
+.kpi-detalle-header {
+    padding: 0.875rem 1.25rem 0.75rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+}
+
+.kpi-detalle-table {
+    font-size: 0.85rem;
+    min-width: 720px;
+}
+
+.kpi-thead-sticky th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #212529;
+    white-space: nowrap;
+}
+
+.kpi-detalle-count {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.1;
+}
+
+.kpi-detalle-pct-badge {
+    font-size: 1rem !important;
+    padding: 0.45em 0.9em !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.01em;
+}
+
+.badge-clasificacion {
+    min-width: 96px;
+    display: inline-block;
+    text-align: center;
+}
+
+.badge-estado {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #cbd5e1 !important;
+    font-weight: 500 !important;
+}
+
+/* Cards "en desarrollo" — KPIs sin datos aún */
+.kpi-card-placeholder {
+    opacity: 0.55;
+    border: 1px dashed rgba(255,255,255,0.3);
+}
+.kpi-badge-desarrollo {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    font-size: 0.62rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+.kpi-value-placeholder {
+    font-size: 2.2rem;
+    font-weight: 700;
+    opacity: 0.4;
+}
+.kpi-placeholder-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.72rem;
+    opacity: 0.75;
+    margin-top: 0.5rem;
+}
