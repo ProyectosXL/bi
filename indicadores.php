@@ -426,7 +426,7 @@
                                 <div class="card-body">
                                     <i class="fas fa-trophy card-icon text-secondary"></i>
                                     <h5 class="card-title">Premios Comercial</h5>
-                                    <a href="tableros/premiosComercial.html" class="btn btn-secondary btn-card">Ver Reporte</a>
+                                    <a href="premios/" class="btn btn-secondary btn-card">Ver Reporte</a>
                                 </div>
                             </div>
                         </div>

@@ -1,0 +1,165 @@
+/* ═══════════════════════════════════════════════════════
+   /bi/premios/css/premios.css
+   Estilos específicos de Premios Comercial.
+   Requiere /bi/css/base.css + /bi/css/components.css.
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Section header (igual criterio que promo-section-header) ── */
+.premios-section-header {
+    background   : var(--bg-card2);
+    border-bottom: 1px solid var(--border);
+    padding      : 10px 16px;
+    font-family  : var(--font-display);
+    font-weight  : 600;
+    font-size    : 1rem;
+    color        : var(--text-1);
+    display      : flex;
+    align-items  : center;
+    gap          : 8px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    border       : 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+.premios-card {
+    background   : var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    border       : 1px solid var(--border);
+    overflow     : hidden;
+}
+
+/* ── Cards grandes de premio por supervisora (Vista 1) ──────
+   Sin equivalente exacto en el repo (los .summary-card existentes
+   son fondo blanco + borde de acento); acá se pide un bloque sólido
+   de color, así que se arma con los mismos tokens de radius/shadow/
+   font-display + los acentos ya usados en global/css/global.css
+   (morado #8b5cf6, magenta #ec4899) más --accent2/--accent3. */
+.premio-hero-grid {
+    display              : grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap                  : 12px;
+}
+
+.premio-hero-card {
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    padding      : 16px 18px;
+    color        : #fff;
+    display      : flex;
+    flex-direction: column;
+    gap          : 6px;
+    min-height   : 92px;
+    justify-content: center;
+}
+
+.premio-hero-nombre {
+    font-family   : var(--font-display);
+    font-size     : .78rem;
+    font-weight   : 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color         : rgba(255,255,255,.88);
+}
+
+.premio-hero-valor {
+    font-family: var(--font-display);
+    font-size  : 1.7rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.premio-hero-label {
+    font-size: .7rem;
+    color    : rgba(255,255,255,.75);
+}
+
+.premio-hero-card.c0 { background: var(--accent2); }
+.premio-hero-card.c1 { background: #8b5cf6; }
+.premio-hero-card.c2 { background: #ec4899; }
+.premio-hero-card.c3 { background: var(--accent3); }
+.premio-hero-card.c4 { background: var(--accent); }
+.premio-hero-card.c5 { background: #0891b2; }
+.premio-hero-card.c6 { background: #be185d; }
+
+/* ── KPI cards (Vistas 2 y 3), copiadas de global/css/global.css ── */
+.kpi-grid {
+    display              : grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap                  : 12px;
+}
+
+.kpi-card {
+    background   : var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    border       : 1px solid var(--border);
+    padding      : 12px 16px;
+}
+
+.kpi-card-header {
+    display        : flex;
+    justify-content: space-between;
+    align-items    : center;
+    margin-bottom  : 6px;
+}
+
+.kpi-title {
+    font-size     : .72rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color         : var(--text-3);
+    font-weight   : 600;
+}
+
+.kpi-val {
+    font-family: var(--font-display);
+    font-size  : 1.75rem;
+    font-weight: 700;
+    color      : var(--text-1);
+    line-height: 1.1;
+}
+
+/* ── Semáforo (copiado de global/css/ranking.css) ── */
+.text-green  { color: var(--pos, #16a34a) !important; font-weight: 600; }
+.text-yellow { color: #b45309 !important; font-weight: 600; }
+.text-red    { color: var(--neg, #dc2626) !important; font-weight: 600; }
+
+/* ── Tabla: sucursal indentada bajo su supervisora ── */
+.premios-table td.td-sucursal { padding-left: 26px; color: var(--text-2); }
+.premios-table tr.row-supervisora td { font-weight: 700; }
+.premios-table tr.row-sin-datos td { color: var(--text-3); font-style: italic; }
+.premios-table td.td-num { text-align: right; }
+
+.btn-export-excel {
+    margin-left  : auto;
+    background   : transparent;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color        : var(--text-2);
+    padding      : 4px 10px;
+    font-size    : .78rem;
+    cursor       : pointer;
+    display      : flex;
+    align-items  : center;
+    gap          : 6px;
+    transition   : color var(--transition), border-color var(--transition);
+}
+.btn-export-excel:hover { color: var(--accent2); border-color: var(--accent2); }
+
+.premios-loading {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+    padding    : 24px;
+    color      : var(--text-3);
+    font-size  : .85rem;
+    justify-content: center;
+}
+.premios-loading i { animation: spin .8s linear infinite; }
+
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .premio-hero-grid { grid-template-columns: repeat(2, 1fr); }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
