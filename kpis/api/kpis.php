@@ -38,13 +38,16 @@ try {
         case 'kpi-resumen':
             $resumenProyectos = obtenerKPIResumenDatos($cid, $fechaDesde, $fechaHastaExclusivo);
             $resumenTickets   = obtenerKPIResumenTickets($cidApps, $fechaDesde, $fechaHastaExclusivo);
-            echo json_encode(array_merge(array('success' => true), $resumenProyectos, $resumenTickets));
+            $resumenProcesos  = obtenerKPIResumenProcesos($cidApps, $fechaDesde, $fechaHastaExclusivo);
+            echo json_encode(array_merge(array('success' => true), $resumenProyectos, $resumenTickets, $resumenProcesos));
             break;
 
         case 'kpi-detalle':
             $tipo = isset($_GET['tipo']) ? $_GET['tipo'] : '';
             if ($tipo === 'tickets-sla') {
                 obtenerKPIDetalleTickets($cidApps, $fechaDesde, $fechaHastaExclusivo);
+            } elseif ($tipo === 'procesos') {
+                obtenerKPIDetalleProcesos($cidApps, $fechaDesde, $fechaHastaExclusivo);
             } else {
                 obtenerKPIDetalle($cid, $tipo, $fechaDesde, $fechaHastaExclusivo);
             }
@@ -149,17 +152,44 @@ function asegurarTablaTickets($cidApps) {
 }
 
 /**
+ * Fragmento SQL compartido: horas hábiles entre FECHA_TAREA y FECHA_CIERRE,
+ * excluyendo fines de semana y feriados vía RO_T_CALENDARIO (base POWER_BI_CONTROL,
+ * mismo servidor 'apps'; DIA_LABORAL=0 en sábados/domingos/feriados). Para el día de
+ * inicio y el de cierre solo cuenta la porción de ese día dentro del intervalo; los
+ * días intermedios no laborales aportan 0 horas.
+ */
+function sqlHorasHabilesTickets() {
+    return "SELECT
+                t.TICKET, t.FECHA_TAREA, t.FECHA_CIERRE,
+                t.AREA, t.USUARIO_ASIGNADO, t.CONTACTOS, t.TIPO,
+                SUM(CASE WHEN cal.DIA_LABORAL = 1 THEN
+                        DATEDIFF(SECOND,
+                            CASE WHEN cal.FECHA = CAST(t.FECHA_TAREA AS DATE) THEN t.FECHA_TAREA ELSE CAST(cal.FECHA AS DATETIME) END,
+                            CASE WHEN cal.FECHA = CAST(t.FECHA_CIERRE AS DATE) THEN t.FECHA_CIERRE ELSE DATEADD(DAY, 1, CAST(cal.FECHA AS DATETIME)) END
+                        )
+                    ELSE 0 END) / 3600.0 AS HorasHabiles
+            FROM dbo.RO_T_TICKETS_PROYECTOS t
+            CROSS APPLY (
+                SELECT FECHA, DIA_LABORAL
+                FROM [POWER_BI_CONTROL].dbo.RO_T_CALENDARIO
+                WHERE FECHA BETWEEN CAST(t.FECHA_TAREA AS DATE) AND CAST(t.FECHA_CIERRE AS DATE)
+            ) cal
+            WHERE t.CERRADO = 1 AND t.FECHA_TAREA >= ? AND t.FECHA_TAREA < ?
+            GROUP BY t.TICKET, t.FECHA_TAREA, t.FECHA_CIERRE, t.AREA, t.USUARIO_ASIGNADO, t.CONTACTOS, t.TIPO";
+}
+
+/**
  * KPI 3 (% Tickets dentro de SLA) — tickets cerrados cuya Fecha Tarea cae en
- * el rango seleccionado. SLA fijo de 48hs entre FECHA_TAREA y FECHA_CIERRE,
- * igual para todos los TIPO. No se filtra por AREA (la tabla es solo de Innovación).
+ * el rango seleccionado. SLA fijo de 48 horas hábiles (excluyendo fines de semana
+ * y feriados) entre FECHA_TAREA y FECHA_CIERRE, igual para todos los TIPO.
+ * No se filtra por AREA (la tabla es solo de Innovación).
  */
 function obtenerKPIResumenTickets($cidApps, $desde, $hastaExclusivo) {
-    $sql = "SELECT
+    $sql = "WITH TicketsHoras AS (" . sqlHorasHabilesTickets() . ")
+            SELECT
                 COUNT(*) AS total_tickets,
-                SUM(CASE WHEN DATEDIFF(HOUR, FECHA_TAREA, FECHA_CIERRE) <= 48
-                         THEN 1 ELSE 0 END) AS tickets_ok
-            FROM dbo.RO_T_TICKETS_PROYECTOS
-            WHERE CERRADO = 1 AND FECHA_TAREA >= ? AND FECHA_TAREA < ?";
+                SUM(CASE WHEN HorasHabiles <= 48 THEN 1 ELSE 0 END) AS tickets_ok
+            FROM TicketsHoras";
     $params = array($desde, $hastaExclusivo);
 
     $stmt = sqlsrv_query($cidApps, $sql, $params);
@@ -181,15 +211,15 @@ function obtenerKPIResumenTickets($cidApps, $desde, $hastaExclusivo) {
  * Detalle de tickets para el drill-down "Ver tickets" del KPI 3.
  */
 function obtenerKPIDetalleTickets($cidApps, $desde, $hastaExclusivo) {
-    $sql = "SELECT
+    $sql = "WITH TicketsHoras AS (" . sqlHorasHabilesTickets() . ")
+            SELECT
                 TICKET,
                 CONVERT(varchar(19), FECHA_TAREA, 120)  AS FechaTareaStr,
                 CONVERT(varchar(19), FECHA_CIERRE, 120) AS FechaCierreStr,
-                DATEDIFF(HOUR, FECHA_TAREA, FECHA_CIERRE) AS HorasResolucion,
+                ROUND(HorasHabiles, 1) AS HorasHabiles,
                 AREA, USUARIO_ASIGNADO, CONTACTOS, TIPO,
-                CASE WHEN DATEDIFF(HOUR, FECHA_TAREA, FECHA_CIERRE) <= 48 THEN 1 ELSE 0 END AS CumpleSLA
-            FROM dbo.RO_T_TICKETS_PROYECTOS
-            WHERE CERRADO = 1 AND FECHA_TAREA >= ? AND FECHA_TAREA < ?
+                CASE WHEN HorasHabiles <= 48 THEN 1 ELSE 0 END AS CumpleSLA
+            FROM TicketsHoras
             ORDER BY FECHA_TAREA ASC";
     $params = array($desde, $hastaExclusivo);
 
@@ -207,7 +237,7 @@ function obtenerKPIDetalleTickets($cidApps, $desde, $hastaExclusivo) {
             'ticket'           => intval($row['TICKET']),
             'fecha_tarea'      => $row['FechaTareaStr'],
             'fecha_cierre'     => $row['FechaCierreStr'],
-            'horas'            => $row['HorasResolucion'] !== null ? intval($row['HorasResolucion']) : null,
+            'horas'            => $row['HorasHabiles'] !== null ? floatval($row['HorasHabiles']) : null,
             'area'             => $row['AREA'],
             'usuario_asignado' => $row['USUARIO_ASIGNADO'],
             'contactos'        => $row['CONTACTOS'],
@@ -222,6 +252,96 @@ function obtenerKPIDetalleTickets($cidApps, $desde, $hastaExclusivo) {
         'tickets' => $tickets,
         'total'   => count($tickets),
         'cumplen' => $cumplen
+    ));
+}
+
+/**
+ * Cantidad de meses cubiertos por [desde, hastaExclusivo). Ambos vienen como
+ * fechas con día 01 (ver obtenerRangoFechas), así que la diferencia en meses
+ * entre ellas da exactamente la cantidad de meses del rango seleccionado.
+ */
+function mesesEnRango($desde, $hastaExclusivo) {
+    $d1 = new DateTime($desde);
+    $d2 = new DateTime($hastaExclusivo);
+    $diff = $d1->diff($d2);
+    return max(1, $diff->y * 12 + $diff->m);
+}
+
+/**
+ * KPI 4 (% Procesos Relevados vs Plan) — procesos con score_actual >= 2.0
+ * (ya "Gestionado"/documentado, no informal) cuya Fecha de Relevado
+ * (created_at) cae en el rango seleccionado. Plan fijo: 2 procesos/mes.
+ * No se filtra por estado ni por área/responsable (toda la tabla es del
+ * trabajo de relevamiento de Innovación).
+ */
+function obtenerKPIResumenProcesos($cidApps, $desde, $hastaExclusivo) {
+    $sql = "SELECT COUNT(*) AS total_procesos
+            FROM dbo.FP_PROCESSES
+            WHERE score_actual >= 2.0 AND created_at >= ? AND created_at < ?";
+    $params = array($desde, $hastaExclusivo);
+
+    $stmt = sqlsrv_query($cidApps, $sql, $params);
+    if ($stmt === false) throw new Exception('Error KPI procesos: ' . print_r(sqlsrv_errors(), true));
+
+    $row           = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
+    $totalProcesos = intval($row['total_procesos']);
+    $mesesRango    = mesesEnRango($desde, $hastaExclusivo);
+    $objetivo      = 2 * $mesesRango;
+    $pctProcesos   = $objetivo > 0 ? round(($totalProcesos / $objetivo) * 100, 1) : null;
+
+    return array(
+        'total_procesos'    => $totalProcesos,
+        'meses_rango'       => $mesesRango,
+        'objetivo_procesos' => $objetivo,
+        'pct_procesos'      => $pctProcesos
+    );
+}
+
+/**
+ * Detalle de procesos para el drill-down "Ver procesos" del KPI 4. A diferencia
+ * del resumen, acá se listan TODOS los procesos creados en el rango (sin filtrar
+ * por score_actual) para dar contexto completo; cada fila indica si cuenta o no
+ * para el KPI (relevado = score_actual >= 2.0).
+ */
+function obtenerKPIDetalleProcesos($cidApps, $desde, $hastaExclusivo) {
+    $sql = "SELECT
+                codigo, nombre, area, subarea, categoria, criticidad, score_actual,
+                CONVERT(varchar(19), created_at, 120) AS CreatedAtStr
+            FROM dbo.FP_PROCESSES
+            WHERE created_at >= ? AND created_at < ?
+            ORDER BY created_at ASC";
+    $params = array($desde, $hastaExclusivo);
+
+    $stmt = sqlsrv_query($cidApps, $sql, $params);
+    if ($stmt === false) throw new Exception('Error detalle procesos: ' . print_r(sqlsrv_errors(), true));
+
+    $procesos = array();
+    $cumplen  = 0;
+
+    while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+        $score     = $row['score_actual'] !== null ? floatval($row['score_actual']) : null;
+        $relevado  = ($score !== null && $score >= 2.0) ? 1 : 0;
+        if ($relevado) $cumplen++;
+
+        $procesos[] = array(
+            'codigo'         => $row['codigo'],
+            'nombre'         => $row['nombre'],
+            'area'           => $row['area'],
+            'subarea'        => $row['subarea'],
+            'categoria'      => $row['categoria'],
+            'criticidad'     => $row['criticidad'] !== null ? intval($row['criticidad']) : null,
+            'score_actual'   => $score,
+            'created_at'     => $row['CreatedAtStr'],
+            'relevado'       => $relevado
+        );
+    }
+
+    echo json_encode(array(
+        'success'  => true,
+        'tipo'     => 'procesos',
+        'procesos' => $procesos,
+        'total'    => count($procesos),
+        'cumplen'  => $cumplen
     ));
 }
 
