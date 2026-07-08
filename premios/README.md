@@ -127,8 +127,19 @@ las medidas DAX `Premio Obj. Venta Franq. (importe)` / `Premio Obj. Crecimiento 
 ## Reglas de negocio implementadas en `PremiosDB`
 
 - **Facturación Var %** = `IMP_FACT / IMP_FACT_ANT - 1`.
-- **Benchmark de marca** (sin filtro de sucursal/supervisora) = variación de marca + 10 puntos,
-  usado para el premio de crecimiento (`benchmarkVarMarca()`).
+- **Benchmark de marca — Locales Propios** (sin filtro de sucursal/supervisora) = variación
+  de marca **+ 10 puntos ADITIVO** (`benchmarkVarMarca()`). Confirmado por DAX:
+  `Facturación Var % All = CALCULATE([Facturación Var %], ALL(...)) + 0.1`.
+- **Benchmark de marca — Franquicias**: acá el +10% es **MULTIPLICATIVO**, no aditivo —
+  `(1 + var%) * 1.1 - 1` (`benchmarkVarMarcaFranquicias()`). Confirmado por DAX:
+  `Facturación Var % All Franq. = CALCULATE([Facturación Var % Franq.], ALL(...)) * 1.1`,
+  donde `[Facturación Var % Franq.]` está en formato ratio por un error de paréntesis en el
+  `.pbix` original (`DIVIDE(SUM(IMP_FACT), SUM(IMP_FACT_ANT)-1)` — el "-1" quedó dentro del
+  denominador, sin efecto práctico, pero el resultado es un ratio ≈ FACT/FACT_ANT en vez de
+  un delta). **No usar la misma fórmula de benchmark para ambos canales** — es la causa real
+  de la discrepancia "21 vs 20" en `Premio Obj. Crecimiento Cant. Franq.` que tardamos varias
+  rondas en encontrar (afectaba solo a sucursales franquicia muy cercanas al límite, como
+  ADROGUE).
 - **Premio Objetivo Venta / Crecimiento (Locales Propios)**: confirmado contra el DAX real.
   Para TODAS las supervisoras excepto Carolina Commendatore, la CANTIDAD de sucursales que
   cumplen es un número A NIVEL EMPRESA (mismas medidas `ALL(SUPERVISORA)` que en Franquicias),
@@ -176,15 +187,17 @@ No usa Chart.js (el tablero original no tiene gráficos, solo cards y tablas).
   idéntica a la del tablero real). El resto de las supervisoras quedó dentro de $5.000-
   $6.000 del valor real (antes del fix de la fila "TODAS"/ECOMMERCE la diferencia era de
   $30.000-$90.000) — consistente con una sola sucursal en cada caso cambiando de
-  clasificación por estar muy pegada al benchmark de marca (mismo patrón confirmado y
-  aceptado con ADROGUE en Franquicias, ver más abajo). También coinciden exacto: Total
+  clasificación por estar muy pegada al benchmark de marca. También coinciden exacto: Total
   Premios de Natalia Bontempo ($225.000 — su única sucursal es la fila sintética "CENTRAL"),
   y los totales de facturación/objetivo/facturación previa de la Vista Franquicias.
-- **Premio Obj. Crecimiento Cant. Franq.**: se comparó fila por fila (todas las ~65
-  sucursales franquicia) contra el tablero real — 64 coinciden exacto, la única diferencia
-  es ADROGUE (var%=+12,62% vs mi benchmark=+12,48%, un margen de <0,2pp que alcanza para
-  voltear su clasificación). Confirma que la lógica es correcta; no vale la pena perseguir
-  ese margen fino.
+- **Premio Obj. Crecimiento Cant. Franq. — RESUELTO por completo.** La diferencia "21 vs 20"
+  (afectaba a ADROGUE, la única sucursal borderline) se debía a que el benchmark de marca de
+  Franquicias usa una fórmula MULTIPLICATIVA (`×1.1`), no aditiva (`+10pp`) como Locales
+  Propios — ver "Benchmark de marca — Franquicias" arriba. Con el fix, el conteo da exacto
+  20 y **las 7 supervisoras coinciden exacto, dólar por dólar**, con la captura real del
+  tablero de Power BI (Carolina $160.000, Elina $241.000, Josefina $378.000, Julieta
+  $144.000, Nahir $396.000, Natalia $225.000, Sonia $313.000).
 - El % de variación de la fila Total en Franquicias no coincidió (probablemente el original
-  promedia el % por fila en vez de recalcular sobre la suma) — pendiente de revisar si hace
-  falta pixel-perfect en esa celda puntual.
+  promedia el % por fila en vez de recalcular sobre la suma) — es una celda de detalle
+  aislada, no afecta ningún monto de premio; pendiente de revisar si hace falta
+  pixel-perfect ahí también.

@@ -326,12 +326,28 @@ class PremiosDB
     }
 
     /**
-     * Benchmark de marca (sin filtro de sucursal/supervisora) para variación de facturación,
-     * con el +10 puntos exigido para el premio de crecimiento.
+     * Benchmark de marca (Locales Propios) para variación de facturación, con el +10
+     * puntos ADITIVO exigido para el premio de crecimiento. Confirmado por DAX:
+     * `Facturación Var % All = CALCULATE([Facturación Var %], ALL(...))+0.1`.
      */
     public function benchmarkVarMarca(array $filasSinFiltrar): float
     {
         return $this->facturacionVarMarca($filasSinFiltrar) + self::BENCHMARK_PLUS;
+    }
+
+    /**
+     * Benchmark de marca (Franquicias) para variación de facturación — a diferencia de
+     * Locales Propios, acá el +10% es MULTIPLICATIVO, no aditivo. Confirmado por DAX:
+     * `Facturación Var % All Franq. = CALCULATE([Facturación Var % Franq.], ALL(...)) * 1.1`
+     * (con `[Facturación Var % Franq.]` en formato ratio, no delta — de ahí la diferencia
+     * de fórmula respecto a Locales Propios). Ejemplo real: agregado +2,4842% de var% da
+     * un benchmark de +12,7326% (no +12,4842% como daría la fórmula aditiva) — confirmado
+     * contra el KPI real "Facturación Var % All Franq.: 112,73 %".
+     */
+    public function benchmarkVarMarcaFranquicias(array $filasSinFiltrar): float
+    {
+        $var = $this->facturacionVarMarca($filasSinFiltrar);
+        return (1 + $var) * 1.1 - 1;
     }
 
     /** Ticket promedio de marca (sin filtro), para comparar contra cada sucursal. */
@@ -536,7 +552,7 @@ class PremiosDB
      */
     public function conteosFranquiciaEmpresa(array $todasLasFranquicias): array
     {
-        $benchmarkVarF = $this->benchmarkVarMarca($todasLasFranquicias);
+        $benchmarkVarF = $this->benchmarkVarMarcaFranquicias($todasLasFranquicias);
         $cantVenta = 0; $cantCrecimiento = 0;
         foreach ($todasLasFranquicias as $f) {
             if ($f['sin_datos']) continue;
