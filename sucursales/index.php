@@ -46,7 +46,20 @@ require_once __DIR__ . '/../class/config.php';
 $config     = getConfig();
 $showGrupos = $config['features']['grupos'];
 date_default_timezone_set('America/Argentina/Buenos_Aires');
-$ultimaAct  = '—';
+require_once __DIR__ . '/class/DashboardDB.php';
+$isOutdated = false;
+$ultimaAct = 'No disponible';
+try {
+    $defaultDb = new DashboardDB();
+    $ultimaActRaw = $defaultDb->getUltimaActualizacion();
+    if ($ultimaActRaw) {
+        $dtUpdate = new DateTime($ultimaActRaw);
+        $ultimaAct = $dtUpdate->format('d/m/Y H:i:s');
+        
+        $dtYesterday = new DateTime('yesterday 00:00:00');
+        $isOutdated = ($dtUpdate < $dtYesterday);
+    }
+} catch (Throwable $_) {}
 $descLocal  = $_SESSION['descLocal'];
 ?>
 <!DOCTYPE html>
@@ -82,6 +95,9 @@ $descLocal  = $_SESSION['descLocal'];
         <div class="topbar-meta">
             Última fecha datos<br>
             <strong id="ultima-actualizacion"><?= $ultimaAct ?></strong>
+            <span class="badge-outdated" id="badge-desactualizado" title="Los datos tienen más de un día de retraso" <?= !$isOutdated ? 'style="display: none;"' : '' ?>>
+                <i class="bi bi-exclamation-triangle-fill"></i> DESACTUALIZADO
+            </span>
         </div>
     </header>
 
