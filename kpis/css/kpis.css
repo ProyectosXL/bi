@@ -35,6 +35,14 @@ body {
 }
 .kpi-info-btn:hover { opacity: 1; }
 .kpi-sub { font-size: 0.78rem; opacity: 0.55; margin-top: 0.35rem; min-height: 1em; }
+.kpi-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.72rem;
+    opacity: 0.65;
+    margin-top: 0.5rem;
+}
 
 /* Modal de detalle — calcado de adminProyectos/css/estadisticas.css */
 .kpi-detalle-header {
@@ -109,4 +117,145 @@ body {
     font-size: 0.72rem;
     opacity: 0.75;
     margin-top: 0.5rem;
+}
+
+/* Notas aclaratorias — lectura ejecutiva del modelo por categoría */
+.kpi-notas-table td {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+}
+.kpi-notas-categoria {
+    font-weight: 600;
+    white-space: nowrap;
+    width: 1%;
+}
+.kpi-notas-ejecucion .kpi-notas-categoria { background: #e2efda; }
+.kpi-notas-soporte   .kpi-notas-categoria { background: #fff2cc; }
+.kpi-notas-impacto   .kpi-notas-categoria { background: #fbe0d5; }
+.kpi-notas-mejora    .kpi-notas-categoria { background: #dbe9f6; }
+.kpi-notas-footer {
+    background: #f1f3f5;
+    font-size: 0.82rem;
+    color: #495057;
+    border-top: 1px solid #e2e8f0;
+}
+
+/* Cumplimiento General Ponderado */
+.kpi-card-general {
+    border-top: 3px solid #f5b942;
+}
+.kpi-general-breakdown {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    min-width: 260px;
+}
+.kpi-general-item {
+    flex: 1 1 200px;
+    min-width: 180px;
+}
+
+/* Modal Instructivo de Medición */
+.kpi-instructivo-badge {
+    font-size: 0.75rem;
+    padding: 0.4em 0.8em;
+    font-weight: 600;
+}
+.kpi-badge-ejecucion { background: #e2efda; color: #2f5233; }
+.kpi-badge-soporte   { background: #fff2cc; color: #7a5b00; }
+.kpi-badge-impacto   { background: #fbe0d5; color: #8a3b1f; }
+.kpi-badge-mejora    { background: #dbe9f6; color: #1f4e79; }
+
+.kpi-instructivo-section {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+.kpi-instructivo-section h6 {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+.kpi-instructivo-formula {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+}
+.kpi-instructivo-formula p {
+    font-family: 'Courier New', monospace;
+    font-size: 0.92rem;
+    color: #3730a3;
+}
+.kpi-instructivo-section-ejemplo {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+.kpi-instructivo-section-ejemplo p {
+    font-style: italic;
+    color: #166534;
+}
+.kpi-instructivo-reglas {
+    list-style: none;
+    padding-left: 0;
+    font-size: 0.88rem;
+    margin: 0;
+}
+.kpi-instructivo-reglas li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+}
+.kpi-instructivo-reglas li i { color: #dc2626; margin-top: 0.2rem; }
+
+/* Modal Importar Excel */
+.kpi-import-columnas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.kpi-import-col-badge {
+    background: #eef2ff;
+    color: #4338ca;
+    font-weight: 600;
+    font-size: 0.72rem;
+    padding: 0.35em 0.65em;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+}
+.kpi-import-dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    padding: 1.75rem 1rem;
+    border: 2px dashed #94a3b8;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #475569;
+    cursor: pointer;
+    transition: all .15s ease;
+    margin: 0;
+}
+.kpi-import-dropzone:hover {
+    border-color: #0d6efd;
+    background: #eff6ff;
+    color: #0d6efd;
+}
+.kpi-import-badge {
+    font-size: 0.78rem;
+    padding: 0.4em 0.8em;
+    font-weight: 600;
+}
+.kpi-import-preview-table table { font-size: 0.85rem; }
+
+/* Estrellas de madurez (modal Procesos Detalle) */
+.kpi-estrellas {
+    color: #d97706;
+    letter-spacing: 1px;
 }

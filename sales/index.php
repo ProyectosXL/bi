@@ -12,14 +12,26 @@ if (!isset($_SESSION['username'])) {
 require_once __DIR__ . '/../class/config.php';
 $tipoSesion = $_SESSION['tipo'] ?? '';
 date_default_timezone_set('America/Argentina/Buenos_Aires');
-$ultimaAct = date('d/m/Y H:i:s');
 
 // Pre-cargar lista de canales y rubros para los filtros
 require_once __DIR__ . '/class/SalesDB.php';
+$isOutdated = false;
+$ultimaAct = 'No disponible';
 try {
     $salesDb = new SalesDB();
     $canalesDisp = $salesDb->getCanales();
     $rubrosDisp  = $salesDb->getRubros();
+    
+    // Obtener última actualización real de los datos
+    $ultimaActRaw = $salesDb->getUltimaActualizacion();
+    if ($ultimaActRaw) {
+        $dtUpdate = new DateTime($ultimaActRaw);
+        $ultimaAct = $dtUpdate->format('d/m/Y H:i:s');
+        
+        // Determinar si los datos son menores al día anterior (ayer 00:00:00)
+        $dtYesterday = new DateTime('yesterday 00:00:00');
+        $isOutdated = ($dtUpdate < $dtYesterday);
+    }
 } catch (Throwable $e) {
     $canalesDisp = [];
     $rubrosDisp  = [];
@@ -58,6 +70,11 @@ try {
     <div class="topbar-meta">
         Última actualización<br>
         <strong><?= $ultimaAct ?></strong>
+        <?php if ($isOutdated): ?>
+            <span class="badge-outdated" title="Los datos tienen más de un día de retraso">
+                <i class="bi bi-exclamation-triangle-fill"></i> DESACTUALIZADO
+            </span>
+        <?php endif; ?>
     </div>
 </header>
 

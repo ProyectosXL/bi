@@ -451,11 +451,14 @@ class GlobalDashboardDB
         [$sfGI, $pGI] = $this->grupoFiltro('i');
         [$sfGT, $pGT] = $this->grupoFiltro('t');
 
+        $condFechaHora = $this->origen === 'uruguay' ? "" : "AND i.FECHA_HORA IS NOT NULL";
+        $condFechaHoraI2 = $this->origen === 'uruguay' ? "" : "AND i2.FECHA_HORA IS NOT NULL";
+
         $rowI = $this->queryOne("
             SELECT ISNULL(SUM(i.INGRESOS), 0) AS total_ingresos
             FROM BI_T_INGRESOS_SUCURSALES i
             WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND i.FECHA_HORA IS NOT NULL
+              {$condFechaHora}
               AND i.INGRESOS > 0 {$sfI} {$sfGI}
         ", array_merge([$desde, $hasta], $pI, $pGI));
 
@@ -470,7 +473,7 @@ class GlobalDashboardDB
                   WHERE i2.NRO_SUCURS = t.NRO_SUCURS
                     AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
                     AND i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
-                    AND i2.FECHA_HORA IS NOT NULL
+                    {$condFechaHoraI2}
                     AND i2.INGRESOS > 0
               )
         ", array_merge([$desde, $hasta], $pT, $pGT, [$desde, $hasta]));
@@ -494,6 +497,19 @@ class GlobalDashboardDB
         ?int $sucursal = null,
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
+        if ($this->origen === 'uruguay') {
+            $result = [];
+            for ($h = 0; $h < 24; $h++) {
+                $result[] = [
+                    'hora'       => $h,
+                    'label'      => str_pad($h, 2, '0', STR_PAD_LEFT) . 'h',
+                    'tickets'    => 0,
+                    'ingresos'   => 0,
+                    'conversion' => 0,
+                ];
+            }
+            return $result;
+        }
         $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
         [$sfI, $pI]   = Filters::build($fp, 'i', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURS', false);
         [$sfT, $pT]   = Filters::build($fp, 't', $this->campoVendedor, $this->origen, false, false);
@@ -612,6 +628,7 @@ class GlobalDashboardDB
             GROUP BY CAST(t.FECHA AS DATE)
         ", array_merge([$desde, $hasta], $pTk, $pGTk, [$desde, $hasta], $pT, $pGT));
 
+        $condFechaHoraI2 = $this->origen === 'uruguay' ? "" : "AND i2.FECHA_HORA IS NOT NULL";
         // Tickets filtrados por sucursales con ingresos ese día (para conversión correcta)
         $tickConvRows = $this->query("
             SELECT
@@ -625,7 +642,7 @@ class GlobalDashboardDB
                   WHERE i2.NRO_SUCURS = t.NRO_SUCURS
                     AND CAST(i2.FECHA AS DATE) = CAST(t.FECHA AS DATE)
                     AND i2.FECHA >= ? AND i2.FECHA < DATEADD(day,1,CAST(? AS DATE))
-                    AND i2.FECHA_HORA IS NOT NULL
+                    {$condFechaHoraI2}
                     AND i2.INGRESOS > 0
               )
             GROUP BY CAST(t.FECHA AS DATE)
@@ -687,13 +704,14 @@ class GlobalDashboardDB
         }
 
         // Ingresos por día (solo registros con INGRESOS > 0)
+        $condFechaHoraIg = $this->origen === 'uruguay' ? "" : "AND ig.FECHA_HORA IS NOT NULL";
         $ingRows = $this->query("
             SELECT
                 CAST(ig.FECHA AS DATE) AS fecha,
                 ISNULL(SUM(ig.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES ig
             WHERE ig.FECHA >= ? AND ig.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND ig.FECHA_HORA IS NOT NULL
+              {$condFechaHoraIg}
               AND ig.INGRESOS > 0 {$sfI} {$sfGI}
             GROUP BY CAST(ig.FECHA AS DATE)
         ", array_merge([$desde, $hasta], $pI, $pGI));
@@ -2122,5 +2140,37 @@ class GlobalDashboardDB
         }
         sqlsrv_free_stmt($stmt);
         return $rows;
+    }
+
+    /** Obtiene la última fecha/hora de actualización de los datos */
+    public function getUltimaActualizacion(): ?string
+    {
+        $sql = "SELECT MAX(last_update) as last_update FROM (
+                    SELECT MAX(last_user_update) as last_update
+                    FROM sys.dm_db_index_usage_stats
+                    WHERE database_id = DB_ID()
+                      AND object_id = OBJECT_ID('dbo.BI_SALES_SUCURSALES')
+                ) t";
+        $stmt = sqlsrv_query($this->conn, $sql);
+        $res = null;
+        if ($stmt !== false && $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            if (!empty($row['last_update'])) {
+                $res = is_object($row['last_update']) ? $row['last_update']->format('Y-m-d H:i:s') : $row['last_update'];
+            }
+            sqlsrv_free_stmt($stmt);
+        }
+
+        // Fallback: si por alguna razón no tenemos estadísticas, usamos el max(FECHA) de BI_SALES_SUCURSALES
+        if (!$res) {
+            $sqlFallback = "SELECT MAX(FECHA) as last_update FROM dbo.BI_SALES_SUCURSALES";
+            $stmtFallback = sqlsrv_query($this->conn, $sqlFallback);
+            if ($stmtFallback !== false && $rowFallback = sqlsrv_fetch_array($stmtFallback, SQLSRV_FETCH_ASSOC)) {
+                if (!empty($rowFallback['last_update'])) {
+                    $res = is_object($rowFallback['last_update']) ? $rowFallback['last_update']->format('Y-m-d H:i:s') : $rowFallback['last_update'];
+                }
+                sqlsrv_free_stmt($stmtFallback);
+            }
+        }
+        return $res;
     }
 }

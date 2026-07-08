@@ -11,6 +11,7 @@ class DashboardDB
     private $conn;
     private $campoVendedor;
     private $tablaObjetivos;
+    private bool $isUruguay = false;
 
     public function __construct()
     {
@@ -21,6 +22,7 @@ class DashboardDB
         $this->conn           = $this->cid->conectar($config['db']);
         $this->campoVendedor  = $config['campo_vendedor'];
         $this->tablaObjetivos = $config['tabla_objetivos'];
+        $this->isUruguay      = ($config['db'] === 'power_uy');
     }
 
     /* ──────────────────────────────────────────────
@@ -590,13 +592,14 @@ class DashboardDB
 
         // Ingresos por fecha (solo filtro por sucursal, es dato de local completo)
         $sfIn  = $nroSucurs !== null ? "AND ig.NRO_SUCURS = ?" : "";
+        $condFechaHora = $this->isUruguay ? "" : "AND ig.FECHA_HORA IS NOT NULL";
         $sqlIn = "
             SELECT
                 CAST(ig.FECHA AS DATE) AS fecha,
                 ISNULL(SUM(ig.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES ig WITH (NOLOCK)
             WHERE ig.FECHA >= ? AND ig.FECHA < DATEADD(day, 1, CAST(? AS DATE))
-              AND ig.FECHA_HORA IS NOT NULL
+              {$condFechaHora}
               {$sfIn}
             GROUP BY CAST(ig.FECHA AS DATE)
         ";
@@ -1030,6 +1033,7 @@ class DashboardDB
         $sfT = $nroSucurs !== null ? 'AND t.NRO_SUCURS = ?' : '';
         $suc = $nroSucurs !== null ? [$nroSucurs] : [];
 
+        $condFechaHora = $this->isUruguay ? "" : "AND FECHA_HORA IS NOT NULL";
         // Q1: Ingresos de ambos períodos en una sola pasada
         $qI = "
             SELECT
@@ -1037,7 +1041,7 @@ class DashboardDB
                 ISNULL(SUM(CASE WHEN FECHA >= ? AND FECHA < ? THEN INGRESOS ELSE 0 END),0) AS ing_prev
             FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
             WHERE ((FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?))
-              AND FECHA_HORA IS NOT NULL
+              {$condFechaHora}
               {$sfI}
         ";
         $pI  = array_merge([$da, $haX, $dp, $hpX, $da, $haX, $dp, $hpX], $suc);
@@ -1050,7 +1054,7 @@ class DashboardDB
             INNER JOIN (
                 SELECT DISTINCT CAST(FECHA AS DATE) AS dia
                 FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
-                WHERE FECHA >= ? AND FECHA < ? AND FECHA_HORA IS NOT NULL {$sfI}
+                WHERE FECHA >= ? AND FECHA < ? {$condFechaHora} {$sfI}
             ) dias ON CAST(t.FECHA AS DATE) = dias.dia
             WHERE t.FECHA >= ? AND t.FECHA < ?
               AND t.T_COMP = 'FAC' {$sfT}
@@ -1090,11 +1094,13 @@ class DashboardDB
         $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
         $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
 
+        $condFechaHora = $this->isUruguay ? "" : "AND i.FECHA_HORA IS NOT NULL";
+        $condFechaHoraI2 = $this->isUruguay ? "" : "AND FECHA_HORA IS NOT NULL";
         $sqlI = "
             SELECT ISNULL(SUM(i.INGRESOS), 0) AS total_ingresos
             FROM BI_T_INGRESOS_SUCURSALES i WITH (NOLOCK)
             WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day, 1, CAST(? AS DATE))
-              AND i.FECHA_HORA IS NOT NULL
+              {$condFechaHora}
               {$sfI}
         ";
         $rowI = $this->queryOne($sqlI, array_merge([$desde, $hasta], $suc));
@@ -1107,7 +1113,7 @@ class DashboardDB
             INNER JOIN (
                 SELECT DISTINCT CAST(FECHA AS DATE) AS dia
                 FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
-                WHERE FECHA >= ? AND FECHA < ? AND FECHA_HORA IS NOT NULL {$sfI2}
+                WHERE FECHA >= ? AND FECHA < ? {$condFechaHoraI2} {$sfI2}
             ) dias ON CAST(t.FECHA AS DATE) = dias.dia
             WHERE t.FECHA >= ? AND t.FECHA < ?
               AND t.T_COMP = 'FAC' {$sfT}
@@ -1192,6 +1198,9 @@ class DashboardDB
         string $desde, string $hasta,
         ?int $nroSucurs = null
     ): array {
+        if ($this->isUruguay) {
+            return [];
+        }
         $haX = (new DateTime($hasta))->modify('+1 day')->format('Y-m-d');
         $sfI = $nroSucurs !== null ? 'AND NRO_SUCURS = ?'   : '';
         $sfT = $nroSucurs !== null ? 'AND t.NRO_SUCURS = ?' : '';
@@ -1259,5 +1268,37 @@ class DashboardDB
             ];
         }
         return $result;
+    }
+
+    /** Obtiene la última fecha/hora de actualización de los datos */
+    public function getUltimaActualizacion(): ?string
+    {
+        $sql = "SELECT MAX(last_update) as last_update FROM (
+                    SELECT MAX(last_user_update) as last_update
+                    FROM sys.dm_db_index_usage_stats
+                    WHERE database_id = DB_ID()
+                      AND object_id = OBJECT_ID('dbo.BI_SALES_SUCURSALES')
+                ) t";
+        $stmt = sqlsrv_query($this->conn, $sql);
+        $res = null;
+        if ($stmt !== false && $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            if (!empty($row['last_update'])) {
+                $res = is_object($row['last_update']) ? $row['last_update']->format('Y-m-d H:i:s') : $row['last_update'];
+            }
+            sqlsrv_free_stmt($stmt);
+        }
+
+        // Fallback: si por alguna razón no tenemos estadísticas, usamos el max(FECHA) de BI_SALES_SUCURSALES
+        if (!$res) {
+            $sqlFallback = "SELECT MAX(FECHA) as last_update FROM dbo.BI_SALES_SUCURSALES";
+            $stmtFallback = sqlsrv_query($this->conn, $sqlFallback);
+            if ($stmtFallback !== false && $rowFallback = sqlsrv_fetch_array($stmtFallback, SQLSRV_FETCH_ASSOC)) {
+                if (!empty($rowFallback['last_update'])) {
+                    $res = is_object($rowFallback['last_update']) ? $rowFallback['last_update']->format('Y-m-d H:i:s') : $rowFallback['last_update'];
+                }
+                sqlsrv_free_stmt($stmtFallback);
+            }
+        }
+        return $res;
     }
 }

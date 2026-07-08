@@ -106,9 +106,25 @@ try {
     $dias_act  = (new DateTime($desde_act))->diff(new DateTime($hasta_act))->days + 1;
     $dias_prev = (new DateTime($desde_prev))->diff(new DateTime($hasta_prev))->days + 1;
 
+    $ultimaActRaw = null;
+    $isOutdated = false;
+    $ultimaActFormatted = 'No disponible';
+    try {
+        $ultimaActRaw = $db->getUltimaActualizacion();
+        if ($ultimaActRaw) {
+            $dtUpdate = new DateTime($ultimaActRaw);
+            $ultimaActFormatted = $dtUpdate->format('d/m/Y H:i:s');
+            
+            $dtYesterday = new DateTime('yesterday 00:00:00');
+            $isOutdated = ($dtUpdate < $dtYesterday);
+        }
+    } catch (Throwable $_) {}
+
     ob_clean();
     echo json_encode([
         'ok'           => true,
+        'ultima_actualizacion' => $ultimaActFormatted,
+        'is_outdated' => $isOutdated,
         'ultima_fecha' => $ultima_fecha,
         'periodo' => [
             'tipo'        => $periodo,

@@ -1352,10 +1352,13 @@ const Dashboard = (() => {
                     `${per.desde_act.split('-').reverse().join('/')} - ${per.hasta_act.split('-').reverse().join('/')} (${per.dias_act}d)`;
                 document.getElementById('periodo-previo-label').textContent =
                     `vs ${per.desde_prev.split('-').reverse().join('/')} - ${per.hasta_prev.split('-').reverse().join('/')} (${per.dias_prev}d)`;
-                document.getElementById('ultima-actualizacion').textContent =
-                    kpisData.ultima_fecha
-                        ? kpisData.ultima_fecha.split('-').reverse().join('/')
-                        : new Date().toLocaleDateString('es-AR');
+                if (kpisData.ultima_actualizacion) {
+                    document.getElementById('ultima-actualizacion').textContent = kpisData.ultima_actualizacion;
+                }
+                const elBadge = document.getElementById('badge-desactualizado');
+                if (elBadge) {
+                    elBadge.style.display = kpisData.is_outdated ? 'inline-flex' : 'none';
+                }
 
                 /* ── KPI Summary ── */
                 setEl('fact-act',   fmt.money(act.facturacion));

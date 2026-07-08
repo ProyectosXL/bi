@@ -1156,3 +1156,30 @@
     /* Rubros cards: 1 columna */
     .rubros-cards-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Outdated Data Warning Badge ── */
+.badge-outdated {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background-color: var(--neg);
+    color: #ffffff;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-top: 4px;
+    box-shadow: 0 0 10px rgba(220, 38, 38, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    letter-spacing: 0.5px;
+    animation: badge-pulse 2s infinite alternate;
+}
+
+@keyframes badge-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5);
+    }
+    100% {
+        box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+    }
+}

@@ -318,9 +318,25 @@ try {
     $dias_prev = (new DateTime($desde_prev))->diff(new DateTime($hasta_prev))->days + 1;
     $dbmark('antes_jsonFinal');
 
+    $ultimaActRaw = null;
+    $isOutdated = false;
+    $ultimaActFormatted = 'No disponible';
+    try {
+        $ultimaActRaw = $db->getUltimaActualizacion();
+        if ($ultimaActRaw) {
+            $dtUpdate = new DateTime($ultimaActRaw);
+            $ultimaActFormatted = $dtUpdate->format('d/m/Y H:i:s');
+            
+            $dtYesterday = new DateTime('yesterday 00:00:00');
+            $isOutdated = ($dtUpdate < $dtYesterday);
+        }
+    } catch (Throwable $_) {}
+
     ob_clean();
     echo json_encode([
         'ok'             => true,
+        'ultima_actualizacion' => $ultimaActFormatted,
+        'is_outdated' => $isOutdated,
         'cotizacion_dolar' => $cotizacion,
         'periodo' => [
             'tipo'       => $periodo,

@@ -662,6 +662,36 @@ class SalesDB
         return $rows;
     }
 
+    /** Obtiene la última fecha/hora de actualización de los datos */
+    public function getUltimaActualizacion(): ?string
+    {
+        $sql = "SELECT MAX(last_user_update) as last_update
+                FROM sys.dm_db_index_usage_stats
+                WHERE database_id = DB_ID('POWER_BI_CONTROL')
+                  AND object_id = OBJECT_ID('dbo.BI_SALES_LAKERS')";
+        $stmt = sqlsrv_query($this->conn, $sql);
+        $res = null;
+        if ($stmt !== false && $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            if (!empty($row['last_update'])) {
+                $res = is_object($row['last_update']) ? $row['last_update']->format('Y-m-d H:i:s') : $row['last_update'];
+            }
+            sqlsrv_free_stmt($stmt);
+        }
+
+        // Fallback: si por alguna razón no tenemos permisos o estadísticas, usamos el max(FECHA)
+        if (!$res) {
+            $sqlFallback = "SELECT MAX(FECHA) as last_update FROM dbo.BI_SALES_LAKERS";
+            $stmtFallback = sqlsrv_query($this->conn, $sqlFallback);
+            if ($stmtFallback !== false && $rowFallback = sqlsrv_fetch_array($stmtFallback, SQLSRV_FETCH_ASSOC)) {
+                if (!empty($rowFallback['last_update'])) {
+                    $res = is_object($rowFallback['last_update']) ? $rowFallback['last_update']->format('Y-m-d H:i:s') : $rowFallback['last_update'];
+                }
+                sqlsrv_free_stmt($stmtFallback);
+            }
+        }
+        return $res;
+    }
+
     public function __destruct()
     {
         if ($this->conn) sqlsrv_close($this->conn);

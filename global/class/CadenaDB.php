@@ -245,11 +245,12 @@ class CadenaDB
         [$sfGGI, $pGGI] = $this->grupoFiltro('i');
         $sfGI .= ' ' . $sfGGI;
         $pGI   = array_merge($pGI, $pGGI);
+        $condFechaHora = $this->origen === 'uruguay' ? "" : "AND i.FECHA_HORA IS NOT NULL";
         $rowsIngresos = $this->query("
             SELECT i.NRO_SUCURS, ISNULL(SUM(i.INGRESOS), 0) AS ingresos
             FROM BI_T_INGRESOS_SUCURSALES i
             WHERE i.FECHA >= ? AND i.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND i.FECHA_HORA IS NOT NULL
+              {$condFechaHora}
               AND i.INGRESOS > 0 {$sfGI}
             GROUP BY i.NRO_SUCURS
         ", array_merge([$desde_act, $hasta_act], $pGI));
@@ -259,6 +260,7 @@ class CadenaDB
         [$sfGGTC, $pGGTC] = $this->grupoFiltro('tc');
         $sfGTC .= ' ' . $sfGGTC;
         $pGTC   = array_merge($pGTC, $pGGTC);
+        $condFechaHoraIc = $this->origen === 'uruguay' ? "" : "AND ic.FECHA_HORA IS NOT NULL";
         $rowsTicketsConv = $this->query("
             SELECT tc.NRO_SUCURS, COUNT(DISTINCT tc.N_COMP) AS tickets_conv
             FROM BI_SALES_TOTAL_TICKETS tc
@@ -269,7 +271,7 @@ class CadenaDB
                   WHERE ic.NRO_SUCURS = tc.NRO_SUCURS
                     AND CAST(ic.FECHA AS DATE) = CAST(tc.FECHA AS DATE)
                     AND ic.FECHA >= ? AND ic.FECHA < DATEADD(day,1,CAST(? AS DATE))
-                    AND ic.FECHA_HORA IS NOT NULL
+                    {$condFechaHoraIc}
                     AND ic.INGRESOS > 0
               )
             GROUP BY tc.NRO_SUCURS

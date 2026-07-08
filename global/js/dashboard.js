@@ -1504,6 +1504,14 @@ const Dashboard = (() => {
             // Cargar cotizaciones antes de renderizar
             if (_lastPeriodo) await loadCotizaciones(_lastPeriodo);
             updatePeriodLabel(d.periodo);
+            if (d.ultima_actualizacion) {
+                const elAct = document.getElementById('ultima-actualizacion');
+                if (elAct) elAct.textContent = d.ultima_actualizacion;
+            }
+            const elBadge = document.getElementById('badge-desactualizado');
+            if (elBadge) {
+                elBadge.style.display = d.is_outdated ? 'inline-flex' : 'none';
+            }
             renderKPIs(d);
             renderTablaSucursales(d.tabla_sucursales);
             // Async — no bloquean el render inicial; se ejecutan de a uno para no saturar el servidor
