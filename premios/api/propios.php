@@ -48,7 +48,9 @@ try {
     $todos = $db->datosPropios(null);
 
     $kpis = [
-        'facturacion_var_marca' => $db->facturacionVarMarca($todos),
+        // El KPI "Facturación Var % Marca" muestra el BENCHMARK (agregado +10pp), no el
+        // agregado crudo — confirmado contra el KPI real (302,07 % = 292,07 % + 10pp).
+        'facturacion_var_marca' => $db->benchmarkVarMarca($todos),
         'ticket_promedio_marca' => $db->ticketPromedioMarca($todos),
         'pct_ticket_2do_marca'  => $db->pctTicketProductoMarca($todos, 'tickets_2do_prod'),
         'pct_ticket_3er_marca'  => $db->pctTicketProductoMarca($todos, 'tickets_3er_prod'),
@@ -101,6 +103,24 @@ try {
         ];
     }
 
+    // La fila "TODAS" (ECOMMERCE) se muestra suelta, sin agrupar bajo ninguna supervisora
+    // (no pertenece a ninguna) — pero SÍ suma al total general de la tabla, igual que en el
+    // tablero real (el "Total" incluye esta fila).
+    $todasRow = null;
+    if (!$supervisoraFiltro) {
+        $filasTodas = $db->datosPropios('TODAS');
+        if ($filasTodas) {
+            $todasRow = filaVista($db, $filasTodas[0]);
+            $totFactSIva += $filasTodas[0]['imp_fact_s_iva'];
+            $totFactCIva += $filasTodas[0]['imp_fact'];
+            $totObj      += $filasTodas[0]['imp_obj'];
+            $totFactAnt  += $filasTodas[0]['imp_fact_ant'];
+            $totTickets  += $filasTodas[0]['tickets'];
+            $totT2       += $filasTodas[0]['tickets_2do_prod'];
+            $totT3       += $filasTodas[0]['tickets_3er_prod'];
+        }
+    }
+
     $total = [
         'facturacion_s_iva' => $totFactSIva,
         'facturacion_c_iva' => $totFactCIva,
@@ -112,13 +132,25 @@ try {
         'pct_ticket_3er'    => $totTickets > 0 ? $totT3 / $totTickets : 0.0,
     ];
 
+    $ultimaActFormatted = null;
+    $isOutdated = false;
+    $ultimaActRaw = $db->getUltimaActualizacion();
+    if ($ultimaActRaw) {
+        $dtUpdate = new DateTime($ultimaActRaw);
+        $ultimaActFormatted = $dtUpdate->format('d/m/Y H:i:s');
+        $isOutdated = ($dtUpdate < new DateTime('yesterday 00:00:00'));
+    }
+
     ob_clean();
     echo json_encode([
         'ok'      => true,
         'periodo' => ['desde' => $da, 'hasta' => $ha, 'desde_prev' => $dp, 'hasta_prev' => $hp],
         'kpis'    => $kpis,
         'grupos'  => $grupos,
+        'todas'   => $todasRow,
         'total'   => $total,
+        'ultima_actualizacion' => $ultimaActFormatted,
+        'is_outdated' => $isOutdated,
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
 } catch (Throwable $e) {

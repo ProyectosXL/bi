@@ -34,7 +34,9 @@ try {
     $kpis = [
         'cant_cumplen_objetivo'  => $conteos['cant_venta'],
         'cant_objetivo_crec'     => $conteos['cant_crecimiento'],
-        'facturacion_var_marca'  => $db->facturacionVarMarca($todos),
+        // Mismo criterio que en Locales Propios: el KPI "Facturación Var % Marca" muestra
+        // el BENCHMARK (acá multiplicativo, ×1.1), no el agregado crudo.
+        'facturacion_var_marca'  => $db->benchmarkVarMarcaFranquicias($todos),
     ];
 
     $filas = $todos;
@@ -67,6 +69,15 @@ try {
         'facturacion_var'    => $db->facturacionVarPct($totFact, $totFactAnt),
     ];
 
+    $ultimaActFormatted = null;
+    $isOutdated = false;
+    $ultimaActRaw = $db->getUltimaActualizacion();
+    if ($ultimaActRaw) {
+        $dtUpdate = new DateTime($ultimaActRaw);
+        $ultimaActFormatted = $dtUpdate->format('d/m/Y H:i:s');
+        $isOutdated = ($dtUpdate < new DateTime('yesterday 00:00:00'));
+    }
+
     ob_clean();
     echo json_encode([
         'ok'         => true,
@@ -74,6 +85,8 @@ try {
         'kpis'       => $kpis,
         'sucursales' => $sucursales,
         'total'      => $total,
+        'ultima_actualizacion' => $ultimaActFormatted,
+        'is_outdated' => $isOutdated,
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
 } catch (Throwable $e) {

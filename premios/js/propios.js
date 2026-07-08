@@ -5,9 +5,10 @@
  */
 const PremiosPropios = (() => {
 
-    const { $, fmt, updatePeriodoLabel, claseSemaforo, apiFetch } = Premios;
+    const { $, fmt, updatePeriodoLabel, claseSemaforo, apiFetch, actualizarUltimaActualizacion } = Premios;
 
     let _lastGrupos = [];
+    let _lastTodas  = null;
     let _lastTotal  = null;
 
     function renderKpis(kpis) {
@@ -55,7 +56,23 @@ const PremiosPropios = (() => {
         </tr>`;
     }
 
-    function renderTabla(grupos, total) {
+    function filaTodasHTML(f) {
+        // "TODAS" (canal ecommerce): no pertenece a ninguna supervisora, se muestra suelta
+        // arriba del Total, sin indentar (a diferencia de una sucursal bajo su supervisora).
+        return `<tr class="row-todas">
+            <td>TODAS</td>
+            <td class="td-num">${fmt.money(f.facturacion_s_iva)}</td>
+            <td class="td-num">${fmt.money(f.facturacion_c_iva)}</td>
+            <td class="td-num">${fmt.money(f.objetivo_total)}</td>
+            <td class="td-num ${claseSemaforo(f.cumplimiento_obj, f.sin_datos)}">${fmt.pct(f.cumplimiento_obj)}</td>
+            <td class="td-num ${f.facturacion_var !== null ? (f.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(f.facturacion_var)}</td>
+            <td class="td-num">${fmt.money(f.ticket_promedio)}</td>
+            <td class="td-num">${fmt.pct(f.pct_ticket_2do)}</td>
+            <td class="td-num">${fmt.pct(f.pct_ticket_3er)}</td>
+        </tr>`;
+    }
+
+    function renderTabla(grupos, todas, total) {
         const wrap = $('tabla-propios-wrap');
         if (!wrap) return;
 
@@ -63,21 +80,21 @@ const PremiosPropios = (() => {
             const filaSup = filaSubtotalHTML(g.supervisora, g.subtotal);
             const filasSuc = g.sucursales.map(filaSucursalHTML).join('');
             return filaSup + filasSuc;
-        }).join('');
+        }).join('') + (todas ? filaTodasHTML(todas) : '');
 
         wrap.innerHTML = `
             <table class="premios-table">
                 <thead>
                     <tr>
                         <th>Supervisora / Sucursal</th>
-                        <th>Facturación S/IVA</th>
-                        <th>Facturación C/IVA</th>
-                        <th>Objetivo Total $</th>
-                        <th>% Cumplimiento Obj. Venta</th>
-                        <th>Facturación C/IVA Var %</th>
-                        <th>Ticket Promedio</th>
-                        <th>% Tickets 2do Producto</th>
-                        <th>% Tickets 3er Producto</th>
+                        <th class="th-num">Facturación S/IVA</th>
+                        <th class="th-num">Facturación C/IVA</th>
+                        <th class="th-num">Objetivo Total $</th>
+                        <th class="th-num">% Cumplimiento Obj. Venta</th>
+                        <th class="th-num">Facturación C/IVA Var %</th>
+                        <th class="th-num">Ticket Promedio</th>
+                        <th class="th-num">% Tickets 2do Producto</th>
+                        <th class="th-num">% Tickets 3er Producto</th>
                     </tr>
                 </thead>
                 <tbody>${cuerpo}</tbody>
@@ -109,6 +126,9 @@ const PremiosPropios = (() => {
                 f.cumplimiento_obj, f.facturacion_var, f.ticket_promedio, f.pct_ticket_2do, f.pct_ticket_3er,
             ]));
         });
+        if (_lastTodas) rows.push(['TODAS', _lastTodas.facturacion_s_iva, _lastTodas.facturacion_c_iva,
+            _lastTodas.objetivo_total, _lastTodas.cumplimiento_obj, _lastTodas.facturacion_var,
+            _lastTodas.ticket_promedio, _lastTodas.pct_ticket_2do, _lastTodas.pct_ticket_3er]);
         ExcelExporter.export({
             title  : 'Locales Propios — Facturación vs. Objetivos por Sucursales',
             headers: ['Supervisora / Sucursal', 'Facturación S/IVA', 'Facturación C/IVA', 'Objetivo Total $',
@@ -126,12 +146,14 @@ const PremiosPropios = (() => {
     async function load() {
         const data = await apiFetch('propios.php');
         updatePeriodoLabel(data.periodo);
+        actualizarUltimaActualizacion(data);
 
         _lastGrupos = data.grupos ?? [];
+        _lastTodas  = data.todas ?? null;
         _lastTotal  = data.total;
 
         renderKpis(data.kpis ?? {});
-        renderTabla(_lastGrupos, _lastTotal);
+        renderTabla(_lastGrupos, _lastTodas, _lastTotal);
 
         const btn = $('btn-export-propios-tabla');
         if (btn) btn.onclick = exportar;

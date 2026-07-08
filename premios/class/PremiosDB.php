@@ -84,6 +84,58 @@ class PremiosDB
         return mb_convert_case(mb_strtolower(trim($nombre), 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
     }
 
+    /**
+     * Última fecha/hora real de actualización de los datos (no la del período seleccionado
+     * por el usuario) — mismo patrón que `SalesDB::getUltimaActualizacion()` /
+     * `GlobalDashboardDB::getUltimaActualizacion()`: primero se consulta
+     * `sys.dm_db_index_usage_stats` (último INSERT/UPDATE real sobre la tabla); si no hay
+     * estadísticas (ej. tras un reinicio del motor), se usa como fallback `MAX(FECHA)`.
+     * Acá hay DOS orígenes (propios y franquicias) — se devuelve la más antigua de las dos,
+     * porque si cualquiera de los dos está desactualizado, el reporte completo lo está.
+     */
+    public function getUltimaActualizacion(): ?string
+    {
+        $fechaPropios = $this->ultimaActualizacionTabla($this->connPower, 'BI_T_ESTADISTICAS_VENTAS_PROPIOS');
+        $fechaFranq   = $this->ultimaActualizacionTabla($this->connFranquicias, 'BI_T_ESTADISTICAS_VENTAS_FRANQUICIAS');
+
+        $fechas = array_values(array_filter([$fechaPropios, $fechaFranq]));
+        if (!$fechas) return null;
+        sort($fechas);
+        return $fechas[0];
+    }
+
+    /** @param resource $conn Conexión ya abierta a la base donde vive $tabla. */
+    private function ultimaActualizacionTabla($conn, string $tabla): ?string
+    {
+        $sql = "SELECT MAX(last_update) as last_update FROM (
+                    SELECT MAX(last_user_update) as last_update
+                    FROM sys.dm_db_index_usage_stats
+                    WHERE database_id = DB_ID()
+                      AND object_id = OBJECT_ID('dbo.$tabla')
+                ) t";
+        $stmt = sqlsrv_query($conn, $sql);
+        $res = null;
+        if ($stmt !== false && $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            if (!empty($row['last_update'])) {
+                $res = is_object($row['last_update']) ? $row['last_update']->format('Y-m-d H:i:s') : $row['last_update'];
+            }
+            sqlsrv_free_stmt($stmt);
+        }
+
+        // Fallback: si por alguna razón no tenemos estadísticas, usamos el MAX(FECHA) de la tabla.
+        if (!$res) {
+            $sqlFallback = "SELECT MAX(FECHA) as last_update FROM dbo.$tabla";
+            $stmtFallback = sqlsrv_query($conn, $sqlFallback);
+            if ($stmtFallback !== false && $rowFallback = sqlsrv_fetch_array($stmtFallback, SQLSRV_FETCH_ASSOC)) {
+                if (!empty($rowFallback['last_update'])) {
+                    $res = is_object($rowFallback['last_update']) ? $rowFallback['last_update']->format('Y-m-d H:i:s') : $rowFallback['last_update'];
+                }
+                sqlsrv_free_stmt($stmtFallback);
+            }
+        }
+        return $res;
+    }
+
     /** @return string[] Supervisoras activas, en el orden del catálogo (RO_T_SUPERVISORAS_COMERCIAL.ID). */
     public function getSupervisoras(): array
     {

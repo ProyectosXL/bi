@@ -5,7 +5,7 @@
  */
 const PremiosFranquicias = (() => {
 
-    const { $, fmt, updatePeriodoLabel, claseSemaforo, apiFetch } = Premios;
+    const { $, fmt, updatePeriodoLabel, claseSemaforo, apiFetch, actualizarUltimaActualizacion } = Premios;
 
     let _lastSucursales = [];
     let _lastTotal = null;
@@ -46,11 +46,11 @@ const PremiosFranquicias = (() => {
                 <thead>
                     <tr>
                         <th>Sucursal</th>
-                        <th>Facturación</th>
-                        <th>Objetivo Total $</th>
-                        <th>% Cumplimiento Obj. Venta</th>
-                        <th>Facturación Período Anterior</th>
-                        <th>Facturación Variación %</th>
+                        <th class="th-num">Facturación</th>
+                        <th class="th-num">Objetivo Total $</th>
+                        <th class="th-num">% Cumplimiento Obj. Venta</th>
+                        <th class="th-num">Facturación Período Anterior</th>
+                        <th class="th-num">Facturación Variación %</th>
                     </tr>
                 </thead>
                 <tbody>${filas}</tbody>
@@ -87,6 +87,7 @@ const PremiosFranquicias = (() => {
     async function load() {
         const data = await apiFetch('franquicias.php');
         updatePeriodoLabel(data.periodo);
+        actualizarUltimaActualizacion(data);
 
         _lastSucursales = data.sucursales ?? [];
         _lastTotal = data.total;

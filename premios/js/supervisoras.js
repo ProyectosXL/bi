@@ -5,7 +5,7 @@
  */
 const PremiosSupervisoras = (() => {
 
-    const { $, fmt, updatePeriodoLabel, setSupervisoraOptions, apiFetch } = Premios;
+    const { $, fmt, updatePeriodoLabel, setSupervisoraOptions, apiFetch, actualizarUltimaActualizacion } = Premios;
 
     let _lastPropios = [];
     let _lastFranquicias = [];
@@ -56,23 +56,23 @@ const PremiosSupervisoras = (() => {
         const totalGeneral = supervisoras.reduce((s, r) => s + r.propios.total, 0);
 
         wrap.innerHTML = `
-            <table>
+            <table class="premios-table">
                 <thead>
                     <tr>
                         <th rowspan="2">Supervisora</th>
-                        <th colspan="3">Objetivo Venta</th>
-                        <th colspan="3">Objetivo Crecimiento</th>
-                        <th colspan="3">Ticket Promedio</th>
-                        <th colspan="3">Ticket 2do. Producto</th>
-                        <th colspan="3">Ticket 3er Producto</th>
-                        <th rowspan="2">Total premios</th>
+                        <th colspan="3" class="th-center">Objetivo Venta</th>
+                        <th colspan="3" class="th-center">Objetivo Crecimiento</th>
+                        <th colspan="3" class="th-center">Ticket Promedio</th>
+                        <th colspan="3" class="th-center">Ticket 2do. Producto</th>
+                        <th colspan="3" class="th-center">Ticket 3er Producto</th>
+                        <th rowspan="2" class="th-num">Total premios</th>
                     </tr>
                     <tr>
-                        <th>Cant. Locales</th><th>Importe</th><th>Premio</th>
-                        <th>Cant. Locales</th><th>Importe</th><th>Premio</th>
-                        <th>Cant. Locales</th><th>Importe</th><th>Premio</th>
-                        <th>Cant. Locales</th><th>Importe</th><th>Premio</th>
-                        <th>Cant. Locales</th><th>Importe</th><th>Premio</th>
+                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
+                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
+                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
+                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
+                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
                     </tr>
                 </thead>
                 <tbody>${filas}</tbody>
@@ -106,17 +106,17 @@ const PremiosSupervisoras = (() => {
         const totalGeneral = supervisoras.reduce((s, r) => s + r.franquicias.total, 0);
 
         wrap.innerHTML = `
-            <table>
+            <table class="premios-table">
                 <thead>
                     <tr>
                         <th rowspan="2">Supervisora</th>
-                        <th colspan="3">Objetivo Venta Franq.</th>
-                        <th colspan="3">Objetivo Crecimiento Franq.</th>
-                        <th rowspan="2">Total premios</th>
+                        <th colspan="3" class="th-center">Objetivo Venta Franq.</th>
+                        <th colspan="3" class="th-center">Objetivo Crecimiento Franq.</th>
+                        <th rowspan="2" class="th-num">Total premios</th>
                     </tr>
                     <tr>
-                        <th>Cant. Franquicias</th><th>Importe</th><th>Premio</th>
-                        <th>Cant. Franquicias</th><th>Importe</th><th>Premio</th>
+                        <th class="th-center">Cant. Franquicias</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
+                        <th class="th-center">Cant. Franquicias</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
                     </tr>
                 </thead>
                 <tbody>${filas}</tbody>
@@ -176,6 +176,7 @@ const PremiosSupervisoras = (() => {
     async function load() {
         const data = await apiFetch('resumen.php');
         updatePeriodoLabel(data.periodo);
+        actualizarUltimaActualizacion(data);
 
         _lastPropios = data.supervisoras ?? [];
         _lastFranquicias = data.supervisoras ?? [];

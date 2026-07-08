@@ -102,11 +102,14 @@ las filas del período (incluida "TODAS"/ECOMMERCE) — se confirmó empíricame
 rompe el benchmark `Ticket Promedio Marca` (daba $328.000 calculado vs $281.900 real; con
 ECOMMERCE incluida en la suma, da $281.900 exacto). El conteo `Premio Obj. Venta Cant. Suc.`
 del DAX real solo excluye `NRO_SUCURS=1` ("CENTRAL"), no el 9, así que ECOMMERCE debe contar
-igual que cualquier sucursal para ese propósito. La única excepción: la fila "TODAS" **no**
-debe sumarse en la fila "Total" de la tabla de Locales Propios (`api/propios.php`), porque no
-pertenece a ninguna supervisora y nunca aparece como fila visible en ningún grupo — ese
-endpoint acumula el total sumando los grupos por supervisora ya mostrados, no
-`datosPropios(null)` directamente.
+igual que cualquier sucursal para ese propósito.
+
+**En la tabla de Locales Propios (`api/propios.php`), la fila "TODAS" se muestra suelta**,
+sin agrupar bajo ninguna supervisora (justo antes de la fila "Total", igual que en el
+tablero real) — no se pierde ni se oculta. Sí suma al total general de la tabla (el "Total"
+real del tablero la incluye: $6.142.648.265 de facturación C/IVA, no $5.794.109.258 que daría
+sin ella). Los subtotales por supervisora (`grupos[].subtotal`) siguen calculándose con
+`datosPropios($sup)` sin incluirla, ya que no pertenece a ninguna.
 
 **Comparación año anterior**: se usa directamente la columna `IMP_FACT_ANT` de cada fila
 (ya viene calculada por el ETL como "mismo mes, año anterior"), en vez de consultar el
@@ -121,6 +124,29 @@ La cantidad de franquicias que cumplen objetivo/crecimiento es un número a nive
 importe del premio varía por supervisora (`PremiosDB::importesFranquiciaPorSupervisora()`,
 con `MIN`/`MAX` para colapsar duplicados de la misma supervisora+mes — igual criterio que
 las medidas DAX `Premio Obj. Venta Franq. (importe)` / `Premio Obj. Crecimiento Franq. (importe)`).
+
+---
+
+## Badge "Última actualización" / "DESACTUALIZADO"
+
+Mismo patrón que `sales/` y `global/`: `PremiosDB::getUltimaActualizacion()` consulta
+`sys.dm_db_index_usage_stats` para saber cuándo se escribió por última vez cada tabla de
+origen (`BI_T_ESTADISTICAS_VENTAS_PROPIOS` en `power`, `BI_T_ESTADISTICAS_VENTAS_FRANQUICIAS`
+en `power_franquicias`), con fallback a `MAX(FECHA)` si no hay estadísticas de uso (ej. tras
+un reinicio del motor). Como hay DOS orígenes, se devuelve la más antigua de las dos fechas —
+si cualquiera de las dos tablas está desactualizada, el reporte completo lo está.
+
+El dato es independiente del período elegido por el usuario en el toolbar (siempre refleja
+cuándo se cargaron los datos por última vez, no el rango de fechas consultado). Se considera
+"desactualizado" (`is_outdated=true`, badge rojo con animación de pulso) cuando esa fecha es
+anterior a "ayer 00:00:00".
+
+- `index.php` calcula el valor inicial en el primer render de la página (`$ultimaAct`,
+  `$isOutdated`) para el badge en `.topbar-meta` (`#ultima-actualizacion`, `#badge-desactualizado`).
+- Los 3 endpoints (`resumen.php`, `propios.php`, `franquicias.php`) devuelven también
+  `ultima_actualizacion` (string `d/m/Y H:i:s`) e `is_outdated` (bool) en cada respuesta, y
+  `js/premios.js::actualizarUltimaActualizacion(data)` actualiza el badge en cada AJAX
+  (cambio de período/supervisora), sin necesidad de recargar la página.
 
 ---
 
@@ -201,3 +227,22 @@ No usa Chart.js (el tablero original no tiene gráficos, solo cards y tablas).
   promedia el % por fila en vez de recalcular sobre la suma) — es una celda de detalle
   aislada, no afecta ningún monto de premio; pendiente de revisar si hace falta
   pixel-perfect ahí también.
+- **KPI "Facturación Var % Marca" (Vistas Locales Propios y Franquicias)**: muestra el
+  BENCHMARK (con el ajuste +10pp/×1.1 ya aplicado), no el agregado crudo — confirmado
+  contra el KPI real de Locales Propios (302,07 % = 292,07 % + 10pp). `api/propios.php`
+  y `api/franquicias.php` usan `benchmarkVarMarca()`/`benchmarkVarMarcaFranquicias()` para
+  ese KPI puntual, no `facturacionVarMarca()`.
+- **Tabla "Facturación vs. Objetivos por Sucursales" (Locales Propios) — validada 100%
+  exacta contra el tablero real**, incluida la fila "TODAS"/ECOMMERCE y el Total general
+  ($6.142.648.265 de facturación C/IVA, $2.005.791.046 de objetivo, todos los % y el ticket
+  promedio coinciden).
+- **Anomalía conocida y no replicada del tablero original**: en la captura real, la
+  supervisora "Julieta Dalmeida" aparece con 4 sucursales en blanco (Abasto, Alto Palermo,
+  Solar, Unicenter) que en realidad son sucursales de OTRAS supervisoras (Sonia, Elina,
+  Josefina) con datos reales ese mismo mes. Se confirmó en la base que **no existe ninguna
+  fila con `SUPERVISORA='JULIETA DALMEIDA'`** para ese período — es decir, el tablero
+  original muestra esas 4 sucursales duplicadas bajo Julieta con valores en blanco, lo que
+  parece un bug/artefacto visual del `.pbix` (posible cruce sin relación real en el modelo).
+  Como su impacto en $ es nulo (Julieta ya da $0 en Locales Propios, correctamente, en
+  ambos tableros), no se replicó este comportamiento. Mismo caso con "Palmas del Pilar"
+  bajo Josefina (sin datos desde marzo 2026, pero igual aparece en blanco en el original).

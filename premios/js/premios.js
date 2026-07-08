@@ -85,5 +85,17 @@ const Premios = (() => {
         return valor >= 0 ? 'text-green' : 'text-red';
     }
 
-    return { $, fmt, buildQS, apiFetch, updatePeriodoLabel, setSupervisoraOptions, claseSemaforo };
+    /* ── Badge "Última actualización" / "DESACTUALIZADO" (reactivo a cada respuesta AJAX) ── */
+    function actualizarUltimaActualizacion(data) {
+        if (data.ultima_actualizacion) {
+            const elAct = $('ultima-actualizacion');
+            if (elAct) elAct.textContent = data.ultima_actualizacion;
+        }
+        const elBadge = $('badge-desactualizado');
+        if (elBadge) {
+            elBadge.style.display = data.is_outdated ? 'inline-flex' : 'none';
+        }
+    }
+
+    return { $, fmt, buildQS, apiFetch, updatePeriodoLabel, setSupervisoraOptions, claseSemaforo, actualizarUltimaActualizacion };
 })();

@@ -69,11 +69,22 @@ try {
         ];
     }
 
+    $ultimaActFormatted = null;
+    $isOutdated = false;
+    $ultimaActRaw = $db->getUltimaActualizacion();
+    if ($ultimaActRaw) {
+        $dtUpdate = new DateTime($ultimaActRaw);
+        $ultimaActFormatted = $dtUpdate->format('d/m/Y H:i:s');
+        $isOutdated = ($dtUpdate < new DateTime('yesterday 00:00:00'));
+    }
+
     ob_clean();
     echo json_encode([
         'ok'      => true,
         'periodo' => ['desde' => $da, 'hasta' => $ha, 'desde_prev' => $dp, 'hasta_prev' => $hp],
         'supervisoras' => $out,
+        'ultima_actualizacion' => $ultimaActFormatted,
+        'is_outdated' => $isOutdated,
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
 } catch (Throwable $e) {

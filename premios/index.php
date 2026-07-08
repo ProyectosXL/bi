@@ -10,7 +10,25 @@ if (!isset($_SESSION['username'])) {
     exit;
 }
 date_default_timezone_set('America/Argentina/Buenos_Aires');
-$ultimaAct = date('d/m/Y H:i:s');
+
+// Última actualización REAL de los datos de origen (no la hora del servidor web) — mismo
+// patrón que sales/global: se consulta cuándo se modificó por última vez la tabla de
+// ventas en SQL Server, y se marca "desactualizado" si es anterior a ayer 00:00:00.
+require_once __DIR__ . '/class/PremiosDB.php';
+$isOutdated = false;
+$ultimaAct  = 'No disponible';
+try {
+    $hoy = date('Y-m-d');
+    $dbEstado = new PremiosDB($hoy, $hoy, $hoy, $hoy);
+    $ultimaActRaw = $dbEstado->getUltimaActualizacion();
+    if ($ultimaActRaw) {
+        $dtUpdate = new DateTime($ultimaActRaw);
+        $ultimaAct = $dtUpdate->format('d/m/Y H:i:s');
+
+        $dtYesterday = new DateTime('yesterday 00:00:00');
+        $isOutdated = ($dtUpdate < $dtYesterday);
+    }
+} catch (Throwable $e) {}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -40,6 +58,9 @@ $ultimaAct = date('d/m/Y H:i:s');
         <div class="topbar-meta">
             Última actualización<br>
             <strong id="ultima-actualizacion"><?= $ultimaAct ?></strong>
+            <span class="badge-outdated" id="badge-desactualizado" title="Los datos tienen más de un día de retraso" <?= !$isOutdated ? 'style="display: none;"' : '' ?>>
+                <i class="bi bi-exclamation-triangle-fill"></i> DESACTUALIZADO
+            </span>
         </div>
     </header>
 

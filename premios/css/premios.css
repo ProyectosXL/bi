@@ -4,6 +4,28 @@
    Requiere /bi/css/base.css + /bi/css/components.css.
    ═══════════════════════════════════════════════════════ */
 
+/* ── Badge "DESACTUALIZADO" (copiado de global/css/global.css) ── */
+.badge-outdated {
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 5px;
+    background-color: var(--neg);
+    color        : #ffffff;
+    padding      : 3px 8px;
+    border-radius: 4px;
+    font-size    : 0.72rem;
+    font-weight  : 700;
+    margin-top   : 4px;
+    box-shadow   : 0 0 10px rgba(220, 38, 38, 0.45);
+    border       : 1px solid rgba(255, 255, 255, 0.15);
+    letter-spacing: 0.5px;
+    animation    : badge-pulse 2s infinite alternate;
+}
+@keyframes badge-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
+    100% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+}
+
 /* ── Section header (igual criterio que promo-section-header) ── */
 .premios-section-header {
     background   : var(--bg-card2);
@@ -129,7 +151,12 @@
 .premios-table td.td-sucursal { padding-left: 26px; color: var(--text-2); }
 .premios-table tr.row-supervisora td { font-weight: 700; }
 .premios-table tr.row-sin-datos td { color: var(--text-3); font-style: italic; }
+.premios-table tr.row-todas td { border-top: 1px solid var(--border); }
 .premios-table td.td-num { text-align: right; }
+
+/* ── Encabezados alineados con sus columnas (por defecto .table-wrap th es left) ── */
+.table-wrap th.th-num    { text-align: right; }
+.table-wrap th.th-center { text-align: center; }
 
 .btn-export-excel {
     margin-left  : auto;
