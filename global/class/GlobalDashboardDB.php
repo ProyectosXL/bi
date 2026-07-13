@@ -2173,4 +2173,326 @@ class GlobalDashboardDB
         }
         return $res;
     }
+    public function getKPIsLiquidacion(string $desdeAct, string $hastaAct, string $desdePrev, string $hastaPrev,
+                                       ?int $sucursal = null, ?string $vendedor = null, ?string $rubro = null,
+                                       ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null,
+                                       ?string $liqTipo = null, ?string $liqRubro = null, ?string $liqCategoria = null): array
+    {
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
+        $paramsNormal = $this->fp($sucursal, $vendedor ?? '%', $rubro ?? '%', $grupo, $tipoTienda, $canal);
+        [$wClause, $params] = Filters::build($paramsNormal, 's');
+
+        $liqClause = "";
+        $liqParams = [];
+        if ($liqTipo === 'LIQUIDACION') {
+            $liqClause .= " AND md.LIQUIDACION = 'SI'";
+        } elseif ($liqTipo === 'NORMAL') {
+            $liqClause .= " AND (md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI')";
+        } else {
+            if ($liqTipo !== 'ALL') {
+                $liqClause .= " AND md.LIQUIDACION = 'SI'";
+            }
+        }
+
+        if ($liqRubro && $liqRubro !== '%') {
+            $liqClause .= " AND s.RUBRO = ?";
+            $liqParams[] = $liqRubro;
+        }
+        if ($liqCategoria && $liqCategoria !== '%') {
+            $liqClause .= " AND s.CATEGORIA = ?";
+            $liqParams[] = $liqCategoria;
+        }
+
+        $sqlAct = "
+            SELECT SUM(s.IMPORTE) as fact, SUM(s.CANTIDAD) as unid, COUNT(DISTINCT s.N_COMP) as tickets
+            FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
+            LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.MAESTRO_DESTINOS md WITH (NOLOCK) 
+                ON s.COD_ARTICU COLLATE DATABASE_DEFAULT = md.COD_ARTICU COLLATE DATABASE_DEFAULT
+            WHERE s.FECHA >= ? AND s.FECHA <= ?
+              AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+              {$liqClause}
+              {$wClause}
+        ";
+
+        $allParamsAct = array_merge([$desdeAct, $hastaAct], $liqParams, $params);
+        $resAct = $this->queryOne($sqlAct, $allParamsAct);
+
+        $fa = (float)($resAct['fact'] ?? 0.0);
+        $ua = (float)($resAct['unid'] ?? 0.0);
+        $ta = (int)($resAct['tickets'] ?? 0);
+
+        $fp = 0.0;
+        $up = 0.0;
+        $tp = 0;
+
+        if ($liqTipo === 'NORMAL' || $liqTipo === 'ALL') {
+            $sqlPrev = "
+                SELECT SUM(s.IMPORTE) as fact, SUM(s.CANTIDAD) as unid, COUNT(DISTINCT s.N_COMP) as tickets
+                FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
+                WHERE s.FECHA >= ? AND s.FECHA <= ?
+                  AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+                  " . ($liqRubro && $liqRubro !== '%' ? " AND s.RUBRO = ?" : "") . "
+                  " . ($liqCategoria && $liqCategoria !== '%' ? " AND s.CATEGORIA = ?" : "") . "
+                  {$wClause}
+            ";
+            $prevParams = [$desdePrev, $hastaPrev];
+            if ($liqRubro && $liqRubro !== '%') $prevParams[] = $liqRubro;
+            if ($liqCategoria && $liqCategoria !== '%' ? $prevParams[] = $liqCategoria : null);
+            $prevParams = array_merge($prevParams, $params);
+
+            $resPrev = $this->queryOne($sqlPrev, $prevParams);
+            $fp = (float)($resPrev['fact'] ?? 0.0);
+            $up = (float)($resPrev['unid'] ?? 0.0);
+            $tp = (int)($resPrev['tickets'] ?? 0);
+        }
+
+        return [
+            'fact_act'  => $fa,
+            'fact_prev' => $fp,
+            'var_fact'  => null,
+            'unid_act'  => $ua,
+            'unid_prev' => $up,
+            'var_unid'  => null,
+            'tickets_act'  => $ta,
+            'tickets_prev' => $tp,
+            'var_tickets'  => null,
+            'ticket_prom_act'  => $ta > 0 ? $fa / $ta : 0.0,
+            'ticket_prom_prev' => $tp > 0 ? $fp / $tp : 0.0,
+            'var_ticket_prom'  => null
+        ];
+    }
+
+    public function getFacturacionPorSucursalLiquidacion(
+        string $desde_act, string $hasta_act,
+        string $desde_prev, string $hasta_prev,
+        ?string $grupo = null, ?string $tipoTienda = null,
+        ?int $sucursal = null, ?string $canal = null,
+        ?string $liqTipo = null, ?string $liqRubro = null, ?string $liqCategoria = null
+    ): array {
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
+        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
+        [$sfS, $pS]   = Filters::build($fp, 's', $this->campoVendedor, $this->origen, true, false);
+        [$sfGS, $pGS] = $this->grupoFiltro('s');
+
+        $liqClause = "";
+        $liqParams = [];
+        if ($liqTipo === 'LIQUIDACION') {
+            $liqClause .= " AND md.LIQUIDACION = 'SI'";
+        } elseif ($liqTipo === 'NORMAL') {
+            $liqClause .= " AND (md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI')";
+        } else {
+            if ($liqTipo !== 'ALL') {
+                $liqClause .= " AND md.LIQUIDACION = 'SI'";
+            }
+        }
+
+        if ($liqRubro && $liqRubro !== '%') {
+            $liqClause .= " AND s.RUBRO = ?";
+            $liqParams[] = $liqRubro;
+        }
+        if ($liqCategoria && $liqCategoria !== '%') {
+            $liqClause .= " AND s.CATEGORIA = ?";
+            $liqParams[] = $liqCategoria;
+        }
+
+        $sql = "
+            SELECT s.NRO_SUCURS,
+                   SUM(s.IMPORTE) as fact_act,
+                   SUM(s.CANTIDAD) as unid_act
+            FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
+            LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.MAESTRO_DESTINOS md WITH (NOLOCK)
+                ON s.COD_ARTICU COLLATE DATABASE_DEFAULT = md.COD_ARTICU COLLATE DATABASE_DEFAULT
+            WHERE s.FECHA >= ? AND s.FECHA <= ?
+              AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+              {$liqClause}
+              {$sfS} {$sfGS}
+            GROUP BY s.NRO_SUCURS
+        ";
+        
+        $rows = $this->query($sql, array_merge([$desde_act, $hasta_act], $liqParams, $pS, $pGS));
+
+        $result = [];
+        foreach ($rows as $r) {
+            $nro  = (int)$r['NRO_SUCURS'];
+            $fact = (float)$r['fact_act'];
+            $unid = (float)$r['unid_act'];
+            $result[$nro] = [
+                'nro_sucurs'       => $nro,
+                'facturacion'      => $fact,
+                'facturacion_prev' => 0.0,
+                'unidades'         => $unid,
+                'unidades_prev'    => 0.0,
+                'var_fact'         => null,
+                'var_unid'         => null
+            ];
+        }
+        return $result;
+    }
+
+    public function getProductosLiquidacion(
+        string $desde_act, string $hasta_act,
+        ?string $grupo = null, ?string $tipoTienda = null,
+        ?int $sucursal = null, ?string $canal = null,
+        ?string $liqTipo = null, ?string $liqRubro = null, ?string $liqCategoria = null
+    ): array {
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
+        $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
+        [$sfS, $pS]   = Filters::build($fp, 's', $this->campoVendedor, $this->origen, true, false);
+        [$sfGS, $pGS] = $this->grupoFiltro('s');
+
+        $liqClause = "";
+        $liqParams = [];
+        if ($liqTipo === 'LIQUIDACION') {
+            $liqClause .= " AND md.LIQUIDACION = 'SI'";
+        } elseif ($liqTipo === 'NORMAL') {
+            $liqClause .= " AND (md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI')";
+        } else {
+            if ($liqTipo !== 'ALL') {
+                $liqClause .= " AND md.LIQUIDACION = 'SI'";
+            }
+        }
+
+        if ($liqRubro && $liqRubro !== '%') {
+            $liqClause .= " AND s.RUBRO = ?";
+            $liqParams[] = $liqRubro;
+        }
+        if ($liqCategoria && $liqCategoria !== '%') {
+            $liqClause .= " AND s.CATEGORIA = ?";
+            $liqParams[] = $liqCategoria;
+        }
+
+        $sql = "
+            SELECT TOP 100 
+                   s.COD_ARTICU,
+                   md.DESCRIPCION,
+                   md.TEMPORADA,
+                   SUM(s.CANTIDAD) as cantidad,
+                   SUM(s.IMPORTE) as importe
+            FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
+            LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.MAESTRO_DESTINOS md WITH (NOLOCK)
+                ON s.COD_ARTICU COLLATE DATABASE_DEFAULT = md.COD_ARTICU COLLATE DATABASE_DEFAULT
+            WHERE s.FECHA >= ? AND s.FECHA <= ?
+              AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+              {$liqClause}
+              {$sfS} {$sfGS}
+            GROUP BY s.COD_ARTICU, md.DESCRIPCION, md.TEMPORADA
+            ORDER BY SUM(s.IMPORTE) DESC
+        ";
+
+        return $this->query($sql, array_merge([$desde_act, $hasta_act], $liqParams, $pS, $pGS));
+    }
+
+    public function getJerarquiaLiquidacion(string $desdeAct, string $hastaAct,
+                                            ?int $sucursal = null, ?string $vendedor = null, ?string $rubro = null,
+                                            ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null,
+                                            ?string $liqRubro = null, ?string $liqCategoria = null): array
+    {
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
+        $paramsNormal = $this->fp($sucursal, $vendedor ?? '%', $rubro ?? '%', $grupo, $tipoTienda, $canal);
+        [$wClause, $params] = Filters::build($paramsNormal, 's');
+
+        $liqClause = "";
+        $liqParams = [];
+        if ($liqRubro && $liqRubro !== '%') {
+            $liqClause .= " AND s.RUBRO = ?";
+            $liqParams[] = $liqRubro;
+        }
+        if ($liqCategoria && $liqCategoria !== '%') {
+            $liqClause .= " AND s.CATEGORIA = ?";
+            $liqParams[] = $liqCategoria;
+        }
+
+        $sql = "
+            SELECT 
+                s.RUBRO,
+                s.CATEGORIA,
+                SUM(CASE WHEN md.LIQUIDACION = 'SI' THEN s.IMPORTE ELSE 0 END) as fact_liq,
+                SUM(CASE WHEN md.LIQUIDACION = 'SI' THEN s.CANTIDAD ELSE 0 END) as unid_liq,
+                SUM(CASE WHEN md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI' THEN s.IMPORTE ELSE 0 END) as fact_norm,
+                SUM(CASE WHEN md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI' THEN s.CANTIDAD ELSE 0 END) as unid_norm
+            FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
+            LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.MAESTRO_DESTINOS md WITH (NOLOCK) 
+                ON s.COD_ARTICU COLLATE DATABASE_DEFAULT = md.COD_ARTICU COLLATE DATABASE_DEFAULT
+            WHERE s.FECHA >= ? AND s.FECHA <= ?
+              AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+              {$liqClause}
+              {$wClause}
+            GROUP BY s.RUBRO, s.CATEGORIA
+            ORDER BY s.RUBRO, s.CATEGORIA
+        ";
+
+        $allParams = array_merge([$desdeAct, $hastaAct], $liqParams, $params);
+        return $this->query($sql, $allParams);
+    }
+
+    public function getTimelineLiquidacion(string $desdeAct, string $hastaAct, string $desdePrev, string $hastaPrev,
+                                           ?int $sucursal = null, ?string $vendedor = null, ?string $rubro = null,
+                                           ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null,
+                                           ?string $liqTipo = null, ?string $liqRubro = null, ?string $liqCategoria = null): array
+    {
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
+        $paramsNormal = $this->fp($sucursal, $vendedor ?? '%', $rubro ?? '%', $grupo, $tipoTienda, $canal);
+        [$wClause, $params] = Filters::build($paramsNormal, 's');
+
+        $liqClause = "";
+        $liqParams = [];
+        if ($liqTipo === 'LIQUIDACION') {
+            $liqClause .= " AND md.LIQUIDACION = 'SI'";
+        } elseif ($liqTipo === 'NORMAL') {
+            $liqClause .= " AND (md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI')";
+        }
+
+        if ($liqRubro && $liqRubro !== '%') {
+            $liqClause .= " AND s.RUBRO = ?";
+            $liqParams[] = $liqRubro;
+        }
+        if ($liqCategoria && $liqCategoria !== '%') {
+            $liqClause .= " AND s.CATEGORIA = ?";
+            $liqParams[] = $liqCategoria;
+        }
+
+        $sqlAct = "
+            SELECT 
+                CAST(s.FECHA AS DATE) as fecha,
+                SUM(CASE WHEN md.LIQUIDACION = 'SI' THEN s.IMPORTE ELSE 0 END) as fact_liq,
+                SUM(CASE WHEN md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI' THEN s.IMPORTE ELSE 0 END) as fact_norm
+            FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
+            LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.MAESTRO_DESTINOS md WITH (NOLOCK) 
+                ON s.COD_ARTICU COLLATE DATABASE_DEFAULT = md.COD_ARTICU COLLATE DATABASE_DEFAULT
+            WHERE s.FECHA >= ? AND s.FECHA <= ?
+              AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+              {$liqClause}
+              {$wClause}
+            GROUP BY CAST(s.FECHA AS DATE)
+            ORDER BY CAST(s.FECHA AS DATE)
+        ";
+        $allParamsAct = array_merge([$desdeAct, $hastaAct], $liqParams, $params);
+        $rowsAct = $this->query($sqlAct, $allParamsAct);
+
+        $sqlPrev = "
+            SELECT 
+                CAST(s.FECHA AS DATE) as fecha,
+                SUM(s.IMPORTE) as fact_total
+            FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
+            WHERE s.FECHA >= ? AND s.FECHA <= ?
+              AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+              " . ($liqRubro && $liqRubro !== '%' ? " AND s.RUBRO = ?" : "") . "
+              " . ($liqCategoria && $liqCategoria !== '%' ? " AND s.CATEGORIA = ?" : "") . "
+              {$wClause}
+            GROUP BY CAST(s.FECHA AS DATE)
+            ORDER BY CAST(s.FECHA AS DATE)
+        ";
+        
+        $prevParams = [$desdePrev, $hastaPrev];
+        if ($liqRubro && $liqRubro !== '%') $prevParams[] = $liqRubro;
+        if ($liqCategoria && $liqCategoria !== '%') $prevParams[] = $liqCategoria;
+        $prevParams = array_merge($prevParams, $params);
+        
+        $rowsPrev = $this->query($sqlPrev, $prevParams);
+
+        return [
+            'actual' => $rowsAct,
+            'previo' => $rowsPrev
+        ];
+    }
 }
