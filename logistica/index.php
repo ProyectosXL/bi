@@ -3,11 +3,6 @@
  * /bi/logistica/index.php
  * Dashboard Logística — XL Extra Large (AR + UY)
  */
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
-if (!isset($_SESSION['username'])) {
-    header('Location: ../../sistemas/login.php');
-    exit;
-}
 header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
 
