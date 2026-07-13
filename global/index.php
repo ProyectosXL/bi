@@ -252,6 +252,9 @@ try {
             <i class="bi bi-trophy"></i>&nbsp; Ranking
         </button>
         <?php endif; ?>
+        <button class="tab-btn" id="tab-btn-liquidacion" role="tab" aria-controls="tab-liquidacion" aria-selected="false">
+            <i class="bi bi-percent"></i>&nbsp; Liquidación
+        </button>
         <button class="tab-btn" id="tab-btn-franquicias-detalle" role="tab" aria-controls="tab-franquicias-detalle" aria-selected="false" style="display:none">
             <i class="bi bi-calendar3"></i>&nbsp; Venta día por día
         </button>
@@ -1001,6 +1004,221 @@ try {
         </main>
     </div>
 
+    <!-- ══ PESTAÑA: LIQUIDACIÓN ════════════════════════════════════════ -->
+    <div id="tab-liquidacion" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-liquidacion">
+        <main class="dash-content">
+            <div style="background: rgba(0, 168, 120, 0.1); border-left: 4px solid #00a878; padding: 12px; margin-bottom: 20px; border-radius: 4px; color: #fff; display: flex; align-items: center; gap: 10px;">
+                <i class="bi bi-info-circle-fill" style="color: #00a878; font-size: 1.2rem;"></i>
+                <div>
+                    <strong>Período de Liquidación:</strong> Análisis fijo del <strong>01/07 al 16/08</strong>.
+                    El año anterior por el momento no filtra por artículos específicos (luego se incorporará según la definición de artículos correspondientes).
+                </div>
+            </div>
+
+            <!-- Active Filters Bar -->
+            <div id="liq-active-filters-bar" style="display: none; background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; padding: 12px; margin-bottom: 20px; border-radius: 4px; color: #fff; align-items: center; justify-content: space-between;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i class="bi bi-funnel-fill" style="color: #3b82f6; font-size: 1.2rem;"></i>
+                    <span id="liq-active-filters-text">Filtros activos: ninguno</span>
+                </div>
+                <button id="liq-btn-clear-all-filters" style="padding: 4px 10px; font-size: 0.8rem; background: #ef4444 !important; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    Limpiar Filtros <i class="bi bi-x-circle"></i>
+                </button>
+            </div>
+
+            <!-- KPIs exactly matching summary-row -->
+            <div class="summary-row" style="margin-bottom: 20px;">
+                <div class="summary-card fact">
+                    <div class="summary-icon">💰</div>
+                    <div class="summary-body">
+                        <div class="summary-label">Facturación liquidación</div>
+                        <div class="summary-value" id="liq-kpi-facturacion">—</div>
+                        <div class="summary-var" id="liq-kpi-facturacion-var" style="display:none">—</div>
+                    </div>
+                    <div class="summary-side">
+                        <div class="summary-prev-label">Año anterior</div>
+                        <div class="summary-prev-value" id="liq-kpi-facturacion-prev">—</div>
+                    </div>
+                </div>
+
+                <div class="summary-card unid">
+                    <div class="summary-icon">📦</div>
+                    <div class="summary-body">
+                        <div class="summary-label">Unidades liquidación</div>
+                        <div class="summary-value" id="liq-kpi-unidades">—</div>
+                        <div class="summary-var" id="liq-kpi-unidades-var" style="display:none">—</div>
+                    </div>
+                    <div class="summary-side">
+                        <div class="summary-prev-label">Año anterior</div>
+                        <div class="summary-prev-value" id="liq-kpi-unidades-prev">—</div>
+                    </div>
+                </div>
+
+                <div class="summary-card tickets">
+                    <div class="summary-icon">🎟️</div>
+                    <div class="summary-body">
+                        <div class="summary-label">Tickets liquidación</div>
+                        <div class="summary-value" id="liq-kpi-tickets">—</div>
+                        <div class="summary-var" id="liq-kpi-tickets-var" style="display:none">—</div>
+                    </div>
+                    <div class="summary-side">
+                        <div class="summary-prev-label">Año anterior</div>
+                        <div class="summary-prev-value" id="liq-kpi-tickets-prev">—</div>
+                    </div>
+                </div>
+
+                <div class="summary-card obj">
+                    <div class="summary-icon">💵</div>
+                    <div class="summary-body">
+                        <div class="summary-label">Ticket promedio liq.</div>
+                        <div class="summary-value" id="liq-kpi-promedio">—</div>
+                        <div class="summary-var" id="liq-kpi-promedio-var" style="display:none">—</div>
+                    </div>
+                    <div class="summary-side">
+                        <div class="summary-prev-label">Año anterior</div>
+                        <div class="summary-prev-value" id="liq-kpi-promedio-prev">—</div>
+                    </div>
+                </div>
+            </div> <!-- Close summary-row -->
+
+            <!-- Timeline Chart Card -->
+            <div class="analisis-card" style="margin-bottom: 20px; min-height: 380px; display:flex; flex-direction:column;">
+                <div class="analisis-section-header">
+                    <i class="bi bi-graph-up"></i> Evolución Diaria de Ventas — Liquidación vs Normal vs Año Anterior (Total)
+                </div>
+                <div style="flex:1; padding:12px; position:relative; min-height: 300px;">
+                    <canvas id="liq-chart-timeline"></canvas>
+                </div>
+            </div>
+
+            <!-- Donut Charts Row -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; align-items: start;">
+                <!-- Donut Chart Facturación -->
+                <div class="analisis-card" style="min-height: 380px; display:flex; flex-direction:column;">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-pie-chart"></i> Participación Facturación — Liquidación vs Normal
+                    </div>
+                    <div style="flex:1; padding:12px; position:relative; min-height: 300px; display:flex; flex-direction:column;">
+                        <div id="liq-donut-fact-breadcrumb" style="display:none; margin-bottom:8px;">
+                            <button id="liq-btn-back-donut-fact" style="padding: 4px 8px; font-size: 0.8rem; background: var(--accent2) !important; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+                                <i class="bi bi-arrow-left"></i> Volver
+                            </button>
+                        </div>
+                        <div style="flex:1; position:relative;">
+                            <canvas id="liq-donut-facturacion"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Donut Chart Unidades -->
+                <div class="analisis-card" style="min-height: 380px; display:flex; flex-direction:column;">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-pie-chart"></i> Participación Unidades — Liquidación vs Normal
+                    </div>
+                    <div style="flex:1; padding:12px; position:relative; min-height: 300px; display:flex; flex-direction:column;">
+                        <div id="liq-donut-unid-breadcrumb" style="display:none; margin-bottom:8px;">
+                            <button id="liq-btn-back-donut-unid" style="padding: 4px 8px; font-size: 0.8rem; background: var(--accent2) !important; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+                                <i class="bi bi-arrow-left"></i> Volver
+                            </button>
+                        </div>
+                        <div style="flex:1; position:relative;">
+                            <canvas id="liq-donut-unidades"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Middle Row: Chart & Hierarchical Table -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; align-items: start;">
+                <!-- Chart Rubros comparison -->
+                <div class="analisis-card" style="min-height: 480px; display:flex; flex-direction:column;">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-bar-chart-steps"></i> Participación Liquidación por Rubro (Venta 2026)
+                    </div>
+                    <div style="flex:1; padding:12px; position:relative; min-height: 400px; display:flex; flex-direction:column;">
+                        <div id="liq-chart-breadcrumb" style="display:none; margin-bottom:8px;">
+                            <button id="liq-btn-back-chart" style="padding: 4px 8px; font-size: 0.8rem; background: var(--accent2) !important; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+                                <i class="bi bi-arrow-left"></i> Volver a Rubros
+                            </button>
+                        </div>
+                        <div style="flex:1; position:relative;">
+                            <canvas id="liq-chart-rubros"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progressive hierarchy -->
+                <div class="analisis-card" style="min-height: 480px;">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-diagram-3"></i> Apertura por Rubro / Categoría
+                    </div>
+                    <div style="max-height: 430px; overflow: auto; padding: 0 12px 12px;">
+                        <table class="ranking-table" id="liq-table-jerarquia">
+                            <thead>
+                                <tr>
+                                    <th>Rubro / Categoría</th>
+                                    <th style="text-align: right;">Fact. Liq.</th>
+                                    <th style="text-align: right;">Fact. Normal</th>
+                                    <th style="text-align: right;">% Mix Liq.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="4" style="text-align: center; padding: 20px;">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detail Split Grid -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+                <!-- Sucursales -->
+                <div class="analisis-card">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-shop"></i> Ventas por Sucursal (Liquidación)
+                    </div>
+                    <div style="max-height: 500px; overflow: auto; padding: 0 12px 12px;">
+                        <table class="ranking-table" id="liq-table-sucursales">
+                            <thead>
+                                <tr>
+                                    <th>Sucursal</th>
+                                    <th style="text-align: right;">Facturación</th>
+                                    <th style="text-align: right;">Unidades</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="3" style="text-align: center; padding: 20px;">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Articles -->
+                <div class="analisis-card">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-box-seam"></i> Artículos más Vendidos en Liquidación
+                    </div>
+                    <div style="max-height: 500px; overflow: auto; padding: 0 12px 12px;">
+                        <table class="ranking-table" id="liq-table-productos">
+                            <thead>
+                                <tr>
+                                    <th>Articulo</th>
+                                    <th>Descripción</th>
+                                    <th>Temporada</th>
+                                    <th style="text-align: right;">Cant</th>
+                                    <th style="text-align: right;">Total $</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="5" style="text-align: center; padding: 20px;">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
     <!-- ══ MODAL EVOLUCIÓN MENSUAL ══════════════════════════════════════ -->
     <div id="evolucion-modal-overlay" style="display:none" class="spark-modal-overlay">
         <div class="spark-modal" style="width:min(900px,96vw);max-height:92vh">
@@ -1058,6 +1276,7 @@ $jsFiles = [
     '/bi/global/js/ranking.js',
     '/bi/global/js/franquicias_detalle.js',
     '/bi/global/js/franquicias_resumen.js',
+    '/bi/global/js/liquidacion.js',
 ];
 foreach ($jsFiles as $f):
     $v = @filemtime($_SERVER['DOCUMENT_ROOT'] . $f) ?: 1;
@@ -1088,11 +1307,12 @@ window.BI_CONFIG = {
         { btn: 'tab-btn-participacion',  pane: 'tab-participacion',  name: 'participacion' },
         { btn: 'tab-btn-vendedoras',     pane: 'tab-vendedoras',     name: 'vendedoras'    },
         { btn: 'tab-btn-ranking',        pane: 'tab-ranking',        name: 'ranking'       },
+        { btn: 'tab-btn-liquidacion',    pane: 'tab-liquidacion',    name: 'liquidacion'   },
         { btn: 'tab-btn-franquicias-detalle', pane: 'tab-franquicias-detalle', name: 'franquiciasDetalle' },
         { btn: 'tab-btn-franquicias-resumen', pane: 'tab-franquicias-resumen', name: 'franquiciasResumen' },
     ].filter(t => document.getElementById(t.btn) && document.getElementById(t.pane));
 
-    const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false, franquiciasDetalle: false, franquiciasResumen: false };
+    const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false, liquidacion: false, franquiciasDetalle: false, franquiciasResumen: false };
 
     const loaders = {
         kpis         : () => Dashboard.loadAll(),
@@ -1102,6 +1322,7 @@ window.BI_CONFIG = {
         participacion: () => Participacion.loadAll(),
         vendedoras   : () => Vendedoras.loadAll(),
         ranking      : () => Ranking.loadAll(),
+        liquidacion  : () => Liquidacion.loadAll(),
         franquiciasDetalle: () => FranquiciasDetalle.loadAll(),
         franquiciasResumen: () => FranquiciasResumen.loadAll(),
     };
