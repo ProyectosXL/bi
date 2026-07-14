@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * /bi/sales/api/unidades.php
  * Datos para la pestaÃ±a Unidades.
@@ -32,14 +32,20 @@ try {
 
     $db = new SalesDB();
 
-    // Tabla de unidades por rubro
+    // Tabla de unidades por rubro (actual vs año anterior)
     $tabla = $db->getTablaUnidades($da, $ha, $dp, $hp, $canal);
+
+    // Tabla mensual de unidades por rubro del año en curso
+    $anioActual = (int)date('Y');
+    $tablaMensual = $db->getTablaUnidadesMensualRubro($anioActual, $canal);
 
     ob_clean();
     echo json_encode([
-        'ok'     => true,
-        'periodo'=> ['desde' => $da, 'hasta' => $ha, 'desde_prev' => $dp, 'hasta_prev' => $hp],
-        'tabla'  => $tabla,
+        'ok'           => true,
+        'periodo'      => ['desde' => $da, 'hasta' => $ha, 'desde_prev' => $dp, 'hasta_prev' => $hp],
+        'tabla'        => $tabla,
+        'tabla_mensual'=> $tablaMensual,
+        'anio_actual'  => $anioActual,
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
 } catch (Throwable $e) {
