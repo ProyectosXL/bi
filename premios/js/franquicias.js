@@ -5,7 +5,7 @@
  */
 const PremiosFranquicias = (() => {
 
-    const { $, fmt, updatePeriodoLabel, claseSemaforo, apiFetch, actualizarUltimaActualizacion } = Premios;
+    const { $, fmt, updatePeriodoLabel, cumplimientoCellHTML, apiFetch, actualizarUltimaActualizacion } = Premios;
 
     let _lastSucursales = [];
     let _lastTotal = null;
@@ -25,9 +25,11 @@ const PremiosFranquicias = (() => {
             </div>`).join('');
     }
 
-    function renderTabla(sucursales, total) {
+    function renderTabla(sucursales, total, kpis) {
         const wrap = $('tabla-franquicias-wrap');
         if (!wrap) return;
+
+        const benchmarkMarca = kpis.facturacion_var_marca;
 
         const filas = sucursales.map(f => {
             const cls = f.sin_datos ? 'row-sin-datos' : '';
@@ -35,7 +37,7 @@ const PremiosFranquicias = (() => {
                 <td>${f.sucursal}</td>
                 <td class="td-num">${fmt.money(f.facturacion)}</td>
                 <td class="td-num">${fmt.money(f.objetivo_total)}</td>
-                <td class="td-num ${claseSemaforo(f.cumplimiento_obj, f.sin_datos)}">${fmt.pct(f.cumplimiento_obj)}</td>
+                ${cumplimientoCellHTML(f.cumplimiento_obj, f.facturacion_var, benchmarkMarca, f.sin_datos)}
                 <td class="td-num">${fmt.money(f.facturacion_previa)}</td>
                 <td class="td-num ${f.facturacion_var !== null ? (f.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(f.facturacion_var)}</td>
             </tr>`;
@@ -59,7 +61,7 @@ const PremiosFranquicias = (() => {
                         <td>Total</td>
                         <td class="td-num">${fmt.money(total.facturacion)}</td>
                         <td class="td-num">${fmt.money(total.objetivo_total)}</td>
-                        <td class="td-num ${claseSemaforo(total.cumplimiento_obj)}">${fmt.pct(total.cumplimiento_obj)}</td>
+                        ${cumplimientoCellHTML(total.cumplimiento_obj, total.facturacion_var, benchmarkMarca)}
                         <td class="td-num">${fmt.money(total.facturacion_previa)}</td>
                         <td class="td-num ${total.facturacion_var !== null ? (total.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(total.facturacion_var)}</td>
                     </tr>
@@ -93,7 +95,7 @@ const PremiosFranquicias = (() => {
         _lastTotal = data.total;
 
         renderKpis(data.kpis ?? {});
-        renderTabla(_lastSucursales, _lastTotal);
+        renderTabla(_lastSucursales, _lastTotal, data.kpis ?? {});
 
         const btn = $('btn-export-franquicias-tabla');
         if (btn) btn.onclick = exportar;

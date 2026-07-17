@@ -5,7 +5,7 @@
  */
 const PremiosPropios = (() => {
 
-    const { $, fmt, updatePeriodoLabel, claseSemaforo, apiFetch, actualizarUltimaActualizacion } = Premios;
+    const { $, fmt, updatePeriodoLabel, cumplimientoCellHTML, claseBenchmark, apiFetch, actualizarUltimaActualizacion } = Premios;
 
     let _lastGrupos = [];
     let _lastTodas  = null;
@@ -27,60 +27,73 @@ const PremiosPropios = (() => {
             </div>`).join('');
     }
 
-    function filaSucursalHTML(f) {
+    function filaSucursalHTML(f, bm) {
         const cls = f.sin_datos ? 'row-sin-datos' : '';
         return `<tr class="${cls}">
             <td class="td-sucursal">${f.sucursal}</td>
             <td class="td-num">${fmt.money(f.facturacion_s_iva)}</td>
             <td class="td-num">${fmt.money(f.facturacion_c_iva)}</td>
             <td class="td-num">${fmt.money(f.objetivo_total)}</td>
-            <td class="td-num ${claseSemaforo(f.cumplimiento_obj, f.sin_datos)}">${fmt.pct(f.cumplimiento_obj)}</td>
+            ${cumplimientoCellHTML(f.cumplimiento_obj, f.facturacion_var, bm.facturacionVarMarca, f.sin_datos)}
             <td class="td-num ${f.facturacion_var !== null ? (f.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(f.facturacion_var)}</td>
-            <td class="td-num">${fmt.money(f.ticket_promedio)}</td>
-            <td class="td-num">${fmt.pct(f.pct_ticket_2do)}</td>
-            <td class="td-num">${fmt.pct(f.pct_ticket_3er)}</td>
+            <td class="td-num ${claseBenchmark(f.ticket_promedio, bm.ticketPromedioMarca)}">${fmt.money(f.ticket_promedio)}</td>
+            <td class="td-num ${claseBenchmark(f.pct_ticket_2do, bm.pct2Marca)}">${fmt.pct(f.pct_ticket_2do)}</td>
+            <td class="td-num ${claseBenchmark(f.pct_ticket_3er, bm.pct3Marca)}">${fmt.pct(f.pct_ticket_3er)}</td>
         </tr>`;
     }
 
-    function filaSubtotalHTML(nombre, s) {
-        return `<tr class="row-supervisora">
+    function filaSubtotalHTML(nombre, s, bm, sinDatos, extraClass) {
+        return `<tr class="row-supervisora ${extraClass ?? ''}">
             <td>${nombre}</td>
             <td class="td-num">${fmt.money(s.facturacion_s_iva)}</td>
             <td class="td-num">${fmt.money(s.facturacion_c_iva)}</td>
             <td class="td-num">${fmt.money(s.objetivo_total)}</td>
-            <td class="td-num ${claseSemaforo(s.cumplimiento_obj)}">${fmt.pct(s.cumplimiento_obj)}</td>
+            ${cumplimientoCellHTML(s.cumplimiento_obj, s.facturacion_var, bm.facturacionVarMarca, sinDatos)}
             <td class="td-num ${s.facturacion_var !== null ? (s.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(s.facturacion_var)}</td>
-            <td class="td-num">${fmt.money(s.ticket_promedio)}</td>
-            <td class="td-num">${fmt.pct(s.pct_ticket_2do)}</td>
-            <td class="td-num">${fmt.pct(s.pct_ticket_3er)}</td>
+            <td class="td-num ${claseBenchmark(s.ticket_promedio, bm.ticketPromedioMarca)}">${fmt.money(s.ticket_promedio)}</td>
+            <td class="td-num ${claseBenchmark(s.pct_ticket_2do, bm.pct2Marca)}">${fmt.pct(s.pct_ticket_2do)}</td>
+            <td class="td-num ${claseBenchmark(s.pct_ticket_3er, bm.pct3Marca)}">${fmt.pct(s.pct_ticket_3er)}</td>
         </tr>`;
     }
 
-    function filaTodasHTML(f) {
-        // "TODAS" (canal ecommerce): no pertenece a ninguna supervisora, se muestra suelta
-        // arriba del Total, sin indentar (a diferencia de una sucursal bajo su supervisora).
-        return `<tr class="row-todas">
-            <td>TODAS</td>
+    function filaEcommerceHTML(f, bm) {
+        // Fila sintética SUPERVISORA='TODAS' en la BD = canal ECOMMERCE, hija del grupo
+        // "Todas" (no pertenece a ninguna supervisora real) — indentada igual que una
+        // sucursal bajo su supervisora.
+        const cls = f.sin_datos ? 'row-sin-datos' : '';
+        return `<tr class="${cls}">
+            <td class="td-sucursal">ECOMMERCE</td>
             <td class="td-num">${fmt.money(f.facturacion_s_iva)}</td>
             <td class="td-num">${fmt.money(f.facturacion_c_iva)}</td>
             <td class="td-num">${fmt.money(f.objetivo_total)}</td>
-            <td class="td-num ${claseSemaforo(f.cumplimiento_obj, f.sin_datos)}">${fmt.pct(f.cumplimiento_obj)}</td>
+            ${cumplimientoCellHTML(f.cumplimiento_obj, f.facturacion_var, bm.facturacionVarMarca, f.sin_datos)}
             <td class="td-num ${f.facturacion_var !== null ? (f.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(f.facturacion_var)}</td>
-            <td class="td-num">${fmt.money(f.ticket_promedio)}</td>
-            <td class="td-num">${fmt.pct(f.pct_ticket_2do)}</td>
-            <td class="td-num">${fmt.pct(f.pct_ticket_3er)}</td>
+            <td class="td-num ${claseBenchmark(f.ticket_promedio, bm.ticketPromedioMarca)}">${fmt.money(f.ticket_promedio)}</td>
+            <td class="td-num ${claseBenchmark(f.pct_ticket_2do, bm.pct2Marca)}">${fmt.pct(f.pct_ticket_2do)}</td>
+            <td class="td-num ${claseBenchmark(f.pct_ticket_3er, bm.pct3Marca)}">${fmt.pct(f.pct_ticket_3er)}</td>
         </tr>`;
     }
 
-    function renderTabla(grupos, todas, total) {
+    function renderTabla(grupos, todas, total, kpis) {
         const wrap = $('tabla-propios-wrap');
         if (!wrap) return;
 
+        const bm = {
+            facturacionVarMarca: kpis.facturacion_var_marca,
+            ticketPromedioMarca: kpis.ticket_promedio_marca,
+            pct2Marca          : kpis.pct_ticket_2do_marca,
+            pct3Marca          : kpis.pct_ticket_3er_marca,
+        };
+
         const cuerpo = grupos.map(g => {
-            const filaSup = filaSubtotalHTML(g.supervisora, g.subtotal);
-            const filasSuc = g.sucursales.map(filaSucursalHTML).join('');
+            const filaSup = filaSubtotalHTML(g.supervisora, g.subtotal, bm);
+            const filasSuc = g.sucursales.map(f => filaSucursalHTML(f, bm)).join('');
             return filaSup + filasSuc;
-        }).join('') + (todas ? filaTodasHTML(todas) : '');
+        }).join('')
+            // "Todas": grupo de un solo miembro (Ecommerce) — el subtotal es por eso
+            // numéricamente igual a la fila hija que lo compone.
+            + (todas ? filaSubtotalHTML('Todas', todas, bm, todas.sin_datos, 'row-todas-separador') : '')
+            + (todas ? filaEcommerceHTML(todas, bm) : '');
 
         wrap.innerHTML = `
             <table class="premios-table">
@@ -104,11 +117,11 @@ const PremiosPropios = (() => {
                         <td class="td-num">${fmt.money(total.facturacion_s_iva)}</td>
                         <td class="td-num">${fmt.money(total.facturacion_c_iva)}</td>
                         <td class="td-num">${fmt.money(total.objetivo_total)}</td>
-                        <td class="td-num ${claseSemaforo(total.cumplimiento_obj)}">${fmt.pct(total.cumplimiento_obj)}</td>
+                        ${cumplimientoCellHTML(total.cumplimiento_obj, total.facturacion_var, bm.facturacionVarMarca)}
                         <td class="td-num ${total.facturacion_var !== null ? (total.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(total.facturacion_var)}</td>
-                        <td class="td-num">${fmt.money(total.ticket_promedio)}</td>
-                        <td class="td-num">${fmt.pct(total.pct_ticket_2do)}</td>
-                        <td class="td-num">${fmt.pct(total.pct_ticket_3er)}</td>
+                        <td class="td-num ${claseBenchmark(total.ticket_promedio, bm.ticketPromedioMarca)}">${fmt.money(total.ticket_promedio)}</td>
+                        <td class="td-num ${claseBenchmark(total.pct_ticket_2do, bm.pct2Marca)}">${fmt.pct(total.pct_ticket_2do)}</td>
+                        <td class="td-num ${claseBenchmark(total.pct_ticket_3er, bm.pct3Marca)}">${fmt.pct(total.pct_ticket_3er)}</td>
                     </tr>
                 </tfoot>
             </table>`;
@@ -126,9 +139,14 @@ const PremiosPropios = (() => {
                 f.cumplimiento_obj, f.facturacion_var, f.ticket_promedio, f.pct_ticket_2do, f.pct_ticket_3er,
             ]));
         });
-        if (_lastTodas) rows.push(['TODAS', _lastTodas.facturacion_s_iva, _lastTodas.facturacion_c_iva,
-            _lastTodas.objetivo_total, _lastTodas.cumplimiento_obj, _lastTodas.facturacion_var,
-            _lastTodas.ticket_promedio, _lastTodas.pct_ticket_2do, _lastTodas.pct_ticket_3er]);
+        if (_lastTodas) {
+            rows.push(['Todas', _lastTodas.facturacion_s_iva, _lastTodas.facturacion_c_iva,
+                _lastTodas.objetivo_total, _lastTodas.cumplimiento_obj, _lastTodas.facturacion_var,
+                _lastTodas.ticket_promedio, _lastTodas.pct_ticket_2do, _lastTodas.pct_ticket_3er]);
+            rows.push(['  ECOMMERCE', _lastTodas.facturacion_s_iva, _lastTodas.facturacion_c_iva,
+                _lastTodas.objetivo_total, _lastTodas.cumplimiento_obj, _lastTodas.facturacion_var,
+                _lastTodas.ticket_promedio, _lastTodas.pct_ticket_2do, _lastTodas.pct_ticket_3er]);
+        }
         ExcelExporter.export({
             title  : 'Locales Propios — Facturación vs. Objetivos por Sucursales',
             headers: ['Supervisora / Sucursal', 'Facturación S/IVA', 'Facturación C/IVA', 'Objetivo Total $',
@@ -153,7 +171,7 @@ const PremiosPropios = (() => {
         _lastTotal  = data.total;
 
         renderKpis(data.kpis ?? {});
-        renderTabla(_lastGrupos, _lastTodas, _lastTotal);
+        renderTabla(_lastGrupos, _lastTodas, _lastTotal, data.kpis ?? {});
 
         const btn = $('btn-export-propios-tabla');
         if (btn) btn.onclick = exportar;

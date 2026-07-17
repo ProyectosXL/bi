@@ -36,20 +36,20 @@ const PremiosSupervisoras = (() => {
                 <td>${s.supervisora}</td>
                 <td class="td-num">${p.venta.cant}</td>
                 <td class="td-num">${fmt.money(p.venta.importe)}</td>
-                <td class="td-num">${fmt.money(p.venta.premio)}</td>
+                <td class="td-num td-premio">${fmt.money(p.venta.premio)}</td>
                 <td class="td-num">${p.crecimiento.cant}</td>
                 <td class="td-num">${fmt.money(p.crecimiento.importe)}</td>
-                <td class="td-num">${fmt.money(p.crecimiento.premio)}</td>
+                <td class="td-num td-premio">${fmt.money(p.crecimiento.premio)}</td>
                 <td class="td-num">${p.ticket_promedio.cant}</td>
                 <td class="td-num">${fmt.money(p.ticket_promedio.importe)}</td>
-                <td class="td-num">${fmt.money(p.ticket_promedio.premio)}</td>
+                <td class="td-num td-premio">${fmt.money(p.ticket_promedio.premio)}</td>
                 <td class="td-num">${p.ticket_2do.cant}</td>
                 <td class="td-num">${fmt.money(p.ticket_2do.importe)}</td>
-                <td class="td-num">${fmt.money(p.ticket_2do.premio)}</td>
+                <td class="td-num td-premio">${fmt.money(p.ticket_2do.premio)}</td>
                 <td class="td-num">${p.ticket_3er.cant}</td>
                 <td class="td-num">${fmt.money(p.ticket_3er.importe)}</td>
-                <td class="td-num">${fmt.money(p.ticket_3er.premio)}</td>
-                <td class="td-num"><strong>${fmt.money(p.total)}</strong></td>
+                <td class="td-num td-premio">${fmt.money(p.ticket_3er.premio)}</td>
+                <td class="td-num td-total"><strong>${fmt.money(p.total)}</strong></td>
             </tr>`;
         }).join('');
 
@@ -65,21 +65,21 @@ const PremiosSupervisoras = (() => {
                         <th colspan="3" class="th-center">Ticket Promedio</th>
                         <th colspan="3" class="th-center">Ticket 2do. Producto</th>
                         <th colspan="3" class="th-center">Ticket 3er Producto</th>
-                        <th rowspan="2" class="th-num">Total premios</th>
+                        <th rowspan="2" class="th-num th-total">Total premios</th>
                     </tr>
                     <tr>
-                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
-                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
-                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
-                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
-                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
+                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center th-premio">Premio</th>
+                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center th-premio">Premio</th>
+                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center th-premio">Premio</th>
+                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center th-premio">Premio</th>
+                        <th class="th-center">Cant. Locales</th><th class="th-center">Importe</th><th class="th-center th-premio">Premio</th>
                     </tr>
                 </thead>
                 <tbody>${filas}</tbody>
                 <tfoot>
                     <tr class="totales">
                         <td>Total</td><td colspan="15"></td>
-                        <td class="td-num">${fmt.money(totalGeneral)}</td>
+                        <td class="td-num td-total">${fmt.money(totalGeneral)}</td>
                     </tr>
                 </tfoot>
             </table>`;
@@ -95,11 +95,11 @@ const PremiosSupervisoras = (() => {
                 <td>${s.supervisora}</td>
                 <td class="td-num">${f.venta.cant}</td>
                 <td class="td-num">${fmt.money(f.venta.importe)}</td>
-                <td class="td-num">${fmt.money(f.venta.premio)}</td>
+                <td class="td-num td-premio">${fmt.money(f.venta.premio)}</td>
                 <td class="td-num">${f.crecimiento.cant}</td>
                 <td class="td-num">${fmt.money(f.crecimiento.importe)}</td>
-                <td class="td-num">${fmt.money(f.crecimiento.premio)}</td>
-                <td class="td-num"><strong>${fmt.money(f.total)}</strong></td>
+                <td class="td-num td-premio">${fmt.money(f.crecimiento.premio)}</td>
+                <td class="td-num td-total"><strong>${fmt.money(f.total)}</strong></td>
             </tr>`;
         }).join('');
 
@@ -112,18 +112,18 @@ const PremiosSupervisoras = (() => {
                         <th rowspan="2">Supervisora</th>
                         <th colspan="3" class="th-center">Objetivo Venta Franq.</th>
                         <th colspan="3" class="th-center">Objetivo Crecimiento Franq.</th>
-                        <th rowspan="2" class="th-num">Total premios</th>
+                        <th rowspan="2" class="th-num th-total">Total premios</th>
                     </tr>
                     <tr>
-                        <th class="th-center">Cant. Franquicias</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
-                        <th class="th-center">Cant. Franquicias</th><th class="th-center">Importe</th><th class="th-center">Premio</th>
+                        <th class="th-center">Cant. Franquicias</th><th class="th-center">Importe</th><th class="th-center th-premio">Premio</th>
+                        <th class="th-center">Cant. Franquicias</th><th class="th-center">Importe</th><th class="th-center th-premio">Premio</th>
                     </tr>
                 </thead>
                 <tbody>${filas}</tbody>
                 <tfoot>
                     <tr class="totales">
                         <td>Total</td><td colspan="6"></td>
-                        <td class="td-num">${fmt.money(totalGeneral)}</td>
+                        <td class="td-num td-total">${fmt.money(totalGeneral)}</td>
                     </tr>
                 </tfoot>
             </table>`;

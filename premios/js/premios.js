@@ -79,10 +79,33 @@ const Premios = (() => {
         });
     }
 
-    /* ── Semáforo verde/rojo para % Cumplimiento Obj. Venta ── */
-    function claseSemaforo(valor, sinDatos) {
-        if (sinDatos || valor === null || valor === undefined) return '';
-        return valor >= 0 ? 'text-green' : 'text-red';
+    /**
+     * Celda de "% Cumplimiento Obj. Venta" con semáforo + badge.
+     * Regla de "consuelo" (igual a la del premio de crecimiento real): si la sucursal no
+     * alcanza el objetivo de venta pero su variación de facturación supera el benchmark de
+     * marca, se considera que igual alcanza el objetivo (formato + badge verde).
+     */
+    function cumplimientoCellHTML(valor, facturacionVar, benchmarkMarca, sinDatos) {
+        if (sinDatos || valor === null || valor === undefined) {
+            return `<td class="td-num">${fmt.pct(valor)}</td>`;
+        }
+        const directo = valor >= 0;
+        const porCrecimiento = !directo
+            && facturacionVar !== null && facturacionVar !== undefined
+            && benchmarkMarca !== null && benchmarkMarca !== undefined
+            && facturacionVar > benchmarkMarca;
+        const cumple = directo || porCrecimiento;
+        const titulo = porCrecimiento ? 'Alcanza por crecimiento sobre la marca' : 'Cumple objetivo de venta';
+        if (cumple) {
+            return `<td class="td-num"><span class="badge-cumple" title="${titulo}"><i class="bi bi-check-circle-fill"></i> ${fmt.pct(valor)}</span></td>`;
+        }
+        return `<td class="td-num text-red">${fmt.pct(valor)}</td>`;
+    }
+
+    /** Resalta en verde un valor cuando supera el benchmark de marca correspondiente. */
+    function claseBenchmark(valor, marca) {
+        if (valor === null || valor === undefined || marca === null || marca === undefined) return '';
+        return valor > marca ? 'text-green' : '';
     }
 
     /* ── Badge "Última actualización" / "DESACTUALIZADO" (reactivo a cada respuesta AJAX) ── */
@@ -97,5 +120,5 @@ const Premios = (() => {
         }
     }
 
-    return { $, fmt, buildQS, apiFetch, updatePeriodoLabel, setSupervisoraOptions, claseSemaforo, actualizarUltimaActualizacion };
+    return { $, fmt, buildQS, apiFetch, updatePeriodoLabel, setSupervisoraOptions, cumplimientoCellHTML, claseBenchmark, actualizarUltimaActualizacion };
 })();

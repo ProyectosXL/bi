@@ -149,10 +149,32 @@
 
 /* ── Tabla: sucursal indentada bajo su supervisora ── */
 .premios-table td.td-sucursal { padding-left: 26px; color: var(--text-2); }
-.premios-table tr.row-supervisora td { font-weight: 700; }
+.premios-table tr.row-supervisora td { font-weight: 700; background: #eef2ff; }
 .premios-table tr.row-sin-datos td { color: var(--text-3); font-style: italic; }
-.premios-table tr.row-todas td { border-top: 1px solid var(--border); }
+.premios-table tr.row-todas-separador td { border-top: 2px solid var(--border); }
 .premios-table td.td-num { text-align: right; }
+
+/* ── Resalte de columnas "Premio" / "Total premios" (Vista Premios Supervisoras) ── */
+.premios-table th.th-premio { background: #2554c7; }
+.premios-table td.td-premio { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+.premios-table th.th-total  { background: #b45309; }
+.premios-table td.td-total  { background: #fffbeb; color: #92400e; font-weight: 700; }
+
+/* ── Badge "Cumple" (verde) para objetivos alcanzados, directo o por excepción de crecimiento ── */
+.badge-cumple {
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 4px;
+    padding      : 2px 10px;
+    border-radius: 20px;
+    font-size    : .68rem;
+    font-weight  : 700;
+    background   : #f0fdf4;
+    color        : #16a34a;
+    border       : 1px solid #bbf7d0;
+    white-space  : nowrap;
+    vertical-align: middle;
+}
 
 /* ── Encabezados alineados con sus columnas (por defecto .table-wrap th es left) ── */
 .table-wrap th.th-num    { text-align: right; }

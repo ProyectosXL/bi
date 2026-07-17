@@ -103,9 +103,12 @@ try {
         ];
     }
 
-    // La fila "TODAS" (ECOMMERCE) se muestra suelta, sin agrupar bajo ninguna supervisora
-    // (no pertenece a ninguna) — pero SÍ suma al total general de la tabla, igual que en el
-    // tablero real (el "Total" incluye esta fila).
+    // La fila "ECOMMERCE" (SUPERVISORA='TODAS' en la BD) no pertenece a ninguna supervisora
+    // real. Se muestra como su propio grupo: una fila "Todas" (resaltada igual que una
+    // supervisora, ya que agrupa a "todas" — en este caso, un solo elemento) con "Ecommerce"
+    // como su única fila hija, igual que una sucursal bajo su supervisora. Como el grupo
+    // tiene un solo miembro, el subtotal "Todas" es numéricamente igual a la fila "Ecommerce".
+    // Igual que los demás grupos, SÍ suma al total general de la tabla.
     $todasRow = null;
     if (!$supervisoraFiltro) {
         $filasTodas = $db->datosPropios('TODAS');
