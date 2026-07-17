@@ -129,17 +129,31 @@ las medidas DAX `Premio Obj. Venta Franq. (importe)` / `Premio Obj. Crecimiento 
 
 ## Badge "Última actualización" / "DESACTUALIZADO"
 
-Mismo patrón que `sales/` y `global/`: `PremiosDB::getUltimaActualizacion()` consulta
-`sys.dm_db_index_usage_stats` para saber cuándo se escribió por última vez cada tabla de
-origen (`BI_T_ESTADISTICAS_VENTAS_PROPIOS` en `power`, `BI_T_ESTADISTICAS_VENTAS_FRANQUICIAS`
-en `power_franquicias`), con fallback a `MAX(FECHA)` si no hay estadísticas de uso (ej. tras
-un reinicio del motor). Como hay DOS orígenes, se devuelve la más antigua de las dos fechas —
-si cualquiera de las dos tablas está desactualizada, el reporte completo lo está.
+`PremiosDB::getUltimaActualizacion()` consulta `sys.dm_db_index_usage_stats` para saber
+cuándo se escribió por última vez cada tabla de origen (`BI_T_ESTADISTICAS_VENTAS_PROPIOS`
+en `power`, `BI_T_ESTADISTICAS_VENTAS_FRANQUICIAS` en `power_franquicias`), con fallback a
+`MAX(FECHA)` si no hay estadísticas de uso (ej. tras un reinicio del motor). Como hay DOS
+orígenes, se devuelve la más antigua de las dos fechas — si cualquiera de las dos tablas está
+desactualizada, el reporte completo lo está.
 
 El dato es independiente del período elegido por el usuario en el toolbar (siempre refleja
-cuándo se cargaron los datos por última vez, no el rango de fechas consultado). Se considera
-"desactualizado" (`is_outdated=true`, badge rojo con animación de pulso) cuando esa fecha es
-anterior a "ayer 00:00:00".
+cuándo se cargaron los datos por última vez, no el rango de fechas consultado).
+
+A diferencia de `sales/` y `global/` (SPs que corren a diario, donde alcanza con comparar
+contra "ayer"), el SP que carga estas tablas corre **una sola vez al mes** (día 1) y deja
+cargado el mes recién cerrado. Como las tablas son mensuales, el valor más nuevo posible
+SIEMPRE tiene fecha de fin del mes anterior (ej. el 17/07 los datos llegan hasta el 30/06),
+nunca "ayer" — comparar contra "ayer" (o incluso contra el 1° del mes en curso) hace que el
+badge quede en rojo el resto del mes aunque el dato esté perfectamente al día.
+
+`PremiosDB::esDesactualizado()` encapsula el criterio correcto: el límite de comparación es
+el inicio del **mes de datos esperado**, no el inicio del mes en curso. Pasado el día 5 del
+mes en curso ya se espera que el SP haya corrido este mes, o sea que el dato debe llegar como
+mínimo hasta el mes anterior (límite = 1° del mes anterior). Hasta el día 5 alcanza con que
+el dato llegue hasta el mes ante-anterior (límite = 1° del mes ante-anterior), porque la
+corrida de este mes puede no haber ocurrido todavía sin que sea un problema real. Se
+considera "desactualizado" (`is_outdated=true`, badge rojo con animación de pulso) cuando la
+fecha de última actualización es anterior a ese límite.
 
 - `index.php` calcula el valor inicial en el primer render de la página (`$ultimaAct`,
   `$isOutdated`) para el badge en `.topbar-meta` (`#ultima-actualizacion`, `#badge-desactualizado`).

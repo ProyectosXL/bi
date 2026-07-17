@@ -141,7 +141,7 @@ try {
     if ($ultimaActRaw) {
         $dtUpdate = new DateTime($ultimaActRaw);
         $ultimaActFormatted = $dtUpdate->format('d/m/Y H:i:s');
-        $isOutdated = ($dtUpdate < new DateTime('yesterday 00:00:00'));
+        $isOutdated = PremiosDB::esDesactualizado($dtUpdate);
     }
 
     ob_clean();

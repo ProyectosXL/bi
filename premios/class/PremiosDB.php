@@ -104,6 +104,32 @@ class PremiosDB
         return $fechas[0];
     }
 
+    /**
+     * A diferencia de `sales/` y `global/` (SPs que corren a diario, donde "desactualizado"
+     * = anterior a ayer), el SP que carga las tablas de Premios corre UNA VEZ AL MES (el
+     * día 1) y deja cargado el mes recién cerrado — las tablas son mensuales, así que el
+     * dato "más nuevo" SIEMPRE va a tener fecha de fin del mes anterior (ej. el 17/07 los
+     * datos llegan hasta el 30/06), nunca "ayer". Por eso el límite de comparación tiene que
+     * ser el inicio del MES DE DATOS esperado (un mes antes del mes en curso), no el inicio
+     * del mes en curso — si no, cualquier valor válido queda siempre "antes" del límite.
+     *
+     * Regla: pasado el día 5 del mes en curso ya se espera que el SP haya corrido este mes,
+     * o sea que el dato debe llegar como mínimo hasta el mes anterior (límite = 1° del mes
+     * anterior). Hasta el día 5 alcanza con que el dato llegue hasta el mes ante-anterior
+     * (límite = 1° del mes ante-anterior), porque la corrida de este mes puede no haber
+     * ocurrido todavía sin que sea un problema real.
+     */
+    public static function esDesactualizado(DateTime $dtUpdate, ?DateTime $ahora = null): bool
+    {
+        $ahora  = $ahora ?? new DateTime();
+        $limite = new DateTime($ahora->format('Y-m-01'));
+        $limite->modify('-1 month');
+        if ((int)$ahora->format('j') <= 5) {
+            $limite->modify('-1 month');
+        }
+        return $dtUpdate < $limite;
+    }
+
     /** @param resource $conn Conexión ya abierta a la base donde vive $tabla. */
     private function ultimaActualizacionTabla($conn, string $tabla): ?string
     {

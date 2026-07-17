@@ -11,9 +11,9 @@ if (!isset($_SESSION['username'])) {
 }
 date_default_timezone_set('America/Argentina/Buenos_Aires');
 
-// Última actualización REAL de los datos de origen (no la hora del servidor web) — mismo
-// patrón que sales/global: se consulta cuándo se modificó por última vez la tabla de
-// ventas en SQL Server, y se marca "desactualizado" si es anterior a ayer 00:00:00.
+// Última actualización REAL de los datos de origen (no la hora del servidor web): se
+// consulta cuándo se modificó por última vez la tabla de ventas en SQL Server. A diferencia
+// de sales/global (SP diario), acá el SP corre 1 vez al mes — ver `PremiosDB::esDesactualizado()`.
 require_once __DIR__ . '/class/PremiosDB.php';
 $isOutdated = false;
 $ultimaAct  = 'No disponible';
@@ -25,8 +25,7 @@ try {
         $dtUpdate = new DateTime($ultimaActRaw);
         $ultimaAct = $dtUpdate->format('d/m/Y H:i:s');
 
-        $dtYesterday = new DateTime('yesterday 00:00:00');
-        $isOutdated = ($dtUpdate < $dtYesterday);
+        $isOutdated = PremiosDB::esDesactualizado($dtUpdate);
     }
 } catch (Throwable $e) {}
 ?>
