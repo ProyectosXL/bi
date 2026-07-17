@@ -100,6 +100,15 @@ class SalesDB
         return [" AND {$alias}.RUBRO = ?", [$rubro]];
     }
 
+    /**
+     * Fragmento WHERE para excluir rubros que no se contabilizan en Unidades.
+     * Equivale a: BI_SALES_LAKERS[RUBRO] <> "CONCEPTO" && <> "PACKAGING"
+     */
+    private function whereExcluirRubrosUnid(string $alias = 's'): string
+    {
+        return " AND {$alias}.RUBRO NOT IN ('CONCEPTO', 'PACKAGING')";
+    }
+
     private function fetchAll($stmt): array
     {
         $rows = [];
@@ -124,9 +133,11 @@ class SalesDB
         [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
         [$wRubro, $pRubro] = $this->whereRubroFrag($rubro);
 
-        // 1) Consultar periodo actual
+        // 1) Consultar periodo actual (Suma condicional para unidades)
         $sqlAct = "
-            SELECT SUM(IMPORTE) AS fact, SUM(CANTIDAD) AS unid
+            SELECT 
+                SUM(IMPORTE) AS fact, 
+                SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid
             FROM dbo.BI_SALES_LAKERS s
             WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro
         ";
@@ -135,9 +146,11 @@ class SalesDB
         $rowAct    = sqlsrv_fetch_array($stmtAct, SQLSRV_FETCH_ASSOC);
         sqlsrv_free_stmt($stmtAct);
 
-        // 2) Consultar periodo previo
+        // 2) Consultar periodo previo (Suma condicional para unidades)
         $sqlPrev = "
-            SELECT SUM(IMPORTE) AS fact, SUM(CANTIDAD) AS unid
+            SELECT 
+                SUM(IMPORTE) AS fact, 
+                SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid
             FROM dbo.BI_SALES_LAKERS s
             WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro
         ";
@@ -172,7 +185,10 @@ class SalesDB
         foreach ($canales as $canal) {
             // 1) Periodo actual
             $sqlAct = "
-                SELECT SUM(IMPORTE) AS fact, SUM(CANTIDAD) AS unid, COUNT(DISTINCT CLIENTE) AS puntos_venta
+                SELECT 
+                    SUM(IMPORTE) AS fact, 
+                    SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid, 
+                    COUNT(DISTINCT CLIENTE) AS puntos_venta
                 FROM dbo.BI_SALES_LAKERS s
                 WHERE FECHA >= ? AND FECHA <= ? AND CANAL = ? $wRubro
             ";
@@ -183,7 +199,9 @@ class SalesDB
 
             // 2) Periodo previo
             $sqlPrev = "
-                SELECT SUM(IMPORTE) AS fact, SUM(CANTIDAD) AS unid
+                SELECT 
+                    SUM(IMPORTE) AS fact, 
+                    SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid
                 FROM dbo.BI_SALES_LAKERS s
                 WHERE FECHA >= ? AND FECHA <= ? AND CANAL = ? $wRubro
             ";
@@ -235,7 +253,7 @@ class SalesDB
                 SELECT 
                     FECHA AS etiqueta,
                     SUM(IMPORTE) AS facturacion,
-                    SUM(CANTIDAD) AS unidades
+                    SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unidades
                 FROM dbo.BI_SALES_LAKERS s
                 WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro
                 GROUP BY FECHA
@@ -248,7 +266,7 @@ class SalesDB
                     YEAR(FECHA) AS anio,
                     MONTH(FECHA) AS mes,
                     SUM(IMPORTE) AS facturacion,
-                    SUM(CANTIDAD) AS unidades
+                    SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unidades
                 FROM dbo.BI_SALES_LAKERS s
                 WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro
                 GROUP BY YEAR(FECHA), MONTH(FECHA)
@@ -291,7 +309,7 @@ class SalesDB
                 s.CANAL,
                 MONTH(s.FECHA) AS mes,
                 SUM(s.IMPORTE)  AS facturacion,
-                SUM(s.CANTIDAD) AS unidades
+                SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unidades
             FROM dbo.BI_SALES_LAKERS s
             WHERE YEAR(s.FECHA) = ? $wCanal $wRubro
             GROUP BY s.CANAL, MONTH(s.FECHA)
@@ -407,6 +425,7 @@ class SalesDB
                 SUM(CASE WHEN s.FECHA >= ? AND s.FECHA <= ? THEN s.CANTIDAD ELSE 0 END) AS unid_prev
             FROM dbo.BI_SALES_LAKERS s
             WHERE 1=1 $wCanal
+            " . $this->whereExcluirRubrosUnid() . "
             GROUP BY s.RUBRO
             ORDER BY unid_act DESC
         ";
@@ -445,6 +464,7 @@ class SalesDB
                 SUM(s.CANTIDAD) AS unidades
             FROM dbo.BI_SALES_LAKERS s
             WHERE YEAR(s.FECHA) >= ? $wCanal $wRubro
+            " . $this->whereExcluirRubrosUnid() . "
             GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)
             ORDER BY anio, mes
         ";
@@ -465,6 +485,7 @@ class SalesDB
             SELECT CANAL, MONTH(FECHA) AS mes, SUM(CANTIDAD) AS unidades
             FROM dbo.BI_SALES_LAKERS s
             WHERE YEAR(FECHA) = ? $wCanal $wRubro
+            " . $this->whereExcluirRubrosUnid() . "
             GROUP BY CANAL, MONTH(FECHA)
             ORDER BY CANAL, mes
         ";
@@ -494,6 +515,7 @@ class SalesDB
                 SUM(CASE WHEN YEAR(s.FECHA) = ? THEN s.CANTIDAD ELSE 0 END) AS unid_prev
             FROM dbo.BI_SALES_LAKERS s
             WHERE YEAR(s.FECHA) IN (?, ?) $wCanal
+            " . $this->whereExcluirRubrosUnid() . "
             GROUP BY MONTH(s.FECHA)
             ORDER BY mes
         ";
@@ -528,6 +550,7 @@ class SalesDB
                 SUM(CANTIDAD) AS unidades
             FROM dbo.BI_SALES_LAKERS
             WHERE YEAR(FECHA) >= ?
+              AND RUBRO NOT IN ('CONCEPTO', 'PACKAGING')
             GROUP BY YEAR(FECHA), CANAL
             ORDER BY anio, CANAL
         ";
@@ -555,6 +578,7 @@ class SalesDB
                 SUM(CASE WHEN s.FECHA >= ? AND s.FECHA <= ? THEN s.IMPORTE  ELSE 0 END) AS fact_act
             FROM dbo.BI_SALES_LAKERS s
             WHERE 1=1 $wCanal
+            " . $this->whereExcluirRubrosUnid() . "
             GROUP BY s.RUBRO
             ORDER BY unid_act DESC
         ";
@@ -589,14 +613,14 @@ class SalesDB
         $sql = "
             SELECT 
                 CASE WHEN MONTH(FECHA) IN (8,9,10,11,12,1) THEN 'Verano' ELSE 'Invierno' END AS temp_nombre,
-                YEAR(FECHA) AS temp_anio,
+                CASE WHEN MONTH(FECHA) = 1 THEN YEAR(FECHA) - 1 ELSE YEAR(FECHA) END AS temp_anio,
                 SUM(IMPORTE) AS fact,
-                SUM(CANTIDAD) AS unid
+                SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid
             FROM dbo.BI_SALES_LAKERS s
             WHERE FECHA >= '2023-01-01' $wCanal $wRubro
             GROUP BY 
                 CASE WHEN MONTH(FECHA) IN (8,9,10,11,12,1) THEN 'Verano' ELSE 'Invierno' END,
-                YEAR(FECHA)
+                CASE WHEN MONTH(FECHA) = 1 THEN YEAR(FECHA) - 1 ELSE YEAR(FECHA) END
             ORDER BY temp_anio DESC, temp_nombre DESC
         ";
         $params = array_merge($pCanal, $pRubro);
@@ -690,6 +714,30 @@ class SalesDB
             }
         }
         return $res;
+    }
+
+    /**
+     * Tabla de unidades por RUBRO y MES del año en curso.
+     * Retorna filas con: rubro, mes (1-12), unidades.
+     */
+    public function getTablaUnidadesMensualRubro(int $anio, ?string $canal = null): array
+    {
+        [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
+
+        $sql = "
+            SELECT
+                s.RUBRO,
+                MONTH(s.FECHA) AS mes,
+                SUM(s.CANTIDAD) AS unidades
+            FROM dbo.BI_SALES_LAKERS s
+            WHERE YEAR(s.FECHA) = ? $wCanal
+            " . $this->whereExcluirRubrosUnid() . "
+            GROUP BY s.RUBRO, MONTH(s.FECHA)
+            ORDER BY s.RUBRO, mes
+        ";
+        $params = array_merge([$anio], $pCanal);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        return $this->fetchAll($stmt);
     }
 
     public function __destruct()
