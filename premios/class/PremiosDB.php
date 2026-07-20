@@ -440,12 +440,18 @@ class PremiosDB
         return $this->ticketPromedioEst($fact, $tickets);
     }
 
-    /** % ticket 2do/3er producto de marca (sin filtro). */
+    /**
+     * % ticket 2do/3er producto de marca. A diferencia de ticketPromedioMarca/
+     * facturacionVarMarca (que sí incluyen ECOMMERCE y CENTRAL — ver datosPropios()), acá se
+     * excluyen: ECOMMERCE no tiene venta cruzada de 2do/3er producto (tickets sin ese
+     * atributo), y CENTRAL no tiene tickets propios — ambos solo arrastrarían el promedio
+     * hacia abajo sin representar ventas reales de ningún local.
+     */
     public function pctTicketProductoMarca(array $filasSinFiltrar, string $campo): float
     {
         $tickets = 0; $prod = 0;
         foreach ($filasSinFiltrar as $f) {
-            if ($f['sin_datos']) continue;
+            if ($f['sin_datos'] || $f['casa_central'] || $f['supervisora'] === 'Todas') continue;
             $tickets += $f['tickets'];
             $prod    += $f[$campo];
         }

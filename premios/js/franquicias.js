@@ -5,7 +5,10 @@
  */
 const PremiosFranquicias = (() => {
 
-    const { $, fmt, updatePeriodoLabel, cumplimientoCellHTML, apiFetch, actualizarUltimaActualizacion } = Premios;
+    const {
+        $, fmt, updatePeriodoLabel, calculaCumplePorConsuelo, cumplimientoCellHTML,
+        facturacionVarMarcaCellHTML, apiFetch, actualizarUltimaActualizacion,
+    } = Premios;
 
     let _lastSucursales = [];
     let _lastTotal = null;
@@ -31,15 +34,22 @@ const PremiosFranquicias = (() => {
 
         const benchmarkMarca = kpis.facturacion_var_marca;
 
+        // Cada franquicia (fila) es su propio destinatario del premio (a diferencia de
+        // Locales Propios, acá no hay agrupación por supervisora) — mismo criterio que ahí:
+        // el badge de Facturación Var % solo cuenta si la fila ganó el premio ESPECÍFICAMENTE
+        // por la regla de consuelo, no si ya cumplió el objetivo de venta directo (condición
+        // excluyente con la celda de Cumplimiento Obj. Venta, ver calculaCumplePorConsuelo/
+        // facturacionVarMarcaCellHTML).
         const filas = sucursales.map(f => {
             const cls = f.sin_datos ? 'row-sin-datos' : '';
+            const cumplePorConsuelo = calculaCumplePorConsuelo(f.cumplimiento_obj, f.facturacion_var, benchmarkMarca, f.sin_datos);
             return `<tr class="${cls}">
                 <td>${f.sucursal}</td>
                 <td class="td-num">${fmt.money(f.facturacion)}</td>
                 <td class="td-num">${fmt.money(f.objetivo_total)}</td>
-                ${cumplimientoCellHTML(f.cumplimiento_obj, f.facturacion_var, benchmarkMarca, f.sin_datos)}
+                ${cumplimientoCellHTML(f.cumplimiento_obj, f.sin_datos)}
                 <td class="td-num">${fmt.money(f.facturacion_previa)}</td>
-                <td class="td-num ${f.facturacion_var !== null ? (f.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(f.facturacion_var)}</td>
+                ${facturacionVarMarcaCellHTML(f.facturacion_var, benchmarkMarca, cumplePorConsuelo, fmt.varPct(f.facturacion_var))}
             </tr>`;
         }).join('');
 
@@ -61,9 +71,9 @@ const PremiosFranquicias = (() => {
                         <td>Total</td>
                         <td class="td-num">${fmt.money(total.facturacion)}</td>
                         <td class="td-num">${fmt.money(total.objetivo_total)}</td>
-                        ${cumplimientoCellHTML(total.cumplimiento_obj, total.facturacion_var, benchmarkMarca)}
+                        ${cumplimientoCellHTML(total.cumplimiento_obj)}
                         <td class="td-num">${fmt.money(total.facturacion_previa)}</td>
-                        <td class="td-num ${total.facturacion_var !== null ? (total.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(total.facturacion_var)}</td>
+                        ${facturacionVarMarcaCellHTML(total.facturacion_var, benchmarkMarca, calculaCumplePorConsuelo(total.cumplimiento_obj, total.facturacion_var, benchmarkMarca), fmt.varPct(total.facturacion_var))}
                     </tr>
                 </tfoot>
             </table>`;

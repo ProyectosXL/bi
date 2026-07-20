@@ -5,7 +5,11 @@
  */
 const PremiosPropios = (() => {
 
-    const { $, fmt, updatePeriodoLabel, cumplimientoCellHTML, claseBenchmark, apiFetch, actualizarUltimaActualizacion } = Premios;
+    const {
+        $, fmt, updatePeriodoLabel, calculaCumpleObjetivo, calculaCumplePorConsuelo,
+        cumplimientoCellHTML, badgeCellHTML, facturacionVarMarcaCellHTML, apiFetch,
+        actualizarUltimaActualizacion,
+    } = Premios;
 
     let _lastGrupos = [];
     let _lastTodas  = null;
@@ -27,50 +31,67 @@ const PremiosPropios = (() => {
             </div>`).join('');
     }
 
-    function filaSucursalHTML(f, bm) {
+    function filaSucursalHTML(f, bm, groupId) {
+        // La sucursal no recibe premio (el premio de "consuelo" por crecimiento sobre marca
+        // es exclusivo de la supervisora): % de Cumplimiento Obj. Venta simple, sin la regla
+        // de consuelo. El badge de Facturación Var % es solo informativo (sin gate de "premio"
+        // de fila), pero igual respeta la exclusión mutua con la columna de Cumplimiento: si la
+        // sucursal ya cumplió directo, no se le repite el badge acá aunque también supere marca.
+        // data-grupo la liga a su fila de supervisora (filaSubtotalHTML) para el colapsar/desplegar.
+        const cumplePorConsuelo = calculaCumplePorConsuelo(f.cumplimiento_obj, f.facturacion_var, bm.facturacionVarMarca, f.sin_datos);
         const cls = f.sin_datos ? 'row-sin-datos' : '';
-        return `<tr class="${cls}">
+        return `<tr class="${cls}" data-grupo="${groupId}">
             <td class="td-sucursal">${f.sucursal}</td>
             <td class="td-num">${fmt.money(f.facturacion_s_iva)}</td>
             <td class="td-num">${fmt.money(f.facturacion_c_iva)}</td>
             <td class="td-num">${fmt.money(f.objetivo_total)}</td>
-            ${cumplimientoCellHTML(f.cumplimiento_obj, f.facturacion_var, bm.facturacionVarMarca, f.sin_datos)}
-            <td class="td-num ${f.facturacion_var !== null ? (f.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(f.facturacion_var)}</td>
-            <td class="td-num ${claseBenchmark(f.ticket_promedio, bm.ticketPromedioMarca)}">${fmt.money(f.ticket_promedio)}</td>
-            <td class="td-num ${claseBenchmark(f.pct_ticket_2do, bm.pct2Marca)}">${fmt.pct(f.pct_ticket_2do)}</td>
-            <td class="td-num ${claseBenchmark(f.pct_ticket_3er, bm.pct3Marca)}">${fmt.pct(f.pct_ticket_3er)}</td>
+            ${cumplimientoCellHTML(f.cumplimiento_obj, f.sin_datos)}
+            ${facturacionVarMarcaCellHTML(f.facturacion_var, bm.facturacionVarMarca, cumplePorConsuelo, fmt.varPct(f.facturacion_var))}
+            ${badgeCellHTML(f.ticket_promedio, bm.ticketPromedioMarca, fmt.money(f.ticket_promedio), { titulo: 'Supera el ticket promedio de marca' })}
+            ${badgeCellHTML(f.pct_ticket_2do, bm.pct2Marca, fmt.pct(f.pct_ticket_2do), { titulo: 'Supera el % tickets 2do producto de marca' })}
+            ${badgeCellHTML(f.pct_ticket_3er, bm.pct3Marca, fmt.pct(f.pct_ticket_3er), { titulo: 'Supera el % tickets 3er producto de marca' })}
         </tr>`;
     }
 
-    function filaSubtotalHTML(nombre, s, bm, sinDatos, extraClass) {
-        return `<tr class="row-supervisora ${extraClass ?? ''}">
-            <td>${nombre}</td>
+    function filaSubtotalHTML(nombre, s, bm, sinDatos, extraClass, groupId) {
+        // Fila de supervisora (o "Todas"): la que efectivamente recibe el premio. El
+        // cumplimiento de objetivo (directo o de consuelo) es el "gate" del resto de badges
+        // de la fila — ninguno de ellos debe verse como "cumplido" si la fila no ganó el premio.
+        // data-toggle-grupo + el ícono .toggle-caret habilitan colapsar/desplegar sus sucursales
+        // (data-grupo="${groupId}"), delegado en renderTabla().
+        const cumpleObjetivo = calculaCumpleObjetivo(s.cumplimiento_obj, s.facturacion_var, bm.facturacionVarMarca, sinDatos);
+        const cumplePorConsuelo = calculaCumplePorConsuelo(s.cumplimiento_obj, s.facturacion_var, bm.facturacionVarMarca, sinDatos);
+        return `<tr class="row-supervisora ${extraClass ?? ''}" data-toggle-grupo="${groupId}">
+            <td><i class="bi bi-chevron-down toggle-caret"></i> ${nombre}</td>
             <td class="td-num">${fmt.money(s.facturacion_s_iva)}</td>
             <td class="td-num">${fmt.money(s.facturacion_c_iva)}</td>
             <td class="td-num">${fmt.money(s.objetivo_total)}</td>
-            ${cumplimientoCellHTML(s.cumplimiento_obj, s.facturacion_var, bm.facturacionVarMarca, sinDatos)}
-            <td class="td-num ${s.facturacion_var !== null ? (s.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(s.facturacion_var)}</td>
-            <td class="td-num ${claseBenchmark(s.ticket_promedio, bm.ticketPromedioMarca)}">${fmt.money(s.ticket_promedio)}</td>
-            <td class="td-num ${claseBenchmark(s.pct_ticket_2do, bm.pct2Marca)}">${fmt.pct(s.pct_ticket_2do)}</td>
-            <td class="td-num ${claseBenchmark(s.pct_ticket_3er, bm.pct3Marca)}">${fmt.pct(s.pct_ticket_3er)}</td>
+            ${cumplimientoCellHTML(s.cumplimiento_obj, sinDatos)}
+            ${facturacionVarMarcaCellHTML(s.facturacion_var, bm.facturacionVarMarca, cumplePorConsuelo, fmt.varPct(s.facturacion_var))}
+            ${badgeCellHTML(s.ticket_promedio, bm.ticketPromedioMarca, fmt.money(s.ticket_promedio), { titulo: 'Supera el ticket promedio de marca', gate: cumpleObjetivo })}
+            ${badgeCellHTML(s.pct_ticket_2do, bm.pct2Marca, fmt.pct(s.pct_ticket_2do), { titulo: 'Supera el % tickets 2do producto de marca', gate: cumpleObjetivo })}
+            ${badgeCellHTML(s.pct_ticket_3er, bm.pct3Marca, fmt.pct(s.pct_ticket_3er), { titulo: 'Supera el % tickets 3er producto de marca', gate: cumpleObjetivo })}
         </tr>`;
     }
 
-    function filaEcommerceHTML(f, bm) {
+    function filaEcommerceHTML(f, bm, groupId) {
         // Fila sintética SUPERVISORA='TODAS' en la BD = canal ECOMMERCE, hija del grupo
         // "Todas" (no pertenece a ninguna supervisora real) — indentada igual que una
-        // sucursal bajo su supervisora.
+        // sucursal bajo su supervisora. Es una fila de "local", no de supervisora: igual que
+        // filaSucursalHTML, sin la regla de consuelo ni gate en el resto de columnas (pero sí
+        // con la exclusión mutua entre Cumplimiento y Facturación Var %, ver esa función).
+        const cumplePorConsuelo = calculaCumplePorConsuelo(f.cumplimiento_obj, f.facturacion_var, bm.facturacionVarMarca, f.sin_datos);
         const cls = f.sin_datos ? 'row-sin-datos' : '';
-        return `<tr class="${cls}">
+        return `<tr class="${cls}" data-grupo="${groupId}">
             <td class="td-sucursal">ECOMMERCE</td>
             <td class="td-num">${fmt.money(f.facturacion_s_iva)}</td>
             <td class="td-num">${fmt.money(f.facturacion_c_iva)}</td>
             <td class="td-num">${fmt.money(f.objetivo_total)}</td>
-            ${cumplimientoCellHTML(f.cumplimiento_obj, f.facturacion_var, bm.facturacionVarMarca, f.sin_datos)}
-            <td class="td-num ${f.facturacion_var !== null ? (f.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(f.facturacion_var)}</td>
-            <td class="td-num ${claseBenchmark(f.ticket_promedio, bm.ticketPromedioMarca)}">${fmt.money(f.ticket_promedio)}</td>
-            <td class="td-num ${claseBenchmark(f.pct_ticket_2do, bm.pct2Marca)}">${fmt.pct(f.pct_ticket_2do)}</td>
-            <td class="td-num ${claseBenchmark(f.pct_ticket_3er, bm.pct3Marca)}">${fmt.pct(f.pct_ticket_3er)}</td>
+            ${cumplimientoCellHTML(f.cumplimiento_obj, f.sin_datos)}
+            ${facturacionVarMarcaCellHTML(f.facturacion_var, bm.facturacionVarMarca, cumplePorConsuelo, fmt.varPct(f.facturacion_var))}
+            ${badgeCellHTML(f.ticket_promedio, bm.ticketPromedioMarca, fmt.money(f.ticket_promedio), { titulo: 'Supera el ticket promedio de marca' })}
+            ${badgeCellHTML(f.pct_ticket_2do, bm.pct2Marca, fmt.pct(f.pct_ticket_2do), { titulo: 'Supera el % tickets 2do producto de marca' })}
+            ${badgeCellHTML(f.pct_ticket_3er, bm.pct3Marca, fmt.pct(f.pct_ticket_3er), { titulo: 'Supera el % tickets 3er producto de marca' })}
         </tr>`;
     }
 
@@ -84,16 +105,19 @@ const PremiosPropios = (() => {
             pct2Marca          : kpis.pct_ticket_2do_marca,
             pct3Marca          : kpis.pct_ticket_3er_marca,
         };
+        const cumpleObjetivoTotal = calculaCumpleObjetivo(total.cumplimiento_obj, total.facturacion_var, bm.facturacionVarMarca);
+        const cumplePorConsueloTotal = calculaCumplePorConsuelo(total.cumplimiento_obj, total.facturacion_var, bm.facturacionVarMarca);
 
-        const cuerpo = grupos.map(g => {
-            const filaSup = filaSubtotalHTML(g.supervisora, g.subtotal, bm);
-            const filasSuc = g.sucursales.map(f => filaSucursalHTML(f, bm)).join('');
+        const cuerpo = grupos.map((g, i) => {
+            const groupId = `g${i}`;
+            const filaSup = filaSubtotalHTML(g.supervisora, g.subtotal, bm, false, null, groupId);
+            const filasSuc = g.sucursales.map(f => filaSucursalHTML(f, bm, groupId)).join('');
             return filaSup + filasSuc;
         }).join('')
             // "Todas": grupo de un solo miembro (Ecommerce) — el subtotal es por eso
             // numéricamente igual a la fila hija que lo compone.
-            + (todas ? filaSubtotalHTML('Todas', todas, bm, todas.sin_datos, 'row-todas-separador') : '')
-            + (todas ? filaEcommerceHTML(todas, bm) : '');
+            + (todas ? filaSubtotalHTML('Todas', todas, bm, todas.sin_datos, 'row-todas-separador', 'todas') : '')
+            + (todas ? filaEcommerceHTML(todas, bm, 'todas') : '');
 
         wrap.innerHTML = `
             <table class="premios-table">
@@ -117,14 +141,29 @@ const PremiosPropios = (() => {
                         <td class="td-num">${fmt.money(total.facturacion_s_iva)}</td>
                         <td class="td-num">${fmt.money(total.facturacion_c_iva)}</td>
                         <td class="td-num">${fmt.money(total.objetivo_total)}</td>
-                        ${cumplimientoCellHTML(total.cumplimiento_obj, total.facturacion_var, bm.facturacionVarMarca)}
-                        <td class="td-num ${total.facturacion_var !== null ? (total.facturacion_var >= 0 ? 'text-green' : 'text-red') : ''}">${fmt.varPct(total.facturacion_var)}</td>
-                        <td class="td-num ${claseBenchmark(total.ticket_promedio, bm.ticketPromedioMarca)}">${fmt.money(total.ticket_promedio)}</td>
-                        <td class="td-num ${claseBenchmark(total.pct_ticket_2do, bm.pct2Marca)}">${fmt.pct(total.pct_ticket_2do)}</td>
-                        <td class="td-num ${claseBenchmark(total.pct_ticket_3er, bm.pct3Marca)}">${fmt.pct(total.pct_ticket_3er)}</td>
+                        ${cumplimientoCellHTML(total.cumplimiento_obj)}
+                        ${facturacionVarMarcaCellHTML(total.facturacion_var, bm.facturacionVarMarca, cumplePorConsueloTotal, fmt.varPct(total.facturacion_var))}
+                        ${badgeCellHTML(total.ticket_promedio, bm.ticketPromedioMarca, fmt.money(total.ticket_promedio), { titulo: 'Supera el ticket promedio de marca', gate: cumpleObjetivoTotal })}
+                        ${badgeCellHTML(total.pct_ticket_2do, bm.pct2Marca, fmt.pct(total.pct_ticket_2do), { titulo: 'Supera el % tickets 2do producto de marca', gate: cumpleObjetivoTotal })}
+                        ${badgeCellHTML(total.pct_ticket_3er, bm.pct3Marca, fmt.pct(total.pct_ticket_3er), { titulo: 'Supera el % tickets 3er producto de marca', gate: cumpleObjetivoTotal })}
                     </tr>
                 </tfoot>
             </table>`;
+
+        attachToggleColapsar(wrap);
+    }
+
+    /** Click en una fila de supervisora/"Todas" colapsa u despliega sus sucursales hijas. */
+    function attachToggleColapsar(wrap) {
+        wrap.querySelectorAll('tr[data-toggle-grupo]').forEach(header => {
+            header.addEventListener('click', () => {
+                const id = header.dataset.toggleGrupo;
+                const colapsado = header.classList.toggle('colapsada');
+                wrap.querySelectorAll(`tr[data-grupo="${id}"]`).forEach(fila => {
+                    fila.classList.toggle('fila-oculta', colapsado);
+                });
+            });
+        });
     }
 
     function exportar() {

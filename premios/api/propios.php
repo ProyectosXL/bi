@@ -64,8 +64,12 @@ try {
     // supervisora (NO de datosPropios(null), que ahora incluye la fila sintética "TODAS"/
     // ECOMMERCE — necesaria para los benchmarks de arriba, pero que no es una sucursal de
     // ninguna supervisora y no debe sumarse a la fila "Total" de esta tabla).
-    $totFactSIva = 0.0; $totFactCIva = 0.0; $totObj = 0.0; $totFactAnt = 0.0;
-    $totTickets = 0; $totT2 = 0; $totT3 = 0;
+    $totFactSIva = 0.0; $totFactCIva = 0.0; $totObj = 0.0; $totFactAnt = 0.0; $totTickets = 0;
+    // Filas crudas acumuladas para el % tickets 2do/3er producto del Total — se recalcula con
+    // pctTicketProductoMarca() (misma exclusión de CENTRAL/ECOMMERCE que el benchmark de marca,
+    // ver PremiosDB::pctTicketProductoMarca) en vez de sumar tickets_2do_prod/tickets_3er_prod
+    // a mano, para no reintroducir el mismo arrastre hacia abajo en la fila Total.
+    $filasParaTotal = [];
 
     $sups = $supervisoraFiltro ? [$supervisoraFiltro] : $db->getSupervisoras();
     $grupos = [];
@@ -74,6 +78,7 @@ try {
         if (!$filasSup) continue;
 
         $sucursales = array_map(fn($f) => filaVista($db, $f), $filasSup);
+        $filasParaTotal = array_merge($filasParaTotal, $filasSup);
 
         $sumFactSIva = array_sum(array_column($filasSup, 'imp_fact_s_iva'));
         $sumFactCIva = array_sum(array_column($filasSup, 'imp_fact'));
@@ -85,7 +90,6 @@ try {
 
         $totFactSIva += $sumFactSIva; $totFactCIva += $sumFactCIva; $totObj += $sumObj;
         $totFactAnt  += $sumFactAnt;  $totTickets  += $sumTickets;
-        $totT2       += $sumT2;       $totT3       += $sumT3;
 
         $grupos[] = [
             'supervisora' => $sup,
@@ -119,8 +123,7 @@ try {
             $totObj      += $filasTodas[0]['imp_obj'];
             $totFactAnt  += $filasTodas[0]['imp_fact_ant'];
             $totTickets  += $filasTodas[0]['tickets'];
-            $totT2       += $filasTodas[0]['tickets_2do_prod'];
-            $totT3       += $filasTodas[0]['tickets_3er_prod'];
+            $filasParaTotal[] = $filasTodas[0];
         }
     }
 
@@ -131,8 +134,8 @@ try {
         'cumplimiento_obj'  => $db->cumplimientoObjVenta($totFactCIva, $totObj),
         'facturacion_var'   => $db->facturacionVarPct($totFactCIva, $totFactAnt),
         'ticket_promedio'   => $db->ticketPromedioEst($totFactCIva, $totTickets),
-        'pct_ticket_2do'    => $totTickets > 0 ? $totT2 / $totTickets : 0.0,
-        'pct_ticket_3er'    => $totTickets > 0 ? $totT3 / $totTickets : 0.0,
+        'pct_ticket_2do'    => $db->pctTicketProductoMarca($filasParaTotal, 'tickets_2do_prod'),
+        'pct_ticket_3er'    => $db->pctTicketProductoMarca($filasParaTotal, 'tickets_3er_prod'),
     ];
 
     $ultimaActFormatted = null;

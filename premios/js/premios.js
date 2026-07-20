@@ -80,32 +80,101 @@ const Premios = (() => {
     }
 
     /**
-     * Celda de "% Cumplimiento Obj. Venta" con semáforo + badge.
-     * Regla de "consuelo" (igual a la del premio de crecimiento real): si la sucursal no
-     * alcanza el objetivo de venta pero su variación de facturación supera el benchmark de
-     * marca, se considera que igual alcanza el objetivo (formato + badge verde).
+     * true/false si cumple el objetivo de venta, directo o "de consuelo" (igual a la del
+     * premio de crecimiento real: si no alcanza el objetivo pero su variación de facturación
+     * supera el benchmark de marca, igual se considera cumplido). null si no hay dato.
+     * Este resultado determina si la fila ganó ALGÚN premio (por cualquiera de los dos
+     * caminos), y por eso se usa como "gate" para el resto de badges de su fila (ver
+     * `badgeCellHTML`) — esas otras métricas no deben verse como "cumplidas" si la fila en su
+     * conjunto no ganó el premio. No se usa para decidir el badge de "% Cumplimiento Obj.
+     * Venta" en sí (ver `cumplimientoCellHTML`, que badgea solo el camino directo) ni el de
+     * "Facturación Var %" (ver `calculaCumplePorConsuelo`, que badgea solo el camino de
+     * consuelo) — esas dos columnas se reparten los dos caminos sin superponerse.
      */
-    function cumplimientoCellHTML(valor, facturacionVar, benchmarkMarca, sinDatos) {
-        if (sinDatos || valor === null || valor === undefined) {
-            return `<td class="td-num">${fmt.pct(valor)}</td>`;
-        }
+    function calculaCumpleObjetivo(valor, facturacionVar, benchmarkMarca, sinDatos) {
+        if (sinDatos || valor === null || valor === undefined) return null;
         const directo = valor >= 0;
-        const porCrecimiento = !directo
+        return directo || calculaCumplePorConsuelo(valor, facturacionVar, benchmarkMarca, sinDatos);
+    }
+
+    /**
+     * true/false si cumple el objetivo ESPECÍFICAMENTE por la regla de consuelo (no de forma
+     * directa) — o sea, no llegó al objetivo de venta pero su variación de facturación supera
+     * el benchmark de marca. Es una condición excluyente con el cumplimiento directo: si ya
+     * cumplió directo, no corresponde evaluarlo también por esta regla (ver
+     * `facturacionVarMarcaCellHTML`) — cada fila gana el premio por un camino o el otro, nunca
+     * por los dos a la vez.
+     */
+    function calculaCumplePorConsuelo(valor, facturacionVar, benchmarkMarca, sinDatos) {
+        if (sinDatos || valor === null || valor === undefined) return false;
+        const directo = valor >= 0;
+        return !directo
             && facturacionVar !== null && facturacionVar !== undefined
             && benchmarkMarca !== null && benchmarkMarca !== undefined
             && facturacionVar > benchmarkMarca;
-        const cumple = directo || porCrecimiento;
-        const titulo = porCrecimiento ? 'Alcanza por crecimiento sobre la marca' : 'Cumple objetivo de venta';
-        if (cumple) {
-            return `<td class="td-num"><span class="badge-cumple" title="${titulo}"><i class="bi bi-check-circle-fill"></i> ${fmt.pct(valor)}</span></td>`;
+    }
+
+    /**
+     * Celda de "% Cumplimiento Obj. Venta": badge verde SOLO si cumple el objetivo de venta
+     * DIRECTO (valor >= 0). El cumplimiento "de consuelo" (ver `calculaCumplePorConsuelo`) ya
+     * no se badgea acá — se badgea exclusivamente en la columna de Facturación Var %
+     * (`facturacionVarMarcaCellHTML`), para que el badge de una fila nunca aparezca en ambas
+     * columnas a la vez: si cumple directo, el mérito es de esta columna; si cumple solo por
+     * consuelo, el mérito es de la otra y esta queda en rojo.
+     */
+    function cumplimientoCellHTML(valor, sinDatos) {
+        if (sinDatos || valor === null || valor === undefined) {
+            return `<td class="td-num">${fmt.pct(valor)}</td>`;
+        }
+        if (valor >= 0) {
+            return `<td class="td-num"><span class="badge-cumple" title="Cumple objetivo de venta"><i class="bi bi-check-circle-fill"></i> ${fmt.pct(valor)}</span></td>`;
         }
         return `<td class="td-num text-red">${fmt.pct(valor)}</td>`;
     }
 
-    /** Resalta en verde un valor cuando supera el benchmark de marca correspondiente. */
-    function claseBenchmark(valor, marca) {
-        if (valor === null || valor === undefined || marca === null || marca === undefined) return '';
-        return valor > marca ? 'text-green' : '';
+    /**
+     * Celda con badge verde (mismo `.badge-cumple` que `cumplimientoCellHTML`) cuando el valor
+     * supera un umbral (benchmark de marca, o 0 para una variación positiva simple). Si no lo
+     * supera, texto plano (o con `opts.claseNoCumple` si se pasa, ej. 'text-red').
+     * `opts.gate`: si se pasa `false`, nunca muestra el badge (aunque supere el umbral) — para
+     * filas de supervisora, donde estas métricas secundarias solo cuentan si la fila también
+     * cumplió el objetivo de venta (ver `calculaCumpleObjetivo`).
+     */
+    function badgeCellHTML(valor, umbral, formateado, opts = {}) {
+        if (valor === null || valor === undefined || umbral === null || umbral === undefined) {
+            return `<td class="td-num">${formateado}</td>`;
+        }
+        const superaUmbral = opts.inclusive ? valor >= umbral : valor > umbral;
+        const gate = opts.gate ?? true;
+        if (superaUmbral && gate) {
+            const tituloAttr = opts.titulo ? ` title="${opts.titulo}"` : '';
+            return `<td class="td-num"><span class="badge-cumple"${tituloAttr}><i class="bi bi-check-circle-fill"></i> ${formateado}</span></td>`;
+        }
+        const cls = opts.claseNoCumple && !superaUmbral ? ` ${opts.claseNoCumple}` : '';
+        return `<td class="td-num${cls}">${formateado}</td>`;
+    }
+
+    /**
+     * Celda de "Facturación Var %" para filas de supervisora/Total: badge verde SOLO si la fila
+     * ganó el premio específicamente POR la regla de consuelo (`cumplePorConsuelo`, ver
+     * `calculaCumplePorConsuelo`) — no si ya cumplió el objetivo de venta directo. Es una
+     * condición excluyente con la celda de "% Cumplimiento Obj. Venta": esa columna ya se
+     * acredita el mérito de la fila (directo o por consuelo); esta columna solo repite el
+     * badge cuando el camino fue específicamente el de consuelo, para no acreditar dos veces
+     * el mismo cumplimiento y así no comparar contra la marca lo que ya cumplió de forma
+     * directa. Texto rojo si la variación es negativa (no depende de `cumplePorConsuelo`: una
+     * caída de facturación siempre se marca).
+     */
+    function facturacionVarMarcaCellHTML(valor, benchmarkMarca, cumplePorConsuelo, formateado) {
+        if (valor === null || valor === undefined) {
+            return `<td class="td-num">${formateado}</td>`;
+        }
+        const superaMarca = benchmarkMarca !== null && benchmarkMarca !== undefined && valor > benchmarkMarca;
+        if (superaMarca && cumplePorConsuelo) {
+            return `<td class="td-num"><span class="badge-cumple" title="Supera la variación de facturación de marca"><i class="bi bi-check-circle-fill"></i> ${formateado}</span></td>`;
+        }
+        const cls = valor < 0 ? ' text-red' : '';
+        return `<td class="td-num${cls}">${formateado}</td>`;
     }
 
     /* ── Badge "Última actualización" / "DESACTUALIZADO" (reactivo a cada respuesta AJAX) ── */
@@ -120,5 +189,9 @@ const Premios = (() => {
         }
     }
 
-    return { $, fmt, buildQS, apiFetch, updatePeriodoLabel, setSupervisoraOptions, cumplimientoCellHTML, claseBenchmark, actualizarUltimaActualizacion };
+    return {
+        $, fmt, buildQS, apiFetch, updatePeriodoLabel, setSupervisoraOptions,
+        calculaCumpleObjetivo, calculaCumplePorConsuelo, cumplimientoCellHTML, badgeCellHTML,
+        facturacionVarMarcaCellHTML, actualizarUltimaActualizacion,
+    };
 })();

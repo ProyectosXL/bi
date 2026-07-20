@@ -154,6 +154,21 @@
 .premios-table tr.row-todas-separador td { border-top: 2px solid var(--border); }
 .premios-table td.td-num { text-align: right; }
 
+/* ── Filas de supervisora/"Todas" colapsables (ocultan sus sucursales hijas) ── */
+.premios-table tr[data-toggle-grupo] { cursor: pointer; user-select: none; }
+.premios-table tr[data-toggle-grupo]:hover td { background: #e0e7ff; }
+.premios-table .toggle-caret { display: inline-block; transition: transform .15s ease; margin-right: 2px; }
+.premios-table tr.colapsada .toggle-caret { transform: rotate(-90deg); }
+.premios-table tr.fila-oculta { display: none; }
+
+/* ── Fila de Total: resaltada para diferenciarla de subtotales de supervisora ── */
+.premios-table tr.totales td {
+    background  : #fffbeb;
+    color       : #92400e;
+    border-top  : 2px solid #f59e0b;
+    font-weight : 700;
+}
+
 /* ── Resalte de columnas "Premio" / "Total premios" (Vista Premios Supervisoras) ── */
 .premios-table th.th-premio { background: #2554c7; }
 .premios-table td.td-premio { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
