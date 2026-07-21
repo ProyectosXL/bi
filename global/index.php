@@ -255,10 +255,10 @@ try {
         <button class="tab-btn" id="tab-btn-liquidacion" role="tab" aria-controls="tab-liquidacion" aria-selected="false">
             <i class="bi bi-percent"></i>&nbsp; Liquidación
         </button>
-        <button class="tab-btn" id="tab-btn-franquicias-detalle" role="tab" aria-controls="tab-franquicias-detalle" aria-selected="false" style="display:none">
+        <button class="tab-btn" id="tab-btn-franquicias-detalle" role="tab" aria-controls="tab-franquicias-detalle" aria-selected="false">
             <i class="bi bi-calendar3"></i>&nbsp; Venta día por día
         </button>
-        <button class="tab-btn" id="tab-btn-franquicias-resumen" role="tab" aria-controls="tab-franquicias-resumen" aria-selected="false" style="display:none">
+        <button class="tab-btn" id="tab-btn-franquicias-resumen" role="tab" aria-controls="tab-franquicias-resumen" aria-selected="false">
             <i class="bi bi-grid-3x3-gap"></i>&nbsp; Resumen Anual Anterior
         </button>
         <button class="tab-reload-btn" id="btn-reload-tab" title="Recargar pestaña">
@@ -971,7 +971,7 @@ try {
         <main class="dash-content">
             <div class="analisis-card">
                 <div class="analisis-section-header">
-                    <i class="bi bi-calendar3"></i> Venta Día por Día — Franquicias
+                    <i class="bi bi-calendar3"></i>&nbsp;<span id="title-franquicias-detalle">Venta Día por Día — Locales Propios</span>
                     <div style="margin-left:auto; display:flex; gap:10px;">
                         <button id="btn-export-franquicias-detalle" class="btn-volver" style="background:#16a34a">
                             <i class="bi bi-file-earmark-excel"></i> Exportar
@@ -990,7 +990,7 @@ try {
         <main class="dash-content">
             <div class="analisis-card">
                 <div class="analisis-section-header">
-                    <i class="bi bi-grid-3x3-gap"></i> Resumen Anual Anterior — Franquicias
+                    <i class="bi bi-grid-3x3-gap"></i>&nbsp;<span id="title-franquicias-resumen">Resumen Anual Anterior — Locales Propios</span>
                     <div style="margin-left:auto; display:flex; gap:10px;">
                         <button id="btn-export-franquicias-resumen" class="btn-volver" style="background:#16a34a">
                             <i class="bi bi-file-earmark-excel"></i> Exportar
@@ -1068,6 +1068,19 @@ try {
                 </div>
 
                 <div class="summary-card obj">
+                    <div class="summary-icon">🏷️</div>
+                    <div class="summary-body">
+                        <div class="summary-label">Referencias (SKUs) liq.</div>
+                        <div class="summary-value" id="liq-kpi-referencias">—</div>
+                        <div class="summary-var" id="liq-kpi-referencias-var" style="display:none">—</div>
+                    </div>
+                    <div class="summary-side">
+                        <div class="summary-prev-label">Año anterior</div>
+                        <div class="summary-prev-value" id="liq-kpi-referencias-prev">—</div>
+                    </div>
+                </div>
+
+                <div class="summary-card obj">
                     <div class="summary-icon">💵</div>
                     <div class="summary-body">
                         <div class="summary-label">Ticket promedio liq.</div>
@@ -1092,7 +1105,7 @@ try {
             </div>
 
             <!-- Donut Charts Row -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; align-items: start;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; align-items: start;">
                 <!-- Donut Chart Facturación -->
                 <div class="analisis-card" style="min-height: 380px; display:flex; flex-direction:column;">
                     <div class="analisis-section-header">
@@ -1123,6 +1136,23 @@ try {
                         </div>
                         <div style="flex:1; position:relative;">
                             <canvas id="liq-donut-unidades"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Donut Chart Referencias (SKUs) -->
+                <div class="analisis-card" style="min-height: 380px; display:flex; flex-direction:column;">
+                    <div class="analisis-section-header">
+                        <i class="bi bi-pie-chart"></i> Participación Referencias (SKUs) — Liquidación vs Normal
+                    </div>
+                    <div style="flex:1; padding:12px; position:relative; min-height: 300px; display:flex; flex-direction:column;">
+                        <div id="liq-donut-ref-breadcrumb" style="display:none; margin-bottom:8px;">
+                            <button id="liq-btn-back-donut-ref" style="padding: 4px 8px; font-size: 0.8rem; background: var(--accent2) !important; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+                                <i class="bi bi-arrow-left"></i> Volver
+                            </button>
+                        </div>
+                        <div style="flex:1; position:relative;">
+                            <canvas id="liq-donut-referencias"></canvas>
                         </div>
                     </div>
                 </div>
@@ -1159,11 +1189,15 @@ try {
                                     <th>Rubro / Categoría</th>
                                     <th style="text-align: right;">Fact. Liq.</th>
                                     <th style="text-align: right;">Fact. Normal</th>
-                                    <th style="text-align: right;">% Mix Liq.</th>
+                                    <th style="text-align: right;">Unid. Liq.</th>
+                                    <th style="text-align: right;">Unid. Normal</th>
+                                    <th style="text-align: right;">Ref. Liq. (SKU)</th>
+                                    <th style="text-align: right;">Ref. Normal (SKU)</th>
+                                    <th style="text-align: right;">% Ref. Liq.</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="4" style="text-align: center; padding: 20px;">Cargando...</td></tr>
+                                <tr><td colspan="8" style="text-align: center; padding: 20px;">Cargando...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1184,10 +1218,11 @@ try {
                                     <th>Sucursal</th>
                                     <th style="text-align: right;">Facturación</th>
                                     <th style="text-align: right;">Unidades</th>
+                                    <th style="text-align: right;">Referencias (SKUs)</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="3" style="text-align: center; padding: 20px;">Cargando...</td></tr>
+                                <tr><td colspan="4" style="text-align: center; padding: 20px;">Cargando...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1202,7 +1237,7 @@ try {
                         <table class="ranking-table" id="liq-table-productos">
                             <thead>
                                 <tr>
-                                    <th>Articulo</th>
+                                    <th>Referencia (SKU)</th>
                                     <th>Descripción</th>
                                     <th>Temporada</th>
                                     <th style="text-align: right;">Cant</th>
@@ -1365,10 +1400,12 @@ window.BI_CONFIG = {
             const el = document.getElementById(id);
             if (el) el.style.display = isFran ? '' : 'none';
         });
-        const tabBtnFran = document.getElementById('tab-btn-franquicias-detalle');
-        if (tabBtnFran) tabBtnFran.style.display = isFran ? '' : 'none';
-        const tabBtnFranRes = document.getElementById('tab-btn-franquicias-resumen');
-        if (tabBtnFranRes) tabBtnFranRes.style.display = isFran ? '' : 'none';
+
+        const origenLabel = isFran ? 'Franquicias' : 'Locales Propios';
+        const elDet = document.getElementById('title-franquicias-detalle');
+        if (elDet) elDet.textContent = `Venta Día por Día — ${origenLabel}`;
+        const elRes = document.getElementById('title-franquicias-resumen');
+        if (elRes) elRes.textContent = `Resumen Anual Anterior — ${origenLabel}`;
     }
     document.querySelectorAll('.origen-btn').forEach(btn => {
         btn.addEventListener('click', () => {

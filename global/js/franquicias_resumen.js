@@ -64,12 +64,12 @@ const FranquiciasResumen = (function () {
             <table class="ranking-table rk-detalle-table" id="tabla-fran-resumen">
                 <thead>
                     <tr>
-                        <th style="position:sticky; left:0; z-index:10; background:var(--bg-header); min-width:180px; width:180px;">Mes</th>
-                        <th style="position:sticky; left:180px; z-index:10; background:var(--bg-header); min-width:220px; width:220px;">Indicador</th>
+                        <th style="position:sticky; top:0; left:0; z-index:25; background:var(--bg-header); color:#fff; min-width:180px; width:180px;">Mes</th>
+                        <th style="position:sticky; top:0; left:180px; z-index:25; background:var(--bg-header); color:#fff; min-width:220px; width:220px;">Indicador</th>
         `;
 
         _state.sucursales.forEach(s => {
-            html += `<th style="text-align:right; min-width:140px">${s.nombre}</th>`;
+            html += `<th style="position:sticky; top:0; z-index:20; background:var(--bg-header); color:#fff; text-align:right; min-width:140px">${s.nombre}</th>`;
         });
 
         html += `

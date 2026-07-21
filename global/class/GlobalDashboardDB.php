@@ -2204,7 +2204,7 @@ class GlobalDashboardDB
         }
 
         $sqlAct = "
-            SELECT SUM(s.IMPORTE) as fact, SUM(s.CANTIDAD) as unid, COUNT(DISTINCT s.N_COMP) as tickets
+            SELECT SUM(s.IMPORTE) as fact, SUM(s.CANTIDAD) as unid, COUNT(DISTINCT s.N_COMP) as tickets, COUNT(DISTINCT s.COD_ARTICU) as referencias
             FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
             LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.MAESTRO_DESTINOS md WITH (NOLOCK) 
                 ON s.COD_ARTICU COLLATE DATABASE_DEFAULT = md.COD_ARTICU COLLATE DATABASE_DEFAULT
@@ -2220,14 +2220,16 @@ class GlobalDashboardDB
         $fa = (float)($resAct['fact'] ?? 0.0);
         $ua = (float)($resAct['unid'] ?? 0.0);
         $ta = (int)($resAct['tickets'] ?? 0);
+        $ra = (int)($resAct['referencias'] ?? 0);
 
         $fp = 0.0;
         $up = 0.0;
         $tp = 0;
+        $rp = 0;
 
         if ($liqTipo === 'NORMAL' || $liqTipo === 'ALL') {
             $sqlPrev = "
-                SELECT SUM(s.IMPORTE) as fact, SUM(s.CANTIDAD) as unid, COUNT(DISTINCT s.N_COMP) as tickets
+                SELECT SUM(s.IMPORTE) as fact, SUM(s.CANTIDAD) as unid, COUNT(DISTINCT s.N_COMP) as tickets, COUNT(DISTINCT s.COD_ARTICU) as referencias
                 FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
                 WHERE s.FECHA >= ? AND s.FECHA <= ?
                   AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
@@ -2244,6 +2246,7 @@ class GlobalDashboardDB
             $fp = (float)($resPrev['fact'] ?? 0.0);
             $up = (float)($resPrev['unid'] ?? 0.0);
             $tp = (int)($resPrev['tickets'] ?? 0);
+            $rp = (int)($resPrev['referencias'] ?? 0);
         }
 
         return [
@@ -2256,6 +2259,8 @@ class GlobalDashboardDB
             'tickets_act'  => $ta,
             'tickets_prev' => $tp,
             'var_tickets'  => null,
+            'ref_act'      => $ra,
+            'ref_prev'     => $rp,
             'ticket_prom_act'  => $ta > 0 ? $fa / $ta : 0.0,
             'ticket_prom_prev' => $tp > 0 ? $fp / $tp : 0.0,
             'var_ticket_prom'  => null
@@ -2298,7 +2303,8 @@ class GlobalDashboardDB
         $sql = "
             SELECT s.NRO_SUCURS,
                    SUM(s.IMPORTE) as fact_act,
-                   SUM(s.CANTIDAD) as unid_act
+                   SUM(s.CANTIDAD) as unid_act,
+                   COUNT(DISTINCT s.COD_ARTICU) as ref_act
             FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
             LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.MAESTRO_DESTINOS md WITH (NOLOCK)
                 ON s.COD_ARTICU COLLATE DATABASE_DEFAULT = md.COD_ARTICU COLLATE DATABASE_DEFAULT
@@ -2316,12 +2322,14 @@ class GlobalDashboardDB
             $nro  = (int)$r['NRO_SUCURS'];
             $fact = (float)$r['fact_act'];
             $unid = (float)$r['unid_act'];
+            $ref  = (int)$r['ref_act'];
             $result[$nro] = [
                 'nro_sucurs'       => $nro,
                 'facturacion'      => $fact,
                 'facturacion_prev' => 0.0,
                 'unidades'         => $unid,
                 'unidades_prev'    => 0.0,
+                'referencias'      => $ref,
                 'var_fact'         => null,
                 'var_unid'         => null
             ];
@@ -2408,8 +2416,10 @@ class GlobalDashboardDB
                 s.CATEGORIA,
                 SUM(CASE WHEN md.LIQUIDACION = 'SI' THEN s.IMPORTE ELSE 0 END) as fact_liq,
                 SUM(CASE WHEN md.LIQUIDACION = 'SI' THEN s.CANTIDAD ELSE 0 END) as unid_liq,
+                COUNT(DISTINCT CASE WHEN md.LIQUIDACION = 'SI' THEN s.COD_ARTICU END) as ref_liq,
                 SUM(CASE WHEN md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI' THEN s.IMPORTE ELSE 0 END) as fact_norm,
-                SUM(CASE WHEN md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI' THEN s.CANTIDAD ELSE 0 END) as unid_norm
+                SUM(CASE WHEN md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI' THEN s.CANTIDAD ELSE 0 END) as unid_norm,
+                COUNT(DISTINCT CASE WHEN md.LIQUIDACION IS NULL OR md.LIQUIDACION <> 'SI' THEN s.COD_ARTICU END) as ref_norm
             FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
             LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.MAESTRO_DESTINOS md WITH (NOLOCK) 
                 ON s.COD_ARTICU COLLATE DATABASE_DEFAULT = md.COD_ARTICU COLLATE DATABASE_DEFAULT

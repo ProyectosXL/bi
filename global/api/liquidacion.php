@@ -76,6 +76,8 @@ try {
                 'fact_norm' => 0.0,
                 'unid_liq' => 0.0,
                 'unid_norm' => 0.0,
+                'ref_liq' => 0,
+                'ref_norm' => 0,
                 'categorias' => []
             ];
         }
@@ -84,13 +86,17 @@ try {
         $jerarquia[$rub]['fact_norm'] += (float)$r['fact_norm'];
         $jerarquia[$rub]['unid_liq'] += (float)$r['unid_liq'];
         $jerarquia[$rub]['unid_norm'] += (float)$r['unid_norm'];
+        $jerarquia[$rub]['ref_liq'] += (int)$r['ref_liq'];
+        $jerarquia[$rub]['ref_norm'] += (int)$r['ref_norm'];
         
         $jerarquia[$rub]['categorias'][] = [
             'label' => $cat,
             'fact_liq' => (float)$r['fact_liq'],
             'fact_norm' => (float)$r['fact_norm'],
             'unid_liq' => (float)$r['unid_liq'],
-            'unid_norm' => (float)$r['unid_norm']
+            'unid_norm' => (float)$r['unid_norm'],
+            'ref_liq' => (int)$r['ref_liq'],
+            'ref_norm' => (int)$r['ref_norm']
         ];
     }
     $jerarquia = array_values($jerarquia);

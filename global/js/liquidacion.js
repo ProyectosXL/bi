@@ -8,6 +8,7 @@ const Liquidacion = (function () {
     let _timelineChartInstance = null;
     let _donutFactInstance = null;
     let _donutUnidInstance = null;
+    let _donutRefInstance = null;
 
     // Filtros activos globales (Power BI style)
     let _activeFilters = {
@@ -21,6 +22,8 @@ const Liquidacion = (function () {
     let _donutFactRubro = null;
     let _donutUnidLevel = 0;
     let _donutUnidRubro = null;
+    let _donutRefLevel = 0;
+    let _donutRefRubro = null;
 
     // Filtro temporal para el gráfico de barras por rubro
     let _currentRubroFilter = null; 
@@ -87,6 +90,21 @@ const Liquidacion = (function () {
             };
         }
 
+        const backRefBtn = document.getElementById('liq-btn-back-donut-ref');
+        if (backRefBtn) {
+            backRefBtn.onclick = () => {
+                if (_donutRefLevel === 2) {
+                    _donutRefLevel = 1;
+                    _activeFilters.categoria = null;
+                } else if (_donutRefLevel === 1) {
+                    _donutRefLevel = 0;
+                    _donutRefRubro = null;
+                    _activeFilters.rubro = null;
+                }
+                applyFilters();
+            };
+        }
+
         // Botón volver de gráfico de barras principal
         const backBtn = document.getElementById('liq-btn-back-chart');
         if (backBtn) {
@@ -134,6 +152,7 @@ const Liquidacion = (function () {
         if (_timelineChartInstance) { _timelineChartInstance.destroy(); _timelineChartInstance = null; }
         if (_donutFactInstance) { _donutFactInstance.destroy(); _donutFactInstance = null; }
         if (_donutUnidInstance) { _donutUnidInstance.destroy(); _donutUnidInstance = null; }
+        if (_donutRefInstance) { _donutRefInstance.destroy(); _donutRefInstance = null; }
     }
 
     function clearAllFilters() {
@@ -144,6 +163,8 @@ const Liquidacion = (function () {
         _donutFactRubro = null;
         _donutUnidLevel = 0;
         _donutUnidRubro = null;
+        _donutRefLevel = 0;
+        _donutRefRubro = null;
         _currentRubroFilter = null;
         loadAll();
     }
@@ -203,6 +224,11 @@ const Liquidacion = (function () {
         document.getElementById('liq-kpi-tickets').textContent = fmtNum(k.tickets_act);
         document.getElementById('liq-kpi-tickets-prev').textContent = fmtNum(k.tickets_prev);
 
+        const elRef = document.getElementById('liq-kpi-referencias');
+        if (elRef) elRef.textContent = fmtNum(k.ref_act);
+        const elRefPrev = document.getElementById('liq-kpi-referencias-prev');
+        if (elRefPrev) elRefPrev.textContent = fmtNum(k.ref_prev);
+
         document.getElementById('liq-kpi-promedio').textContent = fmtMoney(k.ticket_prom_act);
         document.getElementById('liq-kpi-promedio-prev').textContent = fmtMoney(k.ticket_prom_prev);
 
@@ -213,19 +239,22 @@ const Liquidacion = (function () {
         const sucursalesKeys = Object.keys(_state.sucursales);
         let totalFact = 0;
         let totalUnid = 0;
+        let totalRef = 0;
         if (sucursalesKeys.length === 0) {
-            sTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">Sin ventas en el período</td></tr>';
+            sTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Sin ventas en el período</td></tr>';
         } else {
             const sortedSucs = sucursalesKeys.map(k => _state.sucursales[k]).sort((a, b) => b.facturacion - a.facturacion);
             sortedSucs.forEach(s => {
                 totalFact += s.facturacion;
                 totalUnid += s.unidades;
+                totalRef += (s.referencias || 0);
                 const tr = document.createElement('tr');
                 const name = getSucursalName(s.nro_sucurs);
                 tr.innerHTML = `
                     <td style="font-weight:600">${name}</td>
                     <td style="text-align:right">${fmtMoney(s.facturacion)}</td>
                     <td style="text-align:right">${fmtNum(s.unidades)}</td>
+                    <td style="text-align:right; font-weight:600; color:#3b82f6;">${fmtNum(s.referencias || 0)}</td>
                 `;
                 sTableBody.appendChild(tr);
             });
@@ -245,6 +274,7 @@ const Liquidacion = (function () {
                         <td style="padding:10px 12px; color:#1e293b;">TOTAL</td>
                         <td style="text-align:right; padding:10px 12px; color:#1e293b;">${fmtMoney(totalFact)}</td>
                         <td style="text-align:right; padding:10px 12px; color:#1e293b;">${fmtNum(totalUnid)}</td>
+                        <td style="text-align:right; padding:10px 12px; color:#2563eb;">${fmtNum(k.ref_act)}</td>
                     </tr>
                 `;
             } else {
@@ -286,7 +316,7 @@ const Liquidacion = (function () {
             if (_state.productos.length > 0) {
                 tfoot.innerHTML = `
                     <tr style="font-weight:700; border-top:2px solid rgba(0,0,0,0.1); background:#f8fafc; position:sticky; bottom:0; z-index:10;">
-                        <td style="padding:10px 12px; color:#1e293b;" colspan="3">TOTAL (Top 100)</td>
+                        <td style="padding:10px 12px; color:#1e293b;" colspan="3">TOTAL (Top ${_state.productos.length} SKUs / Referencias)</td>
                         <td style="text-align:right; padding:10px 12px; color:#1e293b;">${fmtNum(totalProdQty)}</td>
                         <td style="text-align:right; padding:10px 12px; color:#1e293b;">${fmtMoney(totalProdAmt)}</td>
                     </tr>
@@ -322,7 +352,7 @@ const Liquidacion = (function () {
         if (!tbody) return;
 
         if (!_state.jerarquia || _state.jerarquia.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Sin datos en el período</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px;">Sin datos en el período</td></tr>';
             return;
         }
 
@@ -330,8 +360,8 @@ const Liquidacion = (function () {
         const sortedRubros = [..._state.jerarquia].sort((a, b) => b.fact_liq - a.fact_liq);
 
         sortedRubros.forEach((rub, ri) => {
-            const total = rub.fact_liq + rub.fact_norm;
-            const mix = total > 0 ? rub.fact_liq / total : 0;
+            const totalRef = (rub.ref_liq || 0) + (rub.ref_norm || 0);
+            const mixRef = totalRef > 0 ? rub.ref_liq / totalRef : 0;
             const hasCats = rub.categorias && rub.categorias.length > 0;
             const isFilteredRub = _activeFilters.rubro === rub.label;
 
@@ -343,22 +373,30 @@ const Liquidacion = (function () {
                     </td>
                     <td style="text-align:right; font-weight:600;">${Dashboard.fmt.money(rub.fact_liq)}</td>
                     <td style="text-align:right; color:var(--text-3);">${Dashboard.fmt.money(rub.fact_norm)}</td>
-                    <td style="text-align:right; font-weight:600; color:#00a878;">${fmtPct(mix)}</td>
+                    <td style="text-align:right;">${Dashboard.fmt.num(rub.unid_liq)}</td>
+                    <td style="text-align:right; color:var(--text-3);">${Dashboard.fmt.num(rub.unid_norm)}</td>
+                    <td style="text-align:right; font-weight:600; color:#3b82f6;">${Dashboard.fmt.num(rub.ref_liq || 0)}</td>
+                    <td style="text-align:right; color:var(--text-3);">${Dashboard.fmt.num(rub.ref_norm || 0)}</td>
+                    <td style="text-align:right; font-weight:600; color:#00a878;">${fmtPct(mixRef)}</td>
                 </tr>
             `;
 
             if (hasCats) {
                 const sortedCats = [...rub.categorias].sort((a, b) => b.fact_liq - a.fact_liq);
                 sortedCats.forEach(cat => {
-                    const catTotal = cat.fact_liq + cat.fact_norm;
-                    const catMix = catTotal > 0 ? cat.fact_liq / catTotal : 0;
+                    const catTotalRef = (cat.ref_liq || 0) + (cat.ref_norm || 0);
+                    const catMixRef = catTotalRef > 0 ? cat.ref_liq / catTotalRef : 0;
                     const isFilteredCat = _activeFilters.categoria === cat.label;
                     html += `
                         <tr class="row-cat-liq ${isFilteredCat ? 'liq-row-filtered' : ''}" data-ri="${ri}">
                             <td style="padding-left:24px; color:var(--text-2);">${cat.label}</td>
                             <td style="text-align:right;">${Dashboard.fmt.money(cat.fact_liq)}</td>
                             <td style="text-align:right; color:var(--text-3);">${Dashboard.fmt.money(cat.fact_norm)}</td>
-                            <td style="text-align:right; color:#00a878;">${fmtPct(catMix)}</td>
+                            <td style="text-align:right;">${Dashboard.fmt.num(cat.unid_liq)}</td>
+                            <td style="text-align:right; color:var(--text-3);">${Dashboard.fmt.num(cat.unid_norm)}</td>
+                            <td style="text-align:right; color:#3b82f6;">${Dashboard.fmt.num(cat.ref_liq || 0)}</td>
+                            <td style="text-align:right; color:var(--text-3);">${Dashboard.fmt.num(cat.ref_norm || 0)}</td>
+                            <td style="text-align:right; color:#00a878;">${fmtPct(catMixRef)}</td>
                         </tr>
                     `;
                 });
@@ -390,6 +428,8 @@ const Liquidacion = (function () {
                 _donutFactRubro = rubroLabel;
                 _donutUnidLevel = 1;
                 _donutUnidRubro = rubroLabel;
+                _donutRefLevel = 1;
+                _donutRefRubro = rubroLabel;
                 _currentRubroFilter = rubroLabel;
                 applyFilters();
             });
@@ -398,12 +438,22 @@ const Liquidacion = (function () {
         // Calcular Totales para la Jerarquía
         let totalLiqFact = 0;
         let totalNormFact = 0;
+        let totalLiqUnid = 0;
+        let totalNormUnid = 0;
+        let totalLiqRef = 0;
+        let totalNormRef = 0;
+
         _state.jerarquia.forEach(rub => {
             totalLiqFact += rub.fact_liq;
             totalNormFact += rub.fact_norm;
+            totalLiqUnid += rub.unid_liq;
+            totalNormUnid += rub.unid_norm;
+            totalLiqRef += (rub.ref_liq || 0);
+            totalNormRef += (rub.ref_norm || 0);
         });
-        const totalFact = totalLiqFact + totalNormFact;
-        const mixFact = totalFact > 0 ? totalLiqFact / totalFact : 0;
+
+        const totalRefGen = totalLiqRef + totalNormRef;
+        const mixRefGen = totalRefGen > 0 ? totalLiqRef / totalRefGen : 0;
 
         let jTable = document.getElementById('liq-table-jerarquia');
         if (jTable) {
@@ -418,7 +468,11 @@ const Liquidacion = (function () {
                         <td style="padding:10px 12px; color:#1e293b;">TOTAL</td>
                         <td style="text-align:right; padding:10px 12px; color:#1e293b;">${Dashboard.fmt.money(totalLiqFact)}</td>
                         <td style="text-align:right; padding:10px 12px; color:#64748b;">${Dashboard.fmt.money(totalNormFact)}</td>
-                        <td style="text-align:right; padding:10px 12px; color:#00a878;">${fmtPct(mixFact)}</td>
+                        <td style="text-align:right; padding:10px 12px; color:#1e293b;">${Dashboard.fmt.num(totalLiqUnid)}</td>
+                        <td style="text-align:right; padding:10px 12px; color:#64748b;">${Dashboard.fmt.num(totalNormUnid)}</td>
+                        <td style="text-align:right; padding:10px 12px; color:#2563eb;">${Dashboard.fmt.num(totalLiqRef)}</td>
+                        <td style="text-align:right; padding:10px 12px; color:#64748b;">${Dashboard.fmt.num(totalNormRef)}</td>
+                        <td style="text-align:right; padding:10px 12px; color:#00a878;">${fmtPct(mixRefGen)}</td>
                     </tr>
                 `;
             } else {
@@ -738,17 +792,35 @@ const Liquidacion = (function () {
     function renderDonuts() {
         renderDonutChart('facturacion');
         renderDonutChart('unidades');
+        renderDonutChart('referencias');
     }
 
     function renderDonutChart(tipoMetrica) {
         const isFact = tipoMetrica === 'facturacion';
-        const canvasId = isFact ? 'liq-donut-facturacion' : 'liq-donut-unidades';
-        const breadcrumbId = isFact ? 'liq-donut-fact-breadcrumb' : 'liq-donut-unid-breadcrumb';
+        const isRef = tipoMetrica === 'referencias';
+
+        let canvasId = 'liq-donut-facturacion';
+        let breadcrumbId = 'liq-donut-fact-breadcrumb';
+        if (tipoMetrica === 'unidades') {
+            canvasId = 'liq-donut-unidades';
+            breadcrumbId = 'liq-donut-unid-breadcrumb';
+        } else if (tipoMetrica === 'referencias') {
+            canvasId = 'liq-donut-referencias';
+            breadcrumbId = 'liq-donut-ref-breadcrumb';
+        }
+
         const ctx = document.getElementById(canvasId);
         if (!ctx) return;
 
-        const level = isFact ? _donutFactLevel : _donutUnidLevel;
-        const currentRubro = isFact ? _donutFactRubro : _donutUnidRubro;
+        let level = _donutFactLevel;
+        let currentRubro = _donutFactRubro;
+        if (tipoMetrica === 'unidades') {
+            level = _donutUnidLevel;
+            currentRubro = _donutUnidRubro;
+        } else if (tipoMetrica === 'referencias') {
+            level = _donutRefLevel;
+            currentRubro = _donutRefRubro;
+        }
 
         const bc = document.getElementById(breadcrumbId);
         if (bc) bc.style.display = level > 0 ? 'block' : 'none';
@@ -771,8 +843,16 @@ const Liquidacion = (function () {
             let totalLiq = 0;
             let totalNorm = 0;
             _state.jerarquia.forEach(r => {
-                totalLiq += isFact ? r.fact_liq : r.unid_liq;
-                totalNorm += isFact ? r.fact_norm : r.unid_norm;
+                if (isFact) {
+                    totalLiq += r.fact_liq;
+                    totalNorm += r.fact_norm;
+                } else if (isRef) {
+                    totalLiq += (r.ref_liq || 0);
+                    totalNorm += (r.ref_norm || 0);
+                } else {
+                    totalLiq += r.unid_liq;
+                    totalNorm += r.unid_norm;
+                }
             });
             rawData = [
                 isFact ? Dashboard.convertir(totalLiq) : totalLiq,
@@ -786,7 +866,9 @@ const Liquidacion = (function () {
                     label: r.label,
                     val: isFact 
                         ? Dashboard.convertir(targetType === 'LIQUIDACION' ? r.fact_liq : r.fact_norm)
-                        : (targetType === 'LIQUIDACION' ? r.unid_liq : r.unid_norm)
+                        : (isRef
+                            ? (targetType === 'LIQUIDACION' ? (r.ref_liq || 0) : (r.ref_norm || 0))
+                            : (targetType === 'LIQUIDACION' ? r.unid_liq : r.unid_norm))
                 }))
                 .filter(x => x.val > 0)
                 .sort((a, b) => b.val - a.val)
@@ -805,7 +887,9 @@ const Liquidacion = (function () {
                         label: c.label,
                         val: isFact
                             ? Dashboard.convertir(targetType === 'LIQUIDACION' ? c.fact_liq : c.fact_norm)
-                            : (targetType === 'LIQUIDACION' ? c.unid_liq : c.unid_norm)
+                            : (isRef
+                                ? (targetType === 'LIQUIDACION' ? (c.ref_liq || 0) : (c.ref_norm || 0))
+                                : (targetType === 'LIQUIDACION' ? c.unid_liq : c.unid_norm))
                     }))
                     .filter(x => x.val > 0)
                     .sort((a, b) => b.val - a.val)
@@ -844,6 +928,8 @@ const Liquidacion = (function () {
                             
                             if (isFact) {
                                 _donutFactLevel = 1;
+                            } else if (isRef) {
+                                _donutRefLevel = 1;
                             } else {
                                 _donutUnidLevel = 1;
                             }
@@ -857,6 +943,9 @@ const Liquidacion = (function () {
                             if (isFact) {
                                 _donutFactLevel = 2;
                                 _donutFactRubro = clickedLabel;
+                            } else if (isRef) {
+                                _donutRefLevel = 2;
+                                _donutRefRubro = clickedLabel;
                             } else {
                                 _donutUnidLevel = 2;
                                 _donutUnidRubro = clickedLabel;
@@ -919,6 +1008,8 @@ const Liquidacion = (function () {
 
         if (isFact) {
             _donutFactInstance = instance;
+        } else if (isRef) {
+            _donutRefInstance = instance;
         } else {
             _donutUnidInstance = instance;
         }

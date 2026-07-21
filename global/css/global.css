@@ -1077,17 +1077,31 @@
     border: 1px solid var(--border);
     padding: 8px 12px;
 }
+.rk-detalle-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
 .rk-detalle-table thead th {
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 20;
     background: var(--bg-header);
     color: #fff;
 }
-.rk-detalle-table tfoot td {
+.rk-detalle-table tfoot {
     position: sticky;
     bottom: 0;
-    z-index: 10;
+    z-index: 20;
+    background: var(--bg-card);
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.12);
+}
+.rk-detalle-table tfoot tr td {
+    background: var(--bg-card);
+}
+.rk-detalle-table tfoot tr.tfoot-total-act td {
+    background: var(--accent2) !important;
+    color: #fff;
 }
 .rk-detalle-table .text-pos { color: var(--pos, #22c55e); font-weight: 600; }
 .rk-detalle-table .text-neg { color: var(--neg, #ef4444); font-weight: 600; }

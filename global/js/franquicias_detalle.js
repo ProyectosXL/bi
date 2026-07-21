@@ -47,15 +47,15 @@ const FranquiciasDetalle = (function () {
             <table class="ranking-table rk-detalle-table" id="tabla-fran-detalle">
                 <thead>
                     <tr>
-                        <th style="position:sticky; left:0; z-index:10; background:var(--bg-card)">Día / Sucursal</th>
+                        <th style="position:sticky; top:0; left:0; z-index:25; background:var(--bg-header); color:#fff;">Día / Sucursal</th>
         `;
 
         _state.sucursales.forEach(s => {
-            html += `<th style="text-align:right; min-width:120px">${s.nombre}</th>`;
+            html += `<th style="position:sticky; top:0; z-index:20; background:var(--bg-header); color:#fff; text-align:right; min-width:120px">${s.nombre}</th>`;
         });
 
         html += `
-                        <th style="text-align:right; font-weight:700; background:rgba(255,255,255,0.05)">TOTAL DÍA</th>
+                        <th style="position:sticky; top:0; z-index:20; background:var(--bg-header); color:#fff; text-align:right; font-weight:700;">TOTAL DÍA</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -76,8 +76,8 @@ const FranquiciasDetalle = (function () {
         html += `
                 </tbody>
                 <tfoot>
-                    <tr style="background:var(--accent2); color:#fff; font-weight:700">
-                        <td style="position:sticky; left:0; z-index:10; background:var(--accent2)">TOTAL PERÍODO</td>
+                    <tr class="tfoot-total-act" style="background:var(--accent2); color:#fff; font-weight:700">
+                        <td style="position:sticky; left:0; z-index:25; background:var(--accent2); color:#fff;">TOTAL PERÍODO</td>
         `;
         
         let totalGeneral = 0;
@@ -85,27 +85,27 @@ const FranquiciasDetalle = (function () {
             let totalSuc = 0;
             Object.values(_state.data[s.nro] || {}).forEach(v => totalSuc += v);
             totalGeneral += totalSuc;
-            html += `<td style="text-align:right" data-t="n" data-v="${totalSuc}">${Dashboard.fmt.money(totalSuc)}</td>`;
+            html += `<td style="text-align:right; background:var(--accent2); color:#fff;" data-t="n" data-v="${totalSuc}">${Dashboard.fmt.money(totalSuc)}</td>`;
         });
-        html += `<td style="text-align:right" data-t="n" data-v="${totalGeneral}">${Dashboard.fmt.money(totalGeneral)}</td></tr>`;
+        html += `<td style="text-align:right; background:var(--accent2); color:#fff;" data-t="n" data-v="${totalGeneral}">${Dashboard.fmt.money(totalGeneral)}</td></tr>`;
 
         // Fila de PERÍODO PREVIO
         html += `
-                    <tr style="background:rgba(255,255,255,0.05); color:var(--text-2)">
-                        <td style="position:sticky; left:0; z-index:10; background:var(--bg-card)">AÑO ANTERIOR</td>
+                    <tr class="tfoot-total-prev" style="background:var(--bg-card); color:var(--text-2); font-weight:600">
+                        <td style="position:sticky; left:0; z-index:25; background:var(--bg-card); color:var(--text-2);">AÑO ANTERIOR</td>
         `;
         let totalPrevGeneral = 0;
         _state.sucursales.forEach(s => {
             const valPrev = _state.prevTotals[s.nro] || 0;
             totalPrevGeneral += valPrev;
-            html += `<td style="text-align:right" data-t="n" data-v="${valPrev}">${Dashboard.fmt.money(valPrev)}</td>`;
+            html += `<td style="text-align:right; background:var(--bg-card); color:var(--text-2);" data-t="n" data-v="${valPrev}">${Dashboard.fmt.money(valPrev)}</td>`;
         });
-        html += `<td style="text-align:right" data-t="n" data-v="${totalPrevGeneral}">${Dashboard.fmt.money(totalPrevGeneral)}</td></tr>`;
+        html += `<td style="text-align:right; background:var(--bg-card); color:var(--text-2);" data-t="n" data-v="${totalPrevGeneral}">${Dashboard.fmt.money(totalPrevGeneral)}</td></tr>`;
 
         // Fila de CRECIMIENTO
         html += `
-                    <tr style="font-weight:600">
-                        <td style="position:sticky; left:0; z-index:10; background:var(--bg-card)">CRECIMIENTO</td>
+                    <tr class="tfoot-growth" style="background:var(--bg-card); font-weight:600">
+                        <td style="position:sticky; left:0; z-index:25; background:var(--bg-card);">CRECIMIENTO</td>
         `;
         _state.sucursales.forEach(s => {
             let totalSuc = 0;
@@ -113,11 +113,11 @@ const FranquiciasDetalle = (function () {
             const valPrev = _state.prevTotals[s.nro] || 0;
             const growth = valPrev > 0 ? (totalSuc - valPrev) / valPrev : (totalSuc > 0 ? 1 : 0);
             const cls = growth >= 0 ? 'text-pos' : 'text-neg';
-            html += `<td style="text-align:right" class="${cls}" data-t="n" data-v="${growth}">${Dashboard.fmt.pct(growth)}</td>`;
+            html += `<td style="text-align:right; background:var(--bg-card);" class="${cls}" data-t="n" data-v="${growth}">${valPrev > 0 ? Dashboard.fmt.varPct(growth) : '—'}</td>`;
         });
         const totalGrowth = totalPrevGeneral > 0 ? (totalGeneral - totalPrevGeneral) / totalPrevGeneral : (totalGeneral > 0 ? 1 : 0);
         const clsGen = totalGrowth >= 0 ? 'text-pos' : 'text-neg';
-        html += `<td style="text-align:right" class="${clsGen}" data-t="n" data-v="${totalGrowth}">${Dashboard.fmt.pct(totalGrowth)}</td></tr>`;
+        html += `<td style="text-align:right; background:var(--bg-card);" class="${clsGen}" data-t="n" data-v="${totalGrowth}">${totalPrevGeneral > 0 ? Dashboard.fmt.varPct(totalGrowth) : '—'}</td></tr>`;
 
         html += `
                 </tfoot>
