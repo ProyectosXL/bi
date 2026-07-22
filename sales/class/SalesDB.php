@@ -93,6 +93,64 @@ class SalesDB
         return [" AND {$alias}.CANAL = ?", [$v]];
     }
 
+    /** Lista de grupos empresarios disponibles */
+    public function getGruposEmpresario(): array
+    {
+        $sql = "SELECT DISTINCT GRUPO_EMPRESARIO 
+                FROM POWER_BI_CONTROL_FRANQUICIAS.dbo.BI_SALES_SUCURSALES 
+                WHERE GRUPO_EMPRESARIO IS NOT NULL AND GRUPO_EMPRESARIO <> '' 
+                ORDER BY GRUPO_EMPRESARIO";
+        $stmt = sqlsrv_query($this->conn, $sql);
+        $rows = [];
+        if ($stmt) {
+            while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+                $val = trim($r['GRUPO_EMPRESARIO'] ?? '');
+                if ($val !== '') {
+                    $rows[] = $val;
+                }
+            }
+            sqlsrv_free_stmt($stmt);
+        }
+        return $rows;
+    }
+
+    /** Fragmento WHERE para GRUPO_EMPRESARIO */
+    private function whereGrupoEmpresarioFrag($grupoEmpresario, string $alias = 's'): array
+    {
+        if (!$grupoEmpresario) return ['', []];
+        if (is_string($grupoEmpresario)) {
+            $grupoEmpresario = array_filter(array_map('trim', explode(',', $grupoEmpresario)));
+        }
+        if (!is_array($grupoEmpresario) || empty($grupoEmpresario)) return ['', []];
+
+        $placeholders = implode(',', array_fill(0, count($grupoEmpresario), '?'));
+        
+        $sql = " AND {$alias}.CLIENTE IN (
+            SELECT DISTINCT c.CLIENTE 
+            FROM dbo.BI_SALES_LAKERS c
+            INNER JOIN POWER_BI_CONTROL_FRANQUICIAS.dbo.BI_SALES_SUCURSALES sub
+               ON c.CANAL = 'FRANQUICIAS'
+              AND (c.CLIENTE LIKE '%' + sub.SUCURSAL COLLATE Modern_Spanish_CI_AI + '%' 
+                   OR sub.SUCURSAL COLLATE Modern_Spanish_CI_AI LIKE '%' + c.CLIENTE + '%')
+            WHERE sub.GRUPO_EMPRESARIO IN ({$placeholders})
+        )";
+        
+        return [$sql, array_values($grupoEmpresario)];
+    }
+
+    /** Fragmento WHERE para CLIENTE (null = todos) */
+    private function whereClienteFrag($cliente, string $alias = 's'): array
+    {
+        if (!$cliente || $cliente === '%') return ['', []];
+        if (is_string($cliente)) {
+            $cliente = array_filter(array_map('trim', explode(',', $cliente)));
+        }
+        if (!is_array($cliente) || empty($cliente)) return ['', []];
+
+        $placeholders = implode(',', array_fill(0, count($cliente), '?'));
+        return [" AND {$alias}.CLIENTE IN ({$placeholders})", array_values($cliente)];
+    }
+
     /** Fragmento WHERE para RUBRO (null = todos) */
     private function whereRubroFrag(?string $rubro, string $alias = 's'): array
     {
@@ -128,10 +186,12 @@ class SalesDB
      * Retorna: fact_act, fact_prev, var_fact, unid_act, unid_prev, var_unid
      */
     public function getKpisGenerales(string $da, string $ha, string $dp, string $hp,
-                                     ?string $canal = null, ?string $rubro = null): array
+                                     ?string $canal = null, ?string $rubro = null, $cliente = null, $grupo_empresario = null): array
     {
-        [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
-        [$wRubro, $pRubro] = $this->whereRubroFrag($rubro);
+        [$wCanal, $pCanal]   = $this->whereCanalFrag($canal);
+        [$wRubro, $pRubro]   = $this->whereRubroFrag($rubro);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
         // 1) Consultar periodo actual (Suma condicional para unidades)
         $sqlAct = "
@@ -139,9 +199,9 @@ class SalesDB
                 SUM(IMPORTE) AS fact, 
                 SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid
             FROM dbo.BI_SALES_LAKERS s
-            WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro
+            WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro $wCliente $wGrupo
         ";
-        $paramsAct = array_merge([$da, $ha], $pCanal, $pRubro);
+        $paramsAct = array_merge([$da, $ha], $pCanal, $pRubro, $pCliente, $pGrupo);
         $stmtAct   = sqlsrv_query($this->conn, $sqlAct, $paramsAct);
         $rowAct    = sqlsrv_fetch_array($stmtAct, SQLSRV_FETCH_ASSOC);
         sqlsrv_free_stmt($stmtAct);
@@ -152,9 +212,9 @@ class SalesDB
                 SUM(IMPORTE) AS fact, 
                 SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid
             FROM dbo.BI_SALES_LAKERS s
-            WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro
+            WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro $wCliente $wGrupo
         ";
-        $paramsPrev = array_merge([$dp, $hp], $pCanal, $pRubro);
+        $paramsPrev = array_merge([$dp, $hp], $pCanal, $pRubro, $pCliente, $pGrupo);
         $stmtPrev   = sqlsrv_query($this->conn, $sqlPrev, $paramsPrev);
         $rowPrev    = sqlsrv_fetch_array($stmtPrev, SQLSRV_FETCH_ASSOC);
         sqlsrv_free_stmt($stmtPrev);
@@ -175,9 +235,11 @@ class SalesDB
     }
 
     public function getDesgloseCanalKpis(string $da, string $ha, string $dp, string $hp,
-                                          ?string $rubro = null): array
+                                          ?string $rubro = null, $cliente = null, $grupo_empresario = null): array
     {
-        [$wRubro, $pRubro] = $this->whereRubroFrag($rubro);
+        [$wRubro, $pRubro]     = $this->whereRubroFrag($rubro);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
         $canales = ['LOCALES PROPIOS', 'FRANQUICIAS', 'MAYORISTAS', 'ECOMMERCE'];
         $result = [];
@@ -190,9 +252,9 @@ class SalesDB
                     SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid, 
                     COUNT(DISTINCT CLIENTE) AS puntos_venta
                 FROM dbo.BI_SALES_LAKERS s
-                WHERE FECHA >= ? AND FECHA <= ? AND CANAL = ? $wRubro
+                WHERE FECHA >= ? AND FECHA <= ? AND CANAL = ? $wRubro $wCliente $wGrupo
             ";
-            $paramsAct = array_merge([$da, $ha, $canal], $pRubro);
+            $paramsAct = array_merge([$da, $ha, $canal], $pRubro, $pCliente, $pGrupo);
             $stmtAct   = sqlsrv_query($this->conn, $sqlAct, $paramsAct);
             $rowAct    = sqlsrv_fetch_array($stmtAct, SQLSRV_FETCH_ASSOC);
             sqlsrv_free_stmt($stmtAct);
@@ -203,9 +265,9 @@ class SalesDB
                     SUM(IMPORTE) AS fact, 
                     SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid
                 FROM dbo.BI_SALES_LAKERS s
-                WHERE FECHA >= ? AND FECHA <= ? AND CANAL = ? $wRubro
+                WHERE FECHA >= ? AND FECHA <= ? AND CANAL = ? $wRubro $wCliente $wGrupo
             ";
-            $paramsPrev = array_merge([$dp, $hp, $canal], $pRubro);
+            $paramsPrev = array_merge([$dp, $hp, $canal], $pRubro, $pCliente, $pGrupo);
             $stmtPrev   = sqlsrv_query($this->conn, $sqlPrev, $paramsPrev);
             $rowPrev    = sqlsrv_fetch_array($stmtPrev, SQLSRV_FETCH_ASSOC);
             sqlsrv_free_stmt($stmtPrev);
@@ -240,10 +302,12 @@ class SalesDB
      * Devuelve la serie temporal del período seleccionado para los micro gráficos (Sparkcharts).
      * Si el rango de días es <= 31 se agrupa por Día (FECHA), sino por Mes (FECHA).
      */
-    public function getVentasSerieTiempo(string $da, string $ha, ?string $canal = null, ?string $rubro = null): array
+    public function getVentasSerieTiempo(string $da, string $ha, ?string $canal = null, ?string $rubro = null, $cliente = null, $grupo_empresario = null): array
     {
-        [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
-        [$wRubro, $pRubro] = $this->whereRubroFrag($rubro);
+        [$wCanal, $pCanal]   = $this->whereCanalFrag($canal);
+        [$wRubro, $pRubro]   = $this->whereRubroFrag($rubro);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
         $days = (strtotime($ha) - strtotime($da)) / 86400;
 
@@ -255,7 +319,7 @@ class SalesDB
                     SUM(IMPORTE) AS facturacion,
                     SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unidades
                 FROM dbo.BI_SALES_LAKERS s
-                WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro
+                WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro $wCliente $wGrupo
                 GROUP BY FECHA
                 ORDER BY FECHA
             ";
@@ -268,13 +332,13 @@ class SalesDB
                     SUM(IMPORTE) AS facturacion,
                     SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unidades
                 FROM dbo.BI_SALES_LAKERS s
-                WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro
+                WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro $wCliente $wGrupo
                 GROUP BY YEAR(FECHA), MONTH(FECHA)
                 ORDER BY YEAR(FECHA), MONTH(FECHA)
             ";
         }
 
-        $params = array_merge([$da, $ha], $pCanal, $pRubro);
+        $params = array_merge([$da, $ha], $pCanal, $pRubro, $pCliente, $pGrupo);
         $stmt   = sqlsrv_query($this->conn, $sql, $params);
         $rows   = [];
         if ($stmt) {
@@ -299,10 +363,12 @@ class SalesDB
      * Tabla mensual acumulada por canal (YTD o período seleccionado).
      * Columnas = meses del período actual.
      */
-    public function getTablaMensualCanal(int $anio, ?string $canal = null, ?string $rubro = null): array
+    public function getTablaMensualCanal(int $anio, ?string $canal = null, ?string $rubro = null, $cliente = null, $grupo_empresario = null): array
     {
-        [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
-        [$wRubro, $pRubro] = $this->whereRubroFrag($rubro);
+        [$wCanal, $pCanal]   = $this->whereCanalFrag($canal);
+        [$wRubro, $pRubro]   = $this->whereRubroFrag($rubro);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
         $sql = "
             SELECT
@@ -311,11 +377,11 @@ class SalesDB
                 SUM(s.IMPORTE)  AS facturacion,
                 SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unidades
             FROM dbo.BI_SALES_LAKERS s
-            WHERE YEAR(s.FECHA) = ? $wCanal $wRubro
+            WHERE YEAR(s.FECHA) = ? $wCanal $wRubro $wCliente $wGrupo
             GROUP BY s.CANAL, MONTH(s.FECHA)
             ORDER BY s.CANAL, mes
         ";
-        $params = array_merge([$anio], $pCanal, $pRubro);
+        $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
         $stmt   = sqlsrv_query($this->conn, $sql, $params);
         return $this->fetchAll($stmt);
     }
@@ -328,9 +394,11 @@ class SalesDB
      * Tabla de rubros: facturación actual vs. año anterior.
      */
     public function getEvolucionRubrosFacturacion(string $da, string $ha, string $dp, string $hp,
-                                                   ?string $canal = null): array
+                                                   ?string $canal = null, $cliente = null, $grupo_empresario = null): array
     {
         [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
         $sql = "
             SELECT
@@ -338,11 +406,11 @@ class SalesDB
                 SUM(CASE WHEN s.FECHA >= ? AND s.FECHA <= ? THEN s.IMPORTE ELSE 0 END) AS fact_act,
                 SUM(CASE WHEN s.FECHA >= ? AND s.FECHA <= ? THEN s.IMPORTE ELSE 0 END) AS fact_prev
             FROM dbo.BI_SALES_LAKERS s
-            WHERE 1=1 $wCanal
+            WHERE 1=1 $wCanal $wCliente $wGrupo
             GROUP BY s.RUBRO
             ORDER BY fact_act DESC
         ";
-        $params = array_merge([$da, $ha, $dp, $hp], $pCanal);
+        $params = array_merge([$da, $ha, $dp, $hp], $pCanal, $pCliente, $pGrupo);
         $stmt   = sqlsrv_query($this->conn, $sql, $params);
         $rows   = $this->fetchAll($stmt);
 
@@ -363,10 +431,12 @@ class SalesDB
      * Retorna filas: [anio, mes, facturacion]
      */
     public function getEvolucionMensualFacturacion(?string $canal = null, ?string $rubro = null,
-                                                    int $aniosAtras = 4): array
+                                                    int $aniosAtras = 4, $cliente = null, $grupo_empresario = null): array
     {
-        [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
-        [$wRubro, $pRubro] = $this->whereRubroFrag($rubro);
+        [$wCanal, $pCanal]   = $this->whereCanalFrag($canal);
+        [$wRubro, $pRubro]   = $this->whereRubroFrag($rubro);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
         
         // Excluir año 2022 para atrás en toda la app
         $anioDesde = max((int)date('Y') - $aniosAtras, 2023);
@@ -377,11 +447,11 @@ class SalesDB
                 MONTH(s.FECHA) AS mes,
                 SUM(s.IMPORTE) AS facturacion
             FROM dbo.BI_SALES_LAKERS s
-            WHERE YEAR(s.FECHA) >= ? $wCanal $wRubro
+            WHERE YEAR(s.FECHA) >= ? $wCanal $wRubro $wCliente $wGrupo
             GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)
             ORDER BY anio, mes
         ";
-        $params = array_merge([$anioDesde], $pCanal, $pRubro);
+        $params = array_merge([$anioDesde], $pCanal, $pRubro, $pCliente, $pGrupo);
         $stmt   = sqlsrv_query($this->conn, $sql, $params);
         return $this->fetchAll($stmt);
     }
@@ -389,19 +459,21 @@ class SalesDB
     /**
      * Tabla mensual por canal para la pestaña Evolución Facturación.
      */
-    public function getTablaFacturacionCanalMes(int $anio, ?string $canal = null, ?string $rubro = null): array
+    public function getTablaFacturacionCanalMes(int $anio, ?string $canal = null, ?string $rubro = null, $cliente = null, $grupo_empresario = null): array
     {
-        [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
-        [$wRubro, $pRubro] = $this->whereRubroFrag($rubro);
+        [$wCanal, $pCanal]   = $this->whereCanalFrag($canal);
+        [$wRubro, $pRubro]   = $this->whereRubroFrag($rubro);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
         $sql = "
             SELECT CANAL, MONTH(FECHA) AS mes, SUM(IMPORTE) AS facturacion
             FROM dbo.BI_SALES_LAKERS s
-            WHERE YEAR(FECHA) = ? $wCanal $wRubro
+            WHERE YEAR(FECHA) = ? $wCanal $wRubro $wCliente $wGrupo
             GROUP BY CANAL, MONTH(FECHA)
             ORDER BY CANAL, mes
         ";
-        $params = array_merge([$anio], $pCanal, $pRubro);
+        $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
         $stmt   = sqlsrv_query($this->conn, $sql, $params);
         return $this->fetchAll($stmt);
     }
@@ -414,9 +486,11 @@ class SalesDB
      * Tabla de rubros: unidades actual vs. año anterior.
      */
     public function getEvolucionRubrosUnidades(string $da, string $ha, string $dp, string $hp,
-                                                ?string $canal = null): array
+                                                ?string $canal = null, $cliente = null, $grupo_empresario = null): array
     {
         [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
         $sql = "
             SELECT
@@ -424,12 +498,12 @@ class SalesDB
                 SUM(CASE WHEN s.FECHA >= ? AND s.FECHA <= ? THEN s.CANTIDAD ELSE 0 END) AS unid_act,
                 SUM(CASE WHEN s.FECHA >= ? AND s.FECHA <= ? THEN s.CANTIDAD ELSE 0 END) AS unid_prev
             FROM dbo.BI_SALES_LAKERS s
-            WHERE 1=1 $wCanal
+            WHERE 1=1 $wCanal $wCliente $wGrupo
             " . $this->whereExcluirRubrosUnid() . "
             GROUP BY s.RUBRO
             ORDER BY unid_act DESC
         ";
-        $params = array_merge([$da, $ha, $dp, $hp], $pCanal);
+        $params = array_merge([$da, $ha, $dp, $hp], $pCanal, $pCliente, $pGrupo);
         $stmt   = sqlsrv_query($this->conn, $sql, $params);
         $rows   = $this->fetchAll($stmt);
 
@@ -449,10 +523,12 @@ class SalesDB
      * Evolución mensual de unidades por año (multi-serie).
      */
     public function getEvolucionMensualUnidades(?string $canal = null, ?string $rubro = null,
-                                                 int $aniosAtras = 4): array
+                                                 int $aniosAtras = 4, $cliente = null, $grupo_empresario = null): array
     {
-        [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
-        [$wRubro, $pRubro] = $this->whereRubroFrag($rubro);
+        [$wCanal, $pCanal]   = $this->whereCanalFrag($canal);
+        [$wRubro, $pRubro]   = $this->whereRubroFrag($rubro);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
         
         // Excluir año 2022 para atrás en toda la app
         $anioDesde = max((int)date('Y') - $aniosAtras, 2023);
@@ -463,12 +539,12 @@ class SalesDB
                 MONTH(s.FECHA)  AS mes,
                 SUM(s.CANTIDAD) AS unidades
             FROM dbo.BI_SALES_LAKERS s
-            WHERE YEAR(s.FECHA) >= ? $wCanal $wRubro
+            WHERE YEAR(s.FECHA) >= ? $wCanal $wRubro $wCliente $wGrupo
             " . $this->whereExcluirRubrosUnid() . "
             GROUP BY YEAR(s.FECHA), MONTH(s.FECHA)
             ORDER BY anio, mes
         ";
-        $params = array_merge([$anioDesde], $pCanal, $pRubro);
+        $params = array_merge([$anioDesde], $pCanal, $pRubro, $pCliente, $pGrupo);
         $stmt   = sqlsrv_query($this->conn, $sql, $params);
         return $this->fetchAll($stmt);
     }
@@ -476,10 +552,12 @@ class SalesDB
     /**
      * Tabla mensual por canal para la pestaña Evolución Unidades.
      */
-    public function getTablaUnidadesCanalMes(int $anio, ?string $canal = null, ?string $rubro = null): array
+    public function getTablaUnidadesCanalMes(int $anio, ?string $canal = null, ?string $rubro = null, $cliente = null, $grupo_empresario = null): array
     {
-        [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
-        [$wRubro, $pRubro] = $this->whereRubroFrag($rubro);
+        [$wCanal, $pCanal]   = $this->whereCanalFrag($canal);
+        [$wRubro, $pRubro]   = $this->whereRubroFrag($rubro);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
         $sql = "
             SELECT CANAL, MONTH(FECHA) AS mes, SUM(CANTIDAD) AS unidades
@@ -489,7 +567,7 @@ class SalesDB
             GROUP BY CANAL, MONTH(FECHA)
             ORDER BY CANAL, mes
         ";
-        $params = array_merge([$anio], $pCanal, $pRubro);
+        $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
         $stmt   = sqlsrv_query($this->conn, $sql, $params);
         return $this->fetchAll($stmt);
     }
@@ -502,7 +580,7 @@ class SalesDB
      * % Variación mensual de unidades (actual vs. año anterior) por canal.
      * Para el gráfico de línea de variación.
      */
-    public function getVariacionMensualUnidades(?string $canal = null): array
+    public function getVariacionMensualUnidades(?string $canal = null, ?string $rubro = null, $cliente = null, $grupo_empresario = null): array
     {
         [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
         $anioAct  = (int)date('Y');
@@ -566,7 +644,7 @@ class SalesDB
      * Tabla completa de unidades por rubro con variación.
      */
     public function getTablaUnidades(string $da, string $ha, string $dp, string $hp,
-                                      ?string $canal = null): array
+                                      ?string $canal = null, $cliente = null, $grupo_empresario = null): array
     {
         [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
 
@@ -603,10 +681,12 @@ class SalesDB
      * Calcula la facturación y unidades agrupadas por Temporada.
      * Invierno: Feb a Jul (año X). Verano: Ago (año X) a Ene (año X+1).
      */
-    public function getKpisTemporadas(?string $canal = null, ?string $rubro = null): array
+    public function getKpisTemporadas(?string $canal = null, ?string $rubro = null, $cliente = null, $grupo_empresario = null): array
     {
-        [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
-        [$wRubro, $pRubro] = $this->whereRubroFrag($rubro);
+        [$wCanal, $pCanal]   = $this->whereCanalFrag($canal);
+        [$wRubro, $pRubro]   = $this->whereRubroFrag($rubro);
+        [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
+        [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
         // Agrupación nativa por temporada usando la lógica de meses de Power BI:
         // SWITCH(TRUE(), Month in (8,9,10,11,12,1) -> Verano, (2,3,4,5,6,7) -> Invierno)
@@ -617,13 +697,13 @@ class SalesDB
                 SUM(IMPORTE) AS fact,
                 SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid
             FROM dbo.BI_SALES_LAKERS s
-            WHERE FECHA >= '2023-01-01' $wCanal $wRubro
+            WHERE FECHA >= '2023-01-01' $wCanal $wRubro $wCliente $wGrupo
             GROUP BY 
                 CASE WHEN MONTH(FECHA) IN (8,9,10,11,12,1) THEN 'Verano' ELSE 'Invierno' END,
                 CASE WHEN MONTH(FECHA) = 1 THEN YEAR(FECHA) - 1 ELSE YEAR(FECHA) END
             ORDER BY temp_anio DESC, temp_nombre DESC
         ";
-        $params = array_merge($pCanal, $pRubro);
+        $params = array_merge($pCanal, $pRubro, $pCliente, $pGrupo);
         $stmt   = sqlsrv_query($this->conn, $sql, $params);
         $rows   = $this->fetchAll($stmt);
 
@@ -663,6 +743,32 @@ class SalesDB
     /* ─────────────────────────────────────────────────────────
      * UTILIDADES
      * ───────────────────────────────────────────────────────── */
+
+    /** Lista de clientes / locales / franquicias disponibles por canal y rango de fecha */
+    public function getClientes(?string $canal = null, ?string $desde = null, ?string $hasta = null): array
+    {
+        [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
+        $wDate = "";
+        $pDate = [];
+        if ($desde && $hasta) {
+            $wDate = " AND s.FECHA >= ? AND s.FECHA <= ? ";
+            $pDate = [$desde, $hasta];
+        }
+        $sql = "SELECT DISTINCT s.CLIENTE FROM dbo.BI_SALES_LAKERS s WHERE s.CLIENTE IS NOT NULL $wDate $wCanal ORDER BY s.CLIENTE";
+        $params = array_merge($pDate, $pCanal);
+        $stmt = sqlsrv_query($this->conn, $sql, $params);
+        $rows = [];
+        if ($stmt) {
+            while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+                $val = trim($r['CLIENTE'] ?? '');
+                if ($val !== '') {
+                    $rows[] = $val;
+                }
+            }
+            sqlsrv_free_stmt($stmt);
+        }
+        return $rows;
+    }
 
     /** Lista de canales disponibles */
     public function getCanales(): array
@@ -720,7 +826,7 @@ class SalesDB
      * Tabla de unidades por RUBRO y MES del año en curso.
      * Retorna filas con: rubro, mes (1-12), unidades.
      */
-    public function getTablaUnidadesMensualRubro(int $anio, ?string $canal = null): array
+    public function getTablaUnidadesMensualRubro(int $anio, ?string $canal = null, $cliente = null, $grupo_empresario = null): array
     {
         [$wCanal, $pCanal] = $this->whereCanalFrag($canal);
 

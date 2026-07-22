@@ -105,6 +105,50 @@ try {
         <?php endforeach; ?>
     </select>
 
+    <div class="cliente-filter-wrap">
+        <label id="lbl-cliente" for="dropdown-cliente-btn">SUCURSAL</label>
+        <div class="custom-multiselect" id="multiselect-cliente">
+            <button type="button" class="multiselect-btn" id="dropdown-cliente-btn">
+                <span class="multiselect-text" id="multiselect-cliente-label">Todas</span>
+                <i class="bi bi-chevron-down ms-chevron"></i>
+            </button>
+            <div class="multiselect-menu" id="multiselect-cliente-menu" style="display:none;">
+                <div class="multiselect-search-box">
+                    <input type="text" id="multiselect-search" placeholder="Buscar sucursal..." autocomplete="off">
+                </div>
+                <div class="multiselect-actions">
+                    <button type="button" class="btn-ms-act" id="ms-select-all">Todas</button>
+                    <button type="button" class="btn-ms-act" id="ms-clear-all">Limpiar</button>
+                </div>
+                <div class="multiselect-options" id="multiselect-cliente-options">
+                    <!-- Opciones dinámicas -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="cliente-filter-wrap" id="grupo-empresario-filter-wrap" style="display:none;">
+        <label id="lbl-grupo-empresario" for="dropdown-grupo-empresario-btn">GRUPO EMPRESARIO</label>
+        <div class="custom-multiselect" id="multiselect-grupo-empresario">
+            <button type="button" class="multiselect-btn" id="dropdown-grupo-empresario-btn">
+                <span class="multiselect-text" id="multiselect-grupo-empresario-label">Todos</span>
+                <i class="bi bi-chevron-down ms-chevron"></i>
+            </button>
+            <div class="multiselect-menu" id="multiselect-grupo-empresario-menu" style="display:none;">
+                <div class="multiselect-search-box">
+                    <input type="text" id="multiselect-grupo-search" placeholder="Buscar grupo..." autocomplete="off">
+                </div>
+                <div class="multiselect-actions">
+                    <button type="button" class="btn-ms-act" id="ms-grupo-select-all">Todos</button>
+                    <button type="button" class="btn-ms-act" id="ms-grupo-clear-all">Limpiar</button>
+                </div>
+                <div class="multiselect-options" id="multiselect-grupo-empresario-options">
+                    <!-- Opciones dinámicas -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <label for="sel-rubro">Rubro</label>
     <select id="sel-rubro">
         <option value="">Todos</option>
@@ -660,18 +704,359 @@ let chartModalDetalle = null;
 let tabActiva = 'general';
 let tabsIniciadas = new Set();
 let datosSerieActiva = [];
+let selectedClientes = [];
+let _clientesDisponibles = [];
+let selectedGrupoEmpresario = [];
+let _gruposEmpresarioDisponibles = [];
+
+// ── Multi-select Filtro Clientes / Locales / Franquicias ─────────
+function escapeHtmlStr(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+async function cargarClientesDisponibles() {
+    const selCanal = document.getElementById('sel-canal');
+    if (!selCanal) return;
+    const canalVal = selCanal.value;
+    const lblCliente = document.getElementById('lbl-cliente');
+    const wrapGrupo = document.getElementById('grupo-empresario-filter-wrap');
+    
+    if (lblCliente) {
+        lblCliente.textContent = 'SUCURSAL';
+    }
+
+    if (canalVal === 'FRANQUICIAS') {
+        if (wrapGrupo) wrapGrupo.style.display = 'inline-flex';
+        cargarGruposEmpresario();
+    } else {
+        if (wrapGrupo) wrapGrupo.style.display = 'none';
+        selectedGrupoEmpresario = [];
+    }
+
+    const periodo = document.getElementById('sel-periodo').value;
+    let url = `/bi/sales/api/clientes.php?canal=${encodeURIComponent(canalVal)}&periodo=${encodeURIComponent(periodo)}`;
+    if (periodo === 'custom') {
+        url += `&desde=${encodeURIComponent(document.getElementById('input-desde').value)}&hasta=${encodeURIComponent(document.getElementById('input-hasta').value)}`;
+    }
+
+    try {
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (data.ok) {
+            _clientesDisponibles = data.clientes || [];
+            renderClientesOptions(_clientesDisponibles);
+        }
+    } catch(e) {
+        console.error('Error al cargar clientes:', e);
+    }
+}
+
+async function cargarGruposEmpresario() {
+    try {
+        const resp = await fetch('/bi/sales/api/grupos_empresario.php');
+        const data = await resp.json();
+        if (data.ok) {
+            _gruposEmpresarioDisponibles = data.grupos || [];
+            renderGruposOptions(_gruposEmpresarioDisponibles);
+        }
+    } catch(e) {
+        console.error('Error al cargar grupos empresarios:', e);
+    }
+}
+
+function renderClientesOptions(listaClientes) {
+    const container = document.getElementById('multiselect-cliente-options');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    selectedClientes = selectedClientes.filter(c => listaClientes.includes(c));
+
+    if (listaClientes.length === 0) {
+        container.innerHTML = '<div style="padding:8px; font-size:0.8rem; color:#94a3b8; text-align:center;">Sin opciones</div>';
+        actualizarMultiselectLabel(0);
+        return;
+    }
+
+    listaClientes.forEach(cli => {
+        const item = document.createElement('label');
+        item.className = 'multiselect-item';
+        const checked = selectedClientes.includes(cli) ? 'checked' : '';
+        item.innerHTML = `
+            <input type="checkbox" value="${escapeHtmlStr(cli)}" ${checked}>
+            <span>${escapeHtmlStr(cli)}</span>
+        `;
+        const cb = item.querySelector('input');
+        cb.addEventListener('change', function() {
+            if (this.checked) {
+                if (!selectedClientes.includes(cli)) selectedClientes.push(cli);
+            } else {
+                selectedClientes = selectedClientes.filter(x => x !== cli);
+            }
+            actualizarMultiselectLabel(listaClientes.length);
+        });
+        container.appendChild(item);
+    });
+
+    actualizarMultiselectLabel(listaClientes.length);
+}
+
+function renderGruposOptions(listaGrupos) {
+    const container = document.getElementById('multiselect-grupo-empresario-options');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    selectedGrupoEmpresario = selectedGrupoEmpresario.filter(g => listaGrupos.includes(g));
+
+    if (listaGrupos.length === 0) {
+        container.innerHTML = '<div style="padding:8px; font-size:0.8rem; color:#94a3b8; text-align:center;">Sin opciones</div>';
+        actualizarGrupoMultiselectLabel(0);
+        return;
+    }
+
+    listaGrupos.forEach(grp => {
+        const item = document.createElement('label');
+        item.className = 'multiselect-item';
+        const checked = selectedGrupoEmpresario.includes(grp) ? 'checked' : '';
+        item.innerHTML = `
+            <input type="checkbox" value="${escapeHtmlStr(grp)}" ${checked}>
+            <span>${escapeHtmlStr(grp)}</span>
+        `;
+        const cb = item.querySelector('input');
+        cb.addEventListener('change', function() {
+            if (this.checked) {
+                if (!selectedGrupoEmpresario.includes(grp)) selectedGrupoEmpresario.push(grp);
+            } else {
+                selectedGrupoEmpresario = selectedGrupoEmpresario.filter(x => x !== grp);
+            }
+            actualizarGrupoMultiselectLabel(listaGrupos.length);
+        });
+        container.appendChild(item);
+    });
+
+    actualizarGrupoMultiselectLabel(listaGrupos.length);
+}
+
+function actualizarMultiselectLabel(totalOptionsCount) {
+    const label = document.getElementById('multiselect-cliente-label');
+    if (!label) return;
+    if (selectedClientes.length === 0) {
+        label.textContent = 'Todas';
+    } else if (selectedClientes.length === 1) {
+        label.textContent = selectedClientes[0];
+    } else if (selectedClientes.length === totalOptionsCount && totalOptionsCount > 0) {
+        label.textContent = 'Todas';
+    } else {
+        label.textContent = `${selectedClientes.length} seleccionadas`;
+    }
+}
+
+function actualizarGrupoMultiselectLabel(totalOptionsCount) {
+    const label = document.getElementById('multiselect-grupo-empresario-label');
+    if (!label) return;
+    if (selectedGrupoEmpresario.length === 0) {
+        label.textContent = 'Todos';
+    } else if (selectedGrupoEmpresario.length === 1) {
+        label.textContent = selectedGrupoEmpresario[0];
+    } else if (selectedGrupoEmpresario.length === totalOptionsCount && totalOptionsCount > 0) {
+        label.textContent = 'Todos';
+    } else {
+        label.textContent = `${selectedGrupoEmpresario.length} seleccionados`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Dropdown Sucursal
+    const btnMs = document.getElementById('dropdown-cliente-btn');
+    const menuMs = document.getElementById('multiselect-cliente-menu');
+    const wrapMs = document.getElementById('multiselect-cliente');
+
+    if (btnMs && menuMs && wrapMs) {
+        btnMs.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = menuMs.style.display === 'block';
+            menuMs.style.display = isVisible ? 'none' : 'block';
+            wrapMs.classList.toggle('open', !isVisible);
+            // Cerrar el otro si está abierto
+            const menuG = document.getElementById('multiselect-grupo-empresario-menu');
+            const wrapG = document.getElementById('multiselect-grupo-empresario');
+            if (menuG) { menuG.style.display = 'none'; wrapG.classList.remove('open'); }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!wrapMs.contains(e.target)) {
+                menuMs.style.display = 'none';
+                wrapMs.classList.remove('open');
+            }
+        });
+    }
+
+    // Dropdown Grupo Empresario
+    const btnMsG = document.getElementById('dropdown-grupo-empresario-btn');
+    const menuMsG = document.getElementById('multiselect-grupo-empresario-menu');
+    const wrapMsG = document.getElementById('multiselect-grupo-empresario');
+
+    if (btnMsG && menuMsG && wrapMsG) {
+        btnMsG.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = menuMsG.style.display === 'block';
+            menuMsG.style.display = isVisible ? 'none' : 'block';
+            wrapMsG.classList.toggle('open', !isVisible);
+            // Cerrar el otro si está abierto
+            if (menuMs) { menuMs.style.display = 'none'; wrapMs.classList.remove('open'); }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!wrapMsG.contains(e.target)) {
+                menuMsG.style.display = 'none';
+                wrapMsG.classList.remove('open');
+            }
+        });
+    }
+
+    // Buscador Sucursal
+    const searchInput = document.getElementById('multiselect-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const q = this.value.toLowerCase().trim();
+            const items = document.querySelectorAll('#multiselect-cliente-options .multiselect-item');
+            items.forEach(item => {
+                const text = item.innerText.toLowerCase();
+                item.style.display = text.includes(q) ? 'flex' : 'none';
+            });
+        });
+    }
+
+    // Buscador Grupo
+    const searchInputG = document.getElementById('multiselect-grupo-search');
+    if (searchInputG) {
+        searchInputG.addEventListener('input', function() {
+            const q = this.value.toLowerCase().trim();
+            const items = document.querySelectorAll('#multiselect-grupo-empresario-options .multiselect-item');
+            items.forEach(item => {
+                const text = item.innerText.toLowerCase();
+                item.style.display = text.includes(q) ? 'flex' : 'none';
+            });
+        });
+    }
+
+    // Botones Sucursal
+    const btnAll = document.getElementById('ms-select-all');
+    if (btnAll) {
+        btnAll.addEventListener('click', () => {
+            const cbs = document.querySelectorAll('#multiselect-cliente-options input[type="checkbox"]');
+            selectedClientes = [];
+            cbs.forEach(cb => {
+                cb.checked = true;
+                selectedClientes.push(cb.value);
+            });
+            actualizarMultiselectLabel(cbs.length);
+        });
+    }
+
+    const btnClear = document.getElementById('ms-clear-all');
+    if (btnClear) {
+        btnClear.addEventListener('click', () => {
+            const cbs = document.querySelectorAll('#multiselect-cliente-options input[type="checkbox"]');
+            cbs.forEach(cb => cb.checked = false);
+            selectedClientes = [];
+            actualizarMultiselectLabel(cbs.length);
+        });
+    }
+
+    // Botones Grupo
+    const btnAllG = document.getElementById('ms-grupo-select-all');
+    if (btnAllG) {
+        btnAllG.addEventListener('click', () => {
+            const cbs = document.querySelectorAll('#multiselect-grupo-empresario-options input[type="checkbox"]');
+            selectedGrupoEmpresario = [];
+            cbs.forEach(cb => {
+                cb.checked = true;
+                selectedGrupoEmpresario.push(cb.value);
+            });
+            actualizarGrupoMultiselectLabel(cbs.length);
+        });
+    }
+
+    const btnClearG = document.getElementById('ms-grupo-clear-all');
+    if (btnClearG) {
+        btnClearG.addEventListener('click', () => {
+            const cbs = document.querySelectorAll('#multiselect-grupo-empresario-options input[type="checkbox"]');
+            cbs.forEach(cb => cb.checked = false);
+            selectedGrupoEmpresario = [];
+            actualizarGrupoMultiselectLabel(cbs.length);
+        });
+    }
+
+    const selCanal = document.getElementById('sel-canal');
+    if (selCanal) {
+        selCanal.addEventListener('change', () => {
+            selectedClientes = [];
+            selectedGrupoEmpresario = [];
+            cargarClientesDisponibles();
+        });
+    }
+
+    cargarClientesDisponibles();
+});
 
 // ── Helpers de formato ────────────────────────────────────────────
 // Estado global de moneda — actualizado por el switch
 let _modoUSD  = false;
-let _usdRate  = null;
+let _usdRate  = 1;
 let _usdFecha = null;
+let _cotizaciones = {};
+let _periodoDesde = '';
+let _periodoDesdePrev = '';
+
+function getTCCParaMes(mesKey) {
+    return _cotizaciones[mesKey] ?? _usdRate;
+}
+
+function convertir(v, fecha = null) {
+    if (!_modoUSD) return v;
+    if (v === null || v === undefined) return null;
+    let mesKey = null;
+    if (fecha) {
+        mesKey = fecha.substring(0, 7);
+    } else {
+        mesKey = _periodoDesde ? _periodoDesde.substring(0, 7) : null;
+    }
+    const rate = (mesKey && _cotizaciones[mesKey]) ? _cotizaciones[mesKey] : _usdRate;
+    return v / (rate || 1);
+}
+
+async function cargarCotizacionesGenerales(desde, hasta, desdePrev, hastaPrev) {
+    try {
+        const qs = new URLSearchParams({
+            desde: desde,
+            hasta: hasta,
+            desde_prev: desdePrev,
+            hasta_prev: hastaPrev,
+            origen: 'argentina'
+        });
+        const resp = await fetch('/bi/global/api/cotizacion.php?' + qs);
+        const data = await resp.json();
+        if (data.ok) {
+            _cotizaciones = data.cotizaciones || {};
+            _usdRate = data.tcc_actual || _usdRate;
+            USD_RATE = _usdRate;
+        }
+    } catch(e) {
+        console.warn('Error al cargar cotizaciones mensuales:', e);
+    }
+}
 
 // fmtM: formatea pesos. Si el switch está en USD divide por el TC.
-function fmtM(v) {
+function fmtM(v, fecha = null) {
     if (v === null || v === undefined) return '—';
-    if (_modoUSD && _usdRate) {
-        const enUSD = v / _usdRate;
+    if (_modoUSD) {
+        const enUSD = convertir(v, fecha);
         const abs   = Math.abs(enUSD);
         let s;
         if      (abs >= 1e6) s = (enUSD/1e6).toFixed(2) + 'M';
@@ -686,6 +1071,17 @@ function fmtM(v) {
     else if (abs >= 1e3) s = (v/1e3).toFixed(0) + 'K';
     else                 s = v.toFixed(0);
     return '$' + s;
+}
+
+function fmtM_converted(v) {
+    if (v === null || v === undefined) return '—';
+    const abs = Math.abs(v);
+    let s;
+    if      (abs >= 1e9) s = (v/1e9).toFixed(2) + ' mil mill.';
+    else if (abs >= 1e6) s = (v/1e6).toFixed(1) + 'M';
+    else if (abs >= 1e3) s = (v/1e3).toFixed(1) + 'K';
+    else                 s = v.toFixed(0);
+    return (_modoUSD ? 'U$S ' : '$') + s;
 }
 
 function fmtN(v) {
@@ -724,6 +1120,12 @@ function getParams() {
         p.set('desde', document.getElementById('input-desde').value);
         p.set('hasta', document.getElementById('input-hasta').value);
     }
+    if (selectedClientes && selectedClientes.length > 0) {
+        selectedClientes.forEach(c => p.append('cliente[]', c));
+    }
+    if (selectedGrupoEmpresario && selectedGrupoEmpresario.length > 0) {
+        selectedGrupoEmpresario.forEach(g => p.append('grupo_empresario[]', g));
+    }
     return p;
 }
 
@@ -740,7 +1142,11 @@ async function cargarGeneral(force = false) {
         const data = await resp.json().catch(() => {
             throw new Error("Respuesta no válida del servidor. Posible tiempo de espera agotado.");
         });
-        if (!data.ok) throw new Error(data.error);
+        _periodoDesde = data.periodo.desde;
+        _periodoDesdePrev = data.periodo.desde_prev;
+        if (_modoUSD) {
+            await cargarCotizacionesGenerales(data.periodo.desde, data.periodo.hasta, data.periodo.desde_prev, data.periodo.hasta_prev);
+        }
 
         const k = data.kpis;
 
@@ -749,8 +1155,8 @@ async function cargarGeneral(force = false) {
             `Desde ${data.periodo.desde} al ${data.periodo.hasta} (vs ${data.periodo.desde_prev} – ${data.periodo.hasta_prev})`;
 
         // KPIs
-        document.getElementById('kpi-fact-act').textContent  = fmtM(k.fact_act);
-        document.getElementById('kpi-fact-prev').textContent = 'Año ant.: ' + fmtM(k.fact_prev);
+        document.getElementById('kpi-fact-act').textContent  = fmtM(k.fact_act, data.periodo.desde);
+        document.getElementById('kpi-fact-prev').textContent = 'Año ant.: ' + fmtM(k.fact_prev, data.periodo.desde_prev);
         const fv = document.getElementById('kpi-fact-var');
         fv.textContent  = fmtPct(k.var_fact);
         fv.className    = 'summary-var ' + varClass(k.var_fact);
@@ -766,7 +1172,7 @@ async function cargarGeneral(force = false) {
         cFact.innerHTML = data.canales.map(c => `
             <div class="canal-card">
                 <div class="canal-name">${c.canal}</div>
-                <div class="canal-val">${fmtM(c.fact_act)}</div>
+                <div class="canal-val">${fmtM(c.fact_act, data.periodo.desde)}</div>
                 <div class="canal-var ${varClass(c.var_fact)}">${fmtPct(c.var_fact)}</div>
             </div>
         `).join('');
@@ -785,7 +1191,7 @@ async function cargarGeneral(force = false) {
         renderTablaResumenCanal(data.canales_ytd, 'tabla-mensual-wrap');
 
         // Generar gráficos Donut
-        buildDonutChart('chart-donut-fact', data.canales, 'fact_act', fmtM, 'chartDonutFact');
+        buildDonutChart('chart-donut-fact', data.canales, 'fact_act', fmtM_converted, 'chartDonutFact');
         buildDonutChart('chart-donut-unid', data.canales, 'unid_act', fmtN, 'chartDonutUnid');
 
         // Generar gráficos de Sparkline en las tarjetas superiores
@@ -855,6 +1261,9 @@ async function cargarGeneral(force = false) {
 
 // ── Tabla resumen comparativo por canal (estilo Power BI) ──────────
 function renderTablaResumenCanal(canales, wrapId) {
+    const actYearStr = (new Date().getFullYear()) + '-01-01';
+    const prevYearStr = (new Date().getFullYear() - 1) + '-01-01';
+
     const th = s => `<th style="background:var(--bg-header);color:rgba(255,255,255,.9);padding:7px 10px;text-align:right;font-family:var(--font-display);font-weight:600;font-size:.8rem;white-space:nowrap">${s}</th>`;
     const thL = s => `<th style="background:var(--bg-header);color:rgba(255,255,255,.9);padding:7px 10px;text-align:left;font-family:var(--font-display);font-weight:600;font-size:.8rem;white-space:nowrap">${s}</th>`;
     const td  = (v, cls='') => `<td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap" class="${cls}">${v}</td>`;
@@ -878,8 +1287,8 @@ function renderTablaResumenCanal(canales, wrapId) {
         const vu = c.var_unid;
         return `<tr>
             ${tdL(c.canal)}
-            ${td(fmtM(c.fact_act))}
-            ${td(fmtM(c.fact_prev), 'text-muted')}
+            ${td(fmtM(c.fact_act, actYearStr))}
+            ${td(fmtM(c.fact_prev, prevYearStr), 'text-muted')}
             ${td(`<span class="${varClass(vf)}">${fmtPct(vf)}${varArrow(vf)}</span>`)}
             ${td(fmtN(c.unid_act))}
             ${td(fmtN(c.unid_prev), 'text-muted')}
@@ -907,8 +1316,8 @@ function renderTablaResumenCanal(canales, wrapId) {
             ${rows}
             <tr style="background:var(--bg-card2);font-weight:700">
                 <td style="padding:6px 10px;border-top:2px solid var(--border)">Total</td>
-                <td style="padding:6px 10px;border-top:2px solid var(--border);text-align:right;white-space:nowrap">${fmtM(totFa)}</td>
-                <td style="padding:6px 10px;border-top:2px solid var(--border);text-align:right;white-space:nowrap;color:var(--text-3)">${fmtM(totFp)}</td>
+                <td style="padding:6px 10px;border-top:2px solid var(--border);text-align:right;white-space:nowrap">${fmtM(totFa, actYearStr)}</td>
+                <td style="padding:6px 10px;border-top:2px solid var(--border);text-align:right;white-space:nowrap;color:var(--text-3)">${fmtM(totFp, prevYearStr)}</td>
                 <td style="padding:6px 10px;border-top:2px solid var(--border);text-align:right;white-space:nowrap" class="${varClass(varFaTot)}">${fmtPct(varFaTot)}${varArrow(varFaTot)}</td>
                 <td style="padding:6px 10px;border-top:2px solid var(--border);text-align:right;white-space:nowrap">${fmtN(totUa)}</td>
                 <td style="padding:6px 10px;border-top:2px solid var(--border);text-align:right;white-space:nowrap;color:var(--text-3)">${fmtN(totUp)}</td>
@@ -928,9 +1337,15 @@ function renderTablaMensualCanal(rows, metrica, wrapId) {
     rows.forEach(r => {
         const key = r.CANAL || r.canal;
         if (!canalesMap[key]) canalesMap[key] = {};
-        canalesMap[key][r.mes] = metrica === 'facturacion' ? r.facturacion : r.unidades;
+        
+        let val = metrica === 'facturacion' ? r.facturacion : r.unidades;
+        if (metrica === 'facturacion') {
+            const mesKey = new Date().getFullYear() + '-' + String(r.mes).padStart(2, '0') + '-01';
+            val = convertir(val, mesKey);
+        }
+        canalesMap[key][r.mes] = val;
     });
-    const fmt = metrica === 'facturacion' ? fmtM : fmtN;
+    const fmt = metrica === 'facturacion' ? fmtM_converted : fmtN;
     const totalesMes = {};
     meses_usados.forEach(m => {
         totalesMes[m] = Object.values(canalesMap).reduce((s, c) => s + (c[m] || 0), 0);
@@ -968,6 +1383,12 @@ async function cargarEvolFact(force = false) {
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error);
 
+        _periodoDesde = data.periodo.desde;
+        _periodoDesdePrev = data.periodo.desde_prev;
+        if (_modoUSD) {
+            await cargarCotizacionesGenerales(data.periodo.desde, data.periodo.hasta, data.periodo.desde_prev, data.periodo.hasta_prev);
+        }
+
         // Tabla de rubros
         const tbody = document.getElementById('tbody-rubros-fact');
         const tfoot = document.getElementById('tfoot-rubros-fact');
@@ -982,22 +1403,22 @@ async function cargarEvolFact(force = false) {
                 return `
                 <tr>
                     <td style="padding:5px 10px;border-bottom:1px solid var(--border);white-space:nowrap">${r.rubro}</td>
-                    <td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap">${fmtM(r.fact_act)}</td>
-                    <td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;color:var(--text-3)">${fmtM(r.fact_prev)}</td>
+                    <td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap">${fmtM(r.fact_act, data.periodo.desde)}</td>
+                    <td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;color:var(--text-3)">${fmtM(r.fact_prev, data.periodo.desde_prev)}</td>
                     <td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap" class="${varClass(r.var)}">${fmtPct(r.var)}</td>
                 </tr>`;
             }).join('');
             const varTot = totFp !== 0 ? ((totFa - totFp) / Math.abs(totFp) * 100) : null;
             if (tfoot) tfoot.innerHTML = `<tr style="background:var(--bg-header);color:rgba(255,255,255,.95);font-weight:700">
                 <td style="padding:6px 10px;white-space:nowrap">Total</td>
-                <td style="padding:6px 10px;text-align:right;white-space:nowrap">${fmtM(totFa)}</td>
-                <td style="padding:6px 10px;text-align:right;white-space:nowrap;opacity:.8">${fmtM(totFp)}</td>
+                <td style="padding:6px 10px;text-align:right;white-space:nowrap">${fmtM(totFa, data.periodo.desde)}</td>
+                <td style="padding:6px 10px;text-align:right;white-space:nowrap;opacity:.8">${fmtM(totFp, data.periodo.desde_prev)}</td>
                 <td style="padding:6px 10px;text-align:right;white-space:nowrap" class="${varClass(varTot)}">${fmtPct(varTot)}</td>
             </tr>`;
         }
 
         // Gráfico multi-año
-        buildLineChart('chart-evol-fact', data.evolucion, 'facturacion', fmtM);
+        buildLineChart('chart-evol-fact', data.evolucion, 'facturacion', fmtM_converted);
 
         // Tabla mensual
         renderTablaMensualCanal(data.tabla_mensual, 'facturacion', 'tabla-fact-mensual-wrap');
@@ -1066,8 +1487,7 @@ async function cargarVariacion(force = false) {
     tabsIniciadas.add('variacion');
     loading('Cargando Variación...');
     try {
-        const p = new URLSearchParams({ canal: document.getElementById('sel-canal').value });
-        const resp = await fetch('/bi/sales/api/variacion_unidades.php?' + p);
+        const resp = await fetch('/bi/sales/api/variacion_unidades.php?' + getParams());
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error);
 
@@ -1351,7 +1771,13 @@ function buildLineChart(canvasId, rows, metrica, fmtFn) {
     const porAnio = {};
     rows.forEach(r => {
         if (!porAnio[r.anio]) porAnio[r.anio] = {};
-        porAnio[r.anio][r.mes] = metrica === 'facturacion' ? r.facturacion : r.unidades;
+        
+        let val = metrica === 'facturacion' ? r.facturacion : r.unidades;
+        if (metrica === 'facturacion') {
+            const mesKey = r.anio + '-' + String(r.mes).padStart(2, '0') + '-01';
+            val = convertir(val, mesKey);
+        }
+        porAnio[r.anio][r.mes] = val;
     });
 
     const datasets = Object.entries(porAnio).sort(([a],[b])=>a-b).map(([anio, mesesData]) => {
@@ -1554,7 +1980,7 @@ function buildDonutChart(canvasId, canales, metricaKey, fmtFn, globalInstanceNam
     // Filtrar canales válidos y con valor > 0
     const validData = canales.filter(c => c[metricaKey] > 0);
     const labels = validData.map(c => c.canal);
-    const dataValues = validData.map(c => c[metricaKey]);
+    const dataValues = validData.map(c => metricaKey === 'fact_act' ? convertir(c[metricaKey]) : c[metricaKey]);
     
     const total = dataValues.reduce((s, v) => s + v, 0);
 
@@ -1568,7 +1994,8 @@ function buildDonutChart(canvasId, canales, metricaKey, fmtFn, globalInstanceNam
     const legendWrap = document.getElementById(canvasId + '-legend');
     if (legendWrap) {
         legendWrap.innerHTML = validData.map((c, idx) => {
-            const pct = total > 0 ? (c[metricaKey] / total * 100).toFixed(1) : 0;
+            const val = metricaKey === 'fact_act' ? convertir(c[metricaKey]) : c[metricaKey];
+            const pct = total > 0 ? (val / total * 100).toFixed(1) : 0;
             const color = borderColors[idx];
             return `
                 <div class="legend-item">
@@ -1638,7 +2065,7 @@ function buildSparklineChart(canvasId, serieTiempo, metricaKey, color, globalIns
         window[globalInstanceName] = null;
     }
 
-    const dataValues = serieTiempo.map(s => s[metricaKey]);
+    const dataValues = serieTiempo.map(s => metricaKey === 'facturacion' ? convertir(s[metricaKey], s.label) : s[metricaKey]);
     const labels = serieTiempo.map(s => s.label);
 
     const makeAreaGrad = (ctx, chartArea) => {
@@ -1673,7 +2100,15 @@ function buildSparklineChart(canvasId, serieTiempo, metricaKey, color, globalIns
             plugins: {
                 legend: { display: false },
                 datalabels: { display: false },
-                tooltip: { enabled: true }
+                tooltip: {
+                    enabled: true,
+                    callbacks: {
+                        label: ctx => {
+                            const val = ctx.raw;
+                            return metricaKey === 'facturacion' ? fmtM_converted(val) : fmtN(val);
+                        }
+                    }
+                }
             },
             scales: {
                 x: { display: false },
@@ -1857,7 +2292,11 @@ document.getElementById('btn-aplicar').addEventListener('click', () => {
 document.getElementById('sel-periodo').addEventListener('change', function() {
     const custom = document.getElementById('custom-dates');
     this.value === 'custom' ? custom.classList.add('visible') : custom.classList.remove('visible');
+    cargarClientesDisponibles();
 });
+
+document.getElementById('input-desde').addEventListener('change', cargarClientesDisponibles);
+document.getElementById('input-hasta').addEventListener('change', cargarClientesDisponibles);
 
 document.getElementById('btn-reload-tab').addEventListener('click', () => {
     tabsIniciadas.delete(tabActiva);
@@ -1887,14 +2326,60 @@ function mostrarBadgeTC() {
             'padding:7px 14px', 'border-radius:8px',
             'font-family:var(--font-display)', 'font-size:.82rem', 'font-weight:600',
             'box-shadow:0 4px 18px rgba(0,0,0,.25)',
-            'display:flex', 'align-items:center', 'gap:8px',
+            'display:flex', 'align-items:center', 'gap:8px', 'cursor:pointer'
         ].join(';');
+        badge.addEventListener('click', () => {
+            const modalHtml = `
+                <div class="spark-modal-overlay">
+                    <div class="spark-modal" style="max-width: 420px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3);">
+                        <div class="spark-modal-header" style="border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+                            <div>
+                                <span class="spark-modal-title">Cotizaciones USD — Período</span>
+                                <div style="font-size:0.75rem; color:var(--text-3); margin-top:2px;">Último día disponible de cada mes (BCRA)</div>
+                            </div>
+                            <button class="spark-modal-close" onclick="cerrarDetalleSpark()"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="spark-modal-body" style="padding: 16px 0; max-height: 380px; overflow-y: auto;">
+                            ${(!_cotizaciones || Object.keys(_cotizaciones).length === 0) ? `
+                                <div style="padding:16px; text-align:center; color:var(--text-3);">
+                                    TC Comprador del Día Anterior: <strong style="color:var(--text-1); font-size:1rem;">$${_usdRate.toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong> (Único disponible)
+                                </div>
+                            ` : `
+                                <table style="width:100%; border-collapse:collapse; font-size:.85rem;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid var(--border);">
+                                            <th style="text-align:left; padding:8px 16px; color:var(--text-3); font-weight:600;">Mes</th>
+                                            <th style="text-align:right; padding:8px 16px; color:var(--text-3); font-weight:600;">Cotización</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${Object.entries(_cotizaciones).sort(([a],[b])=>b.localeCompare(a)).map(([mes, tcc]) => {
+                                            const parts = mes.split('-');
+                                            const mesNombre = MESES[parseInt(parts[1])-1] + ' ' + parts[0];
+                                            const esActual = _periodoDesde && _periodoDesde.substring(0,7) === mes;
+                                            const isHighlight = esActual ? 'background: rgba(16,185,129,.15); font-weight: 700; color: #10b981;' : '';
+                                            return `
+                                                <tr style="border-bottom:1px solid var(--border); ${isHighlight}">
+                                                    <td style="padding:8px 16px; text-align:left;">${mesNombre} ${esActual ? ' (activo)' : ''}</td>
+                                                    <td style="padding:8px 16px; text-align:right; font-family:var(--font-display);">$\u00A0${tcc.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('spark-modal-root').innerHTML = modalHtml;
+        });
         document.body.appendChild(badge);
     }
-    const tcStr = _usdRate
-        ? `TC Comprador: $${_usdRate.toLocaleString('es-AR')} (${_usdFecha || '—'})`
-        : 'TC: cargando...';
-    badge.innerHTML = `<i class="bi bi-currency-dollar"></i> ${tcStr}`;
+    const mesActual = _periodoDesde ? _periodoDesde.substring(0, 7) : null;
+    const rate = (mesActual && _cotizaciones[mesActual]) ? _cotizaciones[mesActual] : _usdRate;
+    const labelDate = mesActual ? `${MESES[parseInt(mesActual.split('-')[1])-1]} ${mesActual.split('-')[0]}` : (_usdFecha ? _usdFecha.substring(0,7) : 'Referencia');
+    badge.innerHTML = `<i class="bi bi-currency-dollar"></i> TC (${labelDate}): $${rate.toLocaleString('es-AR', {minimumFractionDigits:2})} <i class="bi bi-info-circle" style="font-size:.72rem;opacity:.7"></i>`;
     badge.style.display = 'flex';
 }
 

@@ -5,10 +5,6 @@
  * Migración del tablero de Power BI "Premios Comercial".
  */
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
-if (!isset($_SESSION['username'])) {
-    header('Location: ../sistemas/login.php');
-    exit;
-}
 date_default_timezone_set('America/Argentina/Buenos_Aires');
 
 // Última actualización REAL de los datos de origen (no la hora del servidor web): se

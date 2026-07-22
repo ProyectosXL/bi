@@ -590,3 +590,139 @@
 .switch-toggle input:checked + .switch-slider::before {
     transform: translateX(18px);
 }
+
+/* ── MULTISELECT FILTRO CLIENTES / LOCALES / FRANQUICIAS ───────── */
+.cliente-filter-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+}
+
+.custom-multiselect {
+    position: relative;
+    display: inline-block;
+}
+
+.multiselect-btn {
+    background   : rgba(255,255,255,.12);
+    border       : 1px solid rgba(255,255,255,.2);
+    color        : #ffffff;
+    border-radius: var(--radius-sm, 6px);
+    padding      : 5px 10px;
+    font-family  : var(--font-body);
+    font-size    : .82rem;
+    font-weight  : 400;
+    cursor       : pointer;
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 8px;
+    min-width    : 140px;
+    max-width    : 240px;
+    justify-content: space-between;
+    transition   : border-color var(--transition, .2s), background var(--transition, .2s);
+    height       : 31px;
+}
+
+.multiselect-btn:hover {
+    border-color: var(--accent, #00d284);
+    background  : rgba(255,255,255,.2);
+}
+
+.multiselect-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ms-chevron {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    transition: transform 0.2s;
+}
+
+.custom-multiselect.open .ms-chevron {
+    transform: rotate(180deg);
+}
+
+.multiselect-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 1050;
+    width: 270px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.multiselect-search-box input {
+    width: 100%;
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #f8fafc;
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 0.8rem;
+    outline: none;
+}
+.multiselect-search-box input:focus {
+    border-color: #3b82f6;
+}
+
+.multiselect-actions {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 4px;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 6px;
+}
+
+.btn-ms-act {
+    background: transparent;
+    border: none;
+    color: #3b82f6;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.btn-ms-act:hover {
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.multiselect-options {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.multiselect-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    font-size: 0.82rem;
+    color: #e2e8f0;
+    cursor: pointer;
+    border-radius: 4px;
+    user-select: none;
+}
+.multiselect-item:hover {
+    background: #1e293b;
+}
+
+.multiselect-item input[type="checkbox"] {
+    accent-color: #3b82f6;
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+}

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * /bi/sales/api/evolucion_unidades.php
  * Datos para la pestaÃ±a EvoluciÃ³n Unidades.
@@ -18,9 +18,11 @@ if (!isset($_SESSION['username'])) {
 require_once __DIR__ . '/../class/SalesDB.php';
 
 try {
-    $canal  = $_GET['canal']  ?? null;
-    $rubro  = $_GET['rubro']  ?? null;
-    $periodo = $_GET['periodo'] ?? 'aÃ±o_actual';
+    $canal   = $_GET['canal']   ?? null;
+    $rubro   = $_GET['rubro']   ?? null;
+    $cliente = $_GET['cliente'] ?? null;
+    $grupo_empresario = $_GET['grupo_empresario'] ?? null;
+    $periodo = $_GET['periodo'] ?? 'año_actual';
 
     if ($periodo === 'custom') {
         $da = $_GET['desde'] ?? date('Y-01-01');
@@ -35,13 +37,13 @@ try {
     $anio = (int)date('Y');
 
     // Tabla de rubros
-    $rubros = $db->getEvolucionRubrosUnidades($da, $ha, $dp, $hp, $canal);
+    $rubros = $db->getEvolucionRubrosUnidades($da, $ha, $dp, $hp, $canal, $cliente, $grupo_empresario);
 
-    // EvoluciÃ³n mensual multi-aÃ±o
-    $evolucion = $db->getEvolucionMensualUnidades($canal, $rubro, 4);
+    // Evolución mensual multi-año
+    $evolucion = $db->getEvolucionMensualUnidades($canal, $rubro, 4, $cliente, $grupo_empresario);
 
     // Tabla mensual por canal
-    $tablaMensual = $db->getTablaUnidadesCanalMes($anio, $canal, $rubro);
+    $tablaMensual = $db->getTablaUnidadesCanalMes($anio, $canal, $rubro, $cliente, $grupo_empresario);
 
     ob_clean();
     echo json_encode([

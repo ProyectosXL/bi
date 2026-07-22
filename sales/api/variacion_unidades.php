@@ -18,12 +18,14 @@ if (!isset($_SESSION['username'])) {
 require_once __DIR__ . '/../class/SalesDB.php';
 
 try {
-    $canal = $_GET['canal'] ?? null;
+    $canal   = $_GET['canal']   ?? null;
+    $cliente = $_GET['cliente'] ?? null;
+    $grupo_empresario = $_GET['grupo_empresario'] ?? null;
 
     $db = new SalesDB();
 
     // Variación mensual % (año actual vs año anterior)
-    $variacion = $db->getVariacionMensualUnidades($canal);
+    $variacion = $db->getVariacionMensualUnidades($canal, null, $cliente, $grupo_empresario);
 
     // Participación por canal por año (apilado 100%)
     $participacion = $db->getParticipacionCanalAnual(4);

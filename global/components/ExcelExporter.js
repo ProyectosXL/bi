@@ -134,11 +134,42 @@ const ExcelExporter = (() => {
         /* Agregamos la tabla a partir de la fila 5 */
         XLSX.utils.sheet_add_dom(ws, tableEl, { origin: "A5" });
 
-        /* Ajuste de anchos básico */
+        /* Formatear celdas basadas en data-t="n" y texto original del DOM */
+        const domRows = tableEl.querySelectorAll('tr');
+        domRows.forEach((tr, ri) => {
+            const domCells = tr.querySelectorAll('th, td');
+            domCells.forEach((td, ci) => {
+                const ref = XLSX.utils.encode_cell({ r: ri + 4, c: ci });
+                if (!ws[ref]) return;
+
+                if (ws[ref].t === 'n') {
+                    const text = td.textContent || '';
+                    if (text.includes('%')) {
+                        ws[ref].z = '0.0%';
+                    } else if (text.includes('$') || text.includes('U$S') || text.includes('U$D')) {
+                        if (text.includes('U$S') || text.includes('U$D')) {
+                            ws[ref].z = '"U$S " #,##0';
+                        } else {
+                            ws[ref].z = '$#,##0';
+                        }
+                    }
+                }
+            });
+        });
+
+        /* Ajuste de anchos básico o automático según longitud */
         const range = XLSX.utils.decode_range(ws['!ref']);
         ws['!cols'] = [];
-        for (let i = 0; i <= range.e.c; i++) {
-            ws['!cols'].push({ wch: 15 });
+        for (let colIdx = 0; colIdx <= range.e.c; colIdx++) {
+            let maxLen = 12;
+            for (let rowIdx = 4; rowIdx <= range.e.r; rowIdx++) {
+                const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
+                if (ws[cellRef] && ws[cellRef].v) {
+                    const strVal = String(ws[cellRef].v);
+                    if (strVal.length > maxLen) maxLen = strVal.length;
+                }
+            }
+            ws['!cols'].push({ wch: Math.min(maxLen + 3, 40) });
         }
 
         const wb = XLSX.utils.book_new();

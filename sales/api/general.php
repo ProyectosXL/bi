@@ -21,6 +21,8 @@ try {
     $periodo = $_GET['periodo'] ?? 'mes_actual';
     $canal   = $_GET['canal']   ?? null;
     $rubro   = $_GET['rubro']   ?? null;
+    $cliente = $_GET['cliente'] ?? null;
+    $grupo_empresario = $_GET['grupo_empresario'] ?? null;
 
     if ($periodo === 'custom') {
         $da = $_GET['desde'] ?? date('Y-01-01');
@@ -34,21 +36,20 @@ try {
     $db = new SalesDB();
 
     // 1) KPIs globales (sí usan el período seleccionado arriba)
-    $kpis = $db->getKpisGenerales($da, $ha, $dp, $hp, $canal, $rubro);
+    $kpis = $db->getKpisGenerales($da, $ha, $dp, $hp, $canal, $rubro, $cliente, $grupo_empresario);
 
     // 2) Acumulado año actual vs mismo período año anterior (para la Tabla Acumulado)
-    // Debe ser independiente del filtro de arriba. Usamos 'año_actual'
     [$daYtd, $haYtd, $dpYtd, $hpYtd] = SalesDB::calcularPeriodo('año_actual');
-    $canalesYtd = $db->getDesgloseCanalKpis($daYtd, $haYtd, $dpYtd, $hpYtd, $rubro);
+    $canalesYtd = $db->getDesgloseCanalKpis($daYtd, $haYtd, $dpYtd, $hpYtd, $rubro, $cliente, $grupo_empresario);
 
     // 3) Desglose por canal de la cabecera (sí usa el período seleccionado arriba)
-    $canales = $db->getDesgloseCanalKpis($da, $ha, $dp, $hp, $rubro);
+    $canales = $db->getDesgloseCanalKpis($da, $ha, $dp, $hp, $rubro, $cliente, $grupo_empresario);
 
     // 4) Serie temporal para los Sparkcharts
-    $serie = $db->getVentasSerieTiempo($da, $ha, $canal, $rubro);
+    $serie = $db->getVentasSerieTiempo($da, $ha, $canal, $rubro, $cliente, $grupo_empresario);
 
     // 5) KPIs de Temporadas
-    $temporadas = $db->getKpisTemporadas($canal, $rubro);
+    $temporadas = $db->getKpisTemporadas($canal, $rubro, $cliente, $grupo_empresario);
 
     $mensualCanal = [];
 

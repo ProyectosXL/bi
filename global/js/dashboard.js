@@ -552,8 +552,8 @@ const Dashboard = (() => {
         const registry = {};
         let _modalChart = null;
 
-        function register(canvasId, values, dates, color, formatFn, title) {
-            registry[canvasId] = { values, dates, color, formatFn, title };
+        function register(canvasId, values, dates, color, formatFn, title, secondary = null) {
+            registry[canvasId] = { values, dates, color, formatFn, title, secondary };
         }
 
         function setHoras(canvasId, horas) {
@@ -563,7 +563,19 @@ const Dashboard = (() => {
         function open(canvasId) {
             const entry = registry[canvasId];
             if (!entry) return;
-            const { values, dates, color, formatFn, title } = entry;
+            const { values, dates, color, formatFn, title, secondary } = entry;
+
+            const secArr = Array.isArray(secondary) ? secondary : (secondary ? [secondary] : []);
+            const secStatsHtml = secArr.filter(sec => !sec.hideStats).map(sec => `
+                <div class="spark-modal-stat-divider"></div>
+                <div class="spark-modal-stat stat-secondary">
+                    <span class="spark-modal-stat-label">${sec.label}<br>Total período</span>
+                    <span class="spark-modal-stat-val">${sec.formatFn(sec.values.reduce((a, b) => a + b, 0))}</span>
+                </div>
+                <div class="spark-modal-stat stat-secondary">
+                    <span class="spark-modal-stat-label">${sec.label}<br>Promedio diario</span>
+                    <span class="spark-modal-stat-val">${sec.formatFn(Math.round(sec.values.reduce((a, b) => a + b, 0) / sec.values.length))}</span>
+                </div>`).join('');
 
             const max = Math.max(...values), min = Math.min(...values);
             const avg = values.reduce((a, b) => a + b, 0) / values.length;
@@ -617,6 +629,7 @@ const Dashboard = (() => {
                                 <span class="trend-badge ${trendCls}" title="${trendTitle}">${trendSign}${(trend * 100).toFixed(1)} %</span>
                                 <span class="stat-date" style="font-size:.68rem;color:var(--text-3)">vs promedio período</span>
                             </div>
+                            ${secStatsHtml}
                         </div>
                         <div class="spark-modal-chart-wrap">
                             <canvas id="spark-modal-canvas"></canvas>
@@ -658,47 +671,97 @@ const Dashboard = (() => {
                 return g;
             };
 
+            const modalDatasets = [{
+                label                    : title,
+                data                     : values,
+                borderColor              : ctxObj => makeModalLineGrad(ctxObj.chart.ctx, ctxObj.chart.chartArea),
+                borderWidth              : 2,
+                tension                  : 0.4,
+                fill                     : true,
+                backgroundColor          : ctxObj => makeModalAreaGrad(ctxObj.chart.ctx, ctxObj.chart.chartArea),
+                pointRadius              : mPointRadii,
+                pointBackgroundColor     : mPointBgColors,
+                pointBorderColor         : mPointBdColors,
+                pointBorderWidth         : 1.5,
+                pointHoverRadius         : mPointHover,
+                pointHoverBackgroundColor: color,
+                pointHoverBorderColor    : '#ffffff',
+                pointHoverBorderWidth    : 2,
+                yAxisID                  : 'y',
+                order                    : 1,
+            }];
+
+            const modalScales = {
+                x: { ticks: { maxRotation: 45, font: { size: 10 }, color: '#9ba8c8' } },
+                y: { position: 'left', ticks: { callback: v => formatFn(v), font: { size: 10 }, color: '#9ba8c8' } },
+            };
+
+            if (secArr.length) {
+                secArr.forEach((sec, i) => {
+                    const isInner = i === secArr.length - 1;
+                    modalDatasets.push({
+                        label             : sec.label,
+                        data              : sec.values,
+                        type              : 'bar',
+                        backgroundColor   : sec.color + (isInner ? '80' : '35'),
+                        borderColor       : sec.color + (isInner ? 'cc' : '70'),
+                        borderWidth       : 1,
+                        borderRadius      : 3,
+                        yAxisID           : 'y2',
+                        order             : 2 + (secArr.length - 1 - i),
+                        grouped           : false,
+                        barPercentage     : 1.0,
+                        categoryPercentage: 0.85,
+                    });
+                });
+                modalScales.y2 = {
+                    position: 'right',
+                    grid    : { drawOnChartArea: false },
+                    ticks   : { color: secArr[0].color, font: { size: 10 }, callback: v => secArr[0].formatFn(v) },
+                };
+            }
+
+            const modalTooltipCallbacks = secArr.length ? {
+                title: items => {
+                    const d = new Date(dates[items[0].dataIndex] + 'T00:00:00');
+                    return d.toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+                },
+                label: ctx => {
+                    if (ctx.dataset.yAxisID === 'y2') {
+                        const sec = secArr.find(s => s.label === ctx.dataset.label);
+                        return sec ? `${sec.label}: ${sec.formatFn(ctx.parsed.y)}` : ctx.dataset.label;
+                    }
+                    return `${title}: ${formatFn(ctx.parsed.y)}`;
+                },
+            } : {
+                title: items => {
+                    const d = new Date(dates[items[0].dataIndex] + 'T00:00:00');
+                    return d.toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+                },
+                label: ctx => ' ' + formatFn(ctx.parsed.y),
+            };
+
             _modalChart = new Chart($('spark-modal-canvas'), {
                 type: 'line',
                 data: {
                     labels  : modalLabels,
-                    datasets: [{
-                        data                     : values,
-                        borderColor              : ctxObj => makeModalLineGrad(ctxObj.chart.ctx, ctxObj.chart.chartArea),
-                        borderWidth              : 2,
-                        tension                  : 0.4,
-                        fill                     : true,
-                        backgroundColor          : ctxObj => makeModalAreaGrad(ctxObj.chart.ctx, ctxObj.chart.chartArea),
-                        pointRadius              : mPointRadii,
-                        pointBackgroundColor     : mPointBgColors,
-                        pointBorderColor         : mPointBdColors,
-                        pointBorderWidth         : 1.5,
-                        pointHoverRadius         : mPointHover,
-                        pointHoverBackgroundColor: color,
-                        pointHoverBorderColor    : '#ffffff',
-                        pointHoverBorderWidth    : 2,
-                    }]
+                    datasets: modalDatasets
                 },
                 options: {
-                    responsive: true,
+                    responsive : true,
+                    interaction: { mode: 'index', intersect: false },
                     plugins   : {
-                        legend    : { display: false },
+                        legend    : { display: secArr.length > 0, labels: { color: '#9ba8c8', font: { size: 11 }, boxWidth: 12 } },
                         datalabels: { display: false },
                         tooltip   : {
                             backgroundColor: '#1a2340',
                             titleColor     : '#9ba8c8',
                             bodyColor      : '#ffffff',
                             padding        : 8,
-                            callbacks: {
-                                title: items => {
-                                    const d = new Date(dates[items[0].dataIndex] + 'T00:00:00');
-                                    return d.toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
-                                },
-                                label: ctx => ' ' + formatFn(ctx.parsed.y),
-                            },
+                            callbacks: modalTooltipCallbacks,
                         },
                     },
-                    scales    : { x: { ticks: { maxRotation: 45, font: { size: 10 }, color: '#9ba8c8' } }, y: { ticks: { callback: v => formatFn(v), font: { size: 10 } } } },
+                    scales: modalScales,
                 }
             });
 
@@ -1303,8 +1366,7 @@ const Dashboard = (() => {
             const vCamb  = sa.map(x => x.porc_cambios ?? 0);
             const vIncr  = sa.map(x => x.porc_incremental ?? 0);
             const vConv  = sa.map(x => x.conversion ?? 0);
-            console.log('[renderSparklines] sa:', sa);
-            console.log('[renderSparklines] vConv:', vConv);
+            const vIngresos = sa.map(x => x.ingresos ?? 0);
 
             sparkLine('spark-fact',          vFact,  '#00a878', vPFact, dates);
             sparkLine('spark-unid',          vUnid,  '#f59e0b', null,   dates);
@@ -1320,7 +1382,10 @@ const Dashboard = (() => {
             SparkModal.register('spark-fact',  vFact,  dates, '#00a878', fmt.moneyK, 'Facturación diaria');
             SparkModal.register('spark-unid',  vUnid,  dates, '#f59e0b', fmt.num,    'Unidades diarias');
             SparkModal.register('spark-tickets-main', vTick, dates, '#8b5cf6', fmt.num, 'Tickets diarios');
-            SparkModal.register('spark-conv',  vConv,  dates, '#ec4899', n => fmt.pct(n), 'Conversión diaria');
+            SparkModal.register('spark-conv',  vConv,  dates, '#ec4899', n => fmt.pct(n), 'Conversión diaria', [
+                { values: vIngresos, color: '#38bdf8', label: 'Ingresos', formatFn: fmt.num },
+                { values: vTick,     color: '#8b5cf6', label: 'Tickets',  formatFn: fmt.num, hideStats: true },
+            ]);
             SparkModal.register('spark-tprom', vTProm, dates, '#2563eb', fmt.money, 'Ticket Promedio');
             SparkModal.register('spark-tp2do', vTp2do, dates, '#a855f7', fmt.money, 'T. Prom. 2do Producto');
             SparkModal.register('spark-t2do',  vT2do,  dates, '#14b8a6', n => fmt.pct(n), '% Tickets 2do Producto');
