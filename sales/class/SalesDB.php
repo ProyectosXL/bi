@@ -7,8 +7,8 @@ class SalesDB
 {
     private $conn;
 
-    /** QueryTimeout (segundos) para todas las llamadas sqlsrv_query de esta clase. */
-    private const QUERY_TIMEOUT = ['QueryTimeout' => 30];
+    /** QueryTimeout (segundos) para todas las llamadas sqlsrv_query de esta instancia. */
+    private array $queryTimeoutOpt = ['QueryTimeout' => 30];
 
     /** true cuando #cliente_grupo ya fue materializada en este request. */
     private bool $clienteGrupoReady = false;
@@ -21,6 +21,16 @@ class SalesDB
         if (!$this->conn) {
             throw new RuntimeException('No se pudo conectar a XL-APPS/POWER_BI_CONTROL');
         }
+    }
+
+    /**
+     * Sobrescribe el QueryTimeout por defecto (30s) para esta instancia.
+     * Útil para llamadas síncronas antes del render (ej. index.php) donde
+     * conviene fallar rápido en vez de esperar el timeout completo.
+     */
+    public function setQueryTimeoutSeconds(int $seconds): void
+    {
+        $this->queryTimeoutOpt = ['QueryTimeout' => $seconds];
     }
 
     /* ─────────────────────────────────────────────────────────
@@ -106,7 +116,7 @@ class SalesDB
                 FROM POWER_BI_CONTROL_FRANQUICIAS.dbo.BI_SALES_SUCURSALES 
                 WHERE GRUPO_EMPRESARIO IS NOT NULL AND GRUPO_EMPRESARIO <> '' 
                 ORDER BY GRUPO_EMPRESARIO";
-        $stmt = sqlsrv_query($this->conn, $sql, [], self::QUERY_TIMEOUT);
+        $stmt = sqlsrv_query($this->conn, $sql, [], $this->queryTimeoutOpt);
         $rows = [];
         if ($stmt) {
             while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
@@ -130,7 +140,7 @@ class SalesDB
     {
         if ($this->clienteGrupoReady) return;
 
-        $drop = sqlsrv_query($this->conn, "IF OBJECT_ID('tempdb..#cliente_grupo') IS NOT NULL DROP TABLE #cliente_grupo", [], self::QUERY_TIMEOUT);
+        $drop = sqlsrv_query($this->conn, "IF OBJECT_ID('tempdb..#cliente_grupo') IS NOT NULL DROP TABLE #cliente_grupo", [], $this->queryTimeoutOpt);
         if ($drop !== false) sqlsrv_free_stmt($drop);
 
         $stmt = sqlsrv_query($this->conn, "
@@ -142,7 +152,7 @@ class SalesDB
               AND (c.CLIENTE LIKE '%' + sub.SUCURSAL COLLATE Modern_Spanish_CI_AI + '%'
                    OR sub.SUCURSAL COLLATE Modern_Spanish_CI_AI LIKE '%' + c.CLIENTE + '%')
             WHERE sub.GRUPO_EMPRESARIO IS NOT NULL AND sub.GRUPO_EMPRESARIO <> ''
-        ", [], self::QUERY_TIMEOUT);
+        ", [], $this->queryTimeoutOpt);
         if ($stmt === false) {
             throw new RuntimeException('initTempClienteGrupo: ' . (sqlsrv_errors()[0]['message'] ?? 'error'));
         }
@@ -236,7 +246,7 @@ class SalesDB
             WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro $wCliente $wGrupo
         ";
         $paramsAct = array_merge([$da, $ha], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmtAct   = sqlsrv_query($this->conn, $sqlAct, $paramsAct, self::QUERY_TIMEOUT);
+        $stmtAct   = sqlsrv_query($this->conn, $sqlAct, $paramsAct, $this->queryTimeoutOpt);
         $rowAct    = sqlsrv_fetch_array($stmtAct, SQLSRV_FETCH_ASSOC);
         sqlsrv_free_stmt($stmtAct);
 
@@ -249,7 +259,7 @@ class SalesDB
             WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro $wCliente $wGrupo
         ";
         $paramsPrev = array_merge([$dp, $hp], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmtPrev   = sqlsrv_query($this->conn, $sqlPrev, $paramsPrev, self::QUERY_TIMEOUT);
+        $stmtPrev   = sqlsrv_query($this->conn, $sqlPrev, $paramsPrev, $this->queryTimeoutOpt);
         $rowPrev    = sqlsrv_fetch_array($stmtPrev, SQLSRV_FETCH_ASSOC);
         sqlsrv_free_stmt($stmtPrev);
 
@@ -289,7 +299,7 @@ class SalesDB
             GROUP BY CANAL
         ";
         $paramsAct = array_merge([$da, $ha], $pRubro, $pCliente, $pGrupo);
-        $stmtAct   = sqlsrv_query($this->conn, $sqlAct, $paramsAct, self::QUERY_TIMEOUT);
+        $stmtAct   = sqlsrv_query($this->conn, $sqlAct, $paramsAct, $this->queryTimeoutOpt);
         $actByCanal = [];
         foreach ($this->fetchAll($stmtAct) as $r) {
             $actByCanal[$r['CANAL']] = $r;
@@ -306,7 +316,7 @@ class SalesDB
             GROUP BY CANAL
         ";
         $paramsPrev = array_merge([$dp, $hp], $pRubro, $pCliente, $pGrupo);
-        $stmtPrev   = sqlsrv_query($this->conn, $sqlPrev, $paramsPrev, self::QUERY_TIMEOUT);
+        $stmtPrev   = sqlsrv_query($this->conn, $sqlPrev, $paramsPrev, $this->queryTimeoutOpt);
         $prevByCanal = [];
         foreach ($this->fetchAll($stmtPrev) as $r) {
             $prevByCanal[$r['CANAL']] = $r;
@@ -384,7 +394,7 @@ class SalesDB
         }
 
         $params = array_merge([$da, $ha], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         $rows   = [];
         if ($stmt) {
             while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
@@ -427,7 +437,7 @@ class SalesDB
             ORDER BY s.CANAL, mes
         ";
         $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         return $this->fetchAll($stmt);
     }
 
@@ -456,7 +466,7 @@ class SalesDB
             ORDER BY fact_act DESC
         ";
         $params = array_merge([$da, $ha, $dp, $hp], $pCanal, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         $rows   = $this->fetchAll($stmt);
 
         return array_map(function($r) {
@@ -497,7 +507,7 @@ class SalesDB
             ORDER BY anio, mes
         ";
         $params = array_merge([$anioDesde], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         return $this->fetchAll($stmt);
     }
 
@@ -519,7 +529,7 @@ class SalesDB
             ORDER BY CANAL, mes
         ";
         $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         return $this->fetchAll($stmt);
     }
 
@@ -549,7 +559,7 @@ class SalesDB
             ORDER BY unid_act DESC
         ";
         $params = array_merge([$da, $ha, $dp, $hp], $pCanal, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         $rows   = $this->fetchAll($stmt);
 
         return array_map(function($r) {
@@ -590,7 +600,7 @@ class SalesDB
             ORDER BY anio, mes
         ";
         $params = array_merge([$anioDesde], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         return $this->fetchAll($stmt);
     }
 
@@ -613,7 +623,7 @@ class SalesDB
             ORDER BY CANAL, mes
         ";
         $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         return $this->fetchAll($stmt);
     }
 
@@ -643,7 +653,7 @@ class SalesDB
             ORDER BY mes
         ";
         $params = array_merge([$anioAct, $anioPrev, $anioAct, $anioPrev], $pCanal);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         $rows   = $this->fetchAll($stmt);
 
         return array_map(function($r) {
@@ -677,7 +687,7 @@ class SalesDB
             GROUP BY YEAR(FECHA), CANAL
             ORDER BY anio, CANAL
         ";
-        $stmt = sqlsrv_query($this->conn, $sql, [$anioDesde], self::QUERY_TIMEOUT);
+        $stmt = sqlsrv_query($this->conn, $sql, [$anioDesde], $this->queryTimeoutOpt);
         return $this->fetchAll($stmt);
     }
 
@@ -706,7 +716,7 @@ class SalesDB
             ORDER BY unid_act DESC
         ";
         $params = array_merge([$da, $ha, $dp, $hp, $da, $ha], $pCanal);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         $rows   = $this->fetchAll($stmt);
 
         return array_map(function($r) {
@@ -749,7 +759,7 @@ class SalesDB
             ORDER BY temp_anio DESC, temp_nombre DESC
         ";
         $params = array_merge($pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         $rows   = $this->fetchAll($stmt);
 
         // Procesar variaciones comparando contra la misma temporada del año anterior
@@ -801,7 +811,7 @@ class SalesDB
         }
         $sql = "SELECT DISTINCT s.CLIENTE FROM dbo.BI_SALES_LAKERS s WHERE s.CLIENTE IS NOT NULL $wDate $wCanal ORDER BY s.CLIENTE";
         $params = array_merge($pDate, $pCanal);
-        $stmt = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         $rows = [];
         if ($stmt) {
             while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
@@ -819,7 +829,7 @@ class SalesDB
     public function getCanales(): array
     {
         $stmt = sqlsrv_query($this->conn,
-            "SELECT DISTINCT CANAL FROM dbo.BI_SALES_LAKERS WHERE CANAL IS NOT NULL ORDER BY CANAL", [], self::QUERY_TIMEOUT);
+            "SELECT DISTINCT CANAL FROM dbo.BI_SALES_LAKERS WHERE CANAL IS NOT NULL ORDER BY CANAL", [], $this->queryTimeoutOpt);
         $rows = [];
         while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) $rows[] = $r['CANAL'];
         sqlsrv_free_stmt($stmt);
@@ -830,7 +840,7 @@ class SalesDB
     public function getRubros(): array
     {
         $stmt = sqlsrv_query($this->conn,
-            "SELECT DISTINCT RUBRO FROM dbo.BI_SALES_LAKERS WHERE RUBRO IS NOT NULL ORDER BY RUBRO", [], self::QUERY_TIMEOUT);
+            "SELECT DISTINCT RUBRO FROM dbo.BI_SALES_LAKERS WHERE RUBRO IS NOT NULL ORDER BY RUBRO", [], $this->queryTimeoutOpt);
         $rows = [];
         while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) $rows[] = $r['RUBRO'];
         sqlsrv_free_stmt($stmt);
@@ -844,7 +854,7 @@ class SalesDB
                 FROM sys.dm_db_index_usage_stats
                 WHERE database_id = DB_ID('POWER_BI_CONTROL')
                   AND object_id = OBJECT_ID('dbo.BI_SALES_LAKERS')";
-        $stmt = sqlsrv_query($this->conn, $sql, [], self::QUERY_TIMEOUT);
+        $stmt = sqlsrv_query($this->conn, $sql, [], $this->queryTimeoutOpt);
         $res = null;
         if ($stmt !== false && $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
             if (!empty($row['last_update'])) {
@@ -856,7 +866,7 @@ class SalesDB
         // Fallback: si por alguna razón no tenemos permisos o estadísticas, usamos el max(FECHA)
         if (!$res) {
             $sqlFallback = "SELECT MAX(FECHA) as last_update FROM dbo.BI_SALES_LAKERS";
-            $stmtFallback = sqlsrv_query($this->conn, $sqlFallback, [], self::QUERY_TIMEOUT);
+            $stmtFallback = sqlsrv_query($this->conn, $sqlFallback, [], $this->queryTimeoutOpt);
             if ($stmtFallback !== false && $rowFallback = sqlsrv_fetch_array($stmtFallback, SQLSRV_FETCH_ASSOC)) {
                 if (!empty($rowFallback['last_update'])) {
                     $res = is_object($rowFallback['last_update']) ? $rowFallback['last_update']->format('Y-m-d H:i:s') : $rowFallback['last_update'];
@@ -887,7 +897,7 @@ class SalesDB
             ORDER BY s.RUBRO, mes
         ";
         $params = array_merge([$anio], $pCanal);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         return $this->fetchAll($stmt);
     }
 

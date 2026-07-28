@@ -17,24 +17,46 @@ date_default_timezone_set('America/Argentina/Buenos_Aires');
 require_once __DIR__ . '/class/SalesDB.php';
 $isOutdated = false;
 $ultimaAct = 'No disponible';
+$canalesDisp = [];
+$rubrosDisp  = [];
+
+// Este bloque corre síncrono antes de renderizar el HTML: si XL-APPS está
+// lento, cada llamada tiene su propio try/catch + timeout corto (5s en vez
+// de los 30s de los endpoints AJAX) para que la página abra rápido con
+// filtros vacíos en vez de colgar el request hasta que el gateway lo corte
+// con un 504.
 try {
     $salesDb = new SalesDB();
-    $canalesDisp = $salesDb->getCanales();
-    $rubrosDisp  = $salesDb->getRubros();
-    
-    // Obtener última actualización real de los datos
-    $ultimaActRaw = $salesDb->getUltimaActualizacion();
-    if ($ultimaActRaw) {
-        $dtUpdate = new DateTime($ultimaActRaw);
-        $ultimaAct = $dtUpdate->format('d/m/Y H:i:s');
-        
-        // Determinar si los datos son menores al día anterior (ayer 00:00:00)
-        $dtYesterday = new DateTime('yesterday 00:00:00');
-        $isOutdated = ($dtUpdate < $dtYesterday);
+    $salesDb->setQueryTimeoutSeconds(5);
+
+    try {
+        $canalesDisp = $salesDb->getCanales();
+    } catch (Throwable $e) {
+        $canalesDisp = [];
+    }
+
+    try {
+        $rubrosDisp = $salesDb->getRubros();
+    } catch (Throwable $e) {
+        $rubrosDisp = [];
+    }
+
+    try {
+        // Obtener última actualización real de los datos
+        $ultimaActRaw = $salesDb->getUltimaActualizacion();
+        if ($ultimaActRaw) {
+            $dtUpdate = new DateTime($ultimaActRaw);
+            $ultimaAct = $dtUpdate->format('d/m/Y H:i:s');
+
+            // Determinar si los datos son menores al día anterior (ayer 00:00:00)
+            $dtYesterday = new DateTime('yesterday 00:00:00');
+            $isOutdated = ($dtUpdate < $dtYesterday);
+        }
+    } catch (Throwable $e) {
+        // Mantiene $ultimaAct = 'No disponible' por defecto
     }
 } catch (Throwable $e) {
-    $canalesDisp = [];
-    $rubrosDisp  = [];
+    // No se pudo ni conectar a XL-APPS/POWER_BI_CONTROL: la página abre con filtros vacíos.
 }
 ?>
 <!DOCTYPE html>
