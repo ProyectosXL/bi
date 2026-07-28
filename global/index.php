@@ -23,6 +23,12 @@ if ($isGrupo) {
     $descLabel = $tipoSesion === 'GERENCIA' ? 'GERENCIA' : 'SUPERVISIÓN';
 }
 date_default_timezone_set('America/Argentina/Buenos_Aires');
+
+// Orígenes con sensor de tráfico (merodeo/ingresos) habilitado.
+// Cuando Franquicias tenga el sensor instalado, alcanza con sumar 'franquicias' acá.
+const ORIGENES_CON_CIRCULACION = ['argentina'];
+$mostrarTabCirculacion = !empty(ORIGENES_CON_CIRCULACION) && (!$isGrupo || in_array('franquicias', ORIGENES_CON_CIRCULACION, true));
+
 require_once __DIR__ . '/class/GlobalDashboardDB.php';
 $isOutdated = false;
 $ultimaAct = 'No disponible';
@@ -55,6 +61,7 @@ try {
     <link rel="stylesheet" href="/bi/global/css/vendedoras.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/vendedoras.css') ?>">
     <link rel="stylesheet" href="/bi/global/css/producto.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/producto.css') ?>">
     <link rel="stylesheet" href="/bi/global/css/ranking.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/ranking.css') ?>">
+    <link rel="stylesheet" href="/bi/global/css/circulacion.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/circulacion.css') ?>">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Chart.js 4.x + DataLabels Plugin -->
@@ -233,6 +240,11 @@ try {
         <button class="tab-btn" id="tab-btn-analisis" role="tab" aria-controls="tab-analisis" aria-selected="false">
             <i class="bi bi-graph-up-arrow"></i>&nbsp; Análisis
         </button>
+        <?php if ($mostrarTabCirculacion): ?>
+        <button class="tab-btn" id="tab-btn-circulacion" role="tab" aria-controls="tab-circulacion" aria-selected="false">
+            <i class="bi bi-person-walking"></i>&nbsp; Circulación
+        </button>
+        <?php endif; ?>
         <button class="tab-btn" id="tab-btn-producto" role="tab" aria-controls="tab-producto" aria-selected="false">
             <i class="bi bi-box-seam"></i>&nbsp; Producto
         </button>
@@ -351,6 +363,13 @@ try {
                             <i class="bi bi-people-fill"></i>
                             <span class="ingresados-val" id="conv-ingresos">—</span>
                             <span class="ingresados-label">ingresos</span>
+                        </div>
+                        <div class="summary-ingresados">
+                            <i class="bi bi-person-walking"></i>
+                            <span class="ingresados-val" id="conv-merodeo">—</span>
+                            <span class="ingresados-label">merodeo</span>
+                            <span class="ingresados-val" id="conv-atraccion" style="margin-left:6px">—</span>
+                            <span class="ingresados-label">atracción</span>
                         </div>
                     </div>
                     <div class="summary-side">
@@ -639,6 +658,122 @@ try {
         </div>
     </div>
     <!-- /tab-analisis -->
+
+    <?php if ($mostrarTabCirculacion): ?>
+    <!-- ══ PESTAÑA: CIRCULACIÓN ═════════════════════════════════════════ -->
+    <div id="tab-circulacion" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-circulacion">
+        <main class="dash-content">
+
+            <!-- Chip de cobertura -->
+            <div class="circ-chip" id="circ-cobertura-chip"><i class="bi bi-broadcast"></i> — de — sucursales con sensor de tráfico en el período</div>
+
+            <!-- KPI cards -->
+            <div class="kpi-grid" id="circ-kpi-row">
+                <div class="kpi-card">
+                    <div class="kpi-card-header"><span class="kpi-title">Merodeo</span></div>
+                    <div class="kpi-card-body"><div><div class="kpi-val" id="circ-merodeo-val">—</div><div class="kpi-var" id="circ-merodeo-var">—</div></div></div>
+                    <div class="kpi-prev-label">Período previo: <span id="circ-merodeo-prev">—</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-card-header"><span class="kpi-title">Ingresos</span></div>
+                    <div class="kpi-card-body"><div><div class="kpi-val" id="circ-ingresos-val">—</div><div class="kpi-var" id="circ-ingresos-var">—</div></div></div>
+                    <div class="kpi-prev-label">Período previo: <span id="circ-ingresos-prev">—</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-card-header"><span class="kpi-title">Tasa de Atracción</span></div>
+                    <div class="kpi-card-body"><div><div class="kpi-val" id="circ-atraccion-val">—</div><div class="kpi-var" id="circ-atraccion-var">—</div></div></div>
+                    <div class="kpi-prev-label">Período previo: <span id="circ-atraccion-prev">—</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-card-header"><span class="kpi-title">Tickets</span></div>
+                    <div class="kpi-card-body"><div><div class="kpi-val" id="circ-tickets-val">—</div><div class="kpi-var" id="circ-tickets-var">—</div></div></div>
+                    <div class="kpi-prev-label">Período previo: <span id="circ-tickets-prev">—</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-card-header"><span class="kpi-title">Tasa de Conversión</span></div>
+                    <div class="kpi-card-body"><div><div class="kpi-val" id="circ-conversion-val">—</div><div class="kpi-var" id="circ-conversion-var">—</div></div></div>
+                    <div class="kpi-prev-label">Período previo: <span id="circ-conversion-prev">—</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-card-header"><span class="kpi-title">Venta por Visitante</span></div>
+                    <div class="kpi-card-body"><div><div class="kpi-val" id="circ-vpv-val">—</div><div class="kpi-var" id="circ-vpv-var">—</div></div></div>
+                    <div class="kpi-prev-label">Período previo: <span id="circ-vpv-prev">—</span></div>
+                </div>
+            </div>
+
+            <!-- Embudo -->
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-filter-circle-fill"></i> Embudo de Circulación
+                </div>
+                <div class="funnel-row" id="circ-funnel"></div>
+            </div>
+
+            <!-- Evolución mensual -->
+            <div class="analisis-card" style="margin-bottom: 20px; min-height: 380px; display:flex; flex-direction:column;">
+                <div class="analisis-section-header">
+                    <i class="bi bi-graph-up"></i> Evolución Mensual
+                    <select class="circ-meses-select" id="sel-circulacion-meses">
+                        <option value="12">Últimos 12 meses</option>
+                        <option value="24">Últimos 24 meses</option>
+                    </select>
+                </div>
+                <div style="flex:1; padding:12px; position:relative; min-height: 300px;">
+                    <canvas id="chart-circulacion-evol"></canvas>
+                </div>
+            </div>
+
+            <!-- Matriz de cuadrantes -->
+            <div class="analisis-card" style="margin-bottom: 20px; min-height: 420px; display:flex; flex-direction:column;">
+                <div class="analisis-section-header">
+                    <i class="bi bi-grid-3x3-gap-fill"></i> Matriz de Cuadrantes — Atracción vs. Conversión
+                </div>
+                <div style="flex:1; padding:12px; position:relative; min-height: 300px;">
+                    <canvas id="chart-circulacion-quadrant"></canvas>
+                </div>
+                <div class="circ-quadrant-legend">
+                    <div class="qd-item"><span class="qd-dot" style="background:#22c55e">1</span><span><strong>Atracción alta + Conversión alta:</strong> desempeño destacado en ambas puntas del embudo.</span></div>
+                    <div class="qd-item"><span class="qd-dot" style="background:#f97316">2</span><span><strong>Atracción alta + Conversión baja:</strong> problema de atención en salón — entran pero no compran, desperdiciando el tráfico logrado.</span></div>
+                    <div class="qd-item"><span class="qd-dot" style="background:#eab308">3</span><span><strong>Atracción baja + Conversión alta:</strong> problema de vidriera — pasan pero no entran, aunque el que entra compra.</span></div>
+                    <div class="qd-item"><span class="qd-dot" style="background:#dc2626">4</span><span><strong>Atracción baja + Conversión baja:</strong> oportunidad de mejora integral (vidriera y salón).</span></div>
+                </div>
+                <div class="circ-quadrant-legend-note">
+                    <i class="bi bi-info-circle"></i> El número y color de cada punto identifican su cuadrante (1 mejor → 4 peor). El <strong>tamaño</strong> respeta esa misma jerarquía — un punto del cuadrante 1 siempre se ve más grande que uno de cuadrante 2, 3 o 4 — y dentro de un mismo cuadrante, cuanto mayor la eficiencia real (de cada 100 personas que pasan, cuántas terminan comprando), más grande el punto.
+                </div>
+            </div>
+
+            <!-- Tabla por sucursal -->
+            <div class="table-card">
+                <div class="table-card-header" id="circulacion-tabla-header">
+                    <i class="bi bi-table"></i>&nbsp; Circulación por Sucursal
+                    <div style="margin-left:auto;display:flex;align-items:center;gap:10px"></div>
+                </div>
+                <div class="table-wrap" style="overflow-x:auto">
+                    <table id="table-circulacion-sucursales" style="width:100%;border-collapse:collapse;font-size:.82rem">
+                        <thead>
+                            <tr style="background:var(--bg-header);color:#fff">
+                                <th data-col="desc_sucursal" style="padding:7px 10px;text-align:left">Sucursal</th>
+                                <th data-col="merodeo"             style="padding:7px 10px;text-align:right">Merodeo</th>
+                                <th data-col="ingresos"            style="padding:7px 10px;text-align:right">Ingresos</th>
+                                <th data-col="tickets"             style="padding:7px 10px;text-align:right">Tickets</th>
+                                <th data-col="facturacion"         style="padding:7px 10px;text-align:right">Facturación</th>
+                                <th data-col="atraccion"           style="padding:7px 10px;text-align:right">Atracción %</th>
+                                <th data-col="conversion"          style="padding:7px 10px;text-align:right">Conversión %</th>
+                                <th data-col="ticket_promedio"     style="padding:7px 10px;text-align:right">Ticket prom.</th>
+                                <th data-col="venta_por_visitante" style="padding:7px 10px;text-align:right">Venta / visitante</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-circulacion-sucursales">
+                            <tr><td colspan="9" class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+    <!-- /tab-circulacion -->
+    <?php endif; ?>
 
     <!-- ══ PESTAÑA: PRODUCTO ════════════════════════════════════════════ -->
     <div id="tab-producto" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-producto">
@@ -1307,6 +1442,7 @@ $jsFiles = [
     '/bi/global/js/producto.js',
     '/bi/global/js/cadena.js',
     '/bi/global/js/participacion.js',
+    '/bi/global/js/circulacion.js',
     '/bi/global/js/vendedoras.js',
     '/bi/global/js/ranking.js',
     '/bi/global/js/franquicias_detalle.js',
@@ -1323,7 +1459,8 @@ foreach ($jsFiles as $f):
 window.BI_CONFIG = {
     isGrupo:         <?= $isGrupo ? 'true' : 'false' ?>,
     esGrupo:         <?= $esGrupo ? 'true' : 'false' ?>,
-    sucursalesGrupo: <?= json_encode($sucursalesGrupo) ?>
+    sucursalesGrupo: <?= json_encode($sucursalesGrupo) ?>,
+    origenesConCirculacion: <?= json_encode(ORIGENES_CON_CIRCULACION) ?>
 };
 </script>
 
@@ -1337,6 +1474,7 @@ window.BI_CONFIG = {
     const TABS = [
         { btn: 'tab-btn-kpis',          pane: 'tab-kpis',          name: 'kpis'          },
         { btn: 'tab-btn-analisis',       pane: 'tab-analisis',       name: 'analisis'      },
+        { btn: 'tab-btn-circulacion',    pane: 'tab-circulacion',    name: 'circulacion'   },
         { btn: 'tab-btn-producto',       pane: 'tab-producto',       name: 'producto'      },
         { btn: 'tab-btn-cadena',         pane: 'tab-cadena',         name: 'cadena'        },
         { btn: 'tab-btn-participacion',  pane: 'tab-participacion',  name: 'participacion' },
@@ -1347,11 +1485,12 @@ window.BI_CONFIG = {
         { btn: 'tab-btn-franquicias-resumen', pane: 'tab-franquicias-resumen', name: 'franquiciasResumen' },
     ].filter(t => document.getElementById(t.btn) && document.getElementById(t.pane));
 
-    const loaded = { kpis: false, analisis: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false, liquidacion: false, franquiciasDetalle: false, franquiciasResumen: false };
+    const loaded = { kpis: false, analisis: false, circulacion: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false, liquidacion: false, franquiciasDetalle: false, franquiciasResumen: false };
 
     const loaders = {
         kpis         : () => Dashboard.loadAll(),
         analisis     : () => Analisis.loadAll(),
+        circulacion  : () => Circulacion.loadAll(),
         producto     : () => Producto.loadAll(),
         cadena       : () => Cadena.loadAll(),
         participacion: () => Participacion.loadAll(),
@@ -1406,6 +1545,17 @@ window.BI_CONFIG = {
         if (elDet) elDet.textContent = `Venta Día por Día — ${origenLabel}`;
         const elRes = document.getElementById('title-franquicias-resumen');
         if (elRes) elRes.textContent = `Resumen Anual Anterior — ${origenLabel}`;
+
+        // Tab Circulación: solo visible para los orígenes habilitados (ORIGENES_CON_CIRCULACION)
+        const btnCirculacion = document.getElementById('tab-btn-circulacion');
+        if (btnCirculacion) {
+            const origenActual = activeBtn?.dataset.origen ?? 'argentina';
+            const habilitado = (window.BI_CONFIG?.origenesConCirculacion ?? ['argentina']).includes(origenActual);
+            btnCirculacion.style.display = habilitado ? '' : 'none';
+            if (!habilitado && btnCirculacion.classList.contains('active')) {
+                activateTab('tab-kpis');
+            }
+        }
     }
     document.querySelectorAll('.origen-btn').forEach(btn => {
         btn.addEventListener('click', () => {

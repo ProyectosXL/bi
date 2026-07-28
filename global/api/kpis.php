@@ -191,7 +191,7 @@ try {
 
     // ── Endpoint diferido: conversión ──────────────────────────────────────
     if (($_GET['action'] ?? '') === 'conversion') {
-        $noConv = ['ingresos' => 0, 'tickets' => 0, 'conversion' => 0];
+        $noConv = ['ingresos' => 0, 'merodeo' => 0, 'atraccion' => 0, 'tickets' => 0, 'conversion' => 0];
         if ($origen === 'franquicias') {
             $conv_act = $noConv; $conv_prev = $noConv;
         } else {
@@ -208,9 +208,12 @@ try {
         ob_clean();
         echo json_encode([
             'ok'       => true,
-            'actual'   => ['ingresos' => $conv_act['ingresos'],  'conversion' => $conv_act['conversion']],
-            'previo'   => ['ingresos' => $conv_prev['ingresos'], 'conversion' => $conv_prev['conversion']],
-            'variacion' => ['conversion' => $varFn($conv_act['conversion'], $conv_prev['conversion'])],
+            'actual'   => ['ingresos' => $conv_act['ingresos'],  'merodeo' => $conv_act['merodeo'],  'atraccion' => $conv_act['atraccion'],  'conversion' => $conv_act['conversion']],
+            'previo'   => ['ingresos' => $conv_prev['ingresos'], 'merodeo' => $conv_prev['merodeo'], 'atraccion' => $conv_prev['atraccion'], 'conversion' => $conv_prev['conversion']],
+            'variacion' => [
+                'conversion' => $varFn($conv_act['conversion'], $conv_prev['conversion']),
+                'atraccion'  => $varFn($conv_act['atraccion'],  $conv_prev['atraccion']),
+            ],
         ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
         exit;
     }

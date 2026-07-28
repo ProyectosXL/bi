@@ -1339,6 +1339,8 @@ const Dashboard = (() => {
         setVar ('conv-var',      v.conversion);
         setText('conv-prev',     fmt.pct(p.conversion));
         setText('conv-ingresos', fmt.num(a.ingresos));
+        setText('conv-merodeo',  fmt.num(a.merodeo));
+        setText('conv-atraccion', fmt.pct(a.atraccion));
     }
 
     /* ── Sparklines (carga diferida desde ?action=serie) ─────────────── */

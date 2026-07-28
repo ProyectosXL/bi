@@ -1,0 +1,174 @@
+/**
+ * /bi/global/css/circulacion.css
+ * Estilos de la pestaña Circulación (merodeo, ingresos, atracción, conversión).
+ * Tema claro únicamente — reutiliza variables de base.css / global.css.
+ */
+
+#tab-circulacion .text-right { text-align: right; }
+
+/* ── Chip de cobertura ───────────────────────────────── */
+.circ-chip {
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 6px;
+    margin       : 4px 0 14px;
+    padding      : 6px 12px;
+    font-size    : .78rem;
+    font-weight  : 600;
+    color        : var(--text-2);
+    background   : var(--bg-card2);
+    border       : 1px solid var(--border);
+    border-radius: 100px;
+}
+.circ-chip.circ-chip-warning {
+    color      : #b45309;
+    background : rgba(234,179,8,.12);
+    border-color: rgba(234,179,8,.4);
+}
+.circ-chip i { font-size: .85rem; }
+
+/* ── KPI previo (debajo de kpi-card-body) ───────────── */
+.kpi-prev-label {
+    font-size : .70rem;
+    color     : var(--text-3);
+    margin-top: 4px;
+}
+.kpi-prev-label span { font-weight: 600; color: var(--text-2); }
+
+/* ── Embudo Merodeo → Ingresos → Tickets ────────────── */
+.funnel-row {
+    display    : flex;
+    align-items: center;
+    gap        : 10px;
+    padding    : 18px 10px;
+}
+.funnel-stage {
+    flex          : 1;
+    display       : flex;
+    flex-direction: column;
+    align-items   : center;
+    gap           : 6px;
+    min-width     : 0;
+}
+.funnel-icon {
+    font-size: 1.3rem;
+    color    : var(--accent);
+}
+.funnel-bar-track {
+    width        : 100%;
+    height       : 10px;
+    background   : var(--bg-card2);
+    border-radius: 100px;
+    overflow     : hidden;
+    border       : 1px solid var(--border);
+}
+.funnel-bar {
+    height        : 100%;
+    background    : linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius : 100px;
+    transition    : width .3s ease;
+}
+.funnel-value {
+    font-family: var(--font-display);
+    font-size  : 1.4rem;
+    font-weight: 700;
+    color      : var(--text-1);
+}
+.funnel-label {
+    font-size     : .72rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color         : var(--text-3);
+    font-weight   : 600;
+}
+.funnel-connector {
+    display       : flex;
+    flex-direction: column;
+    align-items   : center;
+    gap           : 2px;
+    color         : var(--text-3);
+    flex-shrink   : 0;
+    padding-bottom: 22px;
+}
+.funnel-connector i { font-size: 1.1rem; }
+.funnel-connector-pct {
+    font-family: var(--font-display);
+    font-size  : .85rem;
+    font-weight: 700;
+    color      : var(--accent2);
+    white-space: nowrap;
+}
+
+/* ── Selector propio de meses (evolución) ────────────── */
+.circ-meses-select {
+    margin-left  : auto;
+    font-size    : .78rem;
+    padding      : 4px 8px;
+    border-radius: var(--radius-sm);
+    border       : 1px solid var(--border);
+    background   : #fff;
+    color        : var(--text-2);
+}
+
+/* ── Leyenda de cuadrantes ───────────────────────────── */
+.circ-quadrant-legend {
+    display              : grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap                  : 8px;
+    margin-top           : 10px;
+    font-size            : .74rem;
+    color                : var(--text-3);
+}
+.circ-quadrant-legend .qd-item {
+    display      : flex;
+    align-items  : flex-start;
+    gap          : 6px;
+    padding      : 6px 8px;
+    border-radius: var(--radius-sm);
+    background   : var(--bg-card2);
+}
+.circ-quadrant-legend .qd-dot {
+    width        : 18px;
+    height       : 18px;
+    border-radius: 50%;
+    flex-shrink  : 0;
+    display      : flex;
+    align-items  : center;
+    justify-content: center;
+    font-family  : var(--font-display);
+    font-size    : .68rem;
+    font-weight  : 700;
+    color        : #fff;
+}
+.circ-quadrant-legend strong { color: var(--text-2); }
+
+.circ-quadrant-legend-note {
+    display    : flex;
+    align-items: flex-start;
+    gap        : 6px;
+    margin-top : 2px;
+    padding    : 6px 8px;
+    font-size  : .72rem;
+    color      : var(--text-3);
+    border-top : 1px dashed var(--border);
+}
+
+/* ── Tabla por sucursal ──────────────────────────────── */
+#table-circulacion-sucursales thead th[data-col] { cursor: pointer; user-select: none; white-space: nowrap; }
+#table-circulacion-sucursales thead th[data-col]:hover { background: rgba(255,255,255,.08); }
+#table-circulacion-sucursales thead th.sort-asc::after  { content: ' ▲'; font-size: .6rem; }
+#table-circulacion-sucursales thead th.sort-desc::after { content: ' ▼'; font-size: .6rem; }
+#table-circulacion-sucursales tbody tr:hover { background: var(--bg-card2); }
+#table-circulacion-sucursales tbody tr.circ-sin-sensor { color: var(--text-3); }
+.circ-icon-sin-sensor { color: #b45309; font-size: .72rem; margin-left: 4px; }
+
+.sem-green  { color: var(--pos); font-weight: 700; }
+.sem-yellow { color: #b45309;    font-weight: 700; }
+.sem-red    { color: var(--neg); font-weight: 700; }
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 900px) {
+    .funnel-row { flex-direction: column; }
+    .funnel-connector { flex-direction: row; padding-bottom: 0; }
+    .circ-quadrant-legend { grid-template-columns: 1fr; }
+}

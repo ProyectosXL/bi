@@ -24,6 +24,15 @@ try {
     // Optimización: Lectura sin bloqueos
     sqlsrv_query($conn, 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
 
+    // Pre-materialización de dimensiones remotas para evitar cruzamientos lentos en los loops de queries (evita 504 Timeout)
+    if ($origen === 'franquicias') {
+        $dropSl = sqlsrv_query($conn, "IF OBJECT_ID('tempdb..#sl_st') IS NOT NULL DROP TABLE #sl_st");
+        if ($dropSl !== false) sqlsrv_free_stmt($dropSl);
+        $stmtSl = sqlsrv_query($conn, "SELECT NRO_SUCURSAL, TANGO, DESC_SUCURSAL INTO #sl_st FROM OPENQUERY([XL-LAKERBIS], 'SELECT NRO_SUCURSAL, TANGO, DESC_SUCURSAL FROM LOCALES_LAKERS.DBO.SUCURSALES_LAKERS WHERE HABILITADO = 1')");
+        if ($stmtSl === false) throw new Error("Error al materializar #sl_st: " . print_r(sqlsrv_errors(), true));
+        sqlsrv_free_stmt($stmtSl);
+    }
+
     // 1. Período: 12 meses hacia atrás desde el mes actual
     $endObj = new DateTime('last day of this month');
     $startObj = (clone $endObj)->modify('-11 months')->modify('first day of this month');
@@ -62,22 +71,20 @@ try {
     [$sfS, $pS] = Filters::build($f, 's', $cfg['campo_vendedor'], $origen, true, true);
 
     // 3. Obtener nombres de sucursales (usamos la tabla maestra para asegurar todas las columnas)
-    // 3. Obtener nombres de sucursales (usamos la tabla maestra para asegurar todas las columnas)
     // Pero solo las que tengan ventas en el período actual o previo.
     if ($origen === 'franquicias') {
         $sqlSuc = "
             SELECT DISTINCT sl.NRO_SUCURSAL as nro, sl.DESC_SUCURSAL as nombre
-            FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
-            WHERE sl.HABILITADO = 1
-            AND sl.NRO_SUCURSAL IN (
+            FROM #sl_st sl
+            WHERE sl.NRO_SUCURSAL IN (
                 SELECT DISTINCT NRO_SUCURS FROM BI_SALES_SUCURSALES WITH (NOLOCK) 
                 WHERE (FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?)
                 UNION ALL
                 SELECT DISTINCT pv.idTango AS NRO_SUCURS
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
-                INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-                INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
-                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
+                INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                INNER JOIN #sl_st sl2 ON pv.idTango = sl2.NRO_SUCURSAL
+                WHERE (sl2.TANGO IS NULL OR sl2.TANGO <> 1)
                   AND ((fd.fecha >= ? AND fd.fecha < ?) OR (fd.fecha >= ? AND fd.fecha < ?))
             )
             ORDER BY sl.DESC_SUCURSAL
@@ -137,23 +144,19 @@ try {
             FROM (
                 SELECT NRO_SUCURS, FECHA, IMPORTE
                 FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
-                WHERE s.FECHA >= ? AND s.FECHA < ? {$sfS} {$sfG}
+                WHERE s.FECHA >= ? AND s.FECHA < ? AND s.NRO_SUCURS IN ({$placeholdersSuc}) {$sfS} {$sfG}
                 UNION ALL
                 SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
-                INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-                INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
-                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
-                  AND fd.fecha >= ? AND fd.fecha < ?
+                INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                WHERE fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
             ) s
-            WHERE s.NRO_SUCURS IN ({$placeholdersSuc})
             GROUP BY NRO_SUCURS, YEAR(FECHA), MONTH(FECHA)
         ";
 
         $pAct = array_merge(
-            [$da, $haX], $pS, $pG,
-            [$da, $haX],
-            $sucIds
+            [$da, $haX], $sucIds, $pS, $pG,
+            [$da, $haX], $sucIds
         );
     } else {
         $sqlVentasAct = "
@@ -200,23 +203,19 @@ try {
             FROM (
                 SELECT NRO_SUCURS, FECHA, IMPORTE
                 FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
-                WHERE s.FECHA >= ? AND s.FECHA < ? {$sfS} {$sfG}
+                WHERE s.FECHA >= ? AND s.FECHA < ? AND s.NRO_SUCURS IN ({$placeholdersSuc}) {$sfS} {$sfG}
                 UNION ALL
                 SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
-                INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-                INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
-                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
-                  AND fd.fecha >= ? AND fd.fecha < ?
+                INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                WHERE fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
             ) s
-            WHERE s.NRO_SUCURS IN ({$placeholdersSuc})
             GROUP BY NRO_SUCURS, YEAR(FECHA), MONTH(FECHA)
         ";
 
         $pPrev = array_merge(
-            [$dp, $hpX], $pS, $pG,
-            [$dp, $hpX],
-            $sucIds
+            [$dp, $hpX], $sucIds, $pS, $pG,
+            [$dp, $hpX], $sucIds
         );
     } else {
         $sqlVentasPrev = "
@@ -254,17 +253,32 @@ try {
     }
 
     // 6. Query de Objetivos - Año Actual (Agrupado por Año y Mes)
-    $sqlObjetivos = "
-        SELECT 
-            o.NRO_SUCURSAL as NRO_SUCURS,
-            YEAR(o.FECHA) as anio,
-            MONTH(o.FECHA) as mes,
-            ISNULL(SUM(o.IMPORTE_OBJ), 0) as total_obj
-        FROM {$cfg['tabla_objetivos']} o WITH (NOLOCK)
-        WHERE o.FECHA >= ? AND o.FECHA < ?
-          AND o.NRO_SUCURSAL IN ({$placeholdersSuc})
-        GROUP BY o.NRO_SUCURSAL, YEAR(o.FECHA), MONTH(o.FECHA)
-    ";
+    if ($origen === 'franquicias') {
+        $sqlObjetivos = "
+            SELECT 
+                pv.idTango as NRO_SUCURS,
+                o.anio as anio,
+                o.mes as mes,
+                ISNULL(SUM(o.importeObjetivo), 0) as total_obj
+            FROM sistemas.dbo.FP_ObjetivosFinales o WITH (NOLOCK)
+            INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON o.idPOS = pv.id
+            WHERE DATEFROMPARTS(o.anio, o.mes, 1) >= ? AND DATEFROMPARTS(o.anio, o.mes, 1) < ?
+              AND pv.idTango IN ({$placeholdersSuc})
+            GROUP BY pv.idTango, o.anio, o.mes
+        ";
+    } else {
+        $sqlObjetivos = "
+            SELECT 
+                o.NRO_SUCURSAL as NRO_SUCURS,
+                YEAR(o.FECHA) as anio,
+                MONTH(o.FECHA) as mes,
+                ISNULL(SUM(o.IMPORTE_OBJ), 0) as total_obj
+            FROM {$cfg['tabla_objetivos']} o WITH (NOLOCK)
+            WHERE o.FECHA >= ? AND o.FECHA < ?
+              AND o.NRO_SUCURSAL IN ({$placeholdersSuc})
+            GROUP BY o.NRO_SUCURSAL, YEAR(o.FECHA), MONTH(o.FECHA)
+        ";
+    }
 
     $pObj = array_merge(
         [$da, $haX],

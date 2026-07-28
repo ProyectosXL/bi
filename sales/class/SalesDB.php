@@ -7,6 +7,12 @@ class SalesDB
 {
     private $conn;
 
+    /** QueryTimeout (segundos) para todas las llamadas sqlsrv_query de esta clase. */
+    private const QUERY_TIMEOUT = ['QueryTimeout' => 30];
+
+    /** true cuando #cliente_grupo ya fue materializada en este request. */
+    private bool $clienteGrupoReady = false;
+
     public function __construct()
     {
         require_once __DIR__ . '/../../class/classEnv.php';
@@ -100,7 +106,7 @@ class SalesDB
                 FROM POWER_BI_CONTROL_FRANQUICIAS.dbo.BI_SALES_SUCURSALES 
                 WHERE GRUPO_EMPRESARIO IS NOT NULL AND GRUPO_EMPRESARIO <> '' 
                 ORDER BY GRUPO_EMPRESARIO";
-        $stmt = sqlsrv_query($this->conn, $sql);
+        $stmt = sqlsrv_query($this->conn, $sql, [], self::QUERY_TIMEOUT);
         $rows = [];
         if ($stmt) {
             while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
@@ -114,6 +120,36 @@ class SalesDB
         return $rows;
     }
 
+    /**
+     * Materializa el mapeo CLIENTE ↔ GRUPO_EMPRESARIO en #cliente_grupo una sola vez
+     * por request. Evita repetir el JOIN LIKE no sargable entre BI_SALES_LAKERS y
+     * POWER_BI_CONTROL_FRANQUICIAS.dbo.BI_SALES_SUCURSALES en cada query que filtra
+     * por grupo empresario (hasta ~20 veces por request).
+     */
+    private function initTempClienteGrupo(): void
+    {
+        if ($this->clienteGrupoReady) return;
+
+        $drop = sqlsrv_query($this->conn, "IF OBJECT_ID('tempdb..#cliente_grupo') IS NOT NULL DROP TABLE #cliente_grupo", [], self::QUERY_TIMEOUT);
+        if ($drop !== false) sqlsrv_free_stmt($drop);
+
+        $stmt = sqlsrv_query($this->conn, "
+            SELECT DISTINCT c.CLIENTE, sub.GRUPO_EMPRESARIO
+            INTO #cliente_grupo
+            FROM dbo.BI_SALES_LAKERS c
+            INNER JOIN POWER_BI_CONTROL_FRANQUICIAS.dbo.BI_SALES_SUCURSALES sub
+               ON c.CANAL = 'FRANQUICIAS'
+              AND (c.CLIENTE LIKE '%' + sub.SUCURSAL COLLATE Modern_Spanish_CI_AI + '%'
+                   OR sub.SUCURSAL COLLATE Modern_Spanish_CI_AI LIKE '%' + c.CLIENTE + '%')
+            WHERE sub.GRUPO_EMPRESARIO IS NOT NULL AND sub.GRUPO_EMPRESARIO <> ''
+        ", [], self::QUERY_TIMEOUT);
+        if ($stmt === false) {
+            throw new RuntimeException('initTempClienteGrupo: ' . (sqlsrv_errors()[0]['message'] ?? 'error'));
+        }
+        sqlsrv_free_stmt($stmt);
+        $this->clienteGrupoReady = true;
+    }
+
     /** Fragmento WHERE para GRUPO_EMPRESARIO */
     private function whereGrupoEmpresarioFrag($grupoEmpresario, string $alias = 's'): array
     {
@@ -123,18 +159,16 @@ class SalesDB
         }
         if (!is_array($grupoEmpresario) || empty($grupoEmpresario)) return ['', []];
 
+        $this->initTempClienteGrupo();
+
         $placeholders = implode(',', array_fill(0, count($grupoEmpresario), '?'));
-        
+
         $sql = " AND {$alias}.CLIENTE IN (
-            SELECT DISTINCT c.CLIENTE 
-            FROM dbo.BI_SALES_LAKERS c
-            INNER JOIN POWER_BI_CONTROL_FRANQUICIAS.dbo.BI_SALES_SUCURSALES sub
-               ON c.CANAL = 'FRANQUICIAS'
-              AND (c.CLIENTE LIKE '%' + sub.SUCURSAL COLLATE Modern_Spanish_CI_AI + '%' 
-                   OR sub.SUCURSAL COLLATE Modern_Spanish_CI_AI LIKE '%' + c.CLIENTE + '%')
-            WHERE sub.GRUPO_EMPRESARIO IN ({$placeholders})
+            SELECT DISTINCT cg.CLIENTE
+            FROM #cliente_grupo cg
+            WHERE cg.GRUPO_EMPRESARIO IN ({$placeholders})
         )";
-        
+
         return [$sql, array_values($grupoEmpresario)];
     }
 
@@ -202,7 +236,7 @@ class SalesDB
             WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro $wCliente $wGrupo
         ";
         $paramsAct = array_merge([$da, $ha], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmtAct   = sqlsrv_query($this->conn, $sqlAct, $paramsAct);
+        $stmtAct   = sqlsrv_query($this->conn, $sqlAct, $paramsAct, self::QUERY_TIMEOUT);
         $rowAct    = sqlsrv_fetch_array($stmtAct, SQLSRV_FETCH_ASSOC);
         sqlsrv_free_stmt($stmtAct);
 
@@ -215,7 +249,7 @@ class SalesDB
             WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro $wCliente $wGrupo
         ";
         $paramsPrev = array_merge([$dp, $hp], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmtPrev   = sqlsrv_query($this->conn, $sqlPrev, $paramsPrev);
+        $stmtPrev   = sqlsrv_query($this->conn, $sqlPrev, $paramsPrev, self::QUERY_TIMEOUT);
         $rowPrev    = sqlsrv_fetch_array($stmtPrev, SQLSRV_FETCH_ASSOC);
         sqlsrv_free_stmt($stmtPrev);
 
@@ -242,41 +276,52 @@ class SalesDB
         [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
         $canales = ['LOCALES PROPIOS', 'FRANQUICIAS', 'MAYORISTAS', 'ECOMMERCE'];
+
+        // 1) Periodo actual — una sola query agrupada por canal en vez de 1 por canal
+        $sqlAct = "
+            SELECT
+                CANAL,
+                SUM(IMPORTE) AS fact,
+                SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid,
+                COUNT(DISTINCT CLIENTE) AS puntos_venta
+            FROM dbo.BI_SALES_LAKERS s
+            WHERE FECHA >= ? AND FECHA <= ? $wRubro $wCliente $wGrupo
+            GROUP BY CANAL
+        ";
+        $paramsAct = array_merge([$da, $ha], $pRubro, $pCliente, $pGrupo);
+        $stmtAct   = sqlsrv_query($this->conn, $sqlAct, $paramsAct, self::QUERY_TIMEOUT);
+        $actByCanal = [];
+        foreach ($this->fetchAll($stmtAct) as $r) {
+            $actByCanal[$r['CANAL']] = $r;
+        }
+
+        // 2) Periodo previo — idem, agrupado por canal
+        $sqlPrev = "
+            SELECT
+                CANAL,
+                SUM(IMPORTE) AS fact,
+                SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid
+            FROM dbo.BI_SALES_LAKERS s
+            WHERE FECHA >= ? AND FECHA <= ? $wRubro $wCliente $wGrupo
+            GROUP BY CANAL
+        ";
+        $paramsPrev = array_merge([$dp, $hp], $pRubro, $pCliente, $pGrupo);
+        $stmtPrev   = sqlsrv_query($this->conn, $sqlPrev, $paramsPrev, self::QUERY_TIMEOUT);
+        $prevByCanal = [];
+        foreach ($this->fetchAll($stmtPrev) as $r) {
+            $prevByCanal[$r['CANAL']] = $r;
+        }
+
         $result = [];
-
         foreach ($canales as $canal) {
-            // 1) Periodo actual
-            $sqlAct = "
-                SELECT 
-                    SUM(IMPORTE) AS fact, 
-                    SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid, 
-                    COUNT(DISTINCT CLIENTE) AS puntos_venta
-                FROM dbo.BI_SALES_LAKERS s
-                WHERE FECHA >= ? AND FECHA <= ? AND CANAL = ? $wRubro $wCliente $wGrupo
-            ";
-            $paramsAct = array_merge([$da, $ha, $canal], $pRubro, $pCliente, $pGrupo);
-            $stmtAct   = sqlsrv_query($this->conn, $sqlAct, $paramsAct);
-            $rowAct    = sqlsrv_fetch_array($stmtAct, SQLSRV_FETCH_ASSOC);
-            sqlsrv_free_stmt($stmtAct);
-
-            // 2) Periodo previo
-            $sqlPrev = "
-                SELECT 
-                    SUM(IMPORTE) AS fact, 
-                    SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) AS unid
-                FROM dbo.BI_SALES_LAKERS s
-                WHERE FECHA >= ? AND FECHA <= ? AND CANAL = ? $wRubro $wCliente $wGrupo
-            ";
-            $paramsPrev = array_merge([$dp, $hp, $canal], $pRubro, $pCliente, $pGrupo);
-            $stmtPrev   = sqlsrv_query($this->conn, $sqlPrev, $paramsPrev);
-            $rowPrev    = sqlsrv_fetch_array($stmtPrev, SQLSRV_FETCH_ASSOC);
-            sqlsrv_free_stmt($stmtPrev);
+            $rowAct  = $actByCanal[$canal]  ?? null;
+            $rowPrev = $prevByCanal[$canal] ?? null;
 
             $fa = (float)($rowAct['fact'] ?? 0.0);
             $ua = (float)($rowAct['unid'] ?? 0.0);
+            $pv = (int)($rowAct['puntos_venta'] ?? 0);
             $fp = (float)($rowPrev['fact'] ?? 0.0);
             $up = (float)($rowPrev['unid'] ?? 0.0);
-            $pv = (int)($rowAct['puntos_venta'] ?? 0);
 
             $result[] = [
                 'canal'       => $canal,
@@ -339,7 +384,7 @@ class SalesDB
         }
 
         $params = array_merge([$da, $ha], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         $rows   = [];
         if ($stmt) {
             while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
@@ -382,7 +427,7 @@ class SalesDB
             ORDER BY s.CANAL, mes
         ";
         $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         return $this->fetchAll($stmt);
     }
 
@@ -411,7 +456,7 @@ class SalesDB
             ORDER BY fact_act DESC
         ";
         $params = array_merge([$da, $ha, $dp, $hp], $pCanal, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         $rows   = $this->fetchAll($stmt);
 
         return array_map(function($r) {
@@ -452,7 +497,7 @@ class SalesDB
             ORDER BY anio, mes
         ";
         $params = array_merge([$anioDesde], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         return $this->fetchAll($stmt);
     }
 
@@ -474,7 +519,7 @@ class SalesDB
             ORDER BY CANAL, mes
         ";
         $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         return $this->fetchAll($stmt);
     }
 
@@ -504,7 +549,7 @@ class SalesDB
             ORDER BY unid_act DESC
         ";
         $params = array_merge([$da, $ha, $dp, $hp], $pCanal, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         $rows   = $this->fetchAll($stmt);
 
         return array_map(function($r) {
@@ -545,7 +590,7 @@ class SalesDB
             ORDER BY anio, mes
         ";
         $params = array_merge([$anioDesde], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         return $this->fetchAll($stmt);
     }
 
@@ -568,7 +613,7 @@ class SalesDB
             ORDER BY CANAL, mes
         ";
         $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         return $this->fetchAll($stmt);
     }
 
@@ -598,7 +643,7 @@ class SalesDB
             ORDER BY mes
         ";
         $params = array_merge([$anioAct, $anioPrev, $anioAct, $anioPrev], $pCanal);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         $rows   = $this->fetchAll($stmt);
 
         return array_map(function($r) {
@@ -632,7 +677,7 @@ class SalesDB
             GROUP BY YEAR(FECHA), CANAL
             ORDER BY anio, CANAL
         ";
-        $stmt = sqlsrv_query($this->conn, $sql, [$anioDesde]);
+        $stmt = sqlsrv_query($this->conn, $sql, [$anioDesde], self::QUERY_TIMEOUT);
         return $this->fetchAll($stmt);
     }
 
@@ -661,7 +706,7 @@ class SalesDB
             ORDER BY unid_act DESC
         ";
         $params = array_merge([$da, $ha, $dp, $hp, $da, $ha], $pCanal);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         $rows   = $this->fetchAll($stmt);
 
         return array_map(function($r) {
@@ -704,7 +749,7 @@ class SalesDB
             ORDER BY temp_anio DESC, temp_nombre DESC
         ";
         $params = array_merge($pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         $rows   = $this->fetchAll($stmt);
 
         // Procesar variaciones comparando contra la misma temporada del año anterior
@@ -756,7 +801,7 @@ class SalesDB
         }
         $sql = "SELECT DISTINCT s.CLIENTE FROM dbo.BI_SALES_LAKERS s WHERE s.CLIENTE IS NOT NULL $wDate $wCanal ORDER BY s.CLIENTE";
         $params = array_merge($pDate, $pCanal);
-        $stmt = sqlsrv_query($this->conn, $sql, $params);
+        $stmt = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         $rows = [];
         if ($stmt) {
             while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
@@ -774,7 +819,7 @@ class SalesDB
     public function getCanales(): array
     {
         $stmt = sqlsrv_query($this->conn,
-            "SELECT DISTINCT CANAL FROM dbo.BI_SALES_LAKERS WHERE CANAL IS NOT NULL ORDER BY CANAL");
+            "SELECT DISTINCT CANAL FROM dbo.BI_SALES_LAKERS WHERE CANAL IS NOT NULL ORDER BY CANAL", [], self::QUERY_TIMEOUT);
         $rows = [];
         while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) $rows[] = $r['CANAL'];
         sqlsrv_free_stmt($stmt);
@@ -785,7 +830,7 @@ class SalesDB
     public function getRubros(): array
     {
         $stmt = sqlsrv_query($this->conn,
-            "SELECT DISTINCT RUBRO FROM dbo.BI_SALES_LAKERS WHERE RUBRO IS NOT NULL ORDER BY RUBRO");
+            "SELECT DISTINCT RUBRO FROM dbo.BI_SALES_LAKERS WHERE RUBRO IS NOT NULL ORDER BY RUBRO", [], self::QUERY_TIMEOUT);
         $rows = [];
         while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) $rows[] = $r['RUBRO'];
         sqlsrv_free_stmt($stmt);
@@ -799,7 +844,7 @@ class SalesDB
                 FROM sys.dm_db_index_usage_stats
                 WHERE database_id = DB_ID('POWER_BI_CONTROL')
                   AND object_id = OBJECT_ID('dbo.BI_SALES_LAKERS')";
-        $stmt = sqlsrv_query($this->conn, $sql);
+        $stmt = sqlsrv_query($this->conn, $sql, [], self::QUERY_TIMEOUT);
         $res = null;
         if ($stmt !== false && $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
             if (!empty($row['last_update'])) {
@@ -811,7 +856,7 @@ class SalesDB
         // Fallback: si por alguna razón no tenemos permisos o estadísticas, usamos el max(FECHA)
         if (!$res) {
             $sqlFallback = "SELECT MAX(FECHA) as last_update FROM dbo.BI_SALES_LAKERS";
-            $stmtFallback = sqlsrv_query($this->conn, $sqlFallback);
+            $stmtFallback = sqlsrv_query($this->conn, $sqlFallback, [], self::QUERY_TIMEOUT);
             if ($stmtFallback !== false && $rowFallback = sqlsrv_fetch_array($stmtFallback, SQLSRV_FETCH_ASSOC)) {
                 if (!empty($rowFallback['last_update'])) {
                     $res = is_object($rowFallback['last_update']) ? $rowFallback['last_update']->format('Y-m-d H:i:s') : $rowFallback['last_update'];
@@ -842,7 +887,7 @@ class SalesDB
             ORDER BY s.RUBRO, mes
         ";
         $params = array_merge([$anio], $pCanal);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params);
+        $stmt   = sqlsrv_query($this->conn, $sql, $params, self::QUERY_TIMEOUT);
         return $this->fetchAll($stmt);
     }
 

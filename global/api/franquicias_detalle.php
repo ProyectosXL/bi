@@ -24,6 +24,15 @@ try {
     // Optimización: Lectura sin bloqueos
     sqlsrv_query($conn, 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED');
 
+    // Pre-materialización de dimensiones remotas para evitar cruzamientos lentos en los loops de queries (evita 504 Timeout)
+    if ($origen === 'franquicias') {
+        $dropSl = sqlsrv_query($conn, "IF OBJECT_ID('tempdb..#sl_st') IS NOT NULL DROP TABLE #sl_st");
+        if ($dropSl !== false) sqlsrv_free_stmt($dropSl);
+        $stmtSl = sqlsrv_query($conn, "SELECT NRO_SUCURSAL, TANGO, DESC_SUCURSAL INTO #sl_st FROM OPENQUERY([XL-LAKERBIS], 'SELECT NRO_SUCURSAL, TANGO, DESC_SUCURSAL FROM LOCALES_LAKERS.DBO.SUCURSALES_LAKERS WHERE HABILITADO = 1')");
+        if ($stmtSl === false) throw new Error("Error al materializar #sl_st: " . print_r(sqlsrv_errors(), true));
+        sqlsrv_free_stmt($stmtSl);
+    }
+
     // 1. Período
     [$da, $ha, $dp, $hp] = PeriodHelper::fromRequest($_GET);
 
@@ -56,17 +65,16 @@ try {
     if ($origen === 'franquicias') {
         $sqlSuc = "
             SELECT DISTINCT sl.NRO_SUCURSAL as nro, sl.DESC_SUCURSAL as nombre
-            FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
-            WHERE sl.HABILITADO = 1
-            AND sl.NRO_SUCURSAL IN (
+            FROM #sl_st sl
+            WHERE sl.NRO_SUCURSAL IN (
                 SELECT DISTINCT NRO_SUCURS FROM BI_SALES_SUCURSALES WITH (NOLOCK) 
                 WHERE (FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?)
                 UNION ALL
                 SELECT DISTINCT pv.idTango AS NRO_SUCURS
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
-                INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-                INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
-                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
+                INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                INNER JOIN #sl_st sl2 ON pv.idTango = sl2.NRO_SUCURSAL
+                WHERE (sl2.TANGO IS NULL OR sl2.TANGO <> 1)
                   AND ((fd.fecha >= ? AND fd.fecha < ?) OR (fd.fecha >= ? AND fd.fecha < ?))
             )
             ORDER BY sl.DESC_SUCURSAL
@@ -90,12 +98,31 @@ try {
     if ($stmtSuc === false) throw new Error(print_r(sqlsrv_errors(), true));
     
     $sucursales = [];
+    $sucIds = [];
     while ($r = sqlsrv_fetch_array($stmtSuc, SQLSRV_FETCH_ASSOC)) {
         $sucursales[] = [
             'nro'    => (int)$r['nro'],
             'nombre' => trim($r['nombre'])
         ];
+        $sucIds[] = (int)$r['nro'];
     }
+
+    if (empty($sucIds)) {
+        echo json_encode([
+            'ok'         => true,
+            'dias'       => [],
+            'sucursales' => [],
+            'data'       => [],
+            'prevTotals' => [],
+            'periodo'    => [
+                'act'  => ['desde' => $da, 'hasta' => $ha],
+                'prev' => ['desde' => $dp, 'hasta' => $hp]
+            ]
+        ]);
+        exit;
+    }
+
+    $placeholdersSuc = implode(',', array_fill(0, count($sucIds), '?'));
 
     // 4. Query unificada de ventas (Actual + Previo)
     // Usamos UNION ALL dentro de la subquery para que los índices de FECHA se usen correctamente
@@ -109,40 +136,30 @@ try {
             FROM (
                 SELECT NRO_SUCURS, DAY(FECHA) as dia, IMPORTE, 1 as is_a, 0 as is_p
                 FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
-                WHERE s.FECHA >= ? AND s.FECHA < ? {$sfS} {$sfG}
+                WHERE s.FECHA >= ? AND s.FECHA < ? AND s.NRO_SUCURS IN ({$placeholdersSuc}) {$sfS} {$sfG}
                 UNION ALL
-                SELECT NRO_SUCURS, DAY(FECHA) as dia, IMPORTE, 1 as is_a, 0 as is_p
-                FROM (
-                    SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
-                    FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
-                    INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-                    INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
-                    WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
-                ) s
-                WHERE s.FECHA >= ? AND s.FECHA < ? {$sfS} {$sfG}
+                SELECT pv.idTango AS NRO_SUCURS, DAY(fd.fecha) as dia, fd.importeVentaReal AS IMPORTE, 1 as is_a, 0 as is_p
+                FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+                INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                WHERE fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
                 UNION ALL
                 SELECT NRO_SUCURS, NULL as dia, IMPORTE, 0 as is_a, 1 as is_p
                 FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
-                WHERE s.FECHA >= ? AND s.FECHA < ? {$sfS} {$sfG}
+                WHERE s.FECHA >= ? AND s.FECHA < ? AND s.NRO_SUCURS IN ({$placeholdersSuc}) {$sfS} {$sfG}
                 UNION ALL
-                SELECT NRO_SUCURS, NULL as dia, IMPORTE, 0 as is_a, 1 as is_p
-                FROM (
-                    SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
-                    FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
-                    INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-                    INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
-                    WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
-                ) s
-                WHERE s.FECHA >= ? AND s.FECHA < ? {$sfS} {$sfG}
+                SELECT pv.idTango AS NRO_SUCURS, NULL as dia, fd.importeVentaReal AS IMPORTE, 0 as is_a, 1 as is_p
+                FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
+                INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                WHERE fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
             ) t
             GROUP BY NRO_SUCURS, dia
         ";
 
         $pAll = array_merge(
-            [$da, $haX], $pS, $pG,
-            [$da, $haX], $pS, $pG,
-            [$dp, $hpX], $pS, $pG,
-            [$dp, $hpX], $pS, $pG
+            [$da, $haX], $sucIds, $pS, $pG,
+            [$da, $haX], $sucIds,
+            [$dp, $hpX], $sucIds, $pS, $pG,
+            [$dp, $hpX], $sucIds
         );
     } else {
         $sqlVentas = "

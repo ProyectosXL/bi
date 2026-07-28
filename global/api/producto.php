@@ -87,11 +87,20 @@ try {
             $act  = $db->getRubrosProducto($desde_act,  $hasta_act,  $sucursalRaw, $vendedor, $rubro, $categoria);
             $prev = $db->getRubrosProducto($desde_prev, $hasta_prev, $sucursalRaw, $vendedor, $rubro, $categoria);
 
+            // Índice actual
+            $actIdx = [];
+            foreach ($act as $r) {
+                $actIdx[$r['RUBRO'] . '|' . $r['CATEGORIA']] = $r;
+            }
+
             // Índice previo
             $prevIdx = [];
             foreach ($prev as $r) {
                 $prevIdx[$r['RUBRO'] . '|' . $r['CATEGORIA']] = $r;
             }
+
+            // Claves de todos los rubros/categorías en ambos períodos
+            $allKeys = array_unique(array_merge(array_keys($actIdx), array_keys($prevIdx)));
 
             // Índice stock local (RUBRO|CATEGORIA → stock_local)
             $stockLocalRows = $db->getStockLocalesProducto($rubro, $categoria);
@@ -116,17 +125,17 @@ try {
 
             // Construir árbol RUBRO → CATEGORIA
             $tree = [];
-            foreach ($act as $r) {
-                $key      = $r['RUBRO'] . '|' . $r['CATEGORIA'];
+            foreach ($allKeys as $key) {
+                [$rubroKey, $catKey] = explode('|', $key);
+                $a        = $actIdx[$key]  ?? null;
                 $p        = $prevIdx[$key] ?? null;
-                $unidAct  = (float)$r['unidades'];
+                $unidAct  = $a ? (float)$a['unidades']    : 0;
                 $unidPrev = $p ? (float)$p['unidades']    : 0;
-                $factAct  = (float)$r['facturacion'];
+                $factAct  = $a ? (float)$a['facturacion'] : 0;
                 $stkLocal = $stockLocalIdx[$key]   ?? 0;
                 $stkCent  = $stockCentralIdx[$key] ?? 0;
                 $varU     = $unidPrev != 0 ? ($unidAct - $unidPrev) / abs($unidPrev) : null;
 
-                $rubroKey = $r['RUBRO'];
                 if (!isset($tree[$rubroKey])) {
                     $tree[$rubroKey] = [
                         'rubro'         => $rubroKey,
@@ -137,7 +146,7 @@ try {
                     ];
                 }
                 $tree[$rubroKey]['categorias'][] = [
-                    'categoria'       => $r['CATEGORIA'],
+                    'categoria'       => $catKey,
                     'unidades'        => $unidAct,
                     'unidades_prev'   => $unidPrev,
                     'facturacion'     => $factAct,

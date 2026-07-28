@@ -453,6 +453,7 @@ class GlobalDashboardDB
 
         $condFechaHora = $this->origen === 'uruguay' ? "" : "AND i.FECHA_HORA IS NOT NULL";
         $condFechaHoraI2 = $this->origen === 'uruguay' ? "" : "AND i2.FECHA_HORA IS NOT NULL";
+        $condFechaHoraM = $this->origen === 'uruguay' ? "" : "AND m.FECHA_HORA IS NOT NULL";
 
         $rowI = $this->queryOne("
             SELECT ISNULL(SUM(i.INGRESOS), 0) AS total_ingresos
@@ -461,6 +462,18 @@ class GlobalDashboardDB
               {$condFechaHora}
               AND i.INGRESOS > 0 {$sfI} {$sfGI}
         ", array_merge([$desde, $hasta], $pI, $pGI));
+
+        // Merodeo: filtra por MERODEO > 0 (no reutiliza el filtro INGRESOS > 0,
+        // porque descartaría días con merodeo registrado y cero ingresos).
+        [$sfM, $pM] = Filters::build($fp, 'm', $this->campoVendedor, $this->origen, false, false, 'NRO_SUCURS', false);
+        [$sfGM, $pGM] = $this->grupoFiltro('m');
+        $rowM = $this->queryOne("
+            SELECT ISNULL(SUM(m.MERODEO), 0) AS total_merodeo
+            FROM BI_T_INGRESOS_SUCURSALES m
+            WHERE m.FECHA >= ? AND m.FECHA < DATEADD(day,1,CAST(? AS DATE))
+              {$condFechaHoraM}
+              AND m.MERODEO > 0 {$sfM} {$sfGM}
+        ", array_merge([$desde, $hasta], $pM, $pGM));
 
         $rowT = $this->queryOne("
             SELECT COUNT(DISTINCT t.N_COMP) AS total_tickets
@@ -479,10 +492,13 @@ class GlobalDashboardDB
         ", array_merge([$desde, $hasta], $pT, $pGT, [$desde, $hasta]));
 
         $ingresos = (int)($rowI['total_ingresos'] ?? 0);
+        $merodeo  = (int)($rowM['total_merodeo']  ?? 0);
         $tickets  = (int)($rowT['total_tickets']  ?? 0);
 
         return [
             'ingresos'   => $ingresos,
+            'merodeo'    => $merodeo,
+            'atraccion'  => $merodeo > 0 ? $ingresos / $merodeo : 0,
             'tickets'    => $tickets,
             'conversion' => $ingresos > 0 ? $tickets / $ingresos : 0,
         ];

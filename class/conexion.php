@@ -107,7 +107,8 @@ if (!class_exists('Conexion')) {
                     "Database" => $serverDB[1],
                     "UID" => $this->user,
                     "PWD" => $pass,
-                    "CharacterSet" => $this->character
+                    "CharacterSet" => $this->character,
+                    "LoginTimeout" => 10
                 );
 
                 // Log de parámetros de conexión (sin contraseña)
