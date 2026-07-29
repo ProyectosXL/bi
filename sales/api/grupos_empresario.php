@@ -7,11 +7,12 @@ session_start();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 
-if (!isset($_SESSION['username'])) {
-    http_response_code(401);
-    echo json_encode(['ok' => false, 'error' => 'No autenticado']);
-    exit;
-}
+// LOGIN DESACTIVADO TEMPORALMENTE — restaurar este bloque para volver a exigir sesión.
+// if (!isset($_SESSION['username'])) {
+//     http_response_code(401);
+//     echo json_encode(['ok' => false, 'error' => 'No autenticado']);
+//     exit;
+// }
 
 require_once __DIR__ . '/../class/SalesDB.php';
 

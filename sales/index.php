@@ -5,10 +5,11 @@
  * Fuente de datos: dbo.BI_SALES_LAKERS en XL-APPS / POWER_BI_CONTROL.
  */
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
-if (!isset($_SESSION['username'])) {
-    header('Location: ../../sistemas/login.php');
-    exit;
-}
+// LOGIN DESACTIVADO TEMPORALMENTE — restaurar este bloque para volver a exigir sesión.
+// if (!isset($_SESSION['username'])) {
+//     header('Location: ../../sistemas/login.php');
+//     exit;
+// }
 require_once __DIR__ . '/../class/config.php';
 $tipoSesion = $_SESSION['tipo'] ?? '';
 date_default_timezone_set('America/Argentina/Buenos_Aires');

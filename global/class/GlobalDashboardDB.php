@@ -2133,29 +2133,16 @@ class GlobalDashboardDB
     {
         if (empty($ids)) return [];
 
-        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
-        $connC = (new Conexion())->conectar('central');
-
         $ph     = implode(',', array_fill(0, count($ids), '?'));
         $params = array_values(array_map('intval', $ids));
 
-        sqlsrv_configure('WarningsReturnAsErrors', 0);
-        $stmt = sqlsrv_query($connC,
+        return $this->query(
             "SELECT sl.NRO_SUCURSAL AS NRO_SUCURS, sl.DESC_SUCURSAL
              FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
              WHERE sl.NRO_SUCURSAL IN ({$ph})
              ORDER BY sl.DESC_SUCURSAL",
             $params
         );
-
-        if ($stmt === false) return [];
-
-        $rows = [];
-        while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-            $rows[] = $row;
-        }
-        sqlsrv_free_stmt($stmt);
-        return $rows;
     }
 
     /** Obtiene la última fecha/hora de actualización de los datos */
