@@ -85,7 +85,7 @@ try {
 <header class="topbar">
     <div class="logo-box">XL</div>
     <div class="topbar-info">
-        <div class="topbar-title">DASHBOARD SALES $ NETO</div>
+        <div class="topbar-title">DASHBOARD SALES GERENCIA $ NETO</div>
         <div class="topbar-sub">
             <span id="periodo-label">—</span>
         </div>
