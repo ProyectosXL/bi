@@ -37,7 +37,7 @@ const Circulacion = (() => {
         if (elVal)  elVal.textContent = valText;
         if (elVar) {
             elVar.textContent = fmt.varPct(ratio);
-            elVar.className   = 'kpi-var ' + (ratio >= 0 ? 'pos' : 'neg');
+            elVar.className   = 'kpi-var ' + (ratio === null || ratio === undefined ? '' : (ratio >= 0 ? 'pos' : 'neg'));
         }
         if (elPrev) elPrev.textContent = prevText;
     }
@@ -225,7 +225,7 @@ const Circulacion = (() => {
                     { type: 'bar',  label: 'Merodeo',      data: serie.map(r => r.merodeo),  backgroundColor: 'rgba(59,130,246,.45)',  borderColor: '#3b82f6', borderWidth: 1, borderRadius: 3, yAxisID: 'y', order: 3 },
                     { type: 'bar',  label: 'Ingresos',     data: serie.map(r => r.ingresos), backgroundColor: 'rgba(236,72,153,.55)', borderColor: '#ec4899', borderWidth: 1, borderRadius: 3, yAxisID: 'y', order: 2 },
                     { type: 'line', label: 'Atracción %',  data: serie.map(r => r.atraccion  * 100), borderColor: '#f59e0b', backgroundColor: '#f59e0b', borderWidth: 2, tension: .3, pointRadius: 3, yAxisID: 'y2', order: 1 },
-                    { type: 'line', label: 'Conversión %', data: serie.map(r => r.conversion * 100), borderColor: '#16a34a', backgroundColor: '#16a34a', borderWidth: 2, tension: .3, pointRadius: 3, yAxisID: 'y2', order: 0 },
+                    { type: 'line', label: 'Conversión %', data: serie.map(r => r.conversion === null || r.conversion === undefined ? null : r.conversion * 100), borderColor: '#16a34a', backgroundColor: '#16a34a', borderWidth: 2, tension: .3, pointRadius: 3, yAxisID: 'y2', order: 0 },
                 ],
             },
             options: {
@@ -238,9 +238,11 @@ const Circulacion = (() => {
                     tooltip: {
                         backgroundColor: '#1a2340', titleColor: '#9ba8c8', bodyColor: '#fff', padding: 10,
                         callbacks: {
-                            label: ctx => ctx.dataset.yAxisID === 'y2'
-                                ? `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} %`
-                                : `${ctx.dataset.label}: ${fmt.num(ctx.parsed.y)}`,
+                            label: ctx => ctx.parsed.y === null || ctx.parsed.y === undefined
+                                ? `${ctx.dataset.label}: —`
+                                : (ctx.dataset.yAxisID === 'y2'
+                                    ? `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} %`
+                                    : `${ctx.dataset.label}: ${fmt.num(ctx.parsed.y)}`),
                         },
                     },
                 },

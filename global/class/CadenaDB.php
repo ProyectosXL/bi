@@ -15,6 +15,7 @@ class CadenaDB
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/ConversionHelper.php';
 
         $cfg = getConfigForOrigen($origen);
         $this->origen         = $origen;
@@ -444,9 +445,7 @@ class CadenaDB
                 'mails'            => $mailsMap[$nro] ?? 0,
                 'mails_pct'        => $tickAct > 0 ? ($mailsMap[$nro] ?? 0) / $tickAct : 0,
                 'ingresos'         => $ingresosMap[$nro] ?? 0,
-                'conversion'       => ($ingresosMap[$nro] ?? 0) > 0
-                                        ? ($ticketsConvMap[$nro] ?? 0) / $ingresosMap[$nro]
-                                        : null,
+                'conversion'       => ConversionHelper::rate($ticketsConvMap[$nro] ?? 0, $ingresosMap[$nro] ?? 0),
                 'porc_presencia'   => $porcPres,
             ];
         }

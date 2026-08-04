@@ -22,6 +22,7 @@ class CirculacionDB
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/ConversionHelper.php';
 
         $cfg = getConfigForOrigen($origen);
         $this->origen        = $origen;
@@ -224,7 +225,7 @@ class CirculacionDB
             'tickets'              => $tickets,
             'facturacion'          => $facturacion,
             'atraccion'            => $merodeo  > 0 ? $ingresos / $merodeo  : 0,
-            'conversion'           => $ingresos > 0 ? $tickets  / $ingresos : 0,
+            'conversion'           => ConversionHelper::rate($tickets, $ingresos),
             'venta_por_visitante'  => $ingresos > 0 ? $facturacion / $ingresos : 0,
             'venta_por_merodeador' => $merodeo  > 0 ? $facturacion / $merodeo  : 0,
             'sucursales_con_sensor' => (int)($rowSensor['suc_con_sensor'] ?? 0),
@@ -321,7 +322,7 @@ class CirculacionDB
                 'tickets'             => $tk['tickets'],
                 'facturacion'         => $fact,
                 'atraccion'           => ($tieneSensor && $im['merodeo']  > 0) ? $im['ingresos'] / $im['merodeo']  : null,
-                'conversion'          => ($tieneSensor && $im['ingresos'] > 0) ? $tk['tickets']   / $im['ingresos'] : null,
+                'conversion'          => $tieneSensor ? ConversionHelper::rate($tk['tickets'], $im['ingresos']) : null,
                 'ticket_promedio'     => $tk['tickets'] > 0 ? $tk['suma_tickets'] / $tk['tickets'] : 0,
                 'venta_por_visitante' => ($tieneSensor && $im['ingresos'] > 0) ? $fact / $im['ingresos'] : null,
             ];
@@ -402,7 +403,7 @@ class CirculacionDB
                 'ingresos'   => $im['ingresos'],
                 'tickets'    => $tk,
                 'atraccion'  => $im['merodeo']  > 0 ? $im['ingresos'] / $im['merodeo']  : 0,
-                'conversion' => $im['ingresos'] > 0 ? $tk            / $im['ingresos'] : 0,
+                'conversion' => ConversionHelper::rate($tk, $im['ingresos']),
             ];
             $cursor->modify('+1 month');
         }

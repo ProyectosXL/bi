@@ -175,6 +175,7 @@ class GlobalDashboardDB
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/PeriodHelper.php';
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/ConversionHelper.php';
 
         $cfg = getConfigForOrigen($origen);
         $this->origen         = $origen;
@@ -500,7 +501,7 @@ class GlobalDashboardDB
             'merodeo'    => $merodeo,
             'atraccion'  => $merodeo > 0 ? $ingresos / $merodeo : 0,
             'tickets'    => $tickets,
-            'conversion' => $ingresos > 0 ? $tickets / $ingresos : 0,
+            'conversion' => ConversionHelper::rate($tickets, $ingresos),
         ];
     }
 
@@ -521,7 +522,7 @@ class GlobalDashboardDB
                     'label'      => str_pad($h, 2, '0', STR_PAD_LEFT) . 'h',
                     'tickets'    => 0,
                     'ingresos'   => 0,
-                    'conversion' => 0,
+                    'conversion' => null,
                 ];
             }
             return $result;
@@ -582,7 +583,7 @@ class GlobalDashboardDB
                 'label'      => str_pad($h, 2, '0', STR_PAD_LEFT) . 'h',
                 'tickets'    => $tickByHour[$h],
                 'ingresos'   => $ingByHour[$h],
-                'conversion' => $ingByHour[$h] > 0 ? $tickByHour[$h] / $ingByHour[$h] : 0,
+                'conversion' => ConversionHelper::rate($tickByHour[$h], $ingByHour[$h]),
             ];
         }
         return $result;
@@ -769,7 +770,7 @@ class GlobalDashboardDB
                 'porc_cambios'        => $unidadesPos > 0 ? $cambios / $unidadesPos : 0,
                 'porc_incremental'    => $devoluciones != 0 ? ($cambiosIncr - $devoluciones) / $devoluciones : 0,
                 'ingresos'            => $ingresos,
-                'conversion'          => $ingresos > 0 ? $ticketsConv / $ingresos : 0,
+                'conversion'          => ConversionHelper::rate($ticketsConv, $ingresos),
             ];
         }
         return $result;
@@ -1194,12 +1195,32 @@ class GlobalDashboardDB
         }
         [$sfGrupo, $pGrupo] = $this->grupoFiltro('s');
         $params = array_merge($params, $pGrupo);
-        return $this->query("
-            SELECT DISTINCT s.{$cv}
+
+        $rows = $this->query("
+            SELECT DISTINCT s.COD_VENDED, s.DESC_VENDEDOR
             FROM BI_SALES_SUCURSALES s
             WHERE 1=1 {$extras} {$sfGrupo}
-            ORDER BY s.{$cv}
         ", $params);
+
+        $result = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            $cod = trim($row['COD_VENDED'] ?? '');
+            $desc = trim($row['DESC_VENDEDOR'] ?? '');
+            if ($desc === '' || strcasecmp($desc, 'DESCONOCIDO') === 0) {
+                $desc = $cod;
+            }
+            if ($desc !== '' && !isset($seen[$desc])) {
+                $seen[$desc] = true;
+                $result[] = [
+                    'COD_VENDED'    => $cod,
+                    'DESC_VENDEDOR' => $desc,
+                    $cv             => $desc,
+                ];
+            }
+        }
+        usort($result, fn($a, $b) => strcasecmp($a[$cv] ?? '', $b[$cv] ?? ''));
+        return $result;
     }
 
     public function getRubrosFiltro(string $desde, string $hasta, ?int $sucursal = null): array

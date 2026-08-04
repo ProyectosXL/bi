@@ -211,7 +211,9 @@ try {
             'actual'   => ['ingresos' => $conv_act['ingresos'],  'merodeo' => $conv_act['merodeo'],  'atraccion' => $conv_act['atraccion'],  'conversion' => $conv_act['conversion']],
             'previo'   => ['ingresos' => $conv_prev['ingresos'], 'merodeo' => $conv_prev['merodeo'], 'atraccion' => $conv_prev['atraccion'], 'conversion' => $conv_prev['conversion']],
             'variacion' => [
-                'conversion' => $varFn($conv_act['conversion'], $conv_prev['conversion']),
+                'conversion' => ($conv_act['conversion'] === null || $conv_prev['conversion'] === null)
+                                ? null
+                                : $varFn($conv_act['conversion'], $conv_prev['conversion']),
                 'atraccion'  => $varFn($conv_act['atraccion'],  $conv_prev['atraccion']),
             ],
         ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

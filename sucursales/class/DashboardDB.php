@@ -17,6 +17,7 @@ class DashboardDB
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/ConversionHelper.php';
         $config = getConfig();
         $this->cid            = new Conexion();
         $this->conn           = $this->cid->conectar($config['db']);
@@ -272,19 +273,35 @@ class DashboardDB
         // Q-T1: tickets y monto — sin JOIN para evitar inflación del SUM por los ítems del ticket
         $sqlT1 = "
             SELECT
-                t.{$cv} AS cv_key,
+                t.COD_VENDED, t.DESC_VENDEDOR,
                 COUNT(DISTINCT t.N_COMP)           AS tickets,
                 ISNULL(SUM(t.IMP_TOTAL_TICKET), 0) AS suma_ticket
             FROM BI_SALES_TOTAL_TICKETS t
             WHERE t.FECHA >= ? AND t.FECHA < DATEADD(day, 1, CAST(? AS DATE))
               AND t.T_COMP = 'FAC'
               {$sfT} {$sfVT}
-            GROUP BY t.{$cv}
+            GROUP BY t.COD_VENDED, t.DESC_VENDEDOR
         ";
         $tickRows = $this->query($sqlT1, array_merge([$desde, $hasta], $suc, $vend));
         $tickMap  = [];
         foreach ($tickRows as $row) {
-            $tickMap[(string)$row['cv_key']] = ['tickets' => (int)$row['tickets'], 'suma_ticket' => (float)$row['suma_ticket']];
+            $cod = trim($row['COD_VENDED'] ?? '');
+            $desc = trim($row['DESC_VENDEDOR'] ?? '');
+            if ($cv === 'DESC_VENDEDOR') {
+                if ($desc === '' || strcasecmp($desc, 'DESCONOCIDO') === 0) {
+                    $desc = $cod;
+                }
+                $key = $desc;
+            } else {
+                $key = $cod;
+            }
+            if ($key !== '') {
+                if (!isset($tickMap[$key])) {
+                    $tickMap[$key] = ['tickets' => 0, 'suma_ticket' => 0.0];
+                }
+                $tickMap[$key]['tickets'] += (int)$row['tickets'];
+                $tickMap[$key]['suma_ticket'] += (float)$row['suma_ticket'];
+            }
         }
 
         // Q-T2: 2do/3er producto — desde BI_SALES_TICKETS directamente (igual que getKPIsBulk Q3)
@@ -292,18 +309,34 @@ class DashboardDB
         $sfVTK = $vendedor !== '%'   ? "AND {$cv} = ?"      : "";
         $sqlT2 = "
             SELECT
-                {$cv} AS cv_key,
+                COD_VENDED, DESC_VENDEDOR,
                 COUNT(DISTINCT CASE WHEN CANTIDAD > 1 THEN N_COMP END) AS tickets_2do,
                 COUNT(DISTINCT CASE WHEN CANTIDAD > 2 THEN N_COMP END) AS tickets_3ro
             FROM BI_SALES_TICKETS
             WHERE FECHA >= ? AND FECHA < DATEADD(day, 1, CAST(? AS DATE))
               {$sfTK} {$sfVTK}
-            GROUP BY {$cv}
+            GROUP BY COD_VENDED, DESC_VENDEDOR
         ";
         $prodRows = $this->query($sqlT2, array_merge([$desde, $hasta], $suc, $vend));
         $prodMap  = [];
         foreach ($prodRows as $row) {
-            $prodMap[(string)$row['cv_key']] = ['tickets_2do' => (int)$row['tickets_2do'], 'tickets_3ro' => (int)$row['tickets_3ro']];
+            $cod = trim($row['COD_VENDED'] ?? '');
+            $desc = trim($row['DESC_VENDEDOR'] ?? '');
+            if ($cv === 'DESC_VENDEDOR') {
+                if ($desc === '' || strcasecmp($desc, 'DESCONOCIDO') === 0) {
+                    $desc = $cod;
+                }
+                $key = $desc;
+            } else {
+                $key = $cod;
+            }
+            if ($key !== '') {
+                if (!isset($prodMap[$key])) {
+                    $prodMap[$key] = ['tickets_2do' => 0, 'tickets_3ro' => 0];
+                }
+                $prodMap[$key]['tickets_2do'] += (int)$row['tickets_2do'];
+                $prodMap[$key]['tickets_3ro'] += (int)$row['tickets_3ro'];
+            }
         }
 
         // Incremental por vendedor
@@ -366,8 +399,12 @@ class DashboardDB
             foreach ($ventas as $v) {
                 $cod   = $v['COD_VENDED'];
                 $fecha = (string)($v['ultima_fecha'] ?? '');
+                $desc  = trim($v['DESC_VENDEDOR'] ?? '');
+                if ($desc === '' || strcasecmp($desc, 'DESCONOCIDO') === 0) {
+                    $desc = $cod;
+                }
                 if (!isset($nameMap[$cod]) || $fecha > $nameMap[$cod]['fecha']) {
-                    $nameMap[$cod] = ['name' => $v['DESC_VENDEDOR'] ?? (string)$cod, 'fecha' => $fecha];
+                    $nameMap[$cod] = ['name' => $desc, 'fecha' => $fecha];
                 }
             }
         }
@@ -677,7 +714,7 @@ class DashboardDB
                 'porc_cambios' => $unidadesPos > 0 ? $cambios / $unidadesPos : 0,
                 'porc_incremental' => $devoluciones != 0 ? ($cambiosIncr - $devoluciones) / $devoluciones : 0,
                 'ingresos'   => $ingresosMap[$fecha] ?? 0,
-                'conversion' => ($ingresosMap[$fecha] ?? 0) > 0 ? $tickets / $ingresosMap[$fecha] : 0,
+                'conversion' => ConversionHelper::rate($tickets, $ingresosMap[$fecha] ?? 0),
                 'porc_presencia' => $porcPresencia,
             ];
         }
@@ -1054,7 +1091,7 @@ class DashboardDB
             INNER JOIN (
                 SELECT DISTINCT CAST(FECHA AS DATE) AS dia
                 FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
-                WHERE FECHA >= ? AND FECHA < ? {$condFechaHora} {$sfI}
+                WHERE FECHA >= ? AND FECHA < ? {$condFechaHora} AND INGRESOS > 0 {$sfI}
             ) dias ON CAST(t.FECHA AS DATE) = dias.dia
             WHERE t.FECHA >= ? AND t.FECHA < ?
               AND t.T_COMP = 'FAC' {$sfT}
@@ -1075,12 +1112,12 @@ class DashboardDB
             'actual' => [
                 'ingresos'   => $ingAct,
                 'tickets'    => $tickAct,
-                'conversion' => $ingAct > 0 ? $tickAct  / $ingAct  : 0.0,
+                'conversion' => ConversionHelper::rate($tickAct, $ingAct),
             ],
             'previo' => [
                 'ingresos'   => $ingPrev,
                 'tickets'    => $tickPrev,
-                'conversion' => $ingPrev > 0 ? $tickPrev / $ingPrev : 0.0,
+                'conversion' => ConversionHelper::rate($tickPrev, $ingPrev),
             ],
         ];
     }
@@ -1113,7 +1150,7 @@ class DashboardDB
             INNER JOIN (
                 SELECT DISTINCT CAST(FECHA AS DATE) AS dia
                 FROM BI_T_INGRESOS_SUCURSALES WITH (NOLOCK)
-                WHERE FECHA >= ? AND FECHA < ? {$condFechaHoraI2} {$sfI2}
+                WHERE FECHA >= ? AND FECHA < ? {$condFechaHoraI2} AND INGRESOS > 0 {$sfI2}
             ) dias ON CAST(t.FECHA AS DATE) = dias.dia
             WHERE t.FECHA >= ? AND t.FECHA < ?
               AND t.T_COMP = 'FAC' {$sfT}
@@ -1126,7 +1163,7 @@ class DashboardDB
         return [
             'ingresos'   => $ingresos,
             'tickets'    => $tickets,
-            'conversion' => $ingresos > 0 ? $tickets / $ingresos : 0,
+            'conversion' => ConversionHelper::rate($tickets, $ingresos),
         ];
     }
 
@@ -1167,15 +1204,32 @@ class DashboardDB
 
         $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
-        // Deduplicar por el campo usado como valor del filtro (nombre o código).
-        // Si hay dos códigos para el mismo nombre, aparece una sola opción.
         $sql = "
-            SELECT DISTINCT {$cv}
+            SELECT DISTINCT s.COD_VENDED, s.DESC_VENDEDOR
             FROM {$from} s
             {$whereClause}
-            ORDER BY {$cv}
         ";
-        return $this->query($sql, $params);
+        $rows = $this->query($sql, $params);
+
+        $result = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            $cod = trim($row['COD_VENDED'] ?? '');
+            $desc = trim($row['DESC_VENDEDOR'] ?? '');
+            if ($desc === '' || strcasecmp($desc, 'DESCONOCIDO') === 0) {
+                $desc = $cod;
+            }
+            if ($desc !== '' && !isset($seen[$desc])) {
+                $seen[$desc] = true;
+                $result[] = [
+                    'COD_VENDED'    => $cod,
+                    'DESC_VENDEDOR' => $desc,
+                    $cv             => $desc,
+                ];
+            }
+        }
+        usort($result, fn($a, $b) => strcasecmp($a[$cv] ?? '', $b[$cv] ?? ''));
+        return $result;
     }
 
     public function getRubrosFiltro(string $desde, string $hasta, ?int $nroSucurs = null): array
@@ -1264,7 +1318,7 @@ class DashboardDB
                 'label'      => str_pad($h, 2, '0', STR_PAD_LEFT) . 'h',
                 'tickets'    => $tickByHour[$h],
                 'ingresos'   => $ingByHour[$h],
-                'conversion' => $ingByHour[$h] > 0 ? $tickByHour[$h] / $ingByHour[$h] : 0,
+                'conversion' => ConversionHelper::rate($tickByHour[$h], $ingByHour[$h]),
             ];
         }
         return $result;

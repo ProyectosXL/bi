@@ -552,18 +552,29 @@ const Dashboard = (() => {
         const registry = {};
         let _modalChart = null;
 
-        function register(canvasId, values, dates, color, formatFn, title, secondary = null) {
-            registry[canvasId] = { values, dates, color, formatFn, title, secondary };
+        function register(canvasId, values, dates, color, formatFn, title, secondary = null, periodRate = null) {
+            registry[canvasId] = { values, dates, color, formatFn, title, secondary, periodRate };
         }
 
         function setHoras(canvasId, horas) {
             if (registry[canvasId]) registry[canvasId].horas = horas;
         }
 
+        // La tasa del período completo llega de un fetch separado (?action=conversion)
+        // que puede resolver después del registro de la serie diaria — se actualiza acá.
+        function updatePeriodRate(canvasId, value) {
+            if (registry[canvasId]?.periodRate) registry[canvasId].periodRate.value = value;
+        }
+
         function open(canvasId) {
             const entry = registry[canvasId];
             if (!entry) return;
-            const { values, dates, color, formatFn, title, secondary } = entry;
+            const { values, dates, color, formatFn, title, secondary, periodRate } = entry;
+
+            // Tasa del período completo — viene ya calculada del backend (misma
+            // fuente que el KPI principal), no se recalcula sumando la serie diaria
+            // acá porque esos días "sin dato" no deben aportar al total.
+            const periodRateVal = periodRate ? periodRate.value : null;
 
             const secArr = Array.isArray(secondary) ? secondary : (secondary ? [secondary] : []);
             const secStatsHtml = secArr.filter(sec => !sec.hideStats).map(sec => `
@@ -577,17 +588,24 @@ const Dashboard = (() => {
                     <span class="spark-modal-stat-val">${sec.formatFn(Math.round(sec.values.reduce((a, b) => a + b, 0) / sec.values.length))}</span>
                 </div>`).join('');
 
-            const max = Math.max(...values), min = Math.min(...values);
-            const avg = values.reduce((a, b) => a + b, 0) / values.length;
-            const last = values[values.length - 1];
-            const trend = avg !== 0 ? (last - avg) / Math.abs(avg) : 0;
-            const maxIdx = values.indexOf(max);
-            const minIdx = values.indexOf(min);
+            // Ignora días sin dato (null/undefined) al calcular las estadísticas
+            const validIdx  = values.map((v, i) => i).filter(i => values[i] !== null && values[i] !== undefined);
+            const validVals = validIdx.map(i => values[i]);
+            const hasValid  = validVals.length > 0;
+            const max = hasValid ? Math.max(...validVals) : null;
+            const min = hasValid ? Math.min(...validVals) : null;
+            const avg = hasValid ? validVals.reduce((a, b) => a + b, 0) / validVals.length : null;
+            const lastIdx = hasValid ? validIdx[validIdx.length - 1] : values.length - 1;
+            const last = hasValid ? values[lastIdx] : null;
+            const trend = (hasValid && avg !== 0) ? (last - avg) / Math.abs(avg) : null;
+            const maxIdx = hasValid ? validIdx[validVals.indexOf(max)] : 0;
+            const minIdx = hasValid ? validIdx[validVals.indexOf(min)] : 0;
             const fmtDate = ds => ds ? new Date(ds + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '';
 
-            const trendSign = trend >= 0 ? '+' : '';
-            const trendCls  = trend >= 0 ? 'pos' : 'neg';
-            const trendTitle = `Último: ${formatFn(last)} | Promedio: ${formatFn(avg)} | Var: ${trendSign}${(trend*100).toFixed(1)}%`;
+            const trendSign  = trend === null ? '' : (trend >= 0 ? '+' : '');
+            const trendCls   = trend === null ? '' : (trend >= 0 ? 'pos' : 'neg');
+            const trendText  = trend === null ? '—' : `${trendSign}${(trend * 100).toFixed(1)} %`;
+            const trendTitle = trend === null ? 'Sin datos suficientes' : `Último: ${formatFn(last)} | Promedio: ${formatFn(avg)} | Var: ${trendSign}${(trend*100).toFixed(1)}%`;
 
             const toggleHtml = entry.horas ? `
                 <div class="conv-view-switch" id="conv-view-switch">
@@ -605,15 +623,21 @@ const Dashboard = (() => {
                             <button class="spark-modal-close" id="spark-modal-close-btn"><i class="bi bi-x-lg"></i></button>
                         </div>
                         <div class="spark-modal-stats">
+                            ${periodRate ? `
+                            <div class="spark-modal-stat">
+                                <span class="spark-modal-stat-label">${periodRate.label}</span>
+                                <span class="spark-modal-stat-val">${formatFn(periodRateVal)}</span>
+                            </div>` : ''}
                             <div class="spark-modal-stat">
                                 <span class="spark-modal-stat-label">Último</span>
                                 <span class="spark-modal-stat-val">${formatFn(last)}</span>
-                                <span class="stat-date">${fmtDate(dates[dates.length - 1])}</span>
+                                <span class="stat-date">${fmtDate(dates[lastIdx])}</span>
                             </div>
+                            ${periodRate ? '' : `
                             <div class="spark-modal-stat">
                                 <span class="spark-modal-stat-label">Promedio</span>
                                 <span class="spark-modal-stat-val">${formatFn(avg)}</span>
-                            </div>
+                            </div>`}
                             <div class="spark-modal-stat">
                                 <span class="spark-modal-stat-label">Máximo</span>
                                 <span class="spark-modal-stat-val">${formatFn(max)}</span>
@@ -626,7 +650,7 @@ const Dashboard = (() => {
                             </div>
                             <div class="spark-modal-stat">
                                 <span class="spark-modal-stat-label">Tendencia</span>
-                                <span class="trend-badge ${trendCls}" title="${trendTitle}">${trendSign}${(trend * 100).toFixed(1)} %</span>
+                                <span class="trend-badge ${trendCls}" title="${trendTitle}">${trendText}</span>
                                 <span class="stat-date" style="font-size:.68rem;color:var(--text-3)">vs promedio período</span>
                             </div>
                             ${secStatsHtml}
@@ -823,7 +847,7 @@ const Dashboard = (() => {
             if (root) root.innerHTML = '';
         }
 
-        return { register, open, setHoras, _registry: registry };
+        return { register, open, setHoras, updatePeriodRate, _registry: registry };
     })();
 
     /* ── Expandir sparklines ─────────────────── */
@@ -1341,6 +1365,7 @@ const Dashboard = (() => {
         setText('conv-ingresos', fmt.num(a.ingresos));
         setText('conv-merodeo',  fmt.num(a.merodeo));
         setText('conv-atraccion', fmt.pct(a.atraccion));
+        SparkModal.updatePeriodRate('spark-conv', a.conversion ?? null);
     }
 
     /* ── Sparklines (carga diferida desde ?action=serie) ─────────────── */
@@ -1367,7 +1392,7 @@ const Dashboard = (() => {
             const vT3ro  = sa.map(x => x.porc_3ro ?? 0);
             const vCamb  = sa.map(x => x.porc_cambios ?? 0);
             const vIncr  = sa.map(x => x.porc_incremental ?? 0);
-            const vConv  = sa.map(x => x.conversion ?? 0);
+            const vConv  = sa.map(x => x.conversion ?? null);
             const vIngresos = sa.map(x => x.ingresos ?? 0);
 
             sparkLine('spark-fact',          vFact,  '#00a878', vPFact, dates);
@@ -1387,7 +1412,7 @@ const Dashboard = (() => {
             SparkModal.register('spark-conv',  vConv,  dates, '#ec4899', n => fmt.pct(n), 'Conversión diaria', [
                 { values: vIngresos, color: '#38bdf8', label: 'Ingresos', formatFn: fmt.num },
                 { values: vTick,     color: '#8b5cf6', label: 'Tickets',  formatFn: fmt.num, hideStats: true },
-            ]);
+            ], { label: 'Tasa de Conversión', value: _lastConvData?.actual?.conversion ?? null });
             SparkModal.register('spark-tprom', vTProm, dates, '#2563eb', fmt.money, 'Ticket Promedio');
             SparkModal.register('spark-tp2do', vTp2do, dates, '#a855f7', fmt.money, 'T. Prom. 2do Producto');
             SparkModal.register('spark-t2do',  vT2do,  dates, '#14b8a6', n => fmt.pct(n), '% Tickets 2do Producto');
@@ -1403,7 +1428,7 @@ const Dashboard = (() => {
         const el = $(id);
         if (!el) return;
         el.textContent = fmt.varPct(ratio);
-        el.className   = 'summary-var ' + (ratio >= 0 ? 'pos' : 'neg');
+        el.className   = 'summary-var ' + (ratio === null || ratio === undefined ? '' : (ratio >= 0 ? 'pos' : 'neg'));
     }
     function setKpiVar(id, ratio, prevText = null, actualText = null) {
         const el = $(id);

@@ -175,7 +175,9 @@ try {
             'porc_cambios'     => $kpi_act['porc_cambios']     - $kpi_prev['porc_cambios'],
             'porc_incremental' => $kpi_act['porc_incremental'] - $kpi_prev['porc_incremental'],
             'porc_presencia'   => $kpi_act['porc_presencia']   - $kpi_prev['porc_presencia'],
-            'conversion'       => $var($conv_act['conversion'], $conv_prev['conversion']),
+            'conversion'       => ($conv_act['conversion'] === null || $conv_prev['conversion'] === null)
+                                    ? null
+                                    : $var($conv_act['conversion'], $conv_prev['conversion']),
         ],
         'benchmark' => [
             'tickets_var'      => $var($bench['tickets'],       $kpi_prev['tickets']),

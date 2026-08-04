@@ -150,8 +150,8 @@ const Dashboard = (() => {
         let _modalChart = null;
         let _openCanvasId = null;  // tracks which canvas is currently open
 
-        function register(canvasId, values, dates, color, formatFn, title, secondary = null) {
-            registry[canvasId] = { values, dates, color, formatFn, title, secondary, horas: registry[canvasId]?.horas || null };
+        function register(canvasId, values, dates, color, formatFn, title, secondary = null, periodRate = null) {
+            registry[canvasId] = { values, dates, color, formatFn, title, secondary, periodRate, horas: registry[canvasId]?.horas || null };
         }
 
         function setHoras(canvasId, horas) {
@@ -189,24 +189,34 @@ const Dashboard = (() => {
             _openCanvasId = canvasId;
             const entry = registry[canvasId];
             if (!entry) return;
-            const { values, dates, color, formatFn, title, secondary } = entry;
+            const { values, dates, color, formatFn, title, secondary, periodRate } = entry;
 
-            // Estadísticas rápidas (serie principal)
-            const max    = Math.max(...values);
-            const min    = Math.min(...values);
-            const avg    = values.reduce((a, b) => a + b, 0) / values.length;
-            const last   = values[values.length - 1];
-            const first  = values[0];
-            const trend  = first !== 0 ? (last - first) / Math.abs(first) : 0;
-            const maxIdx  = values.indexOf(max);
-            const minIdx  = values.indexOf(min);
-            const lastIdx = values.length - 1;
+            // Tasa del período completo — viene ya calculada del backend (misma
+            // fuente que el KPI principal), no se recalcula sumando la serie diaria
+            // acá porque esos días "sin dato" no deben aportar al total.
+            const periodRateVal = periodRate ? periodRate.value : null;
+
+            // Estadísticas rápidas (serie principal) — ignora días sin dato (null/undefined)
+            const validIdx  = values.map((v, i) => i).filter(i => values[i] !== null && values[i] !== undefined);
+            const validVals = validIdx.map(i => values[i]);
+            const hasValid  = validVals.length > 0;
+            const max    = hasValid ? Math.max(...validVals) : null;
+            const min    = hasValid ? Math.min(...validVals) : null;
+            const avg    = hasValid ? validVals.reduce((a, b) => a + b, 0) / validVals.length : null;
+            const lastIdx  = hasValid ? validIdx[validIdx.length - 1] : values.length - 1;
+            const firstIdx = hasValid ? validIdx[0] : 0;
+            const last   = hasValid ? values[lastIdx]  : null;
+            const first  = hasValid ? values[firstIdx] : null;
+            const trend  = (hasValid && first !== 0) ? (last - first) / Math.abs(first) : null;
+            const maxIdx  = hasValid ? validIdx[validVals.indexOf(max)] : 0;
+            const minIdx  = hasValid ? validIdx[validVals.indexOf(min)] : 0;
             const fmtStatDate = ds => ds
                 ? new Date(ds + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' })
                 : '';
 
-            const trendClass = trend >= 0 ? 'pos' : 'neg';
-            const trendSign  = trend >= 0 ? '+' : '';
+            const trendClass = trend === null ? '' : (trend >= 0 ? 'pos' : 'neg');
+            const trendSign  = trend === null ? '' : (trend >= 0 ? '+' : '');
+            const trendText  = trend === null ? '—' : `${trendSign}${(trend * 100).toLocaleString('es-AR', {minimumFractionDigits:1, maximumFractionDigits:1})} %`;
 
             // Estadístcas del eje secundario (si existe)
             const secArr = Array.isArray(secondary) ? secondary : (secondary ? [secondary] : []);
@@ -237,15 +247,21 @@ const Dashboard = (() => {
                             <button class="spark-modal-close" id="spark-modal-close-btn"><i class="bi bi-x-lg"></i></button>
                         </div>
                         <div class="spark-modal-stats">
+                            ${periodRate ? `
+                            <div class="spark-modal-stat">
+                                <span class="spark-modal-stat-label">${periodRate.label}</span>
+                                <span class="spark-modal-stat-val">${formatFn(periodRateVal)}</span>
+                            </div>` : ''}
                             <div class="spark-modal-stat">
                                 <span class="spark-modal-stat-label">Último</span>
                                 <span class="spark-modal-stat-val">${formatFn(last)}</span>
                                 <span class="stat-date">${fmtStatDate(dates[lastIdx])}</span>
                             </div>
+                            ${periodRate ? '' : `
                             <div class="spark-modal-stat">
                                 <span class="spark-modal-stat-label">Promedio</span>
                                 <span class="spark-modal-stat-val">${formatFn(avg)}</span>
-                            </div>
+                            </div>`}
                             <div class="spark-modal-stat">
                                 <span class="spark-modal-stat-label">Máximo</span>
                                 <span class="spark-modal-stat-val">${formatFn(max)}</span>
@@ -258,7 +274,7 @@ const Dashboard = (() => {
                             </div>
                             <div class="spark-modal-stat">
                                 <span class="spark-modal-stat-label">Tendencia</span>
-                                <span class="spark-modal-stat-val ${trendClass}">${trendSign}${(trend * 100).toLocaleString('es-AR', {minimumFractionDigits:1, maximumFractionDigits:1})} %</span>
+                                <span class="spark-modal-stat-val ${trendClass}">${trendText}</span>
                             </div>
                             ${secStatsHtml}
                         </div>
@@ -467,7 +483,7 @@ const Dashboard = (() => {
     })();
 
     /* ── Mini sparkline con tooltip (Canvas API) ──── */
-    function drawSparkline(canvasId, values, dates, color = '#4ade80', formatFn = fmt.money, secondary = null) {
+    function drawSparkline(canvasId, values, dates, color = '#4ade80', formatFn = fmt.money, secondary = null, periodRate = null) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || !values?.length) return;
 
@@ -485,7 +501,7 @@ const Dashboard = (() => {
             'spark-presencia'    : '% Presencialidad',
             'spark-conv'         : 'Conversión (Tickets / Ingresos)',
         };
-        SparkModal.register(canvasId, values, dates, color, formatFn, titleMap[canvasId] || canvasId, secondary);
+        SparkModal.register(canvasId, values, dates, color, formatFn, titleMap[canvasId] || canvasId, secondary, periodRate);
 
         // Botón expandir (se crea una vez por canvas)
         const wrap = canvas.parentElement;
@@ -502,69 +518,93 @@ const Dashboard = (() => {
         const ctx = canvas.getContext('2d');
         const W = canvas.width, H = canvas.height;
         ctx.clearRect(0, 0, W, H);
-        const min = Math.min(...values);
-        const max = Math.max(...values);
+
+        // Días sin dato (null/undefined) no aportan a la escala ni se dibujan
+        const validVals = values.filter(v => v !== null && v !== undefined);
+        const min = validVals.length ? Math.min(...validVals) : 0;
+        const max = validVals.length ? Math.max(...validVals) : 1;
         const range = max - min || 1;
         const n = values.length;
         const pts = values.map((v, i) => ({
             x: n > 1 ? (i / (n - 1)) * W : W / 2,
-            y: H - ((v - min) / range) * (H - 6) - 3,
+            y: (v === null || v === undefined) ? null : H - ((v - min) / range) * (H - 6) - 3,
             value: v,
             date: dates?.[i] || ''
         }));
+
+        // Agrupa corridas consecutivas de puntos con dato válido — un hueco (null)
+        // corta la curva en vez de conectarse a través de él.
+        const segments = [];
+        let _cur = [];
+        pts.forEach(p => {
+            if (p.y === null) { if (_cur.length) segments.push(_cur); _cur = []; }
+            else _cur.push(p);
+        });
+        if (_cur.length) segments.push(_cur);
+
+        const validPts   = pts.filter(p => p.y !== null);
+        const lastValidP = validPts[validPts.length - 1] || null;
 
         // ── Área con degradado vertical (más opaco arriba, transparente abajo) ──
         const areaGrad = ctx.createLinearGradient(0, 0, 0, H);
         areaGrad.addColorStop(0,   color + '40');
         areaGrad.addColorStop(0.6, color + '18');
         areaGrad.addColorStop(1,   color + '00');
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, H);
-        for (let i = 0; i < n - 1; i++) {
-            const cpx = (pts[i].x + pts[i+1].x) / 2;
-            ctx.bezierCurveTo(cpx, pts[i].y, cpx, pts[i+1].y, pts[i+1].x, pts[i+1].y);
-        }
-        ctx.lineTo(pts[n-1].x, H);
-        ctx.closePath();
-        ctx.fillStyle = areaGrad;
-        ctx.fill();
 
         // ── Línea con degradado horizontal (inicio más tenue → final más intenso) ──
         const lineGrad = ctx.createLinearGradient(0, 0, W, 0);
         lineGrad.addColorStop(0,   color + '66');
         lineGrad.addColorStop(0.5, color + 'bb');
         lineGrad.addColorStop(1,   color);
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 0; i < n - 1; i++) {
-            const cpx = (pts[i].x + pts[i+1].x) / 2;
-            ctx.bezierCurveTo(cpx, pts[i].y, cpx, pts[i+1].y, pts[i+1].x, pts[i+1].y);
-        }
-        ctx.strokeStyle = lineGrad;
-        ctx.lineWidth   = 2;
-        ctx.lineJoin    = 'round';
-        ctx.stroke();
 
-        // ── Puntos intermedios (pequeños, relleno blanco + borde color) ──
-        pts.slice(0, -1).forEach(p => {
+        function drawSegment(seg) {
+            if (seg.length < 2) return; // punto aislado: sin línea/área, solo el marcador
             ctx.beginPath();
-            ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-            ctx.fillStyle   = '#fff';
+            ctx.moveTo(seg[0].x, H);
+            for (let i = 0; i < seg.length - 1; i++) {
+                const cpx = (seg[i].x + seg[i+1].x) / 2;
+                ctx.bezierCurveTo(cpx, seg[i].y, cpx, seg[i+1].y, seg[i+1].x, seg[i+1].y);
+            }
+            ctx.lineTo(seg[seg.length - 1].x, H);
+            ctx.closePath();
+            ctx.fillStyle = areaGrad;
             ctx.fill();
-            ctx.strokeStyle = color + 'aa';
-            ctx.lineWidth   = 1.5;
-            ctx.stroke();
-        });
 
-        // ── Último punto destacado (más grande, color sólido) ──
-        const last = pts[n - 1];
-        ctx.beginPath();
-        ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle   = color;
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth   = 1.5;
-        ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(seg[0].x, seg[0].y);
+            for (let i = 0; i < seg.length - 1; i++) {
+                const cpx = (seg[i].x + seg[i+1].x) / 2;
+                ctx.bezierCurveTo(cpx, seg[i].y, cpx, seg[i+1].y, seg[i+1].x, seg[i+1].y);
+            }
+            ctx.strokeStyle = lineGrad;
+            ctx.lineWidth   = 2;
+            ctx.lineJoin    = 'round';
+            ctx.stroke();
+        }
+
+        function drawPoints(hoveredIdx = -1) {
+            pts.forEach((p, i) => {
+                if (p.y === null) return; // sin dato: no se dibuja punto para ese día
+                const isLast = p === lastValidP;
+                const isHov  = i === hoveredIdx;
+                const r = isLast ? (isHov ? 5.5 : 4) : (isHov ? 4 : 2);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.fillStyle   = (isLast || isHov) ? color : '#fff';
+                ctx.fill();
+                ctx.strokeStyle = (isLast || isHov) ? '#fff' : color + 'aa';
+                ctx.lineWidth   = 1.5;
+                ctx.stroke();
+            });
+        }
+
+        function render(hoveredIdx = -1) {
+            ctx.clearRect(0, 0, W, H);
+            segments.forEach(drawSegment);
+            drawPoints(hoveredIdx);
+        }
+
+        render();
 
         // ── Tooltip interactivo con highlight del punto más cercano ──
         let hoveredIdx = -1;
@@ -577,70 +617,21 @@ const Dashboard = (() => {
             document.body.appendChild(tooltip);
         }
 
-        function redrawHighlight(idx) {
-            ctx.clearRect(0, 0, W, H);
-
-            // re-área
-            ctx.beginPath();
-            ctx.moveTo(pts[0].x, H);
-            for (let i = 0; i < n - 1; i++) {
-                const cpx = (pts[i].x + pts[i+1].x) / 2;
-                ctx.bezierCurveTo(cpx, pts[i].y, cpx, pts[i+1].y, pts[i+1].x, pts[i+1].y);
-            }
-            ctx.lineTo(pts[n-1].x, H);
-            ctx.closePath();
-            ctx.fillStyle = areaGrad;
-            ctx.fill();
-
-            // re-línea
-            ctx.beginPath();
-            ctx.moveTo(pts[0].x, pts[0].y);
-            for (let i = 0; i < n - 1; i++) {
-                const cpx = (pts[i].x + pts[i+1].x) / 2;
-                ctx.bezierCurveTo(cpx, pts[i].y, cpx, pts[i+1].y, pts[i+1].x, pts[i+1].y);
-            }
-            ctx.strokeStyle = lineGrad;
-            ctx.lineWidth   = 2;
-            ctx.lineJoin    = 'round';
-            ctx.stroke();
-
-            // re-puntos
-            pts.slice(0, -1).forEach((p, i) => {
-                const isHov = i === idx;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, isHov ? 4 : 2, 0, Math.PI * 2);
-                ctx.fillStyle   = isHov ? color : '#fff';
-                ctx.fill();
-                ctx.strokeStyle = isHov ? '#fff' : color + 'aa';
-                ctx.lineWidth   = 1.5;
-                ctx.stroke();
-            });
-
-            // último punto
-            const isLastHov = idx === n - 1;
-            ctx.beginPath();
-            ctx.arc(last.x, last.y, isLastHov ? 5.5 : 4, 0, Math.PI * 2);
-            ctx.fillStyle   = color;
-            ctx.fill();
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth   = isLastHov ? 2 : 1.5;
-            ctx.stroke();
-        }
-
         canvas.onmousemove = (e) => {
             const rect = canvas.getBoundingClientRect();
             const x    = e.clientX - rect.left;
-            let newIdx = 0, minDist = Math.abs(x - pts[0].x);
+            let newIdx = -1, minDist = Infinity;
             pts.forEach((p, i) => {
+                if (p.y === null) return; // sin dato: no es candidato al hover
                 const d = Math.abs(x - p.x);
                 if (d < minDist) { minDist = d; newIdx = i; }
             });
-            if (minDist > 20) {
+            if (newIdx === -1 || minDist > 20) {
                 tooltip.style.display = 'none';
-                if (hoveredIdx !== -1) { hoveredIdx = -1; redrawHighlight(-1); }
+                if (hoveredIdx !== -1) { hoveredIdx = -1; render(-1); }
                 return;
             }
-            if (newIdx !== hoveredIdx) { hoveredIdx = newIdx; redrawHighlight(newIdx); }
+            if (newIdx !== hoveredIdx) { hoveredIdx = newIdx; render(newIdx); }
             const p   = pts[newIdx];
             const fv  = formatFn(p.value);
             const fd  = p.date ? new Date(p.date + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '';
@@ -1426,7 +1417,7 @@ const Dashboard = (() => {
                 drawSparkline('spark-conv', serieConv, serieDates, '#ec4899', fmt.pct, [
                     { values: serieIngresos, color: '#38bdf8', label: 'Ingresos', formatFn: fmt.num },
                     { values: serieTickets,  color: '#8b5cf6', label: 'Tickets',  formatFn: fmt.num, hideStats: true },
-                ]);
+                ], { value: act.conversion, label: 'Tasa de Conversión' });
 
                 apiFetch('kpis.php', { action: 'conversion_horas' })
                     .then(hd => { if (hd?.horas?.length) SparkModal.setHoras('spark-conv', hd.horas); })
@@ -1484,7 +1475,7 @@ const Dashboard = (() => {
         const el = document.getElementById(id);
         if (!el) return;
         el.textContent = text;
-        if (varVal !== undefined) {
+        if (varVal !== undefined && varVal !== null) {
             el.className = el.className.replace(/\b(pos|neg)\b/g, '');
             el.classList.add(varVal >= 0 ? 'pos' : 'neg');
         }

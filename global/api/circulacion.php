@@ -98,7 +98,9 @@ try {
             'ingresos'            => $varFn($resumenAct['ingresos'],            $resumenPrev['ingresos']),
             'tickets'             => $varFn($resumenAct['tickets'],             $resumenPrev['tickets']),
             'atraccion'           => $varFn($resumenAct['atraccion'],           $resumenPrev['atraccion']),
-            'conversion'          => $varFn($resumenAct['conversion'],          $resumenPrev['conversion']),
+            'conversion'          => ($resumenAct['conversion'] === null || $resumenPrev['conversion'] === null)
+                                        ? null
+                                        : $varFn($resumenAct['conversion'], $resumenPrev['conversion']),
             'venta_por_visitante' => $varFn($resumenAct['venta_por_visitante'], $resumenPrev['venta_por_visitante']),
         ],
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
