@@ -533,16 +533,19 @@ class DashboardDB
      *  SERIE TEMPORAL (para mini-charts)
      * ────────────────────────────────────────────── */
 
-    public function getSerieFacturacion(string $desde, string $hasta, ?int $nroSucurs = null, string $vendedor = '%', string $rubro = '%', bool $lightweight = false): array
+    public function getSerieFacturacion(string $desde, string $hasta, $nroSucurs = null, string $vendedor = '%', $rubro = '%', bool $lightweight = false): array
     {
         $cv   = $this->campoVendedor;
-        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
-        $vend = $vendedor !== '%' ? [$vendedor] : [];
-        $rub  = $rubro !== '%' ? [$rubro] : [];
-
-        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
         $sfVS = $vendedor !== '%' ? "AND s.{$cv} = ?" : "";
-        $sfRS = $rubro !== '%' ? "AND s.RUBRO = ?" : "";
+        
+        [$rubVals, $rubClause] = $this->parseFilter($rubro);
+        $sfRS = $rubClause ? "AND s.RUBRO $rubClause" : "";
+
+        $suc  = $sucVals;
+        $vend = $vendedor !== '%' ? [$vendedor] : [];
+        $rub  = $rubVals;
 
         $from = $this->fromVentasSucursales();
         // Modo lightweight: solo facturación diaria (sin tickets, incremental ni ingresos)
@@ -585,7 +588,7 @@ class DashboardDB
         $rows = $this->query($sql, array_merge([$desde, $hasta], $suc, $vend, $rub));
 
         // Tickets por fecha (count, suma, 2do y 3er producto en una sola query con LEFT JOIN)
-        $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
+        $sfT  = $sucClause ? "AND t.NRO_SUCURS $sucClause" : "";
         $sfVT = $vendedor !== '%' ? "AND t.{$cv} = ?" : "";
         $sqlT = "
             SELECT
@@ -609,7 +612,7 @@ class DashboardDB
         }
 
         // Incremental por fecha
-        $sfP  = $nroSucurs !== null ? "AND p.NRO_SUCURS = ?" : "";
+        $sfP  = $sucClause ? "AND p.NRO_SUCURS $sucClause" : "";
         $sfVP = $vendedor !== '%' ? "AND p.{$cv} = ?" : "";
         $sqlIncr = "
             SELECT
@@ -628,7 +631,7 @@ class DashboardDB
         }
 
         // Ingresos por fecha (solo filtro por sucursal, es dato de local completo)
-        $sfIn  = $nroSucurs !== null ? "AND ig.NRO_SUCURS = ?" : "";
+        $sfIn  = $sucClause ? "AND ig.NRO_SUCURS $sucClause" : "";
         $condFechaHora = $this->isUruguay ? "" : "AND ig.FECHA_HORA IS NOT NULL";
         $sqlIn = "
             SELECT
@@ -649,9 +652,11 @@ class DashboardDB
         // Presencialidad por fecha (solo a nivel sucursal)
         $sfH = "";
         $pH = [$desde, $hasta];
-        if ($nroSucurs !== null) {
-            $sfH = "AND m.nro_sucursal = ?";
-            $pH[] = $nroSucurs;
+        [$sucValsH, $sucClauseH] = $this->parseFilter($nroSucurs, true);
+        $sfH = "";
+        if ($sucClauseH) {
+            $sfH = "AND m.nro_sucursal $sucClauseH";
+            foreach ($sucValsH as $sVal) $pH[] = $sVal;
         }
         $sqlH = "
             SELECT
@@ -729,11 +734,12 @@ class DashboardDB
     /**
      * Objetivo diario del período, como mapa fecha → importe.
      */
-    public function getSerieObjetivo(string $desde, string $hasta, ?int $nroSucurs = null): array
+    public function getSerieObjetivo(string $desde, string $hasta, $nroSucurs = null): array
     {
-        $sfO    = $nroSucurs !== null ? "AND o.NRO_SUCURSAL = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfO    = $sucClause ? "AND o.NRO_SUCURSAL $sucClause" : "";
         $params = [$desde, $hasta];
-        if ($nroSucurs !== null) $params[] = $nroSucurs;
+        foreach ($sucVals as $sVal) $params[] = $sVal;
 
         $sql = "
             SELECT
@@ -766,27 +772,31 @@ class DashboardDB
     public function getKPIsBulk(
         string $da, string $ha,
         string $dp, string $hp,
-        ?int   $nroSucurs = null,
+        $nroSucurs = null,
         string $vendedor  = '%',
-        string $rubro     = '%'
+        $rubro     = '%'
     ): array {
         $cv   = $this->campoVendedor;
         // Límites exclusivos: evita DATEADD en SQL y facilita uso de índices
         $haX  = (new DateTime($ha))->modify('+1 day')->format('Y-m-d');
         $hpX  = (new DateTime($hp))->modify('+1 day')->format('Y-m-d');
 
-        $sfS  = $nroSucurs !== null ? 'AND NRO_SUCURS = ?'    : '';
-        $sfV  = $vendedor  !== '%'  ? "AND {$cv} = ?"         : '';
-        $sfR  = $rubro     !== '%'  ? 'AND RUBRO = ?'          : '';
-        $sfST = $nroSucurs !== null ? 'AND NRO_SUCURS = ?'    : '';
-        $sfVT = $vendedor  !== '%'  ? "AND {$cv} = ?"         : '';
-        $sfSP = $nroSucurs !== null ? 'AND NRO_SUCURS = ?'    : '';
-        $sfVP = $vendedor  !== '%'  ? "AND {$cv} = ?"         : '';
-        $sfSO = $nroSucurs !== null ? 'AND NRO_SUCURSAL = ?'  : '';
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS  = $sucClause ? "AND NRO_SUCURS $sucClause"    : '';
+        $sfST = $sucClause ? "AND NRO_SUCURS $sucClause"    : '';
+        $sfSP = $sucClause ? "AND NRO_SUCURS $sucClause"    : '';
+        $sfSO = $sucClause ? "AND NRO_SUCURSAL $sucClause"  : '';
 
-        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
+        $sfV  = $vendedor  !== '%'  ? "AND {$cv} = ?"         : '';
+        $sfVT = $vendedor  !== '%'  ? "AND {$cv} = ?"         : '';
+        $sfVP = $vendedor  !== '%'  ? "AND {$cv} = ?"         : '';
+
+        [$rubVals, $rubClause] = $this->parseFilter($rubro);
+        $sfR  = $rubClause ? "AND RUBRO $rubClause"          : '';
+
+        $suc  = $sucVals;
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $rub  = $rubro     !== '%'  ? [$rubro]     : [];
+        $rub  = $rubVals;
 
         $from = $this->fromVentasSucursales();
         // ── Q1: BI_SALES_SUCURSALES — un scan para act + prev + benchmark ──
@@ -919,8 +929,15 @@ class DashboardDB
         $r5 = $this->queryOne($q5, $p5) ?? [];
 
         // ── Q6: sistemas.dbo.FP_GESTION_HORARIOS — planificacion horaria y ausencias ──
-        $sfH_act = $nroSucurs !== null ? "m.nro_sucursal = ? AND" : "";
-        $sfH_prev = $nroSucurs !== null ? "m.nro_sucursal = ? AND" : "";
+        $p6 = [];
+        $sfH_act = $this->buildNroSucursalInClause('m.nro_sucursal', $nroSucurs, $p6);
+        $p6[] = $da; $p6[] = $haX;
+        $sfH_prev = $this->buildNroSucursalInClause('m.nro_sucursal', $nroSucurs, $p6);
+        $p6[] = $dp; $p6[] = $hpX;
+        $p6[] = $da; $p6[] = $haX;
+        $p6[] = $da; $p6[] = $haX;
+        $p6[] = $dp; $p6[] = $hpX;
+
         $q6 = "
             SELECT
                 ISNULL(SUM(CASE WHEN is_a=1 THEN 1 ELSE 0 END),0) AS hrs_act,
@@ -948,14 +965,6 @@ class DashboardDB
                 WHERE (h.FECHA >= ? AND h.FECHA < ?) OR (h.FECHA >= ? AND h.FECHA < ?)
             ) t
         ";
-        $p6 = [];
-        if ($nroSucurs !== null) { $p6[] = $nroSucurs; }
-        $p6[] = $da; $p6[] = $haX;
-        if ($nroSucurs !== null) { $p6[] = $nroSucurs; }
-        $p6[] = $dp; $p6[] = $hpX;
-        $p6[] = $da; $p6[] = $haX;
-        $p6[] = $da; $p6[] = $haX;
-        $p6[] = $dp; $p6[] = $hpX;
 
         $r6 = $this->queryOne($q6, $p6) ?? [];
 
@@ -1355,4 +1364,38 @@ class DashboardDB
         }
         return $res;
     }
+
+    private function parseFilter($val, bool $isNumeric = false): array
+    {
+        if ($val === null || $val === '' || $val === '%' || $val === 'Todas' || $val === 'Todos') {
+            return [[], ""];
+        }
+        if (is_string($val) && strpos($val, ',') !== false) {
+            $parts = explode(',', $val);
+            if ($isNumeric) {
+                $parts = array_map('intval', $parts);
+            }
+            return [$parts, "IN (" . implode(',', array_fill(0, count($parts), '?')) . ")"];
+        }
+        $singleVal = $isNumeric ? (int)$val : $val;
+        return [[$singleVal], "= ?"];
+    }
+
+    private function buildNroSucursalInClause(string $column, $val, array &$params): string
+    {
+        if ($val === null || $val === '' || $val === 'Todas') {
+            return '';
+        }
+        if (is_string($val) && strpos($val, ',') !== false) {
+            $parts = array_map('intval', explode(',', $val));
+            $placeholders = implode(',', array_fill(0, count($parts), '?'));
+            foreach ($parts as $p) {
+                $params[] = $p;
+            }
+            return "$column IN ($placeholders) AND";
+        }
+        $params[] = (int)$val;
+        return "$column = ? AND";
+    }
 }
+

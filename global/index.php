@@ -120,7 +120,7 @@ try {
     <!-- ══ TOOLBAR ══════════════════════════════════════════════════════ -->
     <div class="toolbar">
         <label for="sel-sucursal">Sucursal</label>
-        <select id="sel-sucursal">
+        <select id="sel-sucursal" multiple>
             <option value="">Todas</option>
         </select>
 
@@ -216,7 +216,7 @@ try {
         </select>
 
         <label for="sel-rubro">Rubro</label>
-        <select id="sel-rubro">
+        <select id="sel-rubro" multiple>
             <option value="%">Todos</option>
         </select>
 
@@ -281,6 +281,12 @@ try {
     <!-- ══ PESTAÑA: KPIs ═══════════════════════════════════════════════ -->
     <div id="tab-kpis" class="tab-pane active" role="tabpanel" aria-labelledby="tab-btn-kpis">
         <main class="dash-content">
+
+            <div class="kpis-toolbar">
+                <button class="eye-toggle-btn" id="btn-toggle-importes" title="Ocultar importes">
+                    <i class="bi bi-eye"></i>
+                </button>
+            </div>
 
             <!-- ── RESUMEN PRINCIPAL ──────────────────────────────── -->
             <div class="summary-row">

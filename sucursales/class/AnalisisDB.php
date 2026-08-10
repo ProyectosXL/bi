@@ -81,17 +81,22 @@ class AnalisisDB
     public function getJerarquiaDestinoRubroCategoria(
         string $desde,
         string $hasta,
-        ?int   $nroSucurs = null,
+        $nroSucurs = null,
         string $vendedor  = '%',
-        string $rubro     = '%'
+        $rubro     = '%'
     ): array {
         $cv   = $this->campoVendedor;
-        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
+        
         $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $sfRS = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
-        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
+        
+        [$rubVals, $rubClause] = $this->parseFilter($rubro);
+        $sfRS = $rubClause ? "AND s.RUBRO $rubClause" : "";
+        
+        $suc  = $sucVals;
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $rub  = $rubro     !== '%'  ? [$rubro]     : [];
+        $rub  = $rubVals;
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
@@ -231,17 +236,22 @@ class AnalisisDB
     public function getVendedoresAnalisis(
         string $desde,
         string $hasta,
-        ?int   $nroSucurs = null,
+        $nroSucurs = null,
         string $vendedor  = '%',
-        string $rubro     = '%'
+        $rubro     = '%'
     ): array {
         $cv   = $this->campoVendedor;
-        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
+        
         $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $sfRS = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
-        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
+        
+        [$rubVals, $rubClause] = $this->parseFilter($rubro);
+        $sfRS = $rubClause ? "AND s.RUBRO $rubClause" : "";
+        
+        $suc  = $sucVals;
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $rub  = $rubro     !== '%'  ? [$rubro]     : [];
+        $rub  = $rubVals;
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
@@ -324,16 +334,18 @@ class AnalisisDB
     public function getRubrosCards(
         string $desde,
         string $hasta,
-        ?int   $nroSucurs = null,
+        $nroSucurs = null,
         array  $targetRubros = [],
         string $vendedor  = '%'
     ): array {
         if (empty($targetRubros)) return [];
 
         $cv   = $this->campoVendedor;
-        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
+        
         $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
+        $suc  = $sucVals;
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
@@ -386,26 +398,31 @@ class AnalisisDB
      * @return array ['años' => [...], 'meses' => [...], 'series' => [año => [12 valores]]]
      */
     public function getEvolucionMensual(
-        ?int   $nroSucurs = null,
+        $nroSucurs = null,
         string $vendedor  = '%',
-        string $rubro     = '%',
+        $rubro     = '%',
         string $tipo      = 'unidades'
     ): array {
         $cv   = $this->campoVendedor;
-        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
+        
         $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $sfRS = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
-        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
+        
+        [$rubVals, $rubClause] = $this->parseFilter($rubro);
+        $sfRS = $rubClause ? "AND s.RUBRO $rubClause" : "";
+        
+        $suc  = $sucVals;
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $rub  = $rubro     !== '%'  ? [$rubro]     : [];
+        $rub  = $rubVals;
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
         if ($tipo === 'tickets') {
             // Tickets FAC
-            $sfT  = $nroSucurs !== null ? "AND t.NRO_SUCURS = ?" : "";
+            $sfT  = $sucClause ? "AND t.NRO_SUCURS $sucClause" : "";
             $sfVT = $vendedor  !== '%'  ? "AND t.{$cv} = ?" : "";
-            $suc2  = $nroSucurs !== null ? [$nroSucurs] : [];
+            $suc2  = $sucVals;
             $vend2 = $vendedor  !== '%'  ? [$vendedor]  : [];
             [$sfGT, $pGT] = $this->grupoFiltro('t');
             $sfT .= ' ' . $sfGT; $suc2 = array_merge($suc2, $pGT);
@@ -501,13 +518,15 @@ class AnalisisDB
     public function getRankingRubros(
         string $desde,
         string $hasta,
-        ?int   $nroSucurs = null,
+        $nroSucurs = null,
         string $vendedor  = '%'
     ): array {
         $cv   = $this->campoVendedor;
-        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
+        
         $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
+        $suc  = $sucVals;
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
@@ -535,15 +554,22 @@ class AnalisisDB
     public function getRankingCategorias(
         string $desde,
         string $hasta,
-        ?int   $nroSucurs = null,
+        $nroSucurs = null,
         string $vendedor  = '%',
-        string $rubro     = ''
+        $rubro     = ''
     ): array {
         $cv   = $this->campoVendedor;
-        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
+        
         $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $suc  = $nroSucurs !== null ? [$nroSucurs] : [];
+        
+        [$rubVals, $rubClause] = $this->parseFilter($rubro);
+        $sfR = $rubClause ? "AND s.RUBRO $rubClause" : "";
+        
+        $suc  = $sucVals;
         $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
+        $rub  = $rubVals;
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
 
@@ -555,13 +581,13 @@ class AnalisisDB
                 ISNULL(SUM(s.IMPORTE), 0)  AS facturacion
             FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              AND s.RUBRO = ?
+              {$sfR}
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
               {$sfS} {$sfVS}
             GROUP BY ISNULL(s.CATEGORIA, 'SIN CATEGORÍA')
             ORDER BY unidades DESC
         ";
-        return $this->query($sql, array_merge([$desde, $hasta, $rubro], $suc, $vend));
+        return $this->query($sql, array_merge([$desde, $hasta], $rub, $suc, $vend));
     }
 
     /* ──────────────────────────────────────────────
@@ -570,17 +596,22 @@ class AnalisisDB
 
     public function getRubrosProducto(
         string $desde, string $hasta,
-        ?int $nroSucurs = null, string $vendedor = '%',
-        string $rubro = '%', string $categoria = '%'
+        $nroSucurs = null, string $vendedor = '%',
+        $rubro = '%', string $categoria = '%'
     ): array {
         $cv   = $this->campoVendedor;
-        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
+        
         $sfV  = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $sfR  = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
+        
+        [$rubVals, $rubClause] = $this->parseFilter($rubro);
+        $sfR = $rubClause ? "AND s.RUBRO $rubClause" : "";
+        
         $sfC  = $categoria !== '%'  ? "AND s.CATEGORIA = ?" : "";
-        $pS   = $nroSucurs !== null ? [$nroSucurs] : [];
+        $pS   = $sucVals;
         $pV   = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $pR   = $rubro     !== '%'  ? [$rubro]     : [];
+        $pR   = $rubVals;
         $pC   = $categoria !== '%'  ? [$categoria] : [];
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
@@ -603,17 +634,22 @@ class AnalisisDB
 
     public function getColoresProducto(
         string $desde, string $hasta,
-        ?int $nroSucurs = null, string $vendedor = '%',
-        string $rubro = '%', string $categoria = '%'
+        $nroSucurs = null, string $vendedor = '%',
+        $rubro = '%', string $categoria = '%'
     ): array {
         $cv   = $this->campoVendedor;
-        $sfS  = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
+        
         $sfV  = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $sfR  = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
+        
+        [$rubVals, $rubClause] = $this->parseFilter($rubro);
+        $sfR = $rubClause ? "AND s.RUBRO $rubClause" : "";
+        
         $sfC  = $categoria !== '%'  ? "AND s.CATEGORIA = ?" : "";
-        $pS   = $nroSucurs !== null ? [$nroSucurs] : [];
+        $pS   = $sucVals;
         $pV   = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $pR   = $rubro     !== '%'  ? [$rubro]     : [];
+        $pR   = $rubVals;
         $pC   = $categoria !== '%'  ? [$categoria] : [];
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
@@ -639,14 +675,17 @@ class AnalisisDB
 
     public function getSucursalesProducto(
         string $desde, string $hasta,
-        string $vendedor = '%', string $rubro = '%', string $categoria = '%'
+        string $vendedor = '%', $rubro = '%', string $categoria = '%'
     ): array {
         $cv  = $this->campoVendedor;
         $sfV = $vendedor  !== '%' ? "AND s.{$cv} = ?" : "";
-        $sfR = $rubro     !== '%' ? "AND s.RUBRO = ?" : "";
+        
+        [$rubVals, $rubClause] = $this->parseFilter($rubro);
+        $sfR = $rubClause ? "AND s.RUBRO $rubClause" : "";
+        
         $sfC = $categoria !== '%' ? "AND s.CATEGORIA = ?" : "";
         $pV  = $vendedor  !== '%' ? [$vendedor]  : [];
-        $pR  = $rubro     !== '%' ? [$rubro]     : [];
+        $pR  = $rubVals;
         $pC  = $categoria !== '%' ? [$categoria] : [];
         [$sfG, $pG] = $this->grupoFiltro('s');
 
@@ -667,15 +706,20 @@ class AnalisisDB
 
     public function getTopCategoriasProducto(
         string $desde, string $hasta,
-        ?int $nroSucurs = null, string $vendedor = '%', string $rubro = '%'
+        $nroSucurs = null, string $vendedor = '%', $rubro = '%'
     ): array {
         $cv  = $this->campoVendedor;
-        $sfS = $nroSucurs !== null ? "AND s.NRO_SUCURS = ?" : "";
+        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
+        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
+        
         $sfV = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $sfR = $rubro     !== '%'  ? "AND s.RUBRO = ?" : "";
-        $pS  = $nroSucurs !== null ? [$nroSucurs] : [];
+        
+        [$rubVals, $rubClause] = $this->parseFilter($rubro);
+        $sfR = $rubClause ? "AND s.RUBRO $rubClause" : "";
+        
+        $pS  = $sucVals;
         $pV  = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $pR  = $rubro     !== '%'  ? [$rubro]     : [];
+        $pR  = $rubVals;
         [$sfG, $pG] = $this->grupoFiltro('s');
         $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
 
@@ -782,4 +826,21 @@ class AnalisisDB
         $rows = $this->query($sql, $params);
         return $rows[0] ?? null;
     }
+
+    private function parseFilter($val, bool $isNumeric = false): array
+    {
+        if ($val === null || $val === '' || $val === '%' || $val === 'Todas' || $val === 'Todos') {
+            return [[], ""];
+        }
+        if (is_string($val) && strpos($val, ',') !== false) {
+            $parts = explode(',', $val);
+            if ($isNumeric) {
+                $parts = array_map('intval', $parts);
+            }
+            return [$parts, "IN (" . implode(',', array_fill(0, count($parts), '?')) . ")"];
+        }
+        $singleVal = $isNumeric ? (int)$val : $val;
+        return [[$singleVal], "= ?"];
+    }
 }
+

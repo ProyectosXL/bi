@@ -72,6 +72,7 @@ const Dashboard = (() => {
     let _tccActual    = 1;    // última TCC disponible, para display en el label
     let _moneda       = 'ARS';
     let _lastPeriodo  = null; // d.periodo del último loadAll (desde_act, hasta_act, etc.)
+    let _ocultarImportes = localStorage.getItem('bi_ocultar_importes') === '1';
 
     /**
      * Retorna la TCC para un mes dado (formato 'YYYY-MM').
@@ -123,6 +124,12 @@ const Dashboard = (() => {
         };
     })();
 
+    /* ── Enmascarado de importes (solo pestaña KPIs — no tocar fmt.money/moneyK,
+       que son usados por otras pestañas vía Dashboard.fmt) ── */
+    const MASK_IMPORTE = '•••••';
+    const moneyOrMask  = (n, d) => _ocultarImportes ? MASK_IMPORTE : fmt.money(n, d);
+    const moneyKOrMask = (n)    => _ocultarImportes ? MASK_IMPORTE : fmt.moneyK(n);
+
     /* ── Estado "solo activas" ───────────────── */
     let _sucursalesActivasIds = new Set();
 
@@ -134,6 +141,20 @@ const Dashboard = (() => {
         return _sucursalesActivasIds;
     }
 
+    function getSelectedValues(id) {
+        const el = $(id);
+        if (!el) return '';
+        if (el.multiple) {
+            const vals = Array.from(el.options).filter(o => o.selected).map(o => o.value);
+            if (vals.includes('') || vals.includes('%')) {
+                return vals.includes('%') ? '%' : '';
+            }
+            const filtered = vals.filter(v => v !== '' && v !== '%');
+            return filtered.length > 0 ? filtered.join(',') : (id === 'sel-rubro' ? '%' : '');
+        }
+        return el.value ?? '';
+    }
+
     /* ── Leer parámetros del DOM ─────────────── */
     function getParams(extra = {}) {
         const cfg = window.BI_CONFIG ?? { isGrupo: false, esGrupo: false, sucursalesGrupo: [] };
@@ -143,8 +164,8 @@ const Dashboard = (() => {
             origen      : cfg.isGrupo ? 'franquicias' : (origenActive?.dataset.origen ?? 'argentina'),
             periodo     : ($('sel-periodo')?.value     ?? 'mes_actual'),
             vendedor    : ($('sel-vendedor')?.value    ?? '%'),
-            rubro       : ($('sel-rubro')?.value       ?? '%'),
-            sucursal    : ($('sel-sucursal')?.value    ?? ''),
+            rubro       : getSelectedValues('sel-rubro') || '%',
+            sucursal    : getSelectedValues('sel-sucursal') || '',
             grupo       : cfg.isGrupo ? '' : ($('sel-grupo')?.value       ?? ''),
             tipo_tienda : cfg.isGrupo ? '' : ($('sel-tipo-tienda')?.value ?? ''),
             canal       : cfg.isGrupo ? '' : ($('sel-canal')?.value       ?? ''),
@@ -963,11 +984,11 @@ const Dashboard = (() => {
 
         const dataRows = sorted.map(r => `<tr>
             <td>${getSucNombre(r.nro_sucurs)}</td>
-            <td style="text-align:right">${fmt.money(r.facturacion)}</td>
-            <td style="text-align:right">${r.facturacion_prev ? fmt.money(r.facturacion_prev) : '—'}</td>
+            <td style="text-align:right">${moneyOrMask(r.facturacion)}</td>
+            <td style="text-align:right">${r.facturacion_prev ? moneyOrMask(r.facturacion_prev) : '—'}</td>
             <td style="text-align:right">${iconVar(r.var_facturacion)}</td>
-            <td style="text-align:right">${r.objetivo_total ? fmt.money(r.objetivo_total) : '—'}</td>
-            <td style="text-align:right">${r.objetivo_fecha ? fmt.money(r.objetivo_fecha) : '—'}</td>
+            <td style="text-align:right">${r.objetivo_total ? moneyOrMask(r.objetivo_total) : '—'}</td>
+            <td style="text-align:right">${r.objetivo_fecha ? moneyOrMask(r.objetivo_fecha) : '—'}</td>
             <td style="text-align:right">${iconVar(r.desvio)}</td>
         </tr>`).join('');
 
@@ -979,11 +1000,11 @@ const Dashboard = (() => {
         const totDesv   = totObjF > 0 ? (totFact - totObjF) / totObjF : null;
         const totalsRow = `<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--surface-1)">
             <td>TOTAL</td>
-            <td style="text-align:right">${fmt.money(totFact)}</td>
-            <td style="text-align:right">${totPrev ? fmt.money(totPrev) : '—'}</td>
+            <td style="text-align:right">${moneyOrMask(totFact)}</td>
+            <td style="text-align:right">${totPrev ? moneyOrMask(totPrev) : '—'}</td>
             <td style="text-align:right">—</td>
-            <td style="text-align:right">${totObjT ? fmt.money(totObjT) : '—'}</td>
-            <td style="text-align:right">${totObjF ? fmt.money(totObjF) : '—'}</td>
+            <td style="text-align:right">${totObjT ? moneyOrMask(totObjT) : '—'}</td>
+            <td style="text-align:right">${totObjF ? moneyOrMask(totObjF) : '—'}</td>
             <td style="text-align:right">${iconVar(totDesv)}</td>
         </tr>`;
 
@@ -1177,8 +1198,10 @@ const Dashboard = (() => {
         sel._ssInit = true;
         sel.style.display = 'none';
 
+        const isMultiple = sel.multiple;
+
         const wrap = document.createElement('div');
-        wrap.className = 'ss-wrap';
+        wrap.className = 'ss-wrap' + (isMultiple ? ' ss-multi' : '');
         sel.parentNode.insertBefore(wrap, sel);
         wrap.appendChild(sel);
 
@@ -1186,7 +1209,7 @@ const Dashboard = (() => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'ss-btn';
-        btn.innerHTML = `<span class="ss-txt">${sel.options[0]?.text ?? ''}</span><span class="ss-arrow">▾</span>`;
+        btn.innerHTML = `<span class="ss-txt"></span><span class="ss-arrow">▾</span>`;
         wrap.insertBefore(btn, sel);
 
         // Panel con búsqueda + lista
@@ -1199,24 +1222,90 @@ const Dashboard = (() => {
         const list = document.createElement('div');
         list.className = 'ss-list';
         panel.appendChild(input);
+
+        // Select All / Deselect All bar for multiple select
+        if (isMultiple) {
+            const actionsBar = document.createElement('div');
+            actionsBar.style.cssText = 'display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #e5e9f2;font-size:0.75rem;font-weight:600;';
+            const linkAll = document.createElement('a');
+            linkAll.href = '#';
+            linkAll.textContent = 'Seleccionar todos';
+            linkAll.style.color = 'var(--accent, #2563eb)';
+            const linkNone = document.createElement('a');
+            linkNone.href = '#';
+            linkNone.textContent = 'Excluir todos';
+            linkNone.style.color = '#dc2626';
+
+            linkAll.addEventListener('click', e => {
+                e.preventDefault();
+                Array.from(sel.options).forEach(o => {
+                    if (o.value !== '' && o.value !== '%') o.selected = true;
+                    else o.selected = false;
+                });
+                buildList(input.value.trim());
+                sel._ssSync();
+                sel.dispatchEvent(new Event('change'));
+            });
+
+            linkNone.addEventListener('click', e => {
+                e.preventDefault();
+                Array.from(sel.options).forEach(o => {
+                    o.selected = (o.value === '' || o.value === '%');
+                });
+                buildList(input.value.trim());
+                sel._ssSync();
+                sel.dispatchEvent(new Event('change'));
+            });
+
+            actionsBar.appendChild(linkAll);
+            actionsBar.appendChild(linkNone);
+            panel.appendChild(actionsBar);
+            
+            panel.addEventListener('click', e => e.stopPropagation());
+        }
+
         panel.appendChild(list);
         wrap.appendChild(panel);
 
         function buildList(q) {
             const opts = Array.from(sel.options);
+            const listOpts = isMultiple ? opts.filter(o => o.value !== '' && o.value !== '%') : opts;
             const filtered = q
-                ? opts.filter(o => o.text.toLowerCase().includes(q.toLowerCase()))
-                : opts;
+                ? listOpts.filter(o => o.text.toLowerCase().includes(q.toLowerCase()))
+                : listOpts;
             list.innerHTML = '';
             filtered.forEach(opt => {
                 const item = document.createElement('div');
-                item.className = 'ss-item' + (opt.value === sel.value ? ' ss-selected' : '');
-                item.textContent = opt.text;
-                item.addEventListener('click', () => {
-                    sel.value = opt.value;
-                    btn.querySelector('.ss-txt').textContent = opt.text;
-                    wrap.classList.remove('open');
-                    input.value = '';
+                const isSelected = opt.selected;
+                item.className = 'ss-item' + (isSelected ? ' ss-selected' : '');
+
+                if (isMultiple) {
+                    item.innerHTML = `<label style="display:flex;align-items:center;width:100%;margin:0;cursor:pointer;"><input type="checkbox" class="ss-checkbox" ${isSelected ? 'checked' : ''} style="margin-right:8px;pointer-events:none;"><span class="ss-label-chk">${opt.text}</span></label>`;
+                } else {
+                    item.textContent = opt.text;
+                }
+
+                item.addEventListener('click', (e) => {
+                    if (isMultiple) {
+                        e.stopPropagation();
+                        opt.selected = !opt.selected;
+                        
+                        // If no specific options are selected, select the default option
+                        const anySelected = opts.filter(o => o.value !== '' && o.value !== '%').some(o => o.selected);
+                        opts.forEach(o => {
+                            if (o.value === '' || o.value === '%') o.selected = !anySelected;
+                        });
+
+                        buildList(input.value.trim());
+                        sel._ssSync();
+                        sel.dispatchEvent(new Event('change'));
+                    } else {
+                        sel.value = opt.value;
+                        btn.querySelector('.ss-txt').textContent = opt.text;
+                        wrap.classList.remove('open');
+                        input.value = '';
+                        sel.dispatchEvent(new Event('change'));
+                    }
                 });
                 list.appendChild(item);
             });
@@ -1244,8 +1333,21 @@ const Dashboard = (() => {
 
         // Sincronizar texto del botón desde el valor actual del select
         sel._ssSync = () => {
-            const opt = Array.from(sel.options).find(o => o.value === sel.value);
-            btn.querySelector('.ss-txt').textContent = opt?.text ?? '';
+            const selectedOpts = Array.from(sel.options).filter(o => o.selected);
+            if (isMultiple) {
+                const specificSelected = selectedOpts.filter(o => o.value !== '' && o.value !== '%');
+                if (specificSelected.length === 0) {
+                    const defaultOpt = Array.from(sel.options).find(o => o.value === '' || o.value === '%');
+                    btn.querySelector('.ss-txt').textContent = defaultOpt?.text ?? 'Todas';
+                } else if (specificSelected.length === 1) {
+                    btn.querySelector('.ss-txt').textContent = specificSelected[0].text;
+                } else {
+                    btn.querySelector('.ss-txt').textContent = `${specificSelected.length} seleccionadas`;
+                }
+            } else {
+                const opt = selectedOpts[0];
+                btn.querySelector('.ss-txt').textContent = opt?.text ?? '';
+            }
         };
     }
 
@@ -1307,14 +1409,14 @@ const Dashboard = (() => {
         const a = d.actual, p = d.previo, v = d.variacion;
 
         // Ventas
-        setText('fact-act',  fmt.moneyK(a.facturacion));
+        setText('fact-act',  moneyKOrMask(a.facturacion));
         setVar ('fact-var',  v.facturacion);
-        setText('fact-prev', fmt.moneyK(p.facturacion));
+        setText('fact-prev', moneyKOrMask(p.facturacion));
 
         // Objetivo
-        setText('obj-act',   fmt.moneyK(a.objetivo));
+        setText('obj-act',   moneyKOrMask(a.objetivo));
         setVar ('obj-var',   v.objetivo);
-        setText('obj-total', fmt.moneyK(a.objetivo_total));
+        setText('obj-total', moneyKOrMask(a.objetivo_total));
 
         // Unidades
         setText('unid-act',  fmt.num(a.unidades));
@@ -1327,11 +1429,11 @@ const Dashboard = (() => {
         setText('tickets-prev', fmt.num(p.tickets));
 
         // KPI cards
-        setText('card-tprom-val',   fmt.money(a.ticket_promedio));
-        setKpiVar('card-tprom-var', v.ticket_promedio,     fmt.money(p.ticket_promedio),     fmt.money(a.ticket_promedio));
+        setText('card-tprom-val',   moneyOrMask(a.ticket_promedio));
+        setKpiVar('card-tprom-var', v.ticket_promedio,     moneyOrMask(p.ticket_promedio),     moneyOrMask(a.ticket_promedio));
 
-        setText('card-tp2do-val',   fmt.money(a.ticket_promedio_2do));
-        setKpiVar('card-tp2do-var', v.ticket_promedio_2do, fmt.money(p.ticket_promedio_2do), fmt.money(a.ticket_promedio_2do));
+        setText('card-tp2do-val',   moneyOrMask(a.ticket_promedio_2do));
+        setKpiVar('card-tp2do-var', v.ticket_promedio_2do, moneyOrMask(p.ticket_promedio_2do), moneyOrMask(a.ticket_promedio_2do));
 
         setText('card-t2do-val',    fmt.pct(a.porc_2do));
         setVarDiff('card-t2do-var', v.porc_2do,         false, fmt.pct(p.porc_2do),         fmt.pct(a.porc_2do));
@@ -1348,8 +1450,8 @@ const Dashboard = (() => {
 
     /* ── Benchmark diferido (?action=benchmark) ──────────────────────────── */
     function renderBenchmark(b) {
-        setText('card-tprom-bench',   fmt.money(b.ticket_promedio));
-        setText('card-tp2do-bench',   fmt.money(b.ticket_promedio_2do));
+        setText('card-tprom-bench',   moneyOrMask(b.ticket_promedio));
+        setText('card-tp2do-bench',   moneyOrMask(b.ticket_promedio_2do));
         setText('card-t2do-bench',    fmt.pct(b.porc_2do));
         setText('card-t3ro-bench',    fmt.pct(b.porc_3ro));
         setText('card-cambios-bench', fmt.pct(b.porc_cambios));
@@ -1406,15 +1508,15 @@ const Dashboard = (() => {
             sparkLine('spark-cambios',       vCamb,  '#f97316', null,   dates);
             sparkLine('spark-incr',          vIncr,  '#22c55e', null,   dates);
 
-            SparkModal.register('spark-fact',  vFact,  dates, '#00a878', fmt.moneyK, 'Facturación diaria');
+            SparkModal.register('spark-fact',  vFact,  dates, '#00a878', moneyKOrMask, 'Facturación diaria');
             SparkModal.register('spark-unid',  vUnid,  dates, '#f59e0b', fmt.num,    'Unidades diarias');
             SparkModal.register('spark-tickets-main', vTick, dates, '#8b5cf6', fmt.num, 'Tickets diarios');
             SparkModal.register('spark-conv',  vConv,  dates, '#ec4899', n => fmt.pct(n), 'Conversión diaria', [
                 { values: vIngresos, color: '#38bdf8', label: 'Ingresos', formatFn: fmt.num },
                 { values: vTick,     color: '#8b5cf6', label: 'Tickets',  formatFn: fmt.num, hideStats: true },
             ], { label: 'Tasa de Conversión', value: _lastConvData?.actual?.conversion ?? null });
-            SparkModal.register('spark-tprom', vTProm, dates, '#2563eb', fmt.money, 'Ticket Promedio');
-            SparkModal.register('spark-tp2do', vTp2do, dates, '#a855f7', fmt.money, 'T. Prom. 2do Producto');
+            SparkModal.register('spark-tprom', vTProm, dates, '#2563eb', moneyOrMask, 'Ticket Promedio');
+            SparkModal.register('spark-tp2do', vTp2do, dates, '#a855f7', moneyOrMask, 'T. Prom. 2do Producto');
             SparkModal.register('spark-t2do',  vT2do,  dates, '#14b8a6', n => fmt.pct(n), '% Tickets 2do Producto');
             SparkModal.register('spark-t3ro',  vT3ro,  dates, '#6366f1', n => fmt.pct(n), '% Tickets 3er Producto');
             SparkModal.register('spark-cambios', vCamb, dates, '#f97316', n => fmt.pct(n), '% Cambios');
@@ -1583,6 +1685,27 @@ const Dashboard = (() => {
                 if (_lastConvData)  renderConversion(_lastConvData);
             });
         });
+
+        const btnOcultarImportes = document.getElementById('btn-toggle-importes');
+        if (btnOcultarImportes) {
+            const updateEyeIcon = () => {
+                const icon = btnOcultarImportes.querySelector('i');
+                icon.className = _ocultarImportes ? 'bi bi-eye-slash' : 'bi bi-eye';
+                btnOcultarImportes.classList.toggle('active', _ocultarImportes);
+                btnOcultarImportes.title = _ocultarImportes ? 'Mostrar importes' : 'Ocultar importes';
+            };
+            updateEyeIcon();
+            btnOcultarImportes.addEventListener('click', () => {
+                _ocultarImportes = !_ocultarImportes;
+                localStorage.setItem('bi_ocultar_importes', _ocultarImportes ? '1' : '0');
+                updateEyeIcon();
+                if (_lastKpiData) {
+                    renderKPIs(_lastKpiData);
+                    renderTablaSucursales();
+                }
+                if (_lastBenchData) renderBenchmark(_lastBenchData);
+            });
+        }
     });
 
     /* ── API principal ───────────────────────── */
