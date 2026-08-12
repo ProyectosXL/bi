@@ -37,7 +37,7 @@ try {
     $tipoOriginal     = $_SESSION['tipo'];
     $_SESSION['tipo'] = $origenToTipo[$origen] ?? 'LOCAL_PROPIO';
 
-    $sucursalRaw = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? (int)$_GET['sucursal'] : null;
+    $sucursalRaw = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? $_GET['sucursal'] : null;
 
     // GRUPO: validar sucursal solicitada
     if ($isGrupo && $sucursalRaw !== null) {

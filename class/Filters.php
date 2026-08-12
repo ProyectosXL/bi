@@ -35,7 +35,7 @@ class Filters
      * @return array{0:string, 1:array} [$sqlFragment, $params]
      */
     public static function sucursal(
-        ?int $sucursal,
+        $sucursal,
         ?string $grupo,
         ?string $tipoTienda,
         string $alias,
@@ -48,9 +48,16 @@ class Filters
         $clauses = [];
         $params  = [];
 
-        if ($sucursal !== null) {
-            $clauses[] = "{$alias}.{$sucursalCol} = ?";
-            $params[]  = $sucursal;
+        if ($sucursal !== null && $sucursal !== '' && $sucursal !== '%' && $sucursal !== 'Todas') {
+            if (is_string($sucursal) && strpos($sucursal, ',') !== false) {
+                $parts = array_map('intval', explode(',', $sucursal));
+                $placeholders = implode(',', array_fill(0, count($parts), '?'));
+                $clauses[] = "{$alias}.{$sucursalCol} IN ({$placeholders})";
+                $params = array_merge($params, $parts);
+            } else {
+                $clauses[] = "{$alias}.{$sucursalCol} = ?";
+                $params[]  = (int)$sucursal;
+            }
         }
 
         if ($grupo !== null && $origen === 'argentina') {
@@ -104,13 +111,14 @@ class Filters
         return ["AND {$alias}.{$campo} = ?", [$vendedor]];
     }
 
-    /**
-     * Fragmento WHERE para filtro de rubro.
-     * Si $rubro === '%' no genera filtro.
-     */
-    public static function rubro(string $rubro, string $alias): array
+    public static function rubro($rubro, string $alias): array
     {
-        if ($rubro === '%') return ['', []];
+        if ($rubro === null || $rubro === '' || $rubro === '%' || $rubro === 'Todos' || $rubro === 'Todas') return ['', []];
+        if (is_string($rubro) && strpos($rubro, ',') !== false) {
+            $parts = explode(',', $rubro);
+            $placeholders = implode(',', array_fill(0, count($parts), '?'));
+            return ["AND {$alias}.RUBRO IN ({$placeholders})", $parts];
+        }
         return ["AND {$alias}.RUBRO = ?", [$rubro]];
     }
 

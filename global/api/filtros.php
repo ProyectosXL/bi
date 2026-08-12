@@ -28,7 +28,7 @@ try {
     $isGrupo   = ($tipoSesion === 'GRUPO');
     $origen    = $isGrupo ? 'franquicias' : ($_GET['origen'] ?? 'argentina');
     $periodo   = $_GET['periodo']  ?? 'mes_actual';
-    $sucursal  = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? (int)$_GET['sucursal'] : null;
+    $sucursal  = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? $_GET['sucursal'] : null;
 
     // GRUPO: validar sucursal
     if ($isGrupo && $sucursal !== null) {

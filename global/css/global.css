@@ -117,6 +117,10 @@
     text-overflow: ellipsis;
     transition : background .1s;
 }
+.ss-multi .ss-item {
+    display: flex;
+    align-items: center;
+}
 .ss-item:hover   { background: #f0f4ff; }
 .ss-item.ss-selected { background: #e8eeff; font-weight: 600; color: var(--accent, #2563eb); }
 .ss-item label, .ss-label-chk {

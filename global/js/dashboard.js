@@ -1280,7 +1280,7 @@ const Dashboard = (() => {
                 item.className = 'ss-item' + (isSelected ? ' ss-selected' : '');
 
                 if (isMultiple) {
-                    item.innerHTML = `<label style="display:flex;align-items:center;width:100%;margin:0;cursor:pointer;"><input type="checkbox" class="ss-checkbox" ${isSelected ? 'checked' : ''} style="margin-right:8px;pointer-events:none;"><span class="ss-label-chk">${opt.text}</span></label>`;
+                    item.innerHTML = `<input type="checkbox" class="ss-checkbox" ${isSelected ? 'checked' : ''} style="margin-right:8px;pointer-events:none;"><span class="ss-label-chk">${opt.text}</span>`;
                 } else {
                     item.textContent = opt.text;
                 }

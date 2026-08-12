@@ -232,7 +232,7 @@ class GlobalDashboardDB
     }
 
     /** Construye el array de params de filtro normalizado para Filters::build(). */
-    private function fp(?int $sucursal, string $vendedor, string $rubro, ?string $grupo, ?string $tipoTienda, ?string $canal = null): array
+    private function fp($sucursal, string $vendedor, string $rubro, ?string $grupo, ?string $tipoTienda, ?string $canal = null): array
     {
         return [
             'sucursal'    => $sucursal,
@@ -265,7 +265,7 @@ class GlobalDashboardDB
 
     public function getKPIs(
         string $desde, string $hasta,
-        ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
+        $sucursal = null, string $vendedor = '%', string $rubro = '%',
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $cv = $this->campoVendedor;
@@ -337,7 +337,7 @@ class GlobalDashboardDB
 
     public function getTicketsProductos(
         string $desde, string $hasta,
-        ?int $sucursal = null, string $vendedor = '%',
+        $sucursal = null, string $vendedor = '%',
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda, $canal);
@@ -371,7 +371,7 @@ class GlobalDashboardDB
 
     public function getTicketPromedio2do(
         string $desde, string $hasta,
-        ?int $sucursal = null, string $vendedor = '%',
+        $sucursal = null, string $vendedor = '%',
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda, $canal);
@@ -412,7 +412,7 @@ class GlobalDashboardDB
 
     public function getIncremental(
         string $desde, string $hasta,
-        ?int $sucursal = null, string $vendedor = '%',
+        $sucursal = null, string $vendedor = '%',
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $fp = $this->fp($sucursal, $vendedor, '%', $grupo, $tipoTienda, $canal);
@@ -443,7 +443,7 @@ class GlobalDashboardDB
 
     public function getConversion(
         string $desde, string $hasta,
-        ?int $sucursal = null,
+        $sucursal = null,
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
@@ -511,7 +511,7 @@ class GlobalDashboardDB
 
     public function getConversionPorHora(
         string $desde, string $hasta,
-        ?int $sucursal = null,
+        $sucursal = null,
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         if ($this->origen === 'uruguay') {
@@ -595,7 +595,7 @@ class GlobalDashboardDB
 
     public function getSerieFacturacion(
         string $desde, string $hasta,
-        ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
+        $sucursal = null, string $vendedor = '%', string $rubro = '%',
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
@@ -782,7 +782,7 @@ class GlobalDashboardDB
 
     public function getSerieFacturacionSimple(
         string $desde, string $hasta,
-        ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
+        $sucursal = null, string $vendedor = '%', string $rubro = '%',
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $fp = $this->fp($sucursal, $vendedor, $rubro, $grupo, $tipoTienda, $canal);
@@ -843,7 +843,7 @@ class GlobalDashboardDB
         string $desde_act, string $hasta_act,
         string $desde_total, string $hasta_total,
         ?string $grupo = null, ?string $tipoTienda = null,
-        ?int $sucursal = null, ?string $canal = null
+        $sucursal = null, ?string $canal = null
     ): array {
         $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
         [$sfO, $pO]   = Filters::build($fp, 'o', $this->campoVendedor, $this->origen, true, false, 'NRO_SUCURSAL', false);
@@ -882,7 +882,7 @@ class GlobalDashboardDB
         string $desde_act, string $hasta_act,
         string $desde_prev, string $hasta_prev,
         ?string $grupo = null, ?string $tipoTienda = null,
-        ?int $sucursal = null, ?string $canal = null
+        $sucursal = null, ?string $canal = null
     ): array {
         $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
         [$sfS, $pS]   = Filters::build($fp, 's', $this->campoVendedor, $this->origen, true, false);
@@ -1027,7 +1027,7 @@ class GlobalDashboardDB
 
     public function getEvolucionMensual(
         string $tipo,
-        ?int   $sucursal    = null,
+        $sucursal    = null,
         string $vendedor    = '%',
         string $rubro       = '%',
         ?string $grupo      = null,
@@ -1179,7 +1179,7 @@ class GlobalDashboardDB
         ");
     }
 
-    public function getVendedoresFiltro(?string $desde = null, ?string $hasta = null, ?int $sucursal = null): array
+    public function getVendedoresFiltro(?string $desde = null, ?string $hasta = null, $sucursal = null): array
     {
         $cv     = $this->campoVendedor;
         $params = [];
@@ -1223,7 +1223,7 @@ class GlobalDashboardDB
         return $result;
     }
 
-    public function getRubrosFiltro(string $desde, string $hasta, ?int $sucursal = null): array
+    public function getRubrosFiltro(string $desde, string $hasta, $sucursal = null): array
     {
         $sfS = $sucursal !== null ? "AND NRO_SUCURS = ?" : "";
         $suc = $sucursal !== null ? [$sucursal] : [];
@@ -1628,7 +1628,7 @@ class GlobalDashboardDB
     public function getKPIsBulk(
         string $da, string $ha,
         string $dp, string $hp,
-        ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
+        $sucursal = null, string $vendedor = '%', string $rubro = '%',
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $cv  = $this->campoVendedor;
@@ -1821,7 +1821,7 @@ class GlobalDashboardDB
 
     public function getKPIsCompletos(
         string $desde, string $hasta,
-        ?int $sucursal = null, string $vendedor = '%', string $rubro = '%',
+        $sucursal = null, string $vendedor = '%', string $rubro = '%',
         ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $noTp2  = ['tickets_con_2do' => 0, 'facturacion_con_2do' => 0, 'ticket_promedio_2do' => 0];
@@ -1857,7 +1857,7 @@ class GlobalDashboardDB
 
     public function getMails(
         string $desde, string $hasta,
-        ?int $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
+        $sucursal = null, ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null
     ): array {
         $fp = $this->fp($sucursal, '%', '%', $grupo, $tipoTienda, $canal);
         [$sfT, $pT]   = Filters::build($fp, 't', $this->campoVendedor, $this->origen, false, false);
@@ -2049,7 +2049,7 @@ class GlobalDashboardDB
      * ────────────────────────────────────────────── */
 
     public function getEvolucionMensualFacturacion(
-        ?int   $sucursal    = null,
+        $sucursal    = null,
         string $vendedor    = '%',
         string $rubro       = '%',
         ?string $grupo      = null,
@@ -2198,7 +2198,7 @@ class GlobalDashboardDB
         return $res;
     }
     public function getKPIsLiquidacion(string $desdeAct, string $hastaAct, string $desdePrev, string $hastaPrev,
-                                       ?int $sucursal = null, ?string $vendedor = null, ?string $rubro = null,
+                                       $sucursal = null, ?string $vendedor = null, ?string $rubro = null,
                                        ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null,
                                        ?string $liqTipo = null, ?string $liqRubro = null, ?string $liqCategoria = null): array
     {
@@ -2295,7 +2295,7 @@ class GlobalDashboardDB
         string $desde_act, string $hasta_act,
         string $desde_prev, string $hasta_prev,
         ?string $grupo = null, ?string $tipoTienda = null,
-        ?int $sucursal = null, ?string $canal = null,
+        $sucursal = null, ?string $canal = null,
         ?string $liqTipo = null, ?string $liqRubro = null, ?string $liqCategoria = null
     ): array {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
@@ -2364,7 +2364,7 @@ class GlobalDashboardDB
     public function getProductosLiquidacion(
         string $desde_act, string $hasta_act,
         ?string $grupo = null, ?string $tipoTienda = null,
-        ?int $sucursal = null, ?string $canal = null,
+        $sucursal = null, ?string $canal = null,
         ?string $liqTipo = null, ?string $liqRubro = null, ?string $liqCategoria = null
     ): array {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
@@ -2415,7 +2415,7 @@ class GlobalDashboardDB
     }
 
     public function getJerarquiaLiquidacion(string $desdeAct, string $hastaAct,
-                                            ?int $sucursal = null, ?string $vendedor = null, ?string $rubro = null,
+                                            $sucursal = null, ?string $vendedor = null, ?string $rubro = null,
                                             ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null,
                                             ?string $liqRubro = null, ?string $liqCategoria = null): array
     {
@@ -2460,7 +2460,7 @@ class GlobalDashboardDB
     }
 
     public function getTimelineLiquidacion(string $desdeAct, string $hastaAct, string $desdePrev, string $hastaPrev,
-                                           ?int $sucursal = null, ?string $vendedor = null, ?string $rubro = null,
+                                           $sucursal = null, ?string $vendedor = null, ?string $rubro = null,
                                            ?string $grupo = null, ?string $tipoTienda = null, ?string $canal = null,
                                            ?string $liqTipo = null, ?string $liqRubro = null, ?string $liqCategoria = null): array
     {
