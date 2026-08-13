@@ -1178,10 +1178,11 @@ const Dashboard = (() => {
 
     function renderDonuts(d) {
         if (!d?.rubros?.length) return;
-        const rubros = d.rubros.slice(0, 12);
+        const rubrosUnidades = d.rubros.filter(r => r.RUBRO !== 'SIN RUBRO').slice(0, 12);
+        const rubrosFacturacion = d.rubros.slice(0, 12);
         DonutManager.reset();
-        DonutManager.create('donut-unidades-wrap',    'unidades',    rubros, '% Participación Unidades por Rubro');
-        DonutManager.create('donut-facturacion-wrap', 'facturacion', rubros, '% Participación $ por Rubro');
+        DonutManager.create('donut-unidades-wrap',    'unidades',    rubrosUnidades,    '% Participación Unidades por Rubro');
+        DonutManager.create('donut-facturacion-wrap', 'facturacion', rubrosFacturacion, '% Participación $ por Rubro');
     }
 
     /* ── Mapa de nombres de sucursales (compartido con otros módulos) ── */
