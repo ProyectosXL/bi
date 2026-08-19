@@ -50,6 +50,7 @@ const PremiosPropios = (() => {
             ${badgeCellHTML(f.ticket_promedio, bm.ticketPromedioMarca, fmt.money(f.ticket_promedio), { titulo: 'Supera el ticket promedio de marca' })}
             ${badgeCellHTML(f.pct_ticket_2do, bm.pct2Marca, fmt.pct(f.pct_ticket_2do), { titulo: 'Supera el % tickets 2do producto de marca' })}
             ${badgeCellHTML(f.pct_ticket_3er, bm.pct3Marca, fmt.pct(f.pct_ticket_3er), { titulo: 'Supera el % tickets 3er producto de marca' })}
+            <td class="td-num">—</td>
         </tr>`;
     }
 
@@ -71,6 +72,7 @@ const PremiosPropios = (() => {
             ${badgeCellHTML(s.ticket_promedio, bm.ticketPromedioMarca, fmt.money(s.ticket_promedio), { titulo: 'Supera el ticket promedio de marca', gate: cumpleObjetivo })}
             ${badgeCellHTML(s.pct_ticket_2do, bm.pct2Marca, fmt.pct(s.pct_ticket_2do), { titulo: 'Supera el % tickets 2do producto de marca', gate: cumpleObjetivo })}
             ${badgeCellHTML(s.pct_ticket_3er, bm.pct3Marca, fmt.pct(s.pct_ticket_3er), { titulo: 'Supera el % tickets 3er producto de marca', gate: cumpleObjetivo })}
+            <td class="td-num td-premio">${fmt.pct(s.pct_cumplimiento_cadena)}</td>
         </tr>`;
     }
 
@@ -92,6 +94,7 @@ const PremiosPropios = (() => {
             ${badgeCellHTML(f.ticket_promedio, bm.ticketPromedioMarca, fmt.money(f.ticket_promedio), { titulo: 'Supera el ticket promedio de marca' })}
             ${badgeCellHTML(f.pct_ticket_2do, bm.pct2Marca, fmt.pct(f.pct_ticket_2do), { titulo: 'Supera el % tickets 2do producto de marca' })}
             ${badgeCellHTML(f.pct_ticket_3er, bm.pct3Marca, fmt.pct(f.pct_ticket_3er), { titulo: 'Supera el % tickets 3er producto de marca' })}
+            <td class="td-num">—</td>
         </tr>`;
     }
 
@@ -132,6 +135,7 @@ const PremiosPropios = (() => {
                         <th class="th-num">Ticket Promedio</th>
                         <th class="th-num">% Tickets 2do Producto</th>
                         <th class="th-num">% Tickets 3er Producto</th>
+                        <th class="th-num">% Cumpl. Cadena</th>
                     </tr>
                 </thead>
                 <tbody>${cuerpo}</tbody>
@@ -146,6 +150,7 @@ const PremiosPropios = (() => {
                         ${badgeCellHTML(total.ticket_promedio, bm.ticketPromedioMarca, fmt.money(total.ticket_promedio), { titulo: 'Supera el ticket promedio de marca', gate: cumpleObjetivoTotal })}
                         ${badgeCellHTML(total.pct_ticket_2do, bm.pct2Marca, fmt.pct(total.pct_ticket_2do), { titulo: 'Supera el % tickets 2do producto de marca', gate: cumpleObjetivoTotal })}
                         ${badgeCellHTML(total.pct_ticket_3er, bm.pct3Marca, fmt.pct(total.pct_ticket_3er), { titulo: 'Supera el % tickets 3er producto de marca', gate: cumpleObjetivoTotal })}
+                        <td class="td-num td-total">${fmt.pct(total.pct_cumplimiento_cadena)}</td>
                     </tr>
                 </tfoot>
             </table>`;
@@ -172,30 +177,32 @@ const PremiosPropios = (() => {
         _lastGrupos.forEach(g => {
             rows.push([g.supervisora, g.subtotal.facturacion_s_iva, g.subtotal.facturacion_c_iva,
                 g.subtotal.objetivo_total, g.subtotal.cumplimiento_obj, g.subtotal.facturacion_var,
-                g.subtotal.ticket_promedio, g.subtotal.pct_ticket_2do, g.subtotal.pct_ticket_3er]);
+                g.subtotal.ticket_promedio, g.subtotal.pct_ticket_2do, g.subtotal.pct_ticket_3er,
+                g.subtotal.pct_cumplimiento_cadena]);
             g.sucursales.forEach(f => rows.push([
                 '  ' + f.sucursal, f.facturacion_s_iva, f.facturacion_c_iva, f.objetivo_total,
                 f.cumplimiento_obj, f.facturacion_var, f.ticket_promedio, f.pct_ticket_2do, f.pct_ticket_3er,
+                null,
             ]));
         });
         if (_lastTodas) {
             rows.push(['Todas', _lastTodas.facturacion_s_iva, _lastTodas.facturacion_c_iva,
                 _lastTodas.objetivo_total, _lastTodas.cumplimiento_obj, _lastTodas.facturacion_var,
-                _lastTodas.ticket_promedio, _lastTodas.pct_ticket_2do, _lastTodas.pct_ticket_3er]);
+                _lastTodas.ticket_promedio, _lastTodas.pct_ticket_2do, _lastTodas.pct_ticket_3er, null]);
             rows.push(['  ECOMMERCE', _lastTodas.facturacion_s_iva, _lastTodas.facturacion_c_iva,
                 _lastTodas.objetivo_total, _lastTodas.cumplimiento_obj, _lastTodas.facturacion_var,
-                _lastTodas.ticket_promedio, _lastTodas.pct_ticket_2do, _lastTodas.pct_ticket_3er]);
+                _lastTodas.ticket_promedio, _lastTodas.pct_ticket_2do, _lastTodas.pct_ticket_3er, null]);
         }
         ExcelExporter.export({
             title  : 'Locales Propios — Facturación vs. Objetivos por Sucursales',
             headers: ['Supervisora / Sucursal', 'Facturación S/IVA', 'Facturación C/IVA', 'Objetivo Total $',
                 '% Cumplimiento Obj. Venta', 'Facturación C/IVA Var %', 'Ticket Promedio',
-                '% Tickets 2do Producto', '% Tickets 3er Producto'],
+                '% Tickets 2do Producto', '% Tickets 3er Producto', '% Cumpl. Cadena'],
             rows,
             totalsRow: ['Total', _lastTotal.facturacion_s_iva, _lastTotal.facturacion_c_iva, _lastTotal.objetivo_total,
                 _lastTotal.cumplimiento_obj, _lastTotal.facturacion_var, _lastTotal.ticket_promedio,
-                _lastTotal.pct_ticket_2do, _lastTotal.pct_ticket_3er],
-            colFormats: ['text', 'money', 'money', 'money', 'pct', 'pct', 'money', 'pct', 'pct'],
+                _lastTotal.pct_ticket_2do, _lastTotal.pct_ticket_3er, _lastTotal.pct_cumplimiento_cadena],
+            colFormats: ['text', 'money', 'money', 'money', 'pct', 'pct', 'money', 'pct', 'pct', 'pct'],
             filename: 'locales_propios_facturacion_objetivos',
         });
     }

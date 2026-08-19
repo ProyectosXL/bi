@@ -463,7 +463,7 @@ class CadenaDB
                 FROM (
                     SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
                     FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
-                    INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                    INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
                     INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
                     WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
                 ) s

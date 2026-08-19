@@ -43,8 +43,8 @@ try {
     // Evolución mensual multi-año
     $evolucion = $db->getEvolucionMensualUnidades($canal, $rubro, 4, $cliente, $grupo_empresario);
 
-    // Tabla mensual por canal
-    $tablaMensual = $db->getTablaUnidadesCanalMes($anio, $canal, $rubro, $cliente, $grupo_empresario);
+    // Tabla mensual por canal usando el rango exacto de fechas seleccionado
+    $tablaMensual = $db->getTablaUnidadesCanalMes($da, $canal, $rubro, $cliente, $grupo_empresario, $ha);
 
     ob_clean();
     echo json_encode([

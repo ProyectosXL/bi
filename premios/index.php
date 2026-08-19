@@ -133,24 +133,12 @@ try {
 
             <div class="premios-card">
                 <div class="premios-section-header">
-                    <i class="bi bi-shop"></i>&nbsp; Premios por Supervisora (Locales Propios)
-                    <button class="btn-export-excel" id="btn-export-propios-resumen">
+                    <i class="bi bi-award"></i>&nbsp; Premios por Supervisora
+                    <button class="btn-export-excel" id="btn-export-resumen">
                         <i class="bi bi-file-earmark-excel"></i> Excel
                     </button>
                 </div>
-                <div class="table-wrap" id="tabla-resumen-propios-wrap">
-                    <div class="premios-loading">Cargando…</div>
-                </div>
-            </div>
-
-            <div class="premios-card">
-                <div class="premios-section-header">
-                    <i class="bi bi-building"></i>&nbsp; Premios por Supervisora (Franquicias)
-                    <button class="btn-export-excel" id="btn-export-franquicias-resumen">
-                        <i class="bi bi-file-earmark-excel"></i> Excel
-                    </button>
-                </div>
-                <div class="table-wrap" id="tabla-resumen-franquicias-wrap">
+                <div class="table-wrap" id="tabla-resumen-wrap">
                     <div class="premios-loading">Cargando…</div>
                 </div>
             </div>

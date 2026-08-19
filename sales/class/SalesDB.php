@@ -606,24 +606,41 @@ class SalesDB
 
     /**
      * Tabla mensual por canal para la pestaña Evolución Unidades.
+     * Soporta filtrar por rango de fechas exacto (da, ha) o año.
      */
-    public function getTablaUnidadesCanalMes(int $anio, ?string $canal = null, ?string $rubro = null, $cliente = null, $grupo_empresario = null): array
+    public function getTablaUnidadesCanalMes($periodoOAnio, ?string $canal = null, ?string $rubro = null, $cliente = null, $grupo_empresario = null, ?string $ha = null): array
     {
         [$wCanal, $pCanal]   = $this->whereCanalFrag($canal);
         [$wRubro, $pRubro]   = $this->whereRubroFrag($rubro);
         [$wCliente, $pCliente] = $this->whereClienteFrag($cliente);
         [$wGrupo, $pGrupo]     = $this->whereGrupoEmpresarioFrag($grupo_empresario);
 
-        $sql = "
-            SELECT CANAL, MONTH(FECHA) AS mes, SUM(CANTIDAD) AS unidades
-            FROM dbo.BI_SALES_LAKERS s
-            WHERE YEAR(FECHA) = ? $wCanal $wRubro
-            " . $this->whereExcluirRubrosUnid() . "
-            GROUP BY CANAL, MONTH(FECHA)
-            ORDER BY CANAL, mes
-        ";
-        $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
-        $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
+        if ($ha !== null) {
+            // Filtrar por rango exacto de fechas (da a ha)
+            $da = $periodoOAnio;
+            $sql = "
+                SELECT CANAL, MONTH(FECHA) AS mes, YEAR(FECHA) AS anio, SUM(CANTIDAD) AS unidades
+                FROM dbo.BI_SALES_LAKERS s
+                WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro $wCliente $wGrupo
+                " . $this->whereExcluirRubrosUnid() . "
+                GROUP BY CANAL, YEAR(FECHA), MONTH(FECHA)
+                ORDER BY anio, mes, CANAL
+            ";
+            $params = array_merge([$da, $ha], $pCanal, $pRubro, $pCliente, $pGrupo);
+        } else {
+            $anio = (int)$periodoOAnio;
+            $sql = "
+                SELECT CANAL, MONTH(FECHA) AS mes, SUM(CANTIDAD) AS unidades
+                FROM dbo.BI_SALES_LAKERS s
+                WHERE YEAR(FECHA) = ? $wCanal $wRubro $wCliente $wGrupo
+                " . $this->whereExcluirRubrosUnid() . "
+                GROUP BY CANAL, MONTH(FECHA)
+                ORDER BY CANAL, mes
+            ";
+            $params = array_merge([$anio], $pCanal, $pRubro, $pCliente, $pGrupo);
+        }
+
+        $stmt = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         return $this->fetchAll($stmt);
     }
 

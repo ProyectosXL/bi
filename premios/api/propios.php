@@ -95,14 +95,15 @@ try {
             'supervisora' => $sup,
             'sucursales'  => $sucursales,
             'subtotal'    => [
-                'facturacion_s_iva' => $sumFactSIva,
-                'facturacion_c_iva' => $sumFactCIva,
-                'objetivo_total'    => $sumObj,
-                'cumplimiento_obj'  => $db->cumplimientoObjVenta($sumFactCIva, $sumObj),
-                'facturacion_var'   => $db->facturacionVarPct($sumFactCIva, $sumFactAnt),
-                'ticket_promedio'   => $db->ticketPromedioEst($sumFactCIva, $sumTickets),
-                'pct_ticket_2do'    => $sumTickets > 0 ? $sumT2 / $sumTickets : 0.0,
-                'pct_ticket_3er'    => $sumTickets > 0 ? $sumT3 / $sumTickets : 0.0,
+                'facturacion_s_iva'       => $sumFactSIva,
+                'facturacion_c_iva'       => $sumFactCIva,
+                'objetivo_total'          => $sumObj,
+                'cumplimiento_obj'        => $db->cumplimientoObjVenta($sumFactCIva, $sumObj),
+                'facturacion_var'         => $db->facturacionVarPct($sumFactCIva, $sumFactAnt),
+                'ticket_promedio'         => $db->ticketPromedioEst($sumFactCIva, $sumTickets),
+                'pct_ticket_2do'          => $sumTickets > 0 ? $sumT2 / $sumTickets : 0.0,
+                'pct_ticket_3er'          => $sumTickets > 0 ? $sumT3 / $sumTickets : 0.0,
+                'pct_cumplimiento_cadena' => $db->pctCumplimientoCadenaVenta($filasSup),
             ],
         ];
     }
@@ -128,14 +129,15 @@ try {
     }
 
     $total = [
-        'facturacion_s_iva' => $totFactSIva,
-        'facturacion_c_iva' => $totFactCIva,
-        'objetivo_total'    => $totObj,
-        'cumplimiento_obj'  => $db->cumplimientoObjVenta($totFactCIva, $totObj),
-        'facturacion_var'   => $db->facturacionVarPct($totFactCIva, $totFactAnt),
-        'ticket_promedio'   => $db->ticketPromedioEst($totFactCIva, $totTickets),
-        'pct_ticket_2do'    => $db->pctTicketProductoMarca($filasParaTotal, 'tickets_2do_prod'),
-        'pct_ticket_3er'    => $db->pctTicketProductoMarca($filasParaTotal, 'tickets_3er_prod'),
+        'facturacion_s_iva'       => $totFactSIva,
+        'facturacion_c_iva'       => $totFactCIva,
+        'objetivo_total'          => $totObj,
+        'cumplimiento_obj'        => $db->cumplimientoObjVenta($totFactCIva, $totObj),
+        'facturacion_var'         => $db->facturacionVarPct($totFactCIva, $totFactAnt),
+        'ticket_promedio'         => $db->ticketPromedioEst($totFactCIva, $totTickets),
+        'pct_ticket_2do'          => $db->pctTicketProductoMarca($filasParaTotal, 'tickets_2do_prod'),
+        'pct_ticket_3er'          => $db->pctTicketProductoMarca($filasParaTotal, 'tickets_3er_prod'),
+        'pct_cumplimiento_cadena' => $db->pctCumplimientoCadenaVenta($filasParaTotal),
     ];
 
     $ultimaActFormatted = null;

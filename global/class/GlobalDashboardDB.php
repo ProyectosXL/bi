@@ -74,7 +74,7 @@ class GlobalDashboardDB
 
         $stmt = sqlsrv_query($this->conn,
             "SELECT id, idTango INTO #pv_st
-             FROM OPENQUERY([SERVIDORTESTING], 'SELECT id, idTango FROM dbXLSales.dbo.PuntosDeVenta')"
+             FROM sistemas.dbo.PuntosDeVenta WITH (NOLOCK)"
         );
         if ($stmt === false) {
             throw new RuntimeException('initTempFranquiciasST #pv_st: ' . (sqlsrv_errors()[0]['message'] ?? 'error'));
@@ -162,7 +162,7 @@ class GlobalDashboardDB
             UNION ALL
             SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE, 0 AS CANTIDAD, CAST('FRANQUICIA_ST' AS VARCHAR(50)) COLLATE DATABASE_DEFAULT AS RUBRO
             FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
-            INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+            INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
             INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
             WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1) AND sl.HABILITADO = 1
               {$fechaFiltro}
@@ -2097,7 +2097,7 @@ class GlobalDashboardDB
             FROM (
                 SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
-                INNER JOIN [SERVIDORTESTING].dbXLSales.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
+                INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
                 INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK) ON pv.idTango = sl.NRO_SUCURSAL
                 WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1) AND sl.HABILITADO = 1
             ) s

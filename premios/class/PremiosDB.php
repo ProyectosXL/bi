@@ -29,6 +29,24 @@ class PremiosDB
     /** NRO_SUCURS=1 ("CENTRAL") es una fila sin ventas reales — se excluye de todo conteo de premios. */
     private const CASA_CENTRAL_NRO = 1;
 
+    /**
+     * Supervisoras activas en RO_T_SUPERVISORAS_COMERCIAL que, por decisión de negocio,
+     * no deben mostrarse ni recibir premios en ESTE dashboard (siguen vigentes en el
+     * resto de los sistemas — no se toca el catálogo). Nombres tal como los devuelve
+     * formatearNombre().
+     */
+    private const SUPERVISORAS_EXCLUIDAS = ['Julieta Dalmeida'];
+
+    /**
+     * Orden fijo pedido por Johanna para mostrar a las supervisoras (tablas y KPIs),
+     * en vez del orden del catálogo (RO_T_SUPERVISORAS_COMERCIAL.ID). Una supervisora
+     * activa que no esté en esta lista se agrega al final, en el orden del catálogo.
+     */
+    private const ORDEN_SUPERVISORAS = [
+        'Natalia Bontempo', 'Elina Costamagna', 'Carolina Commendatore',
+        'Sonia Pacifico', 'Nahir Actis', 'Josefina Pastorino',
+    ];
+
     /** @var resource Conexión a XL-APPS/POWER_BI_CONTROL (+ linked server LAKERBIS) */
     private $connPower;
 
@@ -162,7 +180,7 @@ class PremiosDB
         return $res;
     }
 
-    /** @return string[] Supervisoras activas, en el orden del catálogo (RO_T_SUPERVISORAS_COMERCIAL.ID). */
+    /** @return string[] Supervisoras activas, en el orden pedido por Johanna (ver ORDEN_SUPERVISORAS). */
     public function getSupervisoras(): array
     {
         $sql = "SELECT NOMBRE FROM [XL-LAKERBIS].locales_lakers.dbo.RO_T_SUPERVISORAS_COMERCIAL
@@ -173,8 +191,17 @@ class PremiosDB
         }
         $out = [];
         while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-            $out[] = self::formatearNombre($r['NOMBRE']);
+            $nombre = self::formatearNombre($r['NOMBRE']);
+            if (in_array($nombre, self::SUPERVISORAS_EXCLUIDAS, true)) {
+                continue;
+            }
+            $out[] = $nombre;
         }
+        usort($out, function ($a, $b) {
+            $posA = array_search($a, self::ORDEN_SUPERVISORAS, true);
+            $posB = array_search($b, self::ORDEN_SUPERVISORAS, true);
+            return ($posA === false ? PHP_INT_MAX : $posA) <=> ($posB === false ? PHP_INT_MAX : $posB);
+        });
         return $out;
     }
 
@@ -382,6 +409,27 @@ class PremiosDB
     {
         if ($obj <= 0) return -1.0;
         return $fact / $obj - 1;
+    }
+
+    /**
+     * % de locales PROPIOS de la cadena de una supervisora que cumplen el objetivo de venta
+     * individualmente — a diferencia del "cant" de premiosVentaCrecimiento(), que es un
+     * conteo a nivel empresa usado solo para calcular el premio (ver esa función). Excluye
+     * NRO_SUCURS=1 "CENTRAL" (fila sintética, no es un local real). Un local sin datos de
+     * venta en el período cuenta en el total de la cadena pero no como cumplido.
+     */
+    public function pctCumplimientoCadenaVenta(array $filasSupervisora): float
+    {
+        $total = 0;
+        $cumple = 0;
+        foreach ($filasSupervisora as $f) {
+            if ($f['casa_central']) continue;
+            $total++;
+            if (!$f['sin_datos'] && $this->cumplimientoObjVenta($f['imp_fact'], $f['imp_obj']) > self::TOLERANCIA_OBJ_VENTA) {
+                $cumple++;
+            }
+        }
+        return $total > 0 ? $cumple / $total : 0.0;
     }
 
     /** Ticket promedio estimado, redondeado hacia arriba a la centena (CEILING(fact/tickets,100)). */
