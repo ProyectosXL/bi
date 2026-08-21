@@ -907,7 +907,7 @@ const Dashboard = (() => {
             title     : 'Facturación vs Objetivos por Sucursal',
             headers   : ['Sucursal', 'Fact. Actual', 'Fact. Año Ant.', 'Var. Fact.', 'Objetivo Total', 'Objetivo Fecha', 'Desvío'],
             rows      : rows.map(r => [
-                getSucNombre(r.nro_sucurs),
+                (r.nombre && !String(r.nombre).startsWith('Suc.')) ? r.nombre : getSucNombre(r.nro_sucurs),
                 r.facturacion      != null ? convertir(r.facturacion)      : null,
                 r.facturacion_prev != null ? convertir(r.facturacion_prev) : null,
                 r.var_facturacion  ?? null,
@@ -942,7 +942,14 @@ const Dashboard = (() => {
     ];
 
     function renderTablaSucursales(rows) {
-        if (rows) _tablaSucRows = rows;
+        if (rows) {
+            _tablaSucRows = rows;
+            (rows ?? []).forEach(r => {
+                if (r.nro_sucurs && r.nombre && !String(r.nombre).startsWith('Suc.')) {
+                    _sucNombres[+r.nro_sucurs] = r.nombre;
+                }
+            });
+        }
 
         // Filtro "solo activas" (client-side)
         let allRows = _tablaSucRows;
@@ -972,18 +979,20 @@ const Dashboard = (() => {
             return `<span class="${cls}">${icon}\u00A0${(Math.abs(v) * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>`;
         };
 
+        const getRowNombre = r => (r.nombre && !String(r.nombre).startsWith('Suc.')) ? r.nombre : getSucNombre(r.nro_sucurs);
+
         // Ordenar
         const { col, asc } = _tablaSucSort;
         const sorted = [...allRows].sort((a, b) => {
-            const av = col === 'nombre' ? getSucNombre(a.nro_sucurs) : (a[col] ?? -Infinity);
-            const bv = col === 'nombre' ? getSucNombre(b.nro_sucurs) : (b[col] ?? -Infinity);
+            const av = col === 'nombre' ? getRowNombre(a) : (a[col] ?? -Infinity);
+            const bv = col === 'nombre' ? getRowNombre(b) : (b[col] ?? -Infinity);
             if (av < bv) return asc ? -1 : 1;
             if (av > bv) return asc ? 1 : -1;
             return 0;
         });
 
         const dataRows = sorted.map(r => `<tr>
-            <td>${getSucNombre(r.nro_sucurs)}</td>
+            <td>${getRowNombre(r)}</td>
             <td style="text-align:right">${moneyOrMask(r.facturacion)}</td>
             <td style="text-align:right">${r.facturacion_prev ? moneyOrMask(r.facturacion_prev) : '—'}</td>
             <td style="text-align:right">${iconVar(r.var_facturacion)}</td>

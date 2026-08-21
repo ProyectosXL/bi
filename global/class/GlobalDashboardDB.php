@@ -934,36 +934,49 @@ class GlobalDashboardDB
         }
 
         $result = [];
-        // Franquicias: incluir las 11 sin Tango aunque no estén en BI_SALES_SUCURSALES
+        // Franquicias: incluir todas las franquicias remotas y locales
         if ($this->origen === 'franquicias') {
             // Query remote active franchises (no joins/subqueries)
             $remoteRows = $this->query("
-                SELECT NRO_SUCURSAL AS NRO_SUCURS, DESC_SUCURSAL, TANGO
+                SELECT NRO_SUCURSAL AS NRO_SUCURS, DESC_SUCURSAL, TANGO, HABILITADO
                 FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS
-                WHERE HABILITADO = 1
-                  AND CANAL = 'FRANQUICIAS'
+                WHERE CANAL LIKE 'FRANQUICIA%' OR NRO_SUCURSAL >= 500
             ");
 
             // Query local distinct sucursales from the current database
             $localRows = $this->query("
-                SELECT DISTINCT NRO_SUCURS
+                SELECT DISTINCT NRO_SUCURS, SUCURSAL
                 FROM BI_SALES_SUCURSALES
             ");
 
-            $localIds = [];
+            $localMap = [];
             foreach ($localRows as $r) {
-                $localIds[(int)$r['NRO_SUCURS']] = true;
+                $localMap[(int)$r['NRO_SUCURS']] = trim($r['SUCURSAL'] ?? '');
             }
 
-            // Filter in PHP: keep if exists locally OR sl.TANGO is null
+            $seen = [];
             foreach ($remoteRows as $row) {
                 $id = (int)$row['NRO_SUCURS'];
-                $tango = $row['TANGO'];
-                if (isset($localIds[$id]) || $tango === null) {
+                $hab = $row['HABILITADO'] ?? null;
+                $isActive = ($hab == 1 || $hab === '1');
+                if ($soloActivas && !$isActive) continue;
+
+                $desc = trim($row['DESC_SUCURSAL'] ?? '') ?: ($localMap[$id] ?? ('Suc. ' . $id));
+                $result[] = [
+                    'NRO_SUCURS'    => $id,
+                    'DESC_SUCURSAL' => $desc,
+                ];
+                $seen[$id] = true;
+            }
+
+            // Agregar cualquier sucursal de ventas local que no estuviese en SUCURSALES_LAKERS
+            foreach ($localMap as $id => $desc) {
+                if (!isset($seen[$id])) {
                     $result[] = [
-                        'NRO_SUCURS' => $id,
-                        'DESC_SUCURSAL' => $row['DESC_SUCURSAL'],
+                        'NRO_SUCURS'    => $id,
+                        'DESC_SUCURSAL' => $desc ?: ('Suc. ' . $id),
                     ];
+                    $seen[$id] = true;
                 }
             }
 
