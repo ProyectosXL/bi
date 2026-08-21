@@ -26,6 +26,34 @@
     100% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
 }
 
+/* ── Agrupa el botón de acción del topbar con topbar-meta (que trae su propio
+   margin-left:auto en components.css — se pisa acá, scoped a este wrapper, sin
+   tocar la clase compartida) para que ambos queden pegados a la derecha juntos. ── */
+.topbar-right {
+    margin-left: auto;
+    display    : flex;
+    align-items: center;
+    gap        : 14px;
+    flex-shrink: 0;
+}
+.topbar-right .topbar-meta { margin-left: 0; }
+
+.btn-topbar-accion {
+    background   : rgba(255,255,255,0.08);
+    border       : 1px solid rgba(255,255,255,0.25);
+    border-radius: var(--radius-sm);
+    color        : rgba(255,255,255,0.92);
+    padding      : 6px 12px;
+    font-size    : .78rem;
+    cursor       : pointer;
+    display      : flex;
+    align-items  : center;
+    gap          : 6px;
+    white-space  : nowrap;
+    transition   : background var(--transition), border-color var(--transition);
+}
+.btn-topbar-accion:hover { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.45); }
+
 /* ── Section header (igual criterio que promo-section-header) ── */
 .premios-section-header {
     background   : var(--bg-card2);
@@ -195,6 +223,10 @@
 .table-wrap th.th-num    { text-align: right; }
 .table-wrap th.th-center { text-align: center; }
 
+/* ── Encabezados abreviados con tooltip (title) — cursor "?" para que se note que hay
+   significado completo al pasar el mouse (ej. "C. PP." = Canal Propios). ── */
+.premios-table th[title] { cursor: help; }
+
 .btn-export-excel {
     margin-left  : auto;
     background   : transparent;
@@ -210,6 +242,149 @@
     transition   : color var(--transition), border-color var(--transition);
 }
 .btn-export-excel:hover { color: var(--accent2); border-color: var(--accent2); }
+
+/* ── Columna de acciones (mail / controlado) en la tabla de Premios Supervisoras ── */
+.premios-table td.td-acciones { white-space: nowrap; text-align: right; }
+.btn-accion-fila {
+    background   : transparent;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color        : var(--text-2);
+    padding      : 4px 8px;
+    font-size    : .72rem;
+    cursor       : pointer;
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 4px;
+    margin-left  : 6px;
+    transition   : color var(--transition), border-color var(--transition), background var(--transition);
+}
+.btn-accion-fila:hover  { color: var(--accent2); border-color: var(--accent2); }
+.btn-accion-fila:disabled { opacity: .45; cursor: not-allowed; }
+.btn-controlado.is-controlado {
+    background: #f0fdf4;
+    color     : #16a34a;
+    border-color: #bbf7d0;
+}
+
+/* ── Modal genérico de aviso/confirmación (reemplazo de alert()/confirm() nativos) ── */
+.premios-alert-overlay {
+    position   : fixed;
+    inset      : 0;
+    background : rgba(26,35,64,0.55);
+    display    : none;
+    align-items: center;
+    justify-content: center;
+    z-index    : 10000;
+    opacity    : 0;
+    transition : opacity .15s ease;
+}
+.premios-alert-overlay.visible { display: flex; opacity: 1; }
+.premios-alert-box {
+    background   : var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    width        : min(380px, 90vw);
+    overflow     : hidden;
+}
+.premios-alert-header {
+    display      : flex;
+    align-items  : center;
+    gap          : 8px;
+    padding      : 14px 16px;
+    font-family  : var(--font-display);
+    font-weight  : 600;
+    font-size    : 1rem;
+    color        : #fff;
+}
+.premios-alert-header.premios-alert-exito { background: var(--pos, #16a34a); }
+.premios-alert-header.premios-alert-error { background: var(--neg, #dc2626); }
+.premios-alert-header.premios-alert-info  { background: var(--accent2); }
+.premios-alert-body {
+    padding  : 16px;
+    font-size: .88rem;
+    color    : var(--text-1);
+    line-height: 1.4;
+}
+.premios-alert-actions {
+    display        : flex;
+    justify-content: flex-end;
+    gap            : 8px;
+    padding        : 0 16px 16px;
+}
+.premios-alert-btn {
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding      : 7px 18px;
+    font-size    : .85rem;
+    cursor       : pointer;
+    background   : transparent;
+    color        : var(--text-2);
+    transition   : background var(--transition), border-color var(--transition);
+}
+.premios-alert-btn-ok {
+    background: var(--accent2);
+    border-color: var(--accent2);
+    color     : #fff;
+    font-weight: 600;
+}
+.premios-alert-btn-ok:hover { opacity: .9; }
+.premios-alert-btn-cancel:hover { border-color: var(--accent2); color: var(--accent2); }
+
+/* ── Modal "Emails de supervisoras" ── */
+.modal-emails-overlay {
+    position   : fixed;
+    inset      : 0;
+    background : rgba(26,35,64,0.55);
+    display    : none;
+    align-items: center;
+    justify-content: center;
+    z-index    : 9999;
+}
+.modal-emails-overlay.visible { display: flex; }
+.modal-emails-box {
+    background   : var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    width        : min(480px, 92vw);
+    max-height   : 80vh;
+    overflow     : auto;
+}
+.modal-emails-header {
+    display        : flex;
+    justify-content: space-between;
+    align-items    : center;
+    padding        : 12px 16px;
+    font-family    : var(--font-display);
+    font-weight    : 600;
+    background     : var(--bg-card2);
+    border-bottom  : 1px solid var(--border);
+}
+.modal-emails-cerrar { background: transparent; border: none; cursor: pointer; color: var(--text-2); font-size: 1rem; }
+.modal-emails-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.modal-emails-nombre { flex: 0 0 42%; font-size: .82rem; color: var(--text-1); }
+
+/* ── Filas arrastrables del modal "Configuración de supervisoras" ── */
+.modal-config-hint { font-size: .76rem; color: var(--text-3); margin: 0; }
+#modal-orden-lista { display: flex; flex-direction: column; gap: 6px; }
+.modal-config-fila {
+    display      : flex;
+    align-items  : center;
+    gap          : 8px;
+    padding      : 7px 10px;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background   : var(--bg-card2);
+    cursor       : grab;
+}
+.modal-config-fila.dragging { opacity: .4; }
+.modal-config-fila.oculta { opacity: .5; }
+.modal-config-fila.oculta .modal-emails-nombre { text-decoration: line-through; }
+.modal-config-handle { color: var(--text-3); }
+.modal-config-check { cursor: pointer; accent-color: var(--accent2); }
+.modal-config-mail { margin-left: auto; font-size: .78rem; color: var(--text-2); }
+.modal-config-mail.sin-mail { color: var(--text-3); font-style: italic; }
+.modal-config-actions { display: flex; justify-content: flex-end; padding-top: 4px; }
 
 .premios-loading {
     display    : flex;

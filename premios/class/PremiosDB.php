@@ -30,22 +30,16 @@ class PremiosDB
     private const CASA_CENTRAL_NRO = 1;
 
     /**
-     * Supervisoras activas en RO_T_SUPERVISORAS_COMERCIAL que, por decisión de negocio,
-     * no deben mostrarse ni recibir premios en ESTE dashboard (siguen vigentes en el
-     * resto de los sistemas — no se toca el catálogo). Nombres tal como los devuelve
-     * formatearNombre().
+     * @var array<int,array{nombre:string,mail:?string}>|null Caché del catálogo COMPLETO de
+     * supervisoras activas (RO_T_SUPERVISORAS_COMERCIAL) para esta instancia — ver
+     * catalogoSupervisoras(). Incluye TODAS las activas, sin filtrar por visibilidad —
+     * ver BI_T_PREMIOS_SUPERVISORAS_ORDEN (columnas ORDEN + VISIBLE) para qué se
+     * muestra/oculta y en qué orden en ESTE dashboard, editable desde el configurador
+     * ("Configuración de supervisoras" en el topbar). Antes había una constante
+     * hardcodeada SUPERVISORAS_EXCLUIDAS con ['Julieta Dalmeida'] — se reemplazó por el
+     * flag VISIBLE=0 de esa tabla, seedeado en premios/sql/setup_control_mail.sql.
      */
-    private const SUPERVISORAS_EXCLUIDAS = ['Julieta Dalmeida'];
-
-    /**
-     * Orden fijo pedido por Johanna para mostrar a las supervisoras (tablas y KPIs),
-     * en vez del orden del catálogo (RO_T_SUPERVISORAS_COMERCIAL.ID). Una supervisora
-     * activa que no esté en esta lista se agrega al final, en el orden del catálogo.
-     */
-    private const ORDEN_SUPERVISORAS = [
-        'Natalia Bontempo', 'Elina Costamagna', 'Carolina Commendatore',
-        'Sonia Pacifico', 'Nahir Actis', 'Josefina Pastorino',
-    ];
+    private ?array $catalogoSupervisorasCache = null;
 
     /** @var resource Conexión a XL-APPS/POWER_BI_CONTROL (+ linked server LAKERBIS) */
     private $connPower;
@@ -180,10 +174,24 @@ class PremiosDB
         return $res;
     }
 
-    /** @return string[] Supervisoras activas, en el orden pedido por Johanna (ver ORDEN_SUPERVISORAS). */
-    public function getSupervisoras(): array
+    /**
+     * Catálogo de supervisoras activas (RO_T_SUPERVISORAS_COMERCIAL, vía linked server
+     * XL-LAKERBIS, igual patrón que usa class/Filters.php para SUCURSALES_LAKERS), con su
+     * mail — columna agregada por el usuario directamente en esa tabla; premios la
+     * consume de SOLO LECTURA (no hay precedente en el repo de escritura hacia una tabla
+     * de XL-LAKERBIS a través de este linked server, así que la edición del mail queda
+     * fuera del dashboard). En el orden crudo del catálogo (RO_T_SUPERVISORAS_COMERCIAL.ID)
+     * — el orden de despliegue real lo resuelve getSupervisoras() por separado.
+     *
+     * @return array<int,array{nombre:string,mail:?string}>
+     */
+    private function catalogoSupervisoras(): array
     {
-        $sql = "SELECT NOMBRE FROM [XL-LAKERBIS].locales_lakers.dbo.RO_T_SUPERVISORAS_COMERCIAL
+        if ($this->catalogoSupervisorasCache !== null) {
+            return $this->catalogoSupervisorasCache;
+        }
+
+        $sql = "SELECT NOMBRE, MAIL FROM [XL-LAKERBIS].locales_lakers.dbo.RO_T_SUPERVISORAS_COMERCIAL
                 WHERE ACTIVA = 1 ORDER BY ID";
         $stmt = sqlsrv_query($this->connPower, $sql);
         if ($stmt === false) {
@@ -191,18 +199,150 @@ class PremiosDB
         }
         $out = [];
         while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-            $nombre = self::formatearNombre($r['NOMBRE']);
-            if (in_array($nombre, self::SUPERVISORAS_EXCLUIDAS, true)) {
-                continue;
-            }
-            $out[] = $nombre;
+            $out[] = ['nombre' => self::formatearNombre($r['NOMBRE']), 'mail' => $r['MAIL'] ?: null];
         }
-        usort($out, function ($a, $b) {
-            $posA = array_search($a, self::ORDEN_SUPERVISORAS, true);
-            $posB = array_search($b, self::ORDEN_SUPERVISORAS, true);
-            return ($posA === false ? PHP_INT_MAX : $posA) <=> ($posB === false ? PHP_INT_MAX : $posB);
+        return $this->catalogoSupervisorasCache = $out;
+    }
+
+    /**
+     * @return string[] Supervisoras activas y VISIBLES en este dashboard (ver
+     * getVisibilidadSupervisoras()), en el orden guardado en
+     * BI_T_PREMIOS_SUPERVISORAS_ORDEN (editable desde el configurador — ver
+     * guardarConfiguracionSupervisoras()). Una supervisora sin orden guardado todavía se
+     * agrega al final, en el orden del catálogo.
+     */
+    public function getSupervisoras(): array
+    {
+        $nombres = array_column($this->catalogoSupervisoras(), 'nombre');
+        $visibilidad = $this->getVisibilidadSupervisoras();
+        $nombres = array_values(array_filter($nombres, fn($n) => $visibilidad[$n] ?? true));
+
+        $orden = $this->getOrdenSupervisoras();
+        $posicionCatalogo = array_flip(array_column($this->catalogoSupervisoras(), 'nombre'));
+        usort($nombres, function ($a, $b) use ($orden, $posicionCatalogo) {
+            $posA = $orden[$a] ?? (1000 + $posicionCatalogo[$a]);
+            $posB = $orden[$b] ?? (1000 + $posicionCatalogo[$b]);
+            return $posA <=> $posB;
         });
+        return $nombres;
+    }
+
+    /**
+     * @return array<int,array{nombre:string,mail:?string,visible:bool}> TODAS las
+     * supervisoras activas del catálogo (incluidas las ocultas, ej. Julieta Dalmeida),
+     * en el mismo orden guardado que getSupervisoras() — para el configurador del
+     * dashboard ("Configuración de supervisoras"), que necesita poder re-mostrar una
+     * supervisora oculta.
+     */
+    public function catalogoConfigSupervisoras(): array
+    {
+        $catalogo = $this->catalogoSupervisoras();
+        $orden = $this->getOrdenSupervisoras();
+        $visibilidad = $this->getVisibilidadSupervisoras();
+        $posicionCatalogo = array_flip(array_column($catalogo, 'nombre'));
+
+        usort($catalogo, function ($a, $b) use ($orden, $posicionCatalogo) {
+            $posA = $orden[$a['nombre']] ?? (1000 + $posicionCatalogo[$a['nombre']]);
+            $posB = $orden[$b['nombre']] ?? (1000 + $posicionCatalogo[$b['nombre']]);
+            return $posA <=> $posB;
+        });
+
+        return array_map(fn($s) => [
+            'nombre'  => $s['nombre'],
+            'mail'    => $s['mail'],
+            'visible' => $visibilidad[$s['nombre']] ?? true,
+        ], $catalogo);
+    }
+
+    /** Mail de una supervisora tal como está en RO_T_SUPERVISORAS_COMERCIAL.MAIL, o null si no tiene. */
+    public function getEmailSupervisora(string $supervisora): ?string
+    {
+        foreach ($this->catalogoSupervisoras() as $s) {
+            if ($s['nombre'] === $supervisora) {
+                return $s['mail'];
+            }
+        }
+        return null;
+    }
+
+    /* ─────────────────────────────────────────────────────────
+     * Orden y visibilidad de supervisoras (BI_T_PREMIOS_SUPERVISORAS_ORDEN) — editables
+     * desde el modal "Configuración de supervisoras" del dashboard (arrastrar para
+     * reordenar, tilde para mostrar/ocultar). Vive en POWER_BI_CONTROL (conexión
+     * 'power'), no en XL-LAKERBIS: es una preferencia de despliegue propia de premios,
+     * no un dato del catálogo comercial compartido — el catálogo (activa/inactiva,
+     * mail) sigue viviendo en RO_T_SUPERVISORAS_COMERCIAL.
+     * ───────────────────────────────────────────────────────── */
+
+    /** @return array<string,int> Mapa SUPERVISORA => ORDEN guardado. */
+    public function getOrdenSupervisoras(): array
+    {
+        $sql = "SELECT SUPERVISORA, ORDEN FROM BI_T_PREMIOS_SUPERVISORAS_ORDEN";
+        $stmt = sqlsrv_query($this->connPower, $sql);
+        if ($stmt === false) {
+            throw new RuntimeException('Error consultando BI_T_PREMIOS_SUPERVISORAS_ORDEN: ' . print_r(sqlsrv_errors(), true));
+        }
+        $out = [];
+        while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            $out[$r['SUPERVISORA']] = (int) $r['ORDEN'];
+        }
         return $out;
+    }
+
+    /**
+     * @return array<string,bool> Mapa SUPERVISORA => VISIBLE guardado. Una supervisora
+     * activa que todavía no tiene fila acá (ej. recién agregada al catálogo) se
+     * considera visible por defecto — se muestra automáticamente sin que haga falta
+     * tocar el configurador, y solo se oculta si alguien la desmarca explícitamente.
+     */
+    public function getVisibilidadSupervisoras(): array
+    {
+        $sql = "SELECT SUPERVISORA, VISIBLE FROM BI_T_PREMIOS_SUPERVISORAS_ORDEN";
+        $stmt = sqlsrv_query($this->connPower, $sql);
+        if ($stmt === false) {
+            throw new RuntimeException('Error consultando BI_T_PREMIOS_SUPERVISORAS_ORDEN: ' . print_r(sqlsrv_errors(), true));
+        }
+        $out = [];
+        while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            $out[$r['SUPERVISORA']] = (bool) $r['VISIBLE'];
+        }
+        return $out;
+    }
+
+    /**
+     * Reemplaza la configuración guardada (orden + visibilidad) por la lista completa
+     * recibida, ya en el orden deseado. Se borra y reinserta dentro de una transacción en
+     * vez de upsert fila por fila — la tabla es chica (una fila por supervisora activa
+     * del catálogo, visible u oculta) y así se evita dejarla en un estado mixto (mitad
+     * vieja/mitad nueva) si el guardado se corta a la mitad.
+     *
+     * @param array<int,array{nombre:string,visible:bool}> $itemsEnOrden Debe incluir TODAS
+     *        las supervisoras activas del catálogo (visibles y ocultas) — ver
+     *        catalogoConfigSupervisoras() y la validación en api/supervisoras_orden.php.
+     */
+    public function guardarConfiguracionSupervisoras(array $itemsEnOrden, string $usuario): void
+    {
+        if (!sqlsrv_begin_transaction($this->connPower)) {
+            throw new RuntimeException('No se pudo iniciar la transacción: ' . print_r(sqlsrv_errors(), true));
+        }
+        try {
+            $stmtDelete = sqlsrv_query($this->connPower, 'DELETE FROM BI_T_PREMIOS_SUPERVISORAS_ORDEN');
+            if ($stmtDelete === false) {
+                throw new RuntimeException('Error limpiando BI_T_PREMIOS_SUPERVISORAS_ORDEN: ' . print_r(sqlsrv_errors(), true));
+            }
+            $sqlInsert = "INSERT INTO BI_T_PREMIOS_SUPERVISORAS_ORDEN (SUPERVISORA, ORDEN, VISIBLE, ACTUALIZADO_POR, FECHA_ACTUALIZACION)
+                          VALUES (?, ?, ?, ?, GETDATE())";
+            foreach (array_values($itemsEnOrden) as $i => $item) {
+                $stmtInsert = sqlsrv_query($this->connPower, $sqlInsert, [$item['nombre'], $i + 1, $item['visible'], $usuario]);
+                if ($stmtInsert === false) {
+                    throw new RuntimeException('Error insertando en BI_T_PREMIOS_SUPERVISORAS_ORDEN: ' . print_r(sqlsrv_errors(), true));
+                }
+            }
+            sqlsrv_commit($this->connPower);
+        } catch (Throwable $e) {
+            sqlsrv_rollback($this->connPower);
+            throw $e;
+        }
     }
 
     /* ─────────────────────────────────────────────────────────
@@ -395,6 +535,140 @@ class PremiosDB
         return $out;
     }
 
+    /**
+     * Fecha (Y-m-d, fin de mes) del período actual si resuelve a UN SOLO mes, o null si el
+     * rango cubre 0 o 2+ meses. El estado "Controlado" (ver marcarControlado()) solo tiene
+     * sentido para un mes puntual — las tablas de origen son mensuales.
+     */
+    public function mesUnico(): ?string
+    {
+        return count($this->mesesActual) === 1 ? $this->mesesActual[0] : null;
+    }
+
+    /**
+     * true si TODAS las supervisoras activas (getSupervisoras()) están marcadas
+     * "Controlado" para ese mes. Usado para disparar el envío automático del resumen
+     * mensual — ver MailPremios::enviarResumenMensual() y api/marcar_controlado.php.
+     */
+    public function todasSupervisorasControladas(string $mes): bool
+    {
+        $activas = $this->getSupervisoras();
+        if (!$activas) return false;
+        $estado = $this->getControladoBulk($mes, $activas);
+        foreach ($activas as $sup) {
+            if (!($estado[$sup]['controlado'] ?? false)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /* ─────────────────────────────────────────────────────────
+     * Estado "Controlado" (BI_T_PREMIOS_CONTROL) — cierre mensual por supervisora,
+     * y mapeo supervisora→email (BI_T_PREMIOS_SUPERVISORAS_EMAIL) para el envío de mail
+     * individual. Ambas tablas viven en POWER_BI_CONTROL (conexión 'power'), junto a las
+     * tablas de hechos — ver premios/sql/setup_control_mail.sql para su creación.
+     * ───────────────────────────────────────────────────────── */
+
+    /**
+     * @param string $mes Fin de mes (Y-m-d) — ver mesUnico().
+     * @param string[] $supervisoras
+     * @return array<string,array{controlado:bool,usuario:?string,fecha_control:?string}>
+     */
+    public function getControladoBulk(string $mes, array $supervisoras): array
+    {
+        $out = [];
+        foreach ($supervisoras as $sup) {
+            $out[$sup] = ['controlado' => false, 'usuario' => null, 'fecha_control' => null];
+        }
+        if (!$supervisoras) return $out;
+
+        $placeholders = implode(',', array_fill(0, count($supervisoras), '?'));
+        $sql = "SELECT SUPERVISORA, CONTROLADO, USUARIO, FECHA_CONTROL
+                FROM BI_T_PREMIOS_CONTROL
+                WHERE MES = ? AND SUPERVISORA IN ($placeholders)";
+        $params = array_merge([$mes], $supervisoras);
+        $stmt = sqlsrv_query($this->connPower, $sql, $params);
+        if ($stmt === false) {
+            throw new RuntimeException('Error consultando BI_T_PREMIOS_CONTROL: ' . print_r(sqlsrv_errors(), true));
+        }
+        while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            $out[$r['SUPERVISORA']] = [
+                'controlado'    => (bool) $r['CONTROLADO'],
+                'usuario'       => $r['USUARIO'],
+                'fecha_control' => $r['FECHA_CONTROL'] instanceof DateTime ? $r['FECHA_CONTROL']->format('d/m/Y H:i:s') : $r['FECHA_CONTROL'],
+            ];
+        }
+        return $out;
+    }
+
+    /** Marca/desmarca "Controlado" para (mes, supervisora); registra usuario y fecha del cambio. */
+    public function marcarControlado(string $mes, string $supervisora, bool $controlado, string $usuario): array
+    {
+        $sql = "MERGE BI_T_PREMIOS_CONTROL AS target
+                USING (SELECT ? AS MES, ? AS SUPERVISORA) AS src
+                ON target.MES = src.MES AND target.SUPERVISORA = src.SUPERVISORA
+                WHEN MATCHED THEN
+                    UPDATE SET CONTROLADO = ?, USUARIO = ?, FECHA_CONTROL = GETDATE()
+                WHEN NOT MATCHED THEN
+                    INSERT (MES, SUPERVISORA, CONTROLADO, USUARIO, FECHA_CONTROL)
+                    VALUES (?, ?, ?, ?, GETDATE());";
+        $params = [$mes, $supervisora, $controlado, $usuario, $mes, $supervisora, $controlado, $usuario];
+        $stmt = sqlsrv_query($this->connPower, $sql, $params);
+        if ($stmt === false) {
+            throw new RuntimeException('Error al grabar BI_T_PREMIOS_CONTROL: ' . print_r(sqlsrv_errors(), true));
+        }
+        return $this->getControladoBulk($mes, [$supervisora])[$supervisora];
+    }
+
+    /**
+     * Arma el resumen de premios (Propios+Franquicias) por supervisora — misma construcción
+     * que usa api/resumen.php, extraída acá para reusarla también en el mail de resumen
+     * mensual (MailPremios::renderResumenMensual()) sin duplicar la lógica.
+     *
+     * @param string[] $supervisoras
+     * @return array{filas:array<int,array>, pct_cumplimiento_cadena_total:float}
+     */
+    public function resumenPorSupervisora(array $supervisoras): array
+    {
+        $propiosTodos     = $this->datosPropios(null);
+        $filasTodas       = $this->datosPropios('TODAS');
+        $franquiciasTodos = $this->datosFranquicias();
+
+        $benchmarks = [
+            'var_marca'    => $this->benchmarkVarMarca($propiosTodos),
+            'ticket_marca' => $this->ticketPromedioMarca($propiosTodos),
+            'pct2_marca'   => $this->pctTicketProductoMarca($propiosTodos, 'tickets_2do_prod'),
+            'pct3_marca'   => $this->pctTicketProductoMarca($propiosTodos, 'tickets_3er_prod'),
+        ];
+
+        $conteosFranquiciaEmpresa = $this->conteosFranquiciaEmpresa($franquiciasTodos);
+        $importesFranquiciaPorSup = $this->importesFranquiciaPorSupervisora();
+
+        $out = [];
+        $filasPropiasTodasLasSup = [];
+        foreach ($supervisoras as $sup) {
+            $filasPropias = $this->datosPropios($sup);
+            $filasPropiasTodasLasSup = array_merge($filasPropiasTodasLasSup, $filasPropias);
+
+            $propios     = $this->premiosPropiosSupervisora($sup, $filasPropias, $propiosTodos, $filasTodas, $benchmarks);
+            $franquicias = $this->premiosFranquiciasSupervisora($conteosFranquiciaEmpresa, $importesFranquiciaPorSup[$sup] ?? []);
+
+            $out[] = [
+                'supervisora'             => $sup,
+                'total_premios'           => $propios['total'] + $franquicias['total'],
+                'propios'                 => $propios,
+                'franquicias'             => $franquicias,
+                'pct_cumplimiento_cadena' => $this->pctCumplimientoCadenaIndicadores($filasPropias, $benchmarks),
+            ];
+        }
+
+        return [
+            'filas' => $out,
+            'pct_cumplimiento_cadena_total' => $this->pctCumplimientoCadenaIndicadores($filasPropiasTodasLasSup, $benchmarks),
+        ];
+    }
+
     /* ─────────────────────────────────────────────────────────
      * Reglas de negocio — fórmulas base
      * ───────────────────────────────────────────────────────── */
@@ -412,20 +686,38 @@ class PremiosDB
     }
 
     /**
-     * % de locales PROPIOS de la cadena de una supervisora que cumplen el objetivo de venta
-     * individualmente — a diferencia del "cant" de premiosVentaCrecimiento(), que es un
-     * conteo a nivel empresa usado solo para calcular el premio (ver esa función). Excluye
-     * NRO_SUCURS=1 "CENTRAL" (fila sintética, no es un local real). Un local sin datos de
-     * venta en el período cuenta en el total de la cadena pero no como cumplido.
+     * % de indicadores secundarios (Ticket Promedio + Ticket 2do Producto + Ticket 3er
+     * Producto) que llegan a su benchmark de marca, sobre el TOTAL de indicadores posibles
+     * de la cadena: cada local real (excluye NRO_SUCURS=1 "CENTRAL") aporta 3 indicadores,
+     * así que una supervisora con 5 locales tiene 15 en la base del cálculo — no es un
+     * promedio de 3 porcentajes, es cuántos de esos N×3 indicadores individuales cumplen.
+     * Mismos umbrales que premioTicketPromedio()/premioTicketProducto() (cada indicador se
+     * evalúa de forma independiente, igual que los 3 badges por fila que se ven en la UI —
+     * sin relación con si la fila ganó o no el objetivo de venta).
+     *
+     * Un local "sin datos" en el período (fact=0 y obj=0) suma sus 3 indicadores al total
+     * pero nunca como cumplidos — mismo criterio que ya usaba esta columna cuando medía
+     * solo objetivo de venta, ahora aplicado indicador por indicador.
+     *
+     * @param array $benchmarksTicket ['ticket_marca'=>float,'pct2_marca'=>float,'pct3_marca'=>float]
+     *                                (mismo array $benchmarks que ya se arma para los premios)
      */
-    public function pctCumplimientoCadenaVenta(array $filasSupervisora): float
+    public function pctCumplimientoCadenaIndicadores(array $filasSupervisora, array $benchmarksTicket): float
     {
         $total = 0;
         $cumple = 0;
         foreach ($filasSupervisora as $f) {
             if ($f['casa_central']) continue;
-            $total++;
-            if (!$f['sin_datos'] && $this->cumplimientoObjVenta($f['imp_fact'], $f['imp_obj']) > self::TOLERANCIA_OBJ_VENTA) {
+            $total += 3;
+            if ($f['sin_datos']) continue;
+
+            if ($this->ticketPromedioEst($f['imp_fact'], $f['tickets']) > $benchmarksTicket['ticket_marca']) {
+                $cumple++;
+            }
+            if ($f['tickets'] > 0 && ($f['tickets_2do_prod'] / $f['tickets']) > $benchmarksTicket['pct2_marca']) {
+                $cumple++;
+            }
+            if ($f['tickets'] > 0 && ($f['tickets_3er_prod'] / $f['tickets']) > $benchmarksTicket['pct3_marca']) {
                 $cumple++;
             }
         }

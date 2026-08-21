@@ -50,12 +50,17 @@ try {
                 <span id="periodo-previo-label">—</span>
             </div>
         </div>
-        <div class="topbar-meta">
-            Última actualización<br>
-            <strong id="ultima-actualizacion"><?= $ultimaAct ?></strong>
-            <span class="badge-outdated" id="badge-desactualizado" title="Los datos tienen más de un día de retraso" <?= !$isOutdated ? 'style="display: none;"' : '' ?>>
-                <i class="bi bi-exclamation-triangle-fill"></i> DESACTUALIZADO
-            </span>
+        <div class="topbar-right">
+            <button class="btn-topbar-accion" id="btn-orden-supervisoras" style="display:none;" title="Reordenar y mostrar/ocultar supervisoras">
+                <i class="bi bi-arrow-down-up"></i> Configuración de supervisoras
+            </button>
+            <div class="topbar-meta">
+                Última actualización<br>
+                <strong id="ultima-actualizacion"><?= $ultimaAct ?></strong>
+                <span class="badge-outdated" id="badge-desactualizado" title="Los datos tienen más de un día de retraso" <?= !$isOutdated ? 'style="display: none;"' : '' ?>>
+                    <i class="bi bi-exclamation-triangle-fill"></i> DESACTUALIZADO
+                </span>
+            </div>
         </div>
     </header>
 
@@ -134,6 +139,9 @@ try {
             <div class="premios-card">
                 <div class="premios-section-header">
                     <i class="bi bi-award"></i>&nbsp; Premios por Supervisora
+                    <button class="btn-export-excel" id="btn-resumen-mensual" style="display:none;">
+                        <i class="bi bi-envelope-paper"></i> Enviar resumen mensual
+                    </button>
                     <button class="btn-export-excel" id="btn-export-resumen">
                         <i class="bi bi-file-earmark-excel"></i> Excel
                     </button>

@@ -16,6 +16,7 @@ if (!isset($_SESSION['username'])) {
     exit;
 }
 
+require_once __DIR__ . '/../../class/config.php';
 require_once __DIR__ . '/../../class/PeriodHelper.php';
 require_once __DIR__ . '/../class/PremiosDB.php';
 
@@ -25,53 +26,30 @@ try {
 
     $db = new PremiosDB($da, $ha, $dp, $hp);
 
-    // Benchmarks de marca: siempre sobre el universo completo, sin filtro de supervisora.
-    // datosPropios(null) excluye la fila sintética "TODAS"; se pide aparte para el caso
-    // especial de Carolina Commendatore (ver PremiosDB::premiosVentaCrecimiento()).
-    $propiosTodos     = $db->datosPropios(null);
-    $filasTodas       = $db->datosPropios('TODAS');
-    $franquiciasTodos = $db->datosFranquicias();
-
-    $benchmarks = [
-        'var_marca'    => $db->benchmarkVarMarca($propiosTodos),
-        'ticket_marca' => $db->ticketPromedioMarca($propiosTodos),
-        'pct2_marca'   => $db->pctTicketProductoMarca($propiosTodos, 'tickets_2do_prod'),
-        'pct3_marca'   => $db->pctTicketProductoMarca($propiosTodos, 'tickets_3er_prod'),
-    ];
-
-    // Franquicias: la "cantidad" que cumple objetivo/crecimiento es a nivel empresa
-    // (no existe relación sucursal-franquicia → supervisora, ver premios/README.md).
-    // Solo el importe del premio varía por supervisora.
-    $conteosFranquiciaEmpresa = $db->conteosFranquiciaEmpresa($franquiciasTodos);
-    $importesFranquiciaPorSup = $db->importesFranquiciaPorSupervisora();
-
     $supervisoras = $db->getSupervisoras();
     if ($supervisoraFiltro) {
         $supervisoras = array_values(array_filter($supervisoras, fn($s) => $s === $supervisoraFiltro));
     }
 
-    $out = [];
-    $filasPropiasTodasLasSup = [];
-    foreach ($supervisoras as $sup) {
-        // OJO: no filtrar $propiosTodos por supervisora acá — NRO_SUCURS=1 "CENTRAL"
-        // tiene una fila real POR CADA supervisora que la recibe (Elina, Natalia), y al
-        // traerlas sin filtro quedan agrupadas por NRO_SUCURS (se pierde la de alguna).
-        // datosPropios($sup) filtra por supervisora ANTES del dedup y las trae bien.
-        $filasPropias = $db->datosPropios($sup);
-        $filasPropiasTodasLasSup = array_merge($filasPropiasTodasLasSup, $filasPropias);
+    $resumen = $db->resumenPorSupervisora($supervisoras);
+    $out = $resumen['filas'];
+    $pctCumplimientoCadenaTotal = $resumen['pct_cumplimiento_cadena_total'];
 
-        $propios     = $db->premiosPropiosSupervisora($sup, $filasPropias, $propiosTodos, $filasTodas, $benchmarks);
-        $franquicias = $db->premiosFranquiciasSupervisora($conteosFranquiciaEmpresa, $importesFranquiciaPorSup[$sup] ?? []);
-
-        $out[] = [
-            'supervisora'             => $sup,
-            'total_premios'           => $propios['total'] + $franquicias['total'],
-            'propios'                 => $propios,
-            'franquicias'             => $franquicias,
-            'pct_cumplimiento_cadena' => $db->pctCumplimientoCadenaVenta($filasPropias),
-        ];
+    // Estado "Controlado": solo tiene sentido para un período de un solo mes (ver
+    // PremiosDB::mesUnico()) — en año/rango multi-mes queda null y la UI no debe ofrecer el botón.
+    $mesUnico = $db->mesUnico();
+    if ($mesUnico) {
+        $controlEstado = $db->getControladoBulk($mesUnico, $supervisoras);
+        foreach ($out as &$fila) {
+            $fila['controlado'] = $controlEstado[$fila['supervisora']] ?? ['controlado' => false, 'usuario' => null, 'fecha_control' => null];
+        }
+        unset($fila);
+    } else {
+        foreach ($out as &$fila) {
+            $fila['controlado'] = null;
+        }
+        unset($fila);
     }
-    $pctCumplimientoCadenaTotal = $db->pctCumplimientoCadenaVenta($filasPropiasTodasLasSup);
 
     $ultimaActFormatted = null;
     $isOutdated = false;
@@ -90,6 +68,8 @@ try {
         'pct_cumplimiento_cadena_total' => $pctCumplimientoCadenaTotal,
         'ultima_actualizacion' => $ultimaActFormatted,
         'is_outdated' => $isOutdated,
+        'puede_gestionar' => isGlobalMode(),
+        'mes_unico' => $mesUnico,
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
 } catch (Throwable $e) {

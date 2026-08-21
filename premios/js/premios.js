@@ -36,6 +36,24 @@ const Premios = (() => {
         return data;
     }
 
+    /**
+     * POST a un endpoint de acción (marcar_controlado.php, enviar_mail_supervisora.php, etc.).
+     * El body incluye los filtros del toolbar (período/supervisora) + lo que se pase en `body`,
+     * así el endpoint puede resolver el período con PeriodHelper::fromRequest() igual que en GET.
+     */
+    async function apiPost(endpoint, body = {}) {
+        const qs = buildQS();
+        const params = Object.fromEntries(new URLSearchParams(qs));
+        const res = await fetch(`api/${endpoint}`, {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body   : JSON.stringify({ ...params, ...body }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || `Error ${res.status} en ${endpoint}`);
+        return data;
+    }
+
     /* ── Etiqueta de período en el topbar ──
        "Desde el D/M/AA al D/M/AA (N días)" / "vs. período del DD/MM/AAAA al DD/MM/AAAA (N días)" */
     function fmtCorta(s) {
@@ -177,6 +195,57 @@ const Premios = (() => {
         return `<td class="td-num${cls}">${formateado}</td>`;
     }
 
+    /* ── Modal genérico de aviso/confirmación (reemplaza alert()/confirm() nativos del
+       navegador por algo con el mismo estilo del resto del dashboard). ── */
+    function _abrirModal(html) {
+        const overlay = document.createElement('div');
+        overlay.className = 'premios-alert-overlay';
+        overlay.innerHTML = `<div class="premios-alert-box">${html}</div>`;
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('visible'));
+        return overlay;
+    }
+    function _cerrarModal(overlay, resolve, valor) {
+        overlay.classList.remove('visible');
+        setTimeout(() => overlay.remove(), 150);
+        resolve(valor);
+    }
+
+    /** @param opts.titulo, opts.tono ('exito'|'error'|'info', default 'info') */
+    function alertModal(mensaje, opts = {}) {
+        const tono = opts.tono ?? 'info';
+        const icono = { exito: 'bi-check-circle-fill', error: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill' }[tono];
+        const titulo = opts.titulo ?? { exito: 'Listo', error: 'Error', info: 'Aviso' }[tono];
+        return new Promise(resolve => {
+            const overlay = _abrirModal(`
+                <div class="premios-alert-header premios-alert-${tono}"><i class="bi ${icono}"></i> ${titulo}</div>
+                <div class="premios-alert-body">${mensaje}</div>
+                <div class="premios-alert-actions">
+                    <button class="premios-alert-btn premios-alert-btn-ok">OK</button>
+                </div>`);
+            const cerrar = () => _cerrarModal(overlay, resolve);
+            overlay.querySelector('.premios-alert-btn-ok').addEventListener('click', cerrar);
+            overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+        });
+    }
+
+    /** @return Promise<boolean> true si confirma, false si cancela. */
+    function confirmModal(mensaje, opts = {}) {
+        return new Promise(resolve => {
+            const overlay = _abrirModal(`
+                <div class="premios-alert-header premios-alert-info"><i class="bi bi-question-circle-fill"></i> ${opts.titulo ?? 'Confirmar'}</div>
+                <div class="premios-alert-body">${mensaje}</div>
+                <div class="premios-alert-actions">
+                    <button class="premios-alert-btn premios-alert-btn-cancel">Cancelar</button>
+                    <button class="premios-alert-btn premios-alert-btn-ok">Aceptar</button>
+                </div>`);
+            const cerrar = valor => _cerrarModal(overlay, resolve, valor);
+            overlay.querySelector('.premios-alert-btn-ok').addEventListener('click', () => cerrar(true));
+            overlay.querySelector('.premios-alert-btn-cancel').addEventListener('click', () => cerrar(false));
+            overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(false); });
+        });
+    }
+
     /* ── Badge "Última actualización" / "DESACTUALIZADO" (reactivo a cada respuesta AJAX) ── */
     function actualizarUltimaActualizacion(data) {
         if (data.ultima_actualizacion) {
@@ -190,8 +259,8 @@ const Premios = (() => {
     }
 
     return {
-        $, fmt, buildQS, apiFetch, updatePeriodoLabel, setSupervisoraOptions,
+        $, fmt, buildQS, apiFetch, apiPost, updatePeriodoLabel, setSupervisoraOptions,
         calculaCumpleObjetivo, calculaCumplePorConsuelo, cumplimientoCellHTML, badgeCellHTML,
-        facturacionVarMarcaCellHTML, actualizarUltimaActualizacion,
+        facturacionVarMarcaCellHTML, actualizarUltimaActualizacion, alertModal, confirmModal,
     };
 })();

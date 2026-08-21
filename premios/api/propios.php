@@ -55,6 +55,13 @@ try {
         'pct_ticket_2do_marca'  => $db->pctTicketProductoMarca($todos, 'tickets_2do_prod'),
         'pct_ticket_3er_marca'  => $db->pctTicketProductoMarca($todos, 'tickets_3er_prod'),
     ];
+    // Mismos 3 benchmarks que $kpis, con las claves que espera pctCumplimientoCadenaIndicadores()
+    // (mismo shape que el array $benchmarks de PremiosDB::resumenPorSupervisora()).
+    $benchmarksCadena = [
+        'ticket_marca' => $kpis['ticket_promedio_marca'],
+        'pct2_marca'   => $kpis['pct_ticket_2do_marca'],
+        'pct3_marca'   => $kpis['pct_ticket_3er_marca'],
+    ];
 
     // Agrupar por supervisora, en el mismo orden que getSupervisoras(). Se pide cada grupo
     // con datosPropios($sup) en vez de filtrar $todos: NRO_SUCURS=1 "CENTRAL" tiene una fila
@@ -103,7 +110,7 @@ try {
                 'ticket_promedio'         => $db->ticketPromedioEst($sumFactCIva, $sumTickets),
                 'pct_ticket_2do'          => $sumTickets > 0 ? $sumT2 / $sumTickets : 0.0,
                 'pct_ticket_3er'          => $sumTickets > 0 ? $sumT3 / $sumTickets : 0.0,
-                'pct_cumplimiento_cadena' => $db->pctCumplimientoCadenaVenta($filasSup),
+                'pct_cumplimiento_cadena' => $db->pctCumplimientoCadenaIndicadores($filasSup, $benchmarksCadena),
             ],
         ];
     }
@@ -137,7 +144,7 @@ try {
         'ticket_promedio'         => $db->ticketPromedioEst($totFactCIva, $totTickets),
         'pct_ticket_2do'          => $db->pctTicketProductoMarca($filasParaTotal, 'tickets_2do_prod'),
         'pct_ticket_3er'          => $db->pctTicketProductoMarca($filasParaTotal, 'tickets_3er_prod'),
-        'pct_cumplimiento_cadena' => $db->pctCumplimientoCadenaVenta($filasParaTotal),
+        'pct_cumplimiento_cadena' => $db->pctCumplimientoCadenaIndicadores($filasParaTotal, $benchmarksCadena),
     ];
 
     $ultimaActFormatted = null;
