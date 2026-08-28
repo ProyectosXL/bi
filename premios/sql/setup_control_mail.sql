@@ -104,3 +104,19 @@ WHERE NOT EXISTS (
 
 -- A futuro, esos 3 destinatarios se editan desde el panel de adminNotificaciones
 -- (sistemas/adminNotificaciones) sin tocar código ni volver a correr este script.
+
+-- PREMIOS_AVANCE_QUINCENAL: a quién copiar en CADA envío individual de "Avance 15 días" (el mail
+-- sale a la supervisora + a estos destinatarios de copia, hoy solo Johanna) — ver
+-- api/enviar_avance_quincenal.php. NO es un resumen agregado aparte, es la lista de copia de cada mail.
+IF NOT EXISTS (SELECT * FROM RO_T_CONFIGURACION_MAIL WHERE TIPO_NOTIFICACION = 'PREMIOS_AVANCE_QUINCENAL')
+BEGIN
+    INSERT INTO RO_T_CONFIGURACION_MAIL (TIPO_NOTIFICACION, PROFILE_NAME, EMAIL_SUBJECT)
+    VALUES ('PREMIOS_AVANCE_QUINCENAL', 'sistemas', 'Avance de Venta - Premios Comercial');
+END
+
+INSERT INTO RO_T_DESTINATARIOS_MAIL (TIPO_NOTIFICACION, EMAIL, ES_COPIA, ACTIVO)
+SELECT 'PREMIOS_AVANCE_QUINCENAL', 'johanna.bolig@xl.com.ar', 0, 1
+WHERE NOT EXISTS (
+    SELECT 1 FROM RO_T_DESTINATARIOS_MAIL d
+    WHERE d.TIPO_NOTIFICACION = 'PREMIOS_AVANCE_QUINCENAL' AND d.EMAIL = 'johanna.bolig@xl.com.ar'
+);

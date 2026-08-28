@@ -386,6 +386,112 @@
 .modal-config-mail.sin-mail { color: var(--text-3); font-style: italic; }
 .modal-config-actions { display: flex; justify-content: flex-end; padding-top: 4px; }
 
+/* ── Modal "Avance de Venta" (avance 15 días + comentario de Johanna) ── */
+/* Ancho mayor que el resto de los modales: la tabla suma Ticket Promedio, % Tickets
+   2do/3er Producto y % Cumpl. Cadena a las columnas de facturación/objetivo. */
+.modal-avance-box { width: min(980px, 96vw); }
+.modal-avance-box .modal-emails-body { padding: 0; gap: 0; }
+
+/* Resumen "de un vistazo" arriba de todo: facturación vs. objetivo con barra de avance +
+   los 3 indicadores secundarios en mini-tiles — para no tener que leer la tabla entera
+   para saber "¿cómo viene la supervisora?". */
+.avance-resumen {
+    display      : flex;
+    flex-wrap    : wrap;
+    gap          : 18px;
+    padding      : 16px 18px;
+    background   : var(--bg-card2);
+    border-bottom: 1px solid var(--border);
+}
+.avance-resumen-principal { flex: 1 1 260px; min-width: 220px; }
+.avance-resumen-label {
+    font-size     : .72rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color         : var(--text-3);
+    font-weight   : 600;
+    margin-bottom : 4px;
+}
+.avance-resumen-cifras { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; }
+.avance-resumen-fact {
+    font-family: var(--font-display);
+    font-size  : 1.5rem;
+    font-weight: 700;
+    color      : var(--text-1);
+}
+.avance-resumen-sep { color: var(--text-3); font-size: .95rem; }
+.avance-resumen-obj { font-size: .95rem; color: var(--text-3); }
+.avance-progress {
+    height       : 8px;
+    border-radius: 20px;
+    background   : var(--border);
+    overflow     : hidden;
+    margin-bottom: 6px;
+}
+.avance-progress-bar {
+    height    : 100%;
+    background: var(--accent2);
+    transition: width .3s ease;
+}
+.avance-progress-bar.cumple { background: var(--pos, #16a34a); }
+.avance-resumen-pct { display: flex; align-items: center; gap: 6px; font-size: .82rem; font-weight: 600; color: var(--text-2); }
+.avance-resumen-pct.text-green i, .avance-resumen-pct.text-red i { font-size: .9rem; }
+
+.avance-resumen-secundarios {
+    display              : grid;
+    grid-template-columns: repeat(4, minmax(84px, 1fr));
+    gap                  : 10px;
+    flex                 : 1 1 320px;
+    align-content        : center;
+}
+.avance-mini-kpi {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding      : 8px 6px;
+    text-align   : center;
+}
+.avance-mini-kpi-val { display: block; font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: var(--text-1); }
+.avance-mini-kpi-label { display: block; font-size: .66rem; color: var(--text-3); margin-top: 2px; line-height: 1.25; }
+
+/* Cuerpo scrolleable: separa el resumen fijo del detalle por sucursal + comentario. */
+.avance-detalle { padding: 14px 18px; }
+.avance-detalle-titulo {
+    font-size    : .76rem;
+    font-weight  : 700;
+    color        : var(--text-2);
+    margin       : 0 0 8px;
+    display      : flex;
+    align-items  : center;
+    gap          : 6px;
+}
+.avance-tabla-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 16px; }
+.avance-tabla-scroll .premios-table { width: 100%; min-width: 820px; margin: 0; }
+.avance-tabla-scroll thead th { position: sticky; top: 0; z-index: 1; }
+.avance-tabla-scroll tbody tr:nth-child(even) td { background: var(--bg-card2); }
+.avance-tabla-scroll tbody tr:hover td { background: #e0e7ff; }
+
+.avance-comentario-label {
+    display      : flex;
+    align-items  : center;
+    gap          : 6px;
+    font-size    : .78rem;
+    font-weight  : 600;
+    color        : var(--text-2);
+    margin-bottom: 6px;
+}
+.modal-avance-textarea {
+    width        : 100%;
+    padding      : 8px 10px;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size    : .85rem;
+    font-family  : inherit;
+    resize       : vertical;
+    margin-bottom: 4px;
+}
+.modal-avance-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+
 .premios-loading {
     display    : flex;
     align-items: center;
@@ -401,4 +507,5 @@
 @media (max-width: 768px) {
     .premio-hero-grid { grid-template-columns: repeat(2, 1fr); }
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .avance-resumen-secundarios { grid-template-columns: repeat(2, 1fr); }
 }

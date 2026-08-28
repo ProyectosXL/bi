@@ -5,7 +5,10 @@
  */
 const PremiosSupervisoras = (() => {
 
-    const { $, fmt, updatePeriodoLabel, setSupervisoraOptions, apiFetch, actualizarUltimaActualizacion } = Premios;
+    const {
+        $, fmt, updatePeriodoLabel, setSupervisoraOptions, apiFetch, actualizarUltimaActualizacion,
+        cumplimientoCellHTML, badgeCellHTML,
+    } = Premios;
 
     let _lastResumen = [];
     let _lastPctCadenaTotal = null;
@@ -29,7 +32,9 @@ const PremiosSupervisoras = (() => {
     }
 
     // Columna "Acciones" (solo visible para roles GERENCIA/SUPERVISION, ver puede_gestionar
-    // en api/resumen.php): botón de mail individual + toggle de estado "Controlado".
+    // en api/resumen.php): botón de mail individual + toggle de estado "Controlado" + botón
+    // de "Avance 15 días" (avance parcial de venta, sin relación con el período del toolbar
+    // ni con _mesUnico — siempre mira el mes calendario actual).
     function accionesCellHTML(s) {
         if (!_puedeGestionar) return '';
         const controlado = s.controlado?.controlado === true;
@@ -40,6 +45,9 @@ const PremiosSupervisoras = (() => {
         return `<td class="td-acciones">
             <button class="btn-accion-fila btn-enviar-mail" data-supervisora="${s.supervisora}" title="Enviar mail a la supervisora">
                 <i class="bi bi-envelope"></i>
+            </button>
+            <button class="btn-accion-fila btn-avance-quincenal" data-supervisora="${s.supervisora}" title="Avance de los primeros 15 días">
+                <i class="bi bi-graph-up-arrow"></i>
             </button>
             <button class="btn-accion-fila btn-controlado ${controlado ? 'is-controlado' : ''}"
                     data-supervisora="${s.supervisora}" ${disabledControlado} title="${tituloControlado}">
@@ -129,6 +137,9 @@ const PremiosSupervisoras = (() => {
         if (_puedeGestionar) {
             wrap.querySelectorAll('.btn-enviar-mail').forEach(btn => {
                 btn.addEventListener('click', () => enviarMailSupervisora(btn));
+            });
+            wrap.querySelectorAll('.btn-avance-quincenal').forEach(btn => {
+                btn.addEventListener('click', () => renderModalAvanceQuincenal(btn.dataset.supervisora));
             });
             wrap.querySelectorAll('.btn-controlado').forEach(btn => {
                 btn.addEventListener('click', () => toggleControlado(btn));
@@ -309,6 +320,170 @@ const PremiosSupervisoras = (() => {
         } catch (err) {
             modal.querySelector('#modal-orden-body').innerHTML = `<p class="text-red">${err.message}</p>`;
         }
+    }
+
+    async function enviarAvanceModal(modal, supervisora, btnEnviar) {
+        const comentario = modal.querySelector('#avance-comentario').value.trim();
+        btnEnviar.disabled = true;
+        const original = btnEnviar.innerHTML;
+        btnEnviar.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando…';
+        try {
+            const res = await Premios.apiPost('enviar_avance_quincenal.php', { supervisora, comentario });
+            modal.classList.remove('visible');
+            await Premios.alertModal(`Avance enviado con éxito a: ${res.destinatarios.join(', ')}`, { tono: 'exito' });
+        } catch (err) {
+            await Premios.alertModal(`No se pudo enviar el avance de ${supervisora}: ${err.message}`, { tono: 'error' });
+        } finally {
+            btnEnviar.innerHTML = original;
+            btnEnviar.disabled = false;
+        }
+    }
+
+    async function renderModalAvanceQuincenal(supervisora) {
+        let modal = $('modal-avance-quincenal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'modal-avance-quincenal';
+            modal.className = 'modal-emails-overlay';
+            document.body.appendChild(modal);
+        }
+        modal.innerHTML = `<div class="modal-emails-box modal-avance-box">
+            <div class="modal-emails-header">
+                <span>Avance de Venta — ${supervisora}</span>
+                <button class="modal-emails-cerrar" id="modal-avance-cerrar"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="modal-emails-body" id="modal-avance-body">
+                <div class="premios-loading">Cargando…</div>
+            </div>
+        </div>`;
+        modal.classList.add('visible');
+        modal.querySelector('#modal-avance-cerrar').onclick = () => modal.classList.remove('visible');
+        modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('visible'); };
+
+        try {
+            const res = await fetch(`api/avance_quincenal.php?supervisora=${encodeURIComponent(supervisora)}`);
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error);
+            const body = modal.querySelector('#modal-avance-body');
+            body.innerHTML = htmlModalAvance(data);
+            body.querySelector('#btn-cancelar-avance').addEventListener('click', () => modal.classList.remove('visible'));
+            body.querySelector('#btn-enviar-avance').addEventListener('click', () =>
+                enviarAvanceModal(modal, supervisora, body.querySelector('#btn-enviar-avance')));
+        } catch (err) {
+            modal.querySelector('#modal-avance-body').innerHTML = `<p class="text-red" style="padding:16px;">${err.message}</p>`;
+        }
+    }
+
+    /**
+     * Resumen "de un vistazo" (facturación vs. objetivo con barra de avance + mini-tiles de
+     * los 3 indicadores secundarios) + tabla de detalle por sucursal + comentario — separados
+     * en bloques bien diferenciados para no tener que leer una tabla densa de 9 columnas para
+     * saber "¿cómo viene la supervisora?". Mismo lenguaje visual (badge-cumple verde/rojo) que
+     * la tabla de "Locales Propios", vía Premios.cumplimientoCellHTML/badgeCellHTML.
+     */
+    function htmlModalAvance(data) {
+        const diaHasta = new Date(data.hasta + 'T00:00:00').getDate();
+        const bm = data.benchmarks ?? { ticket_marca: null, pct2_marca: null, pct3_marca: null };
+
+        // Mismo criterio que AvanceQuincenalDB::pctCumplimiento()/pctVar() (PHP) — recalculado
+        // acá en vez de confiar en un % ya formateado, para poder decidir color/badge por fila.
+        const pctSeguro = (num, den) => den > 0 ? (num / den - 1) : (num > 0 ? null : -1);
+        // Ticket Promedio por sucursal: mismo criterio (CEILING a la centena) que
+        // AvanceQuincenalDB::ticketPromedioEst().
+        const ticketPromSeguro = (fact, tickets) => tickets > 0 ? Math.ceil((fact / tickets) / 100) * 100 : null;
+
+        const sinObjetivo = data.pct_cumplimiento === null;
+        const cumpleObjetivo = data.pct_cumplimiento !== null && data.pct_cumplimiento >= 0;
+        const ratio = sinObjetivo ? 0 : Math.max(0, 1 + data.pct_cumplimiento);
+        const barraPct = Math.min(100, ratio * 100).toFixed(1);
+        const iconoResumen = sinObjetivo ? 'bi-dash-circle' : (cumpleObjetivo ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill');
+        const claseResumen = sinObjetivo ? '' : (cumpleObjetivo ? 'text-green' : 'text-red');
+        const textoResumen = sinObjetivo
+            ? 'Todavía no hay objetivo cargado para este período'
+            : `${fmt.pct(data.pct_cumplimiento)} de cumplimiento` + (data.pct_var !== null ? ` · ${fmt.pct(data.pct_var)} vs. año anterior` : '');
+
+        const filasHtml = data.sucursales.map(f => {
+            const sinDatos = f.facturacion === 0 && f.objetivo === 0;
+            const tickets = f.tickets ?? 0;
+            const ticketProm = tickets > 0 ? ticketPromSeguro(f.facturacion, tickets) : null;
+            const pct2 = tickets > 0 ? f.tickets_2do_prod / tickets : null;
+            const pct3 = tickets > 0 ? f.tickets_3er_prod / tickets : null;
+            return `<tr class="${sinDatos ? 'row-sin-datos' : ''}">
+                    <td>${f.sucursal}</td>
+                    <td class="td-num">${fmt.money(f.facturacion)}</td>
+                    <td class="td-num">${fmt.money(f.objetivo)}</td>
+                    ${cumplimientoCellHTML(pctSeguro(f.facturacion, f.objetivo), sinDatos)}
+                    <td class="td-num ${f.facturacion_prev > 0 ? (f.facturacion >= f.facturacion_prev ? 'text-green' : 'text-red') : ''}">${fmt.pct(pctSeguro(f.facturacion, f.facturacion_prev))}</td>
+                    ${badgeCellHTML(ticketProm, bm.ticket_marca, ticketProm === null ? '—' : fmt.money(ticketProm), { titulo: 'Supera el ticket promedio de la cadena' })}
+                    ${badgeCellHTML(pct2, bm.pct2_marca, fmt.pct(pct2), { titulo: 'Supera el % tickets 2do producto de la cadena' })}
+                    ${badgeCellHTML(pct3, bm.pct3_marca, fmt.pct(pct3), { titulo: 'Supera el % tickets 3er producto de la cadena' })}
+                    <td class="td-num">—</td>
+                </tr>`;
+        }).join('');
+
+        return `
+            <div class="avance-resumen">
+                <div class="avance-resumen-principal">
+                    <div class="avance-resumen-label">Facturación (días 1 al ${diaHasta}) vs. Objetivo del Mes</div>
+                    <div class="avance-resumen-cifras">
+                        <span class="avance-resumen-fact">${fmt.money(data.facturacion_total)}</span>
+                        <span class="avance-resumen-sep">/</span>
+                        <span class="avance-resumen-obj" title="Objetivo real del mes completo, no prorateado a la fecha">${fmt.money(data.objetivo_total)}</span>
+                    </div>
+                    <div class="avance-progress"><div class="avance-progress-bar ${cumpleObjetivo ? 'cumple' : ''}" style="width:${barraPct}%"></div></div>
+                    <div class="avance-resumen-pct ${claseResumen}"><i class="bi ${iconoResumen}"></i> ${textoResumen}</div>
+                </div>
+                <div class="avance-resumen-secundarios">
+                    <div class="avance-mini-kpi"><span class="avance-mini-kpi-val">${fmt.money(data.ticket_promedio)}</span><span class="avance-mini-kpi-label">Ticket Promedio</span></div>
+                    <div class="avance-mini-kpi"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_ticket_2do)}</span><span class="avance-mini-kpi-label">Tickets 2do Prod.</span></div>
+                    <div class="avance-mini-kpi"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_ticket_3er)}</span><span class="avance-mini-kpi-label">Tickets 3er Prod.</span></div>
+                    <div class="avance-mini-kpi"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_cumplimiento_cadena)}</span><span class="avance-mini-kpi-label">Cumpl. Cadena</span></div>
+                </div>
+            </div>
+            <div class="avance-detalle">
+                <p class="avance-detalle-titulo"><i class="bi bi-list-ul"></i> Detalle por sucursal <span class="modal-config-hint" style="font-weight:400;">— avance parcial, no es el cierre del mes</span></p>
+                <div class="avance-tabla-scroll">
+                    <table class="premios-table">
+                        <thead>
+                            <tr>
+                                ${th('Sucursal', 'Sucursal', 'rowspan="2"')}
+                                ${th('Venta', 'Facturación acumulada a la fecha vs. objetivo real del mes completo', 'colspan="4" class="th-center"')}
+                                ${th('Indicadores Secundarios', 'Ticket promedio y venta cruzada — mismos indicadores que premian en el cierre mensual', 'colspan="4" class="th-center"')}
+                            </tr>
+                            <tr>
+                                ${th('Facturación', 'Facturación acumulada a la fecha', 'class="th-num"')}
+                                ${th('Objetivo', 'Objetivo real del mes completo, no prorateado a la fecha', 'class="th-num"')}
+                                ${th('% Cumpl.', '% Cumplimiento del objetivo de venta', 'class="th-num"')}
+                                ${th('Var %', 'Variación de facturación vs. mismo período del año anterior', 'class="th-num"')}
+                                ${th('Tkt. Prom.', 'Ticket Promedio', 'class="th-num"')}
+                                ${th('% 2do Prod.', '% Tickets con 2do producto', 'class="th-num"')}
+                                ${th('% 3er Prod.', '% Tickets con 3er producto', 'class="th-num"')}
+                                ${th('% Cad.', '% Cumplimiento de Cadena', 'class="th-num"')}
+                            </tr>
+                        </thead>
+                        <tbody>${filasHtml}</tbody>
+                        <tfoot><tr class="totales">
+                            <td>Total</td>
+                            <td class="td-num">${fmt.money(data.facturacion_total)}</td>
+                            <td class="td-num">${fmt.money(data.objetivo_total)}</td>
+                            ${cumplimientoCellHTML(data.pct_cumplimiento)}
+                            <td class="td-num">${fmt.pct(data.pct_var)}</td>
+                            ${badgeCellHTML(data.ticket_promedio, bm.ticket_marca, fmt.money(data.ticket_promedio), { titulo: 'Supera el ticket promedio de la cadena' })}
+                            ${badgeCellHTML(data.pct_ticket_2do, bm.pct2_marca, fmt.pct(data.pct_ticket_2do), { titulo: 'Supera el % tickets 2do producto de la cadena' })}
+                            ${badgeCellHTML(data.pct_ticket_3er, bm.pct3_marca, fmt.pct(data.pct_ticket_3er), { titulo: 'Supera el % tickets 3er producto de la cadena' })}
+                            <td class="td-num td-total">${fmt.pct(data.pct_cumplimiento_cadena)}</td>
+                        </tr></tfoot>
+                    </table>
+                </div>
+                <div class="avance-comentario-label"><i class="bi bi-chat-left-text"></i> Comentario (opcional, se manda junto al avance)</div>
+                <textarea id="avance-comentario" class="modal-avance-textarea" rows="3" placeholder="Ej. Vamos bien, sigan así en la segunda quincena..."></textarea>
+                <div class="modal-avance-actions">
+                    <button class="premios-alert-btn premios-alert-btn-cancel" id="btn-cancelar-avance">Cancelar</button>
+                    <button class="premios-alert-btn premios-alert-btn-ok" id="btn-enviar-avance">
+                        <i class="bi bi-send"></i> Enviar avance
+                    </button>
+                </div>
+            </div>`;
     }
 
     async function load() {

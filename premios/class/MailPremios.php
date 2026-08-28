@@ -16,6 +16,7 @@ class MailPremios
 {
     private const PROFILE_DEFAULT = 'sistemas';
     public const TIPO_NOTIFICACION_RESUMEN_MENSUAL = 'PREMIOS_RESUMEN_MENSUAL';
+    public const TIPO_NOTIFICACION_AVANCE_QUINCENAL = 'PREMIOS_AVANCE_QUINCENAL';
 
     /** @var resource Conexión a la base 'central' (msdb vive en el mismo servidor). */
     private $connCentral;
@@ -268,5 +269,133 @@ class MailPremios
             . '<tr><td style="padding:6px 10px;font-weight:700;background:#fffbeb;">Total</td><td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;color:#92400e;">' . self::money($totalGeneral) . '</td></tr>'
             . '</table>'
             . '</body></html>';
+    }
+
+    /* ─────────────────────────────────────────────────────────
+     * Render — avance de los primeros 15 días (parcial, NO es el cierre del mes)
+     * ───────────────────────────────────────────────────────── */
+
+    private static function avisoAvanceParcial(): string
+    {
+        return '<p style="background:#fef9c3;border:1px solid #fde68a;color:#854d0e;padding:8px 12px;'
+            . 'border-radius:4px;font-size:12px;margin:0 0 14px;">'
+            . '⚠️ Este es un AVANCE PARCIAL de venta (facturación acumulada a la fecha vs. el '
+            . 'objetivo REAL del mes completo, no un premio calculado) — los locales propios de '
+            . 'premios se cargan una sola vez al mes, al cierre.</p>';
+    }
+
+    /**
+     * @param array $filasSucursal Retorno de AvanceQuincenalDB::avancePorSupervisora()[n]['sucursales']
+     * @param ?string $comentarioJohanna Mensaje libre que Johanna escribe en el modal antes de mandar
+     *        (ver api/enviar_avance_quincenal.php) — no se persiste en ningún lado, solo viaja en el
+     *        cuerpo de este mail. Si viene vacío/null no se renderiza el bloque.
+     * @param ?float $ticketPromedio,$pctTicket2do,$pctTicket3er,$pctCumplimientoCadena
+     *        Retorno de AvanceQuincenalDB::avancePorSupervisora()[n] — mismos campos que la
+     *        tabla de "Locales Propios" del dashboard, pero calculados sobre las tablas diarias
+     *        del avance parcial (ver AvanceQuincenalDB::pctCumplimientoCadenaIndicadores()).
+     * @param array $benchmarks ['ticket_marca','pct2_marca','pct3_marca'] — mismo array que
+     *        AvanceQuincenalDB::avancePorSupervisora()[n]['benchmarks'], para pintar cada
+     *        indicador en verde/rojo igual criterio que renderDetalleSupervisora().
+     */
+    public static function renderAvanceSupervisora(
+        string $supervisora,
+        array $filasSucursal,
+        float $facturacionTotal,
+        float $objetivoTotal,
+        ?float $pctCumplimiento,
+        string $desde,
+        string $hasta,
+        ?string $comentarioJohanna = null,
+        ?float $pctVar = null,
+        float $ticketPromedio = 0.0,
+        float $pctTicket2do = 0.0,
+        float $pctTicket3er = 0.0,
+        float $pctCumplimientoCadena = 0.0,
+        array $benchmarks = ['ticket_marca' => 0.0, 'pct2_marca' => 0.0, 'pct3_marca' => 0.0]
+    ): string {
+        $periodoTxt = date('d/m/Y', strtotime($desde)) . ' al ' . date('d/m/Y', strtotime($hasta));
+
+        $bloqueComentario = '';
+        if ($comentarioJohanna !== null && trim($comentarioJohanna) !== '') {
+            $bloqueComentario = '<div style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;'
+                . 'padding:10px 14px;border-radius:4px;font-size:13px;margin:0 0 14px;">'
+                . '<strong>💬 Mensaje de Johanna:</strong><br>'
+                . nl2br(self::esc(trim($comentarioJohanna)))
+                . '</div>';
+        }
+
+        $filasHtml = '';
+        foreach ($filasSucursal as $f) {
+            $pct = self::pctSeguro($f['facturacion'], $f['objetivo']);
+            $var = self::pctVarSeguro($f['facturacion'], $f['facturacion_prev'] ?? 0.0);
+            $tickets = $f['tickets'] ?? 0;
+            $ticketProm = $tickets > 0 ? self::ticketPromedioEstSeguro($f['facturacion'], $tickets) : null;
+            $pct2 = $tickets > 0 ? ($f['tickets_2do_prod'] ?? 0) / $tickets : null;
+            $pct3 = $tickets > 0 ? ($f['tickets_3er_prod'] ?? 0) / $tickets : null;
+            $filasHtml .= '<tr>'
+                . '<td style="' . self::estiloTd(false) . '">' . self::esc($f['sucursal']) . '</td>'
+                . '<td style="' . self::estiloTd() . '">' . self::money($f['facturacion']) . '</td>'
+                . '<td style="' . self::estiloTd() . '">' . self::money($f['objetivo']) . '</td>'
+                . '<td style="' . self::estiloTd() . self::colorSegunUmbral($pct, null) . '">' . self::pct($pct) . '</td>'
+                . '<td style="' . self::estiloTd() . self::colorSegunUmbral($var, null) . '">' . self::pct($var) . '</td>'
+                . '<td style="' . self::estiloTd() . self::colorSegunUmbral($ticketProm, $benchmarks['ticket_marca']) . '">' . ($ticketProm === null ? '—' : self::money($ticketProm)) . '</td>'
+                . '<td style="' . self::estiloTd() . self::colorSegunUmbral($pct2, $benchmarks['pct2_marca']) . '">' . self::pct($pct2) . '</td>'
+                . '<td style="' . self::estiloTd() . self::colorSegunUmbral($pct3, $benchmarks['pct3_marca']) . '">' . self::pct($pct3) . '</td>'
+                . '<td style="' . self::estiloTd() . '">—</td>' // % Cumpl. Cadena es de la supervisora, no por sucursal — igual criterio que renderDetalleSupervisora()
+                . '</tr>';
+        }
+
+        return '<html><body style="' . self::estiloBase() . '">'
+            . '<h2 style="font-size:17px;margin:0 0 4px;">Avance de Venta — ' . self::esc($supervisora) . '</h2>'
+            . '<p style="color:#6b7280;margin:0 0 12px;">Días 1 al ' . (new DateTime($hasta))->format('j') . ' — Período: ' . $periodoTxt . '</p>'
+            . $bloqueComentario
+            . self::avisoAvanceParcial()
+            . '<table style="' . self::estiloTabla() . '">'
+            . '<tr>'
+            . '<th style="' . self::estiloTh() . 'text-align:left;">Sucursal</th>'
+            . '<th style="' . self::estiloTh() . '">Facturación</th>'
+            . '<th style="' . self::estiloTh() . '">Objetivo del Mes</th>'
+            . '<th style="' . self::estiloTh() . '">% Cumplimiento</th>'
+            . '<th style="' . self::estiloTh() . '">Facturación Var %</th>'
+            . '<th style="' . self::estiloTh() . '">Ticket Promedio</th>'
+            . '<th style="' . self::estiloTh() . '">% Tickets 2do Producto</th>'
+            . '<th style="' . self::estiloTh() . '">% Tickets 3er Producto</th>'
+            . '<th style="' . self::estiloTh() . '">% Cumpl. Cadena</th>'
+            . '</tr>'
+            . $filasHtml
+            . '<tr>'
+            . '<td style="padding:6px 10px;font-weight:700;background:#fffbeb;">Total</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::money($facturacionTotal) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::money($objetivoTotal) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;color:#92400e;">' . self::pct($pctCumplimiento) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;color:#92400e;">' . self::pct($pctVar) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::money($ticketPromedio) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($pctTicket2do) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($pctTicket3er) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;color:#92400e;">' . self::pct($pctCumplimientoCadena) . '</td>'
+            . '</tr>'
+            . '</table>'
+            . '</body></html>';
+    }
+
+    /** Mismo criterio que AvanceQuincenalDB::ticketPromedioEst() — para pintar el Ticket Promedio por sucursal. */
+    private static function ticketPromedioEstSeguro(float $fact, int $tickets): float
+    {
+        if ($tickets <= 0) return 0.0;
+        return ceil(($fact / $tickets) / 100) * 100;
+    }
+
+    /** pctSeguro: igual fórmula que AvanceQuincenalDB::pctCumplimiento(), para las celdas por sucursal. */
+    private static function pctSeguro(float $fact, float $obj): ?float
+    {
+        if ($obj <= 0) return $fact > 0 ? null : -1.0;
+        return $fact / $obj - 1;
+    }
+
+    /** pctVarSeguro: igual fórmula que AvanceQuincenalDB::pctVar(), para las celdas por sucursal. */
+    private static function pctVarSeguro(float $fact, float $factAnt): ?float
+    {
+        if ($factAnt <= 0) return $fact > 0 ? null : -1.0;
+        return $fact / $factAnt - 1;
     }
 }

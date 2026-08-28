@@ -90,8 +90,12 @@ class PremiosDB
         return $fechas;
     }
 
-    /** 'CAROLINA COMMENDATORE' (como está en la base) → 'Carolina Commendatore' (como se muestra). */
-    private static function formatearNombre(string $nombre): string
+    /**
+     * 'CAROLINA COMMENDATORE' (como está en la base) → 'Carolina Commendatore' (como se muestra).
+     * Public: también la usa AvanceQuincenalDB::mapeoSucursalSupervisora() para formatear el
+     * nombre de SUPERVISORA leído de BI_T_ESTADISTICAS_VENTAS_PROPIOS con el mismo criterio.
+     */
+    public static function formatearNombre(string $nombre): string
     {
         return mb_convert_case(mb_strtolower(trim($nombre), 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
     }
