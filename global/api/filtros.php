@@ -55,6 +55,13 @@ try {
         $sucGrupo = $_SESSION['sucursalesGrupo'] ?? [];
         error_log('[filtros.php GRUPO] sucursalesGrupo=' . json_encode($sucGrupo) . ' origen=' . $origen);
     }
+    // Limpiar caché vieja de sesión para garantizar datos actualizados y deduplicados
+    unset(
+        $_SESSION['sucursales_lista_cache_' . $origen . '_0'],
+        $_SESSION['sucursales_lista_cache_' . $origen . '_1'],
+        $_SESSION['activas_ids_cache_' . $origen]
+    );
+
     $sucursalesList = $isGrupo
         ? $tryCall(fn() => $db->getSucursalesPorIds($_SESSION['sucursalesGrupo'] ?? []))
         : $tryCall(fn() => $db->getSucursalesLista());

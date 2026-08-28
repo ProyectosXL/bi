@@ -1386,8 +1386,20 @@ const Dashboard = (() => {
                     items.map(it => `<option value="${it[valKey]}"${String(it[valKey]) === cur ? ' selected' : ''}>${it[labelKey] ?? it[valKey]}</option>`).join('');
             };
 
+            // Deduplicar sucursales por descripción para evitar duplicados en el selector
+            const rawSucursales = data.sucursales ?? [];
+            const seenSucNames = new Set();
+            const sucursalesUnicas = [];
+            for (const s of rawSucursales) {
+                const nameKey = (s.DESC_SUCURSAL || ('Suc. ' + s.NRO_SUCURS)).trim().toUpperCase();
+                if (!seenSucNames.has(nameKey)) {
+                    seenSucNames.add(nameKey);
+                    sucursalesUnicas.push(s);
+                }
+            }
+
             // Poblar mapa de nombres
-            (data.sucursales ?? []).forEach(s => {
+            rawSucursales.forEach(s => {
                 _sucNombres[+s.NRO_SUCURS] = s.DESC_SUCURSAL ?? ('Suc. ' + s.NRO_SUCURS);
             });
 
@@ -1396,7 +1408,7 @@ const Dashboard = (() => {
                 _sucursalesActivasIds = new Set(data.sucursales_activas.map(Number));
             }
 
-            fill('sel-sucursal',    data.sucursales   ?? [], 'NRO_SUCURS',   'DESC_SUCURSAL', 'Todas',  '');
+            fill('sel-sucursal',    sucursalesUnicas, 'NRO_SUCURS',   'DESC_SUCURSAL', 'Todas',  '');
             fill('sel-grupo',       data.grupos       ?? [], 'GRUPO',        'GRUPO',          'Todos',  '');
             fill('sel-tipo-tienda', data.tipos_tienda ?? [], 'TIPO_TIENDA',  'TIPO_TIENDA',   'Todos',  '');
             fill('sel-vendedor',    data.vendedores   ?? [], 'DESC_VENDEDOR','DESC_VENDEDOR',  'Todos',  '%');

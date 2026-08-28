@@ -936,7 +936,7 @@ class GlobalDashboardDB
         $result = [];
         // Franquicias: incluir todas las franquicias remotas y locales
         if ($this->origen === 'franquicias') {
-            // Query remote active franchises (no joins/subqueries)
+            // Query remote franchises (sucursales habilitadas o principales)
             $remoteRows = $this->query("
                 SELECT NRO_SUCURSAL AS NRO_SUCURS, DESC_SUCURSAL, TANGO, HABILITADO
                 FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS
@@ -954,29 +954,34 @@ class GlobalDashboardDB
                 $localMap[(int)$r['NRO_SUCURS']] = trim($r['SUCURSAL'] ?? '');
             }
 
-            $seen = [];
+            $seenIds = [];
+
+            // 1. Agregar todas las sucursales remotas
             foreach ($remoteRows as $row) {
                 $id = (int)$row['NRO_SUCURS'];
+                if (isset($seenIds[$id])) continue;
+
                 $hab = $row['HABILITADO'] ?? null;
                 $isActive = ($hab == 1 || $hab === '1');
                 if ($soloActivas && !$isActive) continue;
 
                 $desc = trim($row['DESC_SUCURSAL'] ?? '') ?: ($localMap[$id] ?? ('Suc. ' . $id));
+
                 $result[] = [
                     'NRO_SUCURS'    => $id,
                     'DESC_SUCURSAL' => $desc,
                 ];
-                $seen[$id] = true;
+                $seenIds[$id] = true;
             }
 
-            // Agregar cualquier sucursal de ventas local que no estuviese en SUCURSALES_LAKERS
+            // 2. Agregar cualquier sucursal de ventas local que no estuviese en SUCURSALES_LAKERS
             foreach ($localMap as $id => $desc) {
-                if (!isset($seen[$id])) {
+                if (!isset($seenIds[$id])) {
                     $result[] = [
                         'NRO_SUCURS'    => $id,
                         'DESC_SUCURSAL' => $desc ?: ('Suc. ' . $id),
                     ];
-                    $seen[$id] = true;
+                    $seenIds[$id] = true;
                 }
             }
 

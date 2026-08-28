@@ -141,7 +141,9 @@ try {
                 SELECT pv.idTango AS NRO_SUCURS, DAY(fd.fecha) as dia, fd.importeVentaReal AS IMPORTE, 1 as is_a, 0 as is_p
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
                 INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-                WHERE fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
+                INNER JOIN #sl_st sl ON pv.idTango = sl.NRO_SUCURSAL
+                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
+                  AND fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
                 UNION ALL
                 SELECT NRO_SUCURS, NULL as dia, IMPORTE, 0 as is_a, 1 as is_p
                 FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
@@ -150,7 +152,9 @@ try {
                 SELECT pv.idTango AS NRO_SUCURS, NULL as dia, fd.importeVentaReal AS IMPORTE, 0 as is_a, 1 as is_p
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
                 INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-                WHERE fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
+                INNER JOIN #sl_st sl ON pv.idTango = sl.NRO_SUCURSAL
+                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
+                  AND fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
             ) t
             GROUP BY NRO_SUCURS, dia
         ";

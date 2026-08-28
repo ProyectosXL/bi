@@ -149,7 +149,9 @@ try {
                 SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
                 INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-                WHERE fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
+                INNER JOIN #sl_st sl ON pv.idTango = sl.NRO_SUCURSAL
+                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
+                  AND fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
             ) s
             GROUP BY NRO_SUCURS, YEAR(FECHA), MONTH(FECHA)
         ";
@@ -208,7 +210,9 @@ try {
                 SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE
                 FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
                 INNER JOIN sistemas.dbo.PuntosDeVenta pv WITH (NOLOCK) ON fd.idPOS = pv.id
-                WHERE fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
+                INNER JOIN #sl_st sl ON pv.idTango = sl.NRO_SUCURSAL
+                WHERE (sl.TANGO IS NULL OR sl.TANGO <> 1)
+                  AND fd.fecha >= ? AND fd.fecha < ? AND pv.idTango IN ({$placeholdersSuc})
             ) s
             GROUP BY NRO_SUCURS, YEAR(FECHA), MONTH(FECHA)
         ";
