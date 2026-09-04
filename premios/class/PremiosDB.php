@@ -43,9 +43,13 @@ class PremiosDB
         'Sonia Pacifico'        => ['ABASTO', 'AVELLANEDA', 'CABALLITO', 'FLORES'],
         'Carolina Commendatore' => ['ALTO ROSARIO', 'PASEO DEL SIGLO', 'PORTAL ROSARIO', 'MDP GALLEGOS', 'MDP ALDREY'],
         'Nahir Actis'           => ['DISTRITO ARCOS', 'GURRUCHAGA', 'SOLEIL', 'PARQUE BROWN', 'SAN JUSTO'],
-        // "GTNUNI" = segunda sucursal Unicenter (NRO_SUCURS distinto, SUCURSAL='GTNUNI' en la
-        // base), va justo después de la primera Unicenter.
-        'Josefina Pastorino'    => ['UNICENTER', 'GTNUNI', 'TOM', 'MALVINAS', 'DOT', 'SOLAR'],
+        // "GTNUNI" (a diferencia de lo que se pensó en un principio) NO es una segunda
+        // sucursal: es el COD_CLIENT interno de la ÚNICA Unicenter (NRO_SUCURSAL=2) en
+        // SUCURALES_LAKERS — la columna SUCURSAL de BI_T_ESTADISTICAS_VENTAS_PROPIOS siempre
+        // trae 'UNICENTER', nunca 'GTNUNI', confirmado contra la base (2026-09-04). Mismo caso
+        // con "Tom": es la misma sucursal que "Tortugas" (confirmado con el cliente), no una
+        // sucursal aparte.
+        'Josefina Pastorino'    => ['UNICENTER', 'TORTUGAS', 'MALVINAS', 'DOT', 'SOLAR'],
     ];
 
     /** @param array<int,array> $filas Retorno de filaDesdeDB() — se ordena por 'sucursal'. */

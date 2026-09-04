@@ -123,9 +123,14 @@ try {
         <button class="tab-btn" id="tab-btn-franquicias" role="tab" aria-controls="tab-franquicias" aria-selected="false" data-titulo="FRANQUICIAS">
             <i class="bi bi-building"></i>&nbsp; Franquicias
         </button>
-        <button class="tab-reload-btn" id="btn-reload-tab" title="Recargar pestaña">
-            <i class="bi bi-arrow-clockwise"></i>
-        </button>
+        <div class="tab-nav-acciones">
+            <button class="tab-reload-btn" id="btn-info-carga" title="¿Cuándo se actualizan los datos?">
+                <i class="bi bi-question-circle"></i>
+            </button>
+            <button class="tab-reload-btn" id="btn-reload-tab" title="Recargar pestaña">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
     </nav>
 
     <!-- ══ PESTAÑA: PREMIOS SUPERVISORAS ═══════════════════════════════ -->
@@ -344,6 +349,21 @@ const Spinner = (() => {
         btnReload.classList.add('spinning');
         loaded[tab.name] = false;
         loadTab(tab.name).finally(() => btnReload.classList.remove('spinning'));
+    });
+
+    // Botón de ayuda (ⓘ): frecuencia de carga de datos + qué es el "Avance 15 días"
+    document.getElementById('btn-info-carga').addEventListener('click', () => {
+        Premios.alertModal(`
+            <ul style="margin:0;padding-left:18px;line-height:1.55;">
+                <li>Los datos de <strong>Locales Propios</strong> y <strong>Franquicias</strong> se
+                    cargan una sola vez por mes, el día 1 — hasta entonces vas a seguir viendo los
+                    datos del mes anterior (ver "Última actualización" arriba).</li>
+                <li>El botón <strong>"Avance 15 días"</strong> (en Premios Supervisoras) es
+                    distinto: muestra un avance <strong>parcial</strong> de venta de los primeros
+                    días del mes en curso — no es el cierre del mes ni un premio calculado.</li>
+            </ul>`,
+            { tono: 'info', titulo: '¿Cuándo se actualizan los datos?' }
+        );
     });
 
     // Carga inicial: filtros (supervisoras) + pestaña Resumen

@@ -26,6 +26,12 @@
     100% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
 }
 
+/* ── Agrupa el botón de ayuda (frecuencia de carga de datos) con el de recargar
+   pestaña, ambos pegados a la derecha del tab-nav — el margin-left:auto de
+   .tab-reload-btn (components.css) se pisa acá, scoped al wrapper. ── */
+.tab-nav-acciones { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.tab-nav-acciones .tab-reload-btn { margin-left: 0; }
+
 /* ── Agrupa el botón de acción del topbar con topbar-meta (que trae su propio
    margin-left:auto en components.css — se pisa acá, scoped a este wrapper, sin
    tocar la clase compartida) para que ambos queden pegados a la derecha juntos. ── */
