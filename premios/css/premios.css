@@ -182,6 +182,39 @@
 .premios-table tr.row-todas-separador td { border-top: 2px solid var(--border); }
 .premios-table td.td-num { text-align: right; }
 
+/* ── Locales Propios: marco fino alrededor de Fact. C/IVA, Objetivo Total $ y Objetivo de
+   Crecimiento $ — las separa tanto de Supervisora/Sucursal (izquierda) como de los
+   indicadores a la derecha ── */
+#tabla-propios-wrap .premios-table th:nth-child(1),
+#tabla-propios-wrap .premios-table td:nth-child(1),
+#tabla-propios-wrap .premios-table th:nth-child(4),
+#tabla-propios-wrap .premios-table td:nth-child(4) {
+    border-right: 2px solid var(--bg-header);
+}
+
+/* ── Premios Supervisoras: marco fino por cada bloque de Objetivo (Obj. Venta, Obj.
+   Crecimiento, Ticket Promedio, Ticket 2do, Ticket 3er) — mismo criterio visual que Locales
+   Propios. La 1ra fila del encabezado agrupa cada bloque con colspan (1 <th> por bloque,
+   así que el límite es simplemente "después de cada uno de los primeros 6 <th>": Supervisora
+   + los 5 bloques); la 2da fila y el cuerpo tienen una columna real por sub-dato, así que el
+   límite es la ÚLTIMA sub-columna de cada bloque ("T." de cada uno). ── */
+#tabla-resumen-wrap .premios-table thead tr:nth-child(1) th:nth-child(-n+6) {
+    border-right: 2px solid var(--bg-header);
+}
+#tabla-resumen-wrap .premios-table thead tr:nth-child(2) th:nth-child(3),
+#tabla-resumen-wrap .premios-table thead tr:nth-child(2) th:nth-child(6),
+#tabla-resumen-wrap .premios-table thead tr:nth-child(2) th:nth-child(8),
+#tabla-resumen-wrap .premios-table thead tr:nth-child(2) th:nth-child(10),
+#tabla-resumen-wrap .premios-table thead tr:nth-child(2) th:nth-child(12),
+#tabla-resumen-wrap .premios-table tbody td:nth-child(1),
+#tabla-resumen-wrap .premios-table tbody td:nth-child(4),
+#tabla-resumen-wrap .premios-table tbody td:nth-child(7),
+#tabla-resumen-wrap .premios-table tbody td:nth-child(9),
+#tabla-resumen-wrap .premios-table tbody td:nth-child(11),
+#tabla-resumen-wrap .premios-table tbody td:nth-child(13) {
+    border-right: 2px solid var(--bg-header);
+}
+
 /* ── Filas de supervisora/"Todas" colapsables (ocultan sus sucursales hijas) ── */
 .premios-table tr[data-toggle-grupo] { cursor: pointer; user-select: none; }
 .premios-table tr[data-toggle-grupo]:hover td { background: #e0e7ff; }
@@ -219,13 +252,57 @@
     vertical-align: middle;
 }
 
+/* ── Badge "No cumple" (rojo) — mismo diseño que .badge-cumple, para los KPIs que no llegan
+   al benchmark (a pedido del cliente, 2026-09-03: mismo look, no solo texto en rojo) ── */
+.badge-no-cumple {
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 4px;
+    padding      : 2px 10px;
+    border-radius: 20px;
+    font-size    : .68rem;
+    font-weight  : 700;
+    background   : #fef2f2;
+    color        : #dc2626;
+    border       : 1px solid #fecaca;
+    white-space  : nowrap;
+    vertical-align: middle;
+}
+
 /* ── Encabezados alineados con sus columnas (por defecto .table-wrap th es left) ── */
 .table-wrap th.th-num    { text-align: right; }
 .table-wrap th.th-center { text-align: center; }
 
+/* ── Franquicias: encabezado fijo al hacer scroll (tabla larga, sin esto se pierde de vista
+   qué columna es cuál). `position: sticky; top: <alto topbar+tab-nav>` NO funciona acá porque
+   .premios-card tiene `overflow: hidden` (para recortar las esquinas redondeadas) — eso
+   convierte a .premios-card en el contenedor de scroll del sticky en vez del viewport, y el
+   encabezado terminaba fijo a mitad de tabla. Se le da scroll propio y acotado a la tabla
+   (mismo patrón que .avance-tabla-scroll del modal de Avance Quincenal), con el encabezado
+   sticky a top:0 DENTRO de ese scroll — así no depende del alto de barras externas. ── */
+#tabla-franquicias-wrap {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+#tabla-franquicias-wrap thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
 /* ── Encabezados abreviados con tooltip (title) — cursor "?" para que se note que hay
    significado completo al pasar el mouse (ej. "C. PP." = Canal Propios). ── */
 .premios-table th[title] { cursor: help; }
+
+/* ── Encabezados ordenables por click (Premios Supervisoras, Locales Propios, Franquicias):
+   click alterna mayor a menor / menor a mayor / orden original — ver Premios.cicloOrden() en
+   premios.js. El ícono de flechas (sort-icon) queda tenue cuando la columna no está activa, y
+   resaltado cuando sí — misma idea que .premios-table th[title] pero para "se puede ordenar"
+   en vez de "tiene tooltip". ── */
+.premios-table th[data-sort-key] { cursor: pointer; user-select: none; }
+.premios-table th[data-sort-key]:hover { background: var(--bg-header2); }
+.premios-table .sort-icon { opacity: .45; font-size: .75em; margin-left: 2px; vertical-align: middle; }
+.premios-table .sort-icon-active { opacity: 1; color: #60a5fa; }
 
 .btn-export-excel {
     margin-left  : auto;
@@ -361,6 +438,7 @@
     border-bottom  : 1px solid var(--border);
 }
 .modal-emails-cerrar { background: transparent; border: none; cursor: pointer; color: var(--text-2); font-size: 1rem; }
+.modal-emails-header-acciones { display: flex; align-items: center; gap: 10px; }
 .modal-emails-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .modal-emails-nombre { flex: 0 0 42%; font-size: .82rem; color: var(--text-1); }
 
@@ -388,7 +466,7 @@
 
 /* ── Modal "Avance de Venta" (avance 15 días + comentario de Johanna) ── */
 /* Ancho mayor que el resto de los modales: la tabla suma Ticket Promedio, % Tickets
-   2do/3er Producto y % Cumpl. Cadena a las columnas de facturación/objetivo. */
+   2do/3er Producto y % Cumpl. Coach a las columnas de facturación/objetivo. */
 .modal-avance-box { width: min(980px, 96vw); }
 .modal-avance-box .modal-emails-body { padding: 0; gap: 0; }
 
@@ -450,6 +528,7 @@
     border-radius: var(--radius-sm);
     padding      : 8px 6px;
     text-align   : center;
+    cursor       : help;
 }
 .avance-mini-kpi-val { display: block; font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: var(--text-1); }
 .avance-mini-kpi-label { display: block; font-size: .66rem; color: var(--text-3); margin-top: 2px; line-height: 1.25; }

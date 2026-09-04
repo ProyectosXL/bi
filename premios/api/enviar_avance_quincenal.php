@@ -68,7 +68,7 @@ try {
     if ($hasta < $desde) $hasta = $desde;
 
     // Se le pasa el listado COMPLETO de supervisoras activas, no solo $supervisora — ver
-    // mismo comentario en api/avance_quincenal.php (benchmarks de marca para "% Cumpl. Cadena").
+    // mismo comentario en api/avance_quincenal.php (benchmarks de marca para "% Cumpl. Coach").
     $avanceDb = new AvanceQuincenalDB($desde, $hasta);
     $activas = $premiosDb->getSupervisoras();
     $filas = $avanceDb->avancePorSupervisora($activas);

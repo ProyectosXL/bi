@@ -19,23 +19,24 @@ if (!isset($_SESSION['username'])) {
 require_once __DIR__ . '/../../class/PeriodHelper.php';
 require_once __DIR__ . '/../class/PremiosDB.php';
 
-function filaVista(PremiosDB $db, array $f): array
+function filaVista(PremiosDB $db, array $f, float $benchmarkVarMarca): array
 {
     $cumpl = $f['sin_datos'] ? -1.0 : $db->cumplimientoObjVenta($f['imp_fact'], $f['imp_obj']);
     $var   = $f['sin_datos'] ? null  : $db->facturacionVarPct($f['imp_fact'], $f['imp_fact_ant']);
     return [
-        'nro_sucurs'        => $f['nro_sucurs'],
-        'sucursal'          => $f['sucursal'],
-        'casa_central'      => $f['casa_central'],
-        'sin_datos'         => $f['sin_datos'],
-        'facturacion_s_iva' => $f['imp_fact_s_iva'],
-        'facturacion_c_iva' => $f['imp_fact'],
-        'objetivo_total'    => $f['imp_obj'],
-        'cumplimiento_obj'  => $cumpl,
-        'facturacion_var'   => $var,
-        'ticket_promedio'   => $f['sin_datos'] ? 0.0 : $db->ticketPromedioEst($f['imp_fact'], $f['tickets']),
-        'pct_ticket_2do'    => ($f['sin_datos'] || $f['tickets'] <= 0) ? 0.0 : $f['tickets_2do_prod'] / $f['tickets'],
-        'pct_ticket_3er'    => ($f['sin_datos'] || $f['tickets'] <= 0) ? 0.0 : $f['tickets_3er_prod'] / $f['tickets'],
+        'nro_sucurs'           => $f['nro_sucurs'],
+        'sucursal'             => $f['sucursal'],
+        'casa_central'         => $f['casa_central'],
+        'sin_datos'            => $f['sin_datos'],
+        'facturacion_s_iva'    => $f['imp_fact_s_iva'],
+        'facturacion_c_iva'    => $f['imp_fact'],
+        'objetivo_total'       => $f['imp_obj'],
+        'objetivo_crecimiento' => $f['imp_fact_ant'] * (1 + $benchmarkVarMarca),
+        'cumplimiento_obj'     => $cumpl,
+        'facturacion_var'      => $var,
+        'ticket_promedio'      => $f['sin_datos'] ? 0.0 : $db->ticketPromedioEst($f['imp_fact'], $f['tickets']),
+        'pct_ticket_2do'       => ($f['sin_datos'] || $f['tickets'] <= 0) ? 0.0 : $f['tickets_2do_prod'] / $f['tickets'],
+        'pct_ticket_3er'       => ($f['sin_datos'] || $f['tickets'] <= 0) ? 0.0 : $f['tickets_3er_prod'] / $f['tickets'],
     ];
 }
 
@@ -55,7 +56,7 @@ try {
         'pct_ticket_2do_marca'  => $db->pctTicketProductoMarca($todos, 'tickets_2do_prod'),
         'pct_ticket_3er_marca'  => $db->pctTicketProductoMarca($todos, 'tickets_3er_prod'),
     ];
-    // Mismos 3 benchmarks que $kpis, con las claves que espera pctCumplimientoCadenaIndicadores()
+    // Mismos 3 benchmarks que $kpis, con las claves que espera pctCumplimientoCoach()
     // (mismo shape que el array $benchmarks de PremiosDB::resumenPorSupervisora()).
     $benchmarksCadena = [
         'ticket_marca' => $kpis['ticket_promedio_marca'],
@@ -84,7 +85,7 @@ try {
         $filasSup = $db->datosPropios($sup);
         if (!$filasSup) continue;
 
-        $sucursales = array_map(fn($f) => filaVista($db, $f), $filasSup);
+        $sucursales = array_map(fn($f) => filaVista($db, $f, $kpis['facturacion_var_marca']), $filasSup);
         $filasParaTotal = array_merge($filasParaTotal, $filasSup);
 
         $sumFactSIva = array_sum(array_column($filasSup, 'imp_fact_s_iva'));
@@ -105,12 +106,13 @@ try {
                 'facturacion_s_iva'       => $sumFactSIva,
                 'facturacion_c_iva'       => $sumFactCIva,
                 'objetivo_total'          => $sumObj,
+                'objetivo_crecimiento'    => $sumFactAnt * (1 + $kpis['facturacion_var_marca']),
                 'cumplimiento_obj'        => $db->cumplimientoObjVenta($sumFactCIva, $sumObj),
                 'facturacion_var'         => $db->facturacionVarPct($sumFactCIva, $sumFactAnt),
                 'ticket_promedio'         => $db->ticketPromedioEst($sumFactCIva, $sumTickets),
                 'pct_ticket_2do'          => $sumTickets > 0 ? $sumT2 / $sumTickets : 0.0,
                 'pct_ticket_3er'          => $sumTickets > 0 ? $sumT3 / $sumTickets : 0.0,
-                'pct_cumplimiento_cadena' => $db->pctCumplimientoCadenaIndicadores($filasSup, $benchmarksCadena),
+                'pct_cumplimiento_cadena' => $db->pctCumplimientoCoach($filasSup, $benchmarksCadena),
             ],
         ];
     }
@@ -125,7 +127,7 @@ try {
     if (!$supervisoraFiltro) {
         $filasTodas = $db->datosPropios('TODAS');
         if ($filasTodas) {
-            $todasRow = filaVista($db, $filasTodas[0]);
+            $todasRow = filaVista($db, $filasTodas[0], $kpis['facturacion_var_marca']);
             $totFactSIva += $filasTodas[0]['imp_fact_s_iva'];
             $totFactCIva += $filasTodas[0]['imp_fact'];
             $totObj      += $filasTodas[0]['imp_obj'];
@@ -139,12 +141,13 @@ try {
         'facturacion_s_iva'       => $totFactSIva,
         'facturacion_c_iva'       => $totFactCIva,
         'objetivo_total'          => $totObj,
+        'objetivo_crecimiento'    => $totFactAnt * (1 + $kpis['facturacion_var_marca']),
         'cumplimiento_obj'        => $db->cumplimientoObjVenta($totFactCIva, $totObj),
         'facturacion_var'         => $db->facturacionVarPct($totFactCIva, $totFactAnt),
         'ticket_promedio'         => $db->ticketPromedioEst($totFactCIva, $totTickets),
         'pct_ticket_2do'          => $db->pctTicketProductoMarca($filasParaTotal, 'tickets_2do_prod'),
         'pct_ticket_3er'          => $db->pctTicketProductoMarca($filasParaTotal, 'tickets_3er_prod'),
-        'pct_cumplimiento_cadena' => $db->pctCumplimientoCadenaIndicadores($filasParaTotal, $benchmarksCadena),
+        'pct_cumplimiento_cadena' => $db->pctCumplimientoCoach($filasParaTotal, $benchmarksCadena),
     ];
 
     $ultimaActFormatted = null;

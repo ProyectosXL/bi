@@ -14,7 +14,7 @@
  */
 class MailPremios
 {
-    private const PROFILE_DEFAULT = 'sistemas';
+    public const PROFILE_DEFAULT = 'sistemas';
     public const TIPO_NOTIFICACION_RESUMEN_MENSUAL = 'PREMIOS_RESUMEN_MENSUAL';
     public const TIPO_NOTIFICACION_AVANCE_QUINCENAL = 'PREMIOS_AVANCE_QUINCENAL';
 
@@ -31,19 +31,28 @@ class MailPremios
         }
     }
 
-    /** @param string[] $destinatarios */
-    public function enviar(array $destinatarios, string $asunto, string $htmlBody, string $perfil = self::PROFILE_DEFAULT): void
+    /**
+     * @param string[] $destinatarios
+     * @param string[] $copia En copia (CC) — @copy_recipients de sp_send_dbmail, no se agrega
+     *                        a $destinatarios para que quede como CC real y no como "Para".
+     */
+    public function enviar(array $destinatarios, string $asunto, string $htmlBody, string $perfil = self::PROFILE_DEFAULT, array $copia = []): void
     {
         if (!$destinatarios) {
             throw new RuntimeException('No hay destinatarios para enviar el mail');
         }
+        $copyParam = $copia ? ', @copy_recipients = ?' : '';
         $sql = "EXEC msdb.dbo.sp_send_dbmail
                     @profile_name = ?,
                     @recipients   = ?,
                     @subject      = ?,
                     @body         = ?,
-                    @body_format  = 'HTML'";
+                    @body_format  = 'HTML'
+                    $copyParam";
         $params = [$perfil, implode(';', $destinatarios), $asunto, $htmlBody];
+        if ($copia) {
+            $params[] = implode(';', $copia);
+        }
         $stmt = sqlsrv_query($this->connCentral, $sql, $params);
         if ($stmt === false) {
             $errores = sqlsrv_errors() ?? [];
@@ -165,23 +174,28 @@ class MailPremios
 
     /**
      * Tabla de sucursales acotada a las columnas "% Cumplimiento Obj. Venta" .. "% Cumpl.
-     * Cadena" (mismo tramo que se ve en la tabla de "Locales Propios" del dashboard) + el
+     * Coach" (mismo tramo que se ve en la tabla de "Locales Propios" del dashboard) + el
      * total del premio — a pedido explícito: el mail NO incluye los montos de facturación/
      * objetivo en $ ni el desglose de premio por concepto (Objetivo Venta, Crecimiento,
      * etc.), solo estos indicadores y el total.
      *
-     * @param array $filasSup    Retorno de PremiosDB::datosPropios($supervisora)
-     * @param array $subtotal    ['cumplimiento_obj','facturacion_var','ticket_promedio',
-     *                           'pct_ticket_2do','pct_ticket_3er','pct_cumplimiento_cadena']
-     *                           — misma agregación que el renglón de supervisora en api/propios.php
-     * @param array $benchmarks  ['ticket_marca','pct2_marca','pct3_marca'] para pintar en
-     *                           verde/rojo cada celda, igual criterio que los badges de la UI
+     * @param array $filasSup     Retorno de PremiosDB::datosPropios($supervisora)
+     * @param array $totalGeneral ['cumplimiento_obj','facturacion_var','ticket_promedio',
+     *                            'pct_ticket_2do','pct_ticket_3er','pct_cumplimiento_cadena']
+     *                            — TOTAL de TODA la cadena (todas las supervisoras + Ecommerce),
+     *                            no el propio de esta supervisora — ver
+     *                            PremiosDB::totalGeneralPropios(). Es la fila "Total" del mail,
+     *                            a pedido del cliente (2026-09-02): mostrar acá el total de la
+     *                            supervisora confundía, porque se leía como si fuera el objetivo.
+     * @param array $benchmarks   ['ticket_marca','pct2_marca','pct3_marca'] para pintar en
+     *                            verde/rojo cada celda de sucursal, igual criterio que los
+     *                            badges de la UI
      */
     public static function renderDetalleSupervisora(
         PremiosDB $db,
         string $supervisora,
         array $filasSup,
-        array $subtotal,
+        array $totalGeneral,
         array $benchmarks,
         float $totalPremios,
         string $desde,
@@ -205,18 +219,23 @@ class MailPremios
                 . '<td style="' . self::estiloTd() . self::colorSegunUmbral($ticketProm, $benchmarks['ticket_marca']) . '">' . ($ticketProm === null ? '—' : self::money($ticketProm)) . '</td>'
                 . '<td style="' . self::estiloTd() . self::colorSegunUmbral($pct2, $benchmarks['pct2_marca']) . '">' . self::pct($pct2) . '</td>'
                 . '<td style="' . self::estiloTd() . self::colorSegunUmbral($pct3, $benchmarks['pct3_marca']) . '">' . self::pct($pct3) . '</td>'
-                . '<td style="' . self::estiloTd() . '">—</td>' // % Cumpl. Cadena es de cadena, no por sucursal — igual criterio que la tabla del dashboard
+                . '<td style="' . self::estiloTd() . '">—</td>' // % Cumpl. Coach es de la supervisora, no por sucursal — igual criterio que la tabla del dashboard
                 . '</tr>';
         }
 
+        // Fila "Total": TOTAL GENERAL de toda la cadena (todas las supervisoras + Ecommerce,
+        // ver PremiosDB::totalGeneralPropios()) — a pedido del cliente (2026-09-02), reemplaza
+        // al total propio de esta supervisora, que se confundía con un objetivo/benchmark
+        // cuando en realidad era su propio promedio de zona. Con esto, cada sucursal se compara
+        // visualmente contra el resultado real de TODA la empresa, no contra sí misma.
         $filaTotal = '<tr>'
             . '<td style="padding:6px 10px;font-weight:700;background:#fffbeb;">Total</td>'
-            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($subtotal['cumplimiento_obj']) . '</td>'
-            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($subtotal['facturacion_var']) . '</td>'
-            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::money($subtotal['ticket_promedio']) . '</td>'
-            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($subtotal['pct_ticket_2do']) . '</td>'
-            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($subtotal['pct_ticket_3er']) . '</td>'
-            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;color:#92400e;">' . self::pct($subtotal['pct_cumplimiento_cadena']) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($totalGeneral['cumplimiento_obj']) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($totalGeneral['facturacion_var']) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::money($totalGeneral['ticket_promedio']) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($totalGeneral['pct_ticket_2do']) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($totalGeneral['pct_ticket_3er']) . '</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;color:#92400e;">' . self::pct($totalGeneral['pct_cumplimiento_cadena']) . '</td>'
             . '</tr>';
 
         return '<html><body style="' . self::estiloBase() . '">'
@@ -231,7 +250,7 @@ class MailPremios
             . '<th style="' . self::estiloTh() . '">Ticket Promedio</th>'
             . '<th style="' . self::estiloTh() . '">% Tickets 2do Producto</th>'
             . '<th style="' . self::estiloTh() . '">% Tickets 3er Producto</th>'
-            . '<th style="' . self::estiloTh() . '">% Cumpl. Cadena</th>'
+            . '<th style="' . self::estiloTh() . '">% Cumpl. Coach</th>'
             . '</tr>'
             . $filasSucursales
             . $filaTotal
@@ -292,7 +311,7 @@ class MailPremios
      * @param ?float $ticketPromedio,$pctTicket2do,$pctTicket3er,$pctCumplimientoCadena
      *        Retorno de AvanceQuincenalDB::avancePorSupervisora()[n] — mismos campos que la
      *        tabla de "Locales Propios" del dashboard, pero calculados sobre las tablas diarias
-     *        del avance parcial (ver AvanceQuincenalDB::pctCumplimientoCadenaIndicadores()).
+     *        del avance parcial (ver AvanceQuincenalDB::pctCumplimientoCoach()).
      * @param array $benchmarks ['ticket_marca','pct2_marca','pct3_marca'] — mismo array que
      *        AvanceQuincenalDB::avancePorSupervisora()[n]['benchmarks'], para pintar cada
      *        indicador en verde/rojo igual criterio que renderDetalleSupervisora().
@@ -341,7 +360,7 @@ class MailPremios
                 . '<td style="' . self::estiloTd() . self::colorSegunUmbral($ticketProm, $benchmarks['ticket_marca']) . '">' . ($ticketProm === null ? '—' : self::money($ticketProm)) . '</td>'
                 . '<td style="' . self::estiloTd() . self::colorSegunUmbral($pct2, $benchmarks['pct2_marca']) . '">' . self::pct($pct2) . '</td>'
                 . '<td style="' . self::estiloTd() . self::colorSegunUmbral($pct3, $benchmarks['pct3_marca']) . '">' . self::pct($pct3) . '</td>'
-                . '<td style="' . self::estiloTd() . '">—</td>' // % Cumpl. Cadena es de la supervisora, no por sucursal — igual criterio que renderDetalleSupervisora()
+                . '<td style="' . self::estiloTd() . '">—</td>' // % Cumpl. Coach es de la supervisora, no por sucursal — igual criterio que renderDetalleSupervisora()
                 . '</tr>';
         }
 
@@ -360,7 +379,7 @@ class MailPremios
             . '<th style="' . self::estiloTh() . '">Ticket Promedio</th>'
             . '<th style="' . self::estiloTh() . '">% Tickets 2do Producto</th>'
             . '<th style="' . self::estiloTh() . '">% Tickets 3er Producto</th>'
-            . '<th style="' . self::estiloTh() . '">% Cumpl. Cadena</th>'
+            . '<th style="' . self::estiloTh() . '">% Cumpl. Coach</th>'
             . '</tr>'
             . $filasHtml
             . '<tr>'

@@ -47,7 +47,7 @@ try {
 
     // Se le pasa el listado COMPLETO de supervisoras activas, no solo $supervisora: los
     // benchmarks de marca (ticket promedio, % ticket 2do/3er producto) para "% Cumpl.
-    // Cadena" tienen que salir de TODA la cadena, no solo de las sucursales de esta
+    // Coach" tienen que salir de TODA la cadena, no solo de las sucursales de esta
     // supervisora — mismo criterio que PremiosDB::resumenPorSupervisora().
     $avanceDb = new AvanceQuincenalDB($desde, $hasta);
     $activas = $premiosDb->getSupervisoras();

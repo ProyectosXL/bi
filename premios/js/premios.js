@@ -98,6 +98,16 @@ const Premios = (() => {
     }
 
     /**
+     * Redondea a la misma precisión con la que se muestra en pantalla (1 decimal de %, ver
+     * fmt.pct/fmt.varPct) — evita que dos valores comparados por `calculaCumplePorConsuelo`/
+     * `facturacionVarMarcaCellHTML` que se VEN iguales (ej. "18,9 %" vs "18,9 %") no se marquen
+     * como "superado" por una diferencia de decimales invisible en pantalla.
+     */
+    function redondeoPct(n) {
+        return Math.round(n * 1000) / 1000;
+    }
+
+    /**
      * true/false si cumple el objetivo de venta, directo o "de consuelo" (igual a la del
      * premio de crecimiento real: si no alcanza el objetivo pero su variación de facturación
      * supera el benchmark de marca, igual se considera cumplido). null si no hay dato.
@@ -117,11 +127,13 @@ const Premios = (() => {
 
     /**
      * true/false si cumple el objetivo ESPECÍFICAMENTE por la regla de consuelo (no de forma
-     * directa) — o sea, no llegó al objetivo de venta pero su variación de facturación supera
-     * el benchmark de marca. Es una condición excluyente con el cumplimiento directo: si ya
+     * directa) — o sea, no llegó al objetivo de venta pero su variación de facturación llega
+     * al benchmark de marca. Es una condición excluyente con el cumplimiento directo: si ya
      * cumplió directo, no corresponde evaluarlo también por esta regla (ver
      * `facturacionVarMarcaCellHTML`) — cada fila gana el premio por un camino o el otro, nunca
-     * por los dos a la vez.
+     * por los dos a la vez. Compara con `redondeoPct()` (>=, no >): sin esto, dos valores que
+     * se ven IGUALES en pantalla (ambos redondeados a "18,9 %", por ejemplo) podían no marcarse
+     * como cumplidos por una diferencia de decimales invisible (a pedido del cliente, 2026-09-02).
      */
     function calculaCumplePorConsuelo(valor, facturacionVar, benchmarkMarca, sinDatos) {
         if (sinDatos || valor === null || valor === undefined) return false;
@@ -129,7 +141,7 @@ const Premios = (() => {
         return !directo
             && facturacionVar !== null && facturacionVar !== undefined
             && benchmarkMarca !== null && benchmarkMarca !== undefined
-            && facturacionVar > benchmarkMarca;
+            && redondeoPct(facturacionVar) >= redondeoPct(benchmarkMarca);
     }
 
     /**
@@ -147,16 +159,21 @@ const Premios = (() => {
         if (valor >= 0) {
             return `<td class="td-num"><span class="badge-cumple" title="Cumple objetivo de venta"><i class="bi bi-check-circle-fill"></i> ${fmt.pct(valor)}</span></td>`;
         }
-        return `<td class="td-num text-red">${fmt.pct(valor)}</td>`;
+        return `<td class="td-num"><span class="badge-no-cumple" title="No cumple objetivo de venta"><i class="bi bi-x-circle-fill"></i> ${fmt.pct(valor)}</span></td>`;
     }
 
     /**
-     * Celda con badge verde (mismo `.badge-cumple` que `cumplimientoCellHTML`) cuando el valor
-     * supera un umbral (benchmark de marca, o 0 para una variación positiva simple). Si no lo
-     * supera, texto plano (o con `opts.claseNoCumple` si se pasa, ej. 'text-red').
-     * `opts.gate`: si se pasa `false`, nunca muestra el badge (aunque supere el umbral) — para
-     * filas de supervisora, donde estas métricas secundarias solo cuentan si la fila también
-     * cumplió el objetivo de venta (ver `calculaCumpleObjetivo`).
+     * Celda con badge verde (`.badge-cumple`) cuando el valor supera un umbral (benchmark de
+     * marca, o 0 para una variación positiva simple), o badge rojo (`.badge-no-cumple`, mismo
+     * diseño en pill que el verde) cuando no lo supera — a pedido del cliente (2026-09-03):
+     * antes quedaba en texto plano sin remarcar que no llegó al benchmark.
+     * `opts.gate`: si se pasa `false`, nunca muestra el badge VERDE (aunque supere el umbral) —
+     * para filas de supervisora, donde estas métricas secundarias solo cuentan si la fila
+     * también cumplió el objetivo de venta (ver `calculaCumpleObjetivo`). En ese caso NO se
+     * pinta de rojo tampoco si igual superó el umbral (el rojo es solo para "no llegó al
+     * benchmark", no para "el gate lo bloqueó") — queda neutro.
+     * `opts.tituloNoCumple`: tooltip del badge rojo (independiente de `opts.titulo`, que es
+     * el del verde — evita mostrar "Supera..." en un badge que dice lo contrario).
      */
     function badgeCellHTML(valor, umbral, formateado, opts = {}) {
         if (valor === null || valor === undefined || umbral === null || umbral === undefined) {
@@ -168,31 +185,31 @@ const Premios = (() => {
             const tituloAttr = opts.titulo ? ` title="${opts.titulo}"` : '';
             return `<td class="td-num"><span class="badge-cumple"${tituloAttr}><i class="bi bi-check-circle-fill"></i> ${formateado}</span></td>`;
         }
-        const cls = opts.claseNoCumple && !superaUmbral ? ` ${opts.claseNoCumple}` : '';
-        return `<td class="td-num${cls}">${formateado}</td>`;
+        if (!superaUmbral) {
+            const tituloAttr = opts.tituloNoCumple ? ` title="${opts.tituloNoCumple}"` : '';
+            return `<td class="td-num"><span class="badge-no-cumple"${tituloAttr}><i class="bi bi-x-circle-fill"></i> ${formateado}</span></td>`;
+        }
+        return `<td class="td-num">${formateado}</td>`;
     }
 
     /**
-     * Celda de "Facturación Var %" para filas de supervisora/Total: badge verde SOLO si la fila
-     * ganó el premio específicamente POR la regla de consuelo (`cumplePorConsuelo`, ver
-     * `calculaCumplePorConsuelo`) — no si ya cumplió el objetivo de venta directo. Es una
-     * condición excluyente con la celda de "% Cumplimiento Obj. Venta": esa columna ya se
-     * acredita el mérito de la fila (directo o por consuelo); esta columna solo repite el
-     * badge cuando el camino fue específicamente el de consuelo, para no acreditar dos veces
-     * el mismo cumplimiento y así no comparar contra la marca lo que ya cumplió de forma
-     * directa. Texto rojo si la variación es negativa (no depende de `cumplePorConsuelo`: una
-     * caída de facturación siempre se marca).
+     * Celda de "Facturación Var %": badge verde si supera el benchmark de marca, rojo si no —
+     * puramente visual (2026-09-04, a pedido del cliente), sin relación con si la fila ya
+     * ganó el premio por objetivo de venta directo en la otra columna. La regla de negocio de
+     * "consuelo" (mutuamente excluyente con % Cumplimiento Obj. Venta para no acreditar el
+     * mismo mérito dos veces) sigue intacta para el CÁLCULO del premio — ver
+     * `calculaCumplePorConsuelo()` y `PremiosDB::contarCrecimiento()` — esto solo cambia lo
+     * que se ve pintado en esta celda puntual.
      */
-    function facturacionVarMarcaCellHTML(valor, benchmarkMarca, cumplePorConsuelo, formateado) {
-        if (valor === null || valor === undefined) {
+    function facturacionVarMarcaCellHTML(valor, benchmarkMarca, formateado) {
+        if (valor === null || valor === undefined || benchmarkMarca === null || benchmarkMarca === undefined) {
             return `<td class="td-num">${formateado}</td>`;
         }
-        const superaMarca = benchmarkMarca !== null && benchmarkMarca !== undefined && valor > benchmarkMarca;
-        if (superaMarca && cumplePorConsuelo) {
+        const superaMarca = redondeoPct(valor) >= redondeoPct(benchmarkMarca);
+        if (superaMarca) {
             return `<td class="td-num"><span class="badge-cumple" title="Supera la variación de facturación de marca"><i class="bi bi-check-circle-fill"></i> ${formateado}</span></td>`;
         }
-        const cls = valor < 0 ? ' text-red' : '';
-        return `<td class="td-num${cls}">${formateado}</td>`;
+        return `<td class="td-num"><span class="badge-no-cumple" title="No supera la variación de facturación de marca"><i class="bi bi-x-circle-fill"></i> ${formateado}</span></td>`;
     }
 
     /* ── Modal genérico de aviso/confirmación (reemplaza alert()/confirm() nativos del
@@ -246,6 +263,50 @@ const Premios = (() => {
         });
     }
 
+    /* ── Ordenamiento de tablas por click en el encabezado ────────────────────────────
+       Estado por tabla: {key: string|null, dir: 'desc'|'asc'|null}. Ciclo por click en un
+       <th data-sort-key="..."> : sin orden → mayor a menor → menor a mayor → sin orden (vuelve
+       al orden por defecto). Cada módulo de pestaña guarda su propio estado en una variable de
+       módulo y la resetea a `nuevoEstadoOrden()` al arrancar `load()`, así el tablero siempre
+       arranca en el orden original al cambiar de período/supervisora o al recargar la pestaña
+       — a pedido del cliente, el orden manual nunca se recuerda entre cargas. ── */
+    function nuevoEstadoOrden() {
+        return { key: null, dir: null };
+    }
+    function cicloOrden(state, key) {
+        if (state.key !== key) return { key, dir: 'desc' };
+        if (state.dir === 'desc') return { key, dir: 'asc' };
+        return nuevoEstadoOrden();
+    }
+    function iconoOrden(state, key) {
+        if (state.key !== key) return '<i class="bi bi-arrow-down-up sort-icon"></i>';
+        const cls = 'bi ' + (state.dir === 'desc' ? 'bi-sort-down-alt' : 'bi-sort-up') + ' sort-icon sort-icon-active';
+        return `<i class="${cls}"></i>`;
+    }
+    /** @param getValue (fila, key) => string|number|null — valor crudo a comparar para esa key. */
+    function ordenarPor(filas, state, getValue) {
+        if (!state.key) return filas;
+        const copia = [...filas];
+        copia.sort((a, b) => {
+            const va = getValue(a, state.key);
+            const vb = getValue(b, state.key);
+            if (va == null && vb == null) return 0;
+            if (va == null) return 1;
+            if (vb == null) return -1;
+            if (typeof va === 'string' || typeof vb === 'string') {
+                return state.dir === 'desc' ? String(vb).localeCompare(String(va)) : String(va).localeCompare(String(vb));
+            }
+            return state.dir === 'desc' ? vb - va : va - vb;
+        });
+        return copia;
+    }
+    /** Delega los clicks de todos los <th data-sort-key> del wrap a `onClick(key)`. */
+    function attachSortHandlers(wrap, onClick) {
+        wrap.querySelectorAll('th[data-sort-key]').forEach(th => {
+            th.addEventListener('click', () => onClick(th.dataset.sortKey));
+        });
+    }
+
     /* ── Badge "Última actualización" / "DESACTUALIZADO" (reactivo a cada respuesta AJAX) ── */
     function actualizarUltimaActualizacion(data) {
         if (data.ultima_actualizacion) {
@@ -262,5 +323,6 @@ const Premios = (() => {
         $, fmt, buildQS, apiFetch, apiPost, updatePeriodoLabel, setSupervisoraOptions,
         calculaCumpleObjetivo, calculaCumplePorConsuelo, cumplimientoCellHTML, badgeCellHTML,
         facturacionVarMarcaCellHTML, actualizarUltimaActualizacion, alertModal, confirmModal,
+        nuevoEstadoOrden, cicloOrden, iconoOrden, ordenarPor, attachSortHandlers,
     };
 })();

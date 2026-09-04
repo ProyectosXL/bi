@@ -30,6 +30,39 @@ class PremiosDB
     private const CASA_CENTRAL_NRO = 1;
 
     /**
+     * Orden fijo de sucursales dentro de cada supervisora en la tabla "Locales Propios"
+     * (Locales Propios: tabla y mail individual), a pedido del cliente (2026-09-02) — no es
+     * alfabético ni el de la consulta SQL (que no trae ORDER BY), sino un orden de negocio
+     * específico por supervisora. Comparación case-insensitive contra SUCURSAL (ver
+     * ordenarSucursalesPorDefecto()); una sucursal no listada acá (alta nueva, CENTRAL, etc.)
+     * se agrega al final, en el orden que devuelva la consulta, para no perder ninguna
+     * silenciosamente. Solo aplica al orden POR DEFECTO — el click-to-sort del dashboard
+     * (ver premios.js) lo reemplaza mientras esté activo.
+     */
+    private const ORDEN_SUCURSALES = [
+        'Sonia Pacifico'        => ['ABASTO', 'AVELLANEDA', 'CABALLITO', 'FLORES'],
+        'Carolina Commendatore' => ['ALTO ROSARIO', 'PASEO DEL SIGLO', 'PORTAL ROSARIO', 'MDP GALLEGOS', 'MDP ALDREY'],
+        'Nahir Actis'           => ['DISTRITO ARCOS', 'GURRUCHAGA', 'SOLEIL', 'PARQUE BROWN', 'SAN JUSTO'],
+        // "GTNUNI" = segunda sucursal Unicenter (NRO_SUCURS distinto, SUCURSAL='GTNUNI' en la
+        // base), va justo después de la primera Unicenter.
+        'Josefina Pastorino'    => ['UNICENTER', 'GTNUNI', 'TOM', 'MALVINAS', 'DOT', 'SOLAR'],
+    ];
+
+    /** @param array<int,array> $filas Retorno de filaDesdeDB() — se ordena por 'sucursal'. */
+    private function ordenarSucursalesPorDefecto(string $supervisora, array $filas): array
+    {
+        $orden = self::ORDEN_SUCURSALES[$supervisora] ?? null;
+        if (!$orden) return $filas;
+        $posicion = array_flip(array_map('strtoupper', $orden));
+        usort($filas, function ($a, $b) use ($posicion) {
+            $posA = $posicion[strtoupper($a['sucursal'])] ?? PHP_INT_MAX;
+            $posB = $posicion[strtoupper($b['sucursal'])] ?? PHP_INT_MAX;
+            return $posA <=> $posB;
+        });
+        return $filas;
+    }
+
+    /**
      * @var array<int,array{nombre:string,mail:?string}>|null Caché del catálogo COMPLETO de
      * supervisoras activas (RO_T_SUPERVISORAS_COMERCIAL) para esta instancia — ver
      * catalogoSupervisoras(). Incluye TODAS las activas, sin filtrar por visibilidad —
@@ -422,6 +455,12 @@ class PremiosDB
         while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
             $out[] = $this->filaDesdeDB($r, 'IMP_FACT', 'TICKETS');
         }
+        // Orden por defecto de sucursales (ver ORDEN_SUCURSALES) — solo tiene sentido cuando
+        // se pidieron las sucursales de UNA supervisora real, no en el agregado sin filtro
+        // (null) ni en la fila sintética "TODAS".
+        if ($supervisora !== null && strcasecmp($supervisora, 'TODAS') !== 0) {
+            $out = $this->ordenarSucursalesPorDefecto($supervisora, $out);
+        }
         return $out;
     }
 
@@ -656,20 +695,69 @@ class PremiosDB
             $filasPropiasTodasLasSup = array_merge($filasPropiasTodasLasSup, $filasPropias);
 
             $propios     = $this->premiosPropiosSupervisora($sup, $filasPropias, $propiosTodos, $filasTodas, $benchmarks);
-            $franquicias = $this->premiosFranquiciasSupervisora($conteosFranquiciaEmpresa, $importesFranquiciaPorSup[$sup] ?? []);
+            $franquicias = $this->premiosFranquiciasSupervisora($sup, $conteosFranquiciaEmpresa, $importesFranquiciaPorSup[$sup] ?? []);
 
             $out[] = [
                 'supervisora'             => $sup,
                 'total_premios'           => $propios['total'] + $franquicias['total'],
                 'propios'                 => $propios,
                 'franquicias'             => $franquicias,
-                'pct_cumplimiento_cadena' => $this->pctCumplimientoCadenaIndicadores($filasPropias, $benchmarks),
+                'pct_cumplimiento_cadena' => $this->pctCumplimientoCoach($filasPropias, $benchmarks),
             ];
         }
 
         return [
             'filas' => $out,
-            'pct_cumplimiento_cadena_total' => $this->pctCumplimientoCadenaIndicadores($filasPropiasTodasLasSup, $benchmarks),
+            'pct_cumplimiento_cadena_total' => $this->pctCumplimientoCoach($filasPropiasTodasLasSup, $benchmarks),
+        ];
+    }
+
+    /**
+     * Total general de Locales Propios (todas las supervisoras + la fila sintética
+     * "TODAS"/Ecommerce) — mismo agregado que la fila "Total" de la tabla en api/propios.php,
+     * extraído acá para reusarlo en el mail individual de cada supervisora
+     * (ver enviar_mail_supervisora.php, a pedido del cliente 2026-09-02: la fila "Total" del
+     * mail debe mostrar el total de TODA la cadena, no el propio de la supervisora — eso ya
+     * se ve sucursal por sucursal arriba, y confundía con un objetivo).
+     *
+     * @param string[] $supervisoras       Ver getSupervisoras()
+     * @param float    $benchmarkVarMarca  Para 'objetivo_crecimiento' — mismo criterio que api/propios.php
+     * @param array    $benchmarksCadena   ['ticket_marca','pct2_marca','pct3_marca'] para pctCumplimientoCoach()
+     */
+    public function totalGeneralPropios(array $supervisoras, float $benchmarkVarMarca, array $benchmarksCadena): array
+    {
+        $totFactSIva = 0.0; $totFactCIva = 0.0; $totObj = 0.0; $totFactAnt = 0.0; $totTickets = 0;
+        $filasParaTotal = [];
+        foreach ($supervisoras as $sup) {
+            $filasSup = $this->datosPropios($sup);
+            if (!$filasSup) continue;
+            $filasParaTotal = array_merge($filasParaTotal, $filasSup);
+            $totFactSIva += array_sum(array_column($filasSup, 'imp_fact_s_iva'));
+            $totFactCIva += array_sum(array_column($filasSup, 'imp_fact'));
+            $totObj      += array_sum(array_column($filasSup, 'imp_obj'));
+            $totFactAnt  += array_sum(array_column($filasSup, 'imp_fact_ant'));
+            $totTickets  += array_sum(array_column($filasSup, 'tickets'));
+        }
+        $filasTodas = $this->datosPropios('TODAS');
+        if ($filasTodas) {
+            $totFactSIva += $filasTodas[0]['imp_fact_s_iva'];
+            $totFactCIva += $filasTodas[0]['imp_fact'];
+            $totObj      += $filasTodas[0]['imp_obj'];
+            $totFactAnt  += $filasTodas[0]['imp_fact_ant'];
+            $totTickets  += $filasTodas[0]['tickets'];
+            $filasParaTotal[] = $filasTodas[0];
+        }
+        return [
+            'facturacion_s_iva'       => $totFactSIva,
+            'facturacion_c_iva'       => $totFactCIva,
+            'objetivo_total'          => $totObj,
+            'objetivo_crecimiento'    => $totFactAnt * (1 + $benchmarkVarMarca),
+            'cumplimiento_obj'        => $this->cumplimientoObjVenta($totFactCIva, $totObj),
+            'facturacion_var'         => $this->facturacionVarPct($totFactCIva, $totFactAnt),
+            'ticket_promedio'         => $this->ticketPromedioEst($totFactCIva, $totTickets),
+            'pct_ticket_2do'          => $this->pctTicketProductoMarca($filasParaTotal, 'tickets_2do_prod'),
+            'pct_ticket_3er'          => $this->pctTicketProductoMarca($filasParaTotal, 'tickets_3er_prod'),
+            'pct_cumplimiento_cadena' => $this->pctCumplimientoCoach($filasParaTotal, $benchmarksCadena),
         ];
     }
 
@@ -690,23 +778,25 @@ class PremiosDB
     }
 
     /**
-     * % de indicadores secundarios (Ticket Promedio + Ticket 2do Producto + Ticket 3er
-     * Producto) que llegan a su benchmark de marca, sobre el TOTAL de indicadores posibles
-     * de la cadena: cada local real (excluye NRO_SUCURS=1 "CENTRAL") aporta 3 indicadores,
-     * así que una supervisora con 5 locales tiene 15 en la base del cálculo — no es un
-     * promedio de 3 porcentajes, es cuántos de esos N×3 indicadores individuales cumplen.
+     * % Cumplimiento Coach (ex "% Cumpl. Cadena", renombrado a pedido del cliente,
+     * 2026-09-01 — la fórmula NO cambió): % de indicadores secundarios (Ticket Promedio +
+     * Ticket 2do Producto + Ticket 3er Producto) que llegan a su benchmark de marca, sobre
+     * el TOTAL de indicadores posibles de la cadena: cada local real (excluye
+     * NRO_SUCURS=1 "CENTRAL") aporta 3 indicadores, así que una supervisora con 5 locales
+     * tiene 15 en la base del cálculo — no es un promedio de 3 porcentajes, es cuántos de
+     * esos N×3 indicadores individuales cumplen (confirmado con el cliente contra Carolina
+     * Commendatore: 5 locales × 3 indicadores = 15, de los cuales 11 cumplen = 73,3 %).
      * Mismos umbrales que premioTicketPromedio()/premioTicketProducto() (cada indicador se
      * evalúa de forma independiente, igual que los 3 badges por fila que se ven en la UI —
      * sin relación con si la fila ganó o no el objetivo de venta).
      *
      * Un local "sin datos" en el período (fact=0 y obj=0) suma sus 3 indicadores al total
-     * pero nunca como cumplidos — mismo criterio que ya usaba esta columna cuando medía
-     * solo objetivo de venta, ahora aplicado indicador por indicador.
+     * pero nunca como cumplidos.
      *
      * @param array $benchmarksTicket ['ticket_marca'=>float,'pct2_marca'=>float,'pct3_marca'=>float]
      *                                (mismo array $benchmarks que ya se arma para los premios)
      */
-    public function pctCumplimientoCadenaIndicadores(array $filasSupervisora, array $benchmarksTicket): float
+    public function pctCumplimientoCoach(array $filasSupervisora, array $benchmarksTicket): float
     {
         $total = 0;
         $cumple = 0;
@@ -758,18 +848,17 @@ class PremiosDB
     }
 
     /**
-     * Benchmark de marca (Franquicias) para variación de facturación — a diferencia de
-     * Locales Propios, acá el +10% es MULTIPLICATIVO, no aditivo. Confirmado por DAX:
-     * `Facturación Var % All Franq. = CALCULATE([Facturación Var % Franq.], ALL(...)) * 1.1`
-     * (con `[Facturación Var % Franq.]` en formato ratio, no delta — de ahí la diferencia
-     * de fórmula respecto a Locales Propios). Ejemplo real: agregado +2,4842% de var% da
-     * un benchmark de +12,7326% (no +12,4842% como daría la fórmula aditiva) — confirmado
-     * contra el KPI real "Facturación Var % All Franq.: 112,73 %".
+     * Benchmark de marca (Franquicias) para variación de facturación — mismo criterio ADITIVO
+     * (+10 puntos porcentuales) que Locales Propios (ver benchmarkVarMarca()), a pedido del
+     * cliente (2026-09-02). Antes usaba un ajuste MULTIPLICATIVO (×1.1), confirmado contra el
+     * DAX real del .pbix original (`Facturación Var % All Franq. = CALCULATE([Facturación Var
+     * % Franq.], ALL(...)) * 1.1`) — divergencia intencional del reporte original: con
+     * crecimientos altos, ×1.1 daba un benchmark bastante más exigente que +10pp (ej. +8,9%
+     * real → +19,8% con ×1.1, vs. +18,9% con +10pp), lo cual generaba confusión.
      */
     public function benchmarkVarMarcaFranquicias(array $filasSinFiltrar): float
     {
-        $var = $this->facturacionVarMarca($filasSinFiltrar);
-        return (1 + $var) * 1.1 - 1;
+        return $this->benchmarkVarMarca($filasSinFiltrar);
     }
 
     /** Ticket promedio de marca (sin filtro), para comparar contra cada sucursal. */
@@ -818,10 +907,16 @@ class PremiosDB
      * excluye explícitamente, pero es inofensivo porque CENTRAL siempre tiene FACT=0.
      *
      * Carolina Commendatore usa medidas separadas (`...Caro`):
-     *   - Venta: compara la facturación total agrupada de SUS sucursales + la fila
-     *     sintética "TODAS" contra el objetivo total agrupado, SIN tolerancia (umbral en
-     *     0 en vez de -0.5%) y sin excluir ninguna sucursal. Si esa comparación agregada
-     *     da positiva, cuentan TODAS sus sucursales; si no, ninguna.
+     *   - Venta: a pedido del cliente (2026-09-01, se detectó que el agregado todo-o-nada
+     *     original del .pbix no reflejaba cuántos locales realmente cumplían), se cuenta
+     *     por unidad: sus propias sucursales que individualmente cumplen objetivo de venta
+     *     (mismo criterio sin tolerancia que el badge verde de la tabla Locales Propios,
+     *     excluyendo NRO_SUCURS=1 "CENTRAL" y filas sin datos, igual que contarVentaEmpresa())
+     *     más 1 si la fila sintética "TODAS" (Ecommerce) cumple su propio objetivo. Ver
+     *     cantVentaCarolina(). ESTO DIVERGE A PROPÓSITO del DAX original del .pbix, que
+     *     usaba el agregado (fact de sus sucursales + "TODAS" vs. objetivo agrupado, sin
+     *     tolerancia) y daba crédito a TODAS sus sucursales si ese agregado cruzaba el
+     *     objetivo, sin mirar cada una individualmente.
      *   - Crecimiento: sin `ALL()` — se evalúa solo sobre sus propias sucursales (el
      *     cálculo "normal", sin el atajo empresa-wide que reciben las demás).
      *
@@ -884,18 +979,18 @@ class PremiosDB
     }
 
     /**
-     * Caso especial Carolina Commendatore: si (fact de sus sucursales + "TODAS") supera
-     * (objetivo de sus sucursales + "TODAS"), sin tolerancia, cuentan TODAS sus sucursales;
-     * si no, ninguna.
+     * Caso especial Carolina Commendatore: cantidad de sucursales propias que
+     * individualmente cumplen objetivo de venta (sin tolerancia, mismo criterio que el
+     * badge verde de la tabla Locales Propios) + 1 si "TODAS"/Ecommerce cumple el suyo.
      */
     private function cantVentaCarolina(array $filasCarolina, array $filasTodas): int
     {
-        $factAgg = 0.0; $objAgg = 0.0;
+        $cant = 0;
         foreach (array_merge($filasCarolina, $filasTodas) as $f) {
-            $factAgg += $f['imp_fact'];
-            $objAgg  += $f['imp_obj'];
+            if ($f['sin_datos'] || $f['casa_central']) continue;
+            if ($this->cumplimientoObjVenta($f['imp_fact'], $f['imp_obj']) >= 0) $cant++;
         }
-        return $factAgg > $objAgg ? count($filasCarolina) : 0;
+        return $cant;
     }
 
     /**
@@ -987,17 +1082,36 @@ class PremiosDB
             if ($f['imp_fact'] > $f['imp_obj']) $cantVenta++;
             $var   = $this->facturacionVarPct($f['imp_fact'], $f['imp_fact_ant']);
             $cumpl = $this->cumplimientoObjVenta($f['imp_fact'], $f['imp_obj']);
-            if ($var !== null && $var > $benchmarkVarF && $cumpl < 0) $cantCrecimiento++;
+            // Redondeado a 1 decimal (>=, no >) antes de comparar contra el benchmark — mismo
+            // fix que Premios.calculaCumplePorConsuelo() en premios.js (2026-09-02): sin esto,
+            // una franquicia cuya var% se VE igual al benchmark en pantalla (ambos "18,9 %")
+            // podía no contar acá por una diferencia de decimales invisible, desalineando este
+            // KPI respecto de los badges verdes que se ven fila por fila en la tabla.
+            if ($var !== null && self::redondeoPct($var) >= self::redondeoPct($benchmarkVarF) && $cumpl < 0) $cantCrecimiento++;
         }
         return ['cant_venta' => $cantVenta, 'cant_crecimiento' => $cantCrecimiento, 'benchmark_var' => $benchmarkVarF];
+    }
+
+    /** Redondea a la misma precisión con la que se muestra en pantalla (1 decimal de %) — ver comentario en conteosFranquiciaEmpresa(). */
+    private static function redondeoPct(float $n): float
+    {
+        return round($n, 3);
     }
 
     /**
      * Premios de franquicias para una supervisora: cantidad EMPRESA-WIDE (misma para todas)
      * × importe de ESA supervisora.
+     *
+     * Excepción Carolina Commendatore (a pedido del cliente, 2026-09-01): las franquicias no
+     * cuentan para ella, así que se le devuelve todo en cero en vez de la cantidad empresa-wide.
      */
-    public function premiosFranquiciasSupervisora(array $conteosEmpresa, array $importesSupervisora): array
+    public function premiosFranquiciasSupervisora(string $supervisora, array $conteosEmpresa, array $importesSupervisora): array
     {
+        if (strcasecmp($supervisora, 'Carolina Commendatore') === 0) {
+            $vacio = ['cant' => 0, 'importe' => 0.0, 'premio' => 0.0];
+            return ['venta' => $vacio, 'crecimiento' => $vacio, 'total' => 0.0];
+        }
+
         $importeVenta = $importesSupervisora['venta']       ?? 0.0;
         $importeCrec  = $importesSupervisora['crecimiento'] ?? 0.0;
 

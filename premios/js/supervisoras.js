@@ -8,12 +8,39 @@ const PremiosSupervisoras = (() => {
     const {
         $, fmt, updatePeriodoLabel, setSupervisoraOptions, apiFetch, actualizarUltimaActualizacion,
         cumplimientoCellHTML, badgeCellHTML,
+        nuevoEstadoOrden, cicloOrden, iconoOrden, ordenarPor, attachSortHandlers,
     } = Premios;
 
     let _lastResumen = [];
     let _lastPctCadenaTotal = null;
     let _puedeGestionar = false;
     let _mesUnico = null;
+    // Se resetea a "sin orden" en cada load() — el tablero siempre arranca con el orden
+    // original de getSupervisoras(), nunca recuerda el último click de un usuario entre cargas.
+    let _sortState = nuevoEstadoOrden();
+
+    /** Valor crudo de una fila para una key ordenable (ver th() y renderTabla()). */
+    function valorOrden(s, key) {
+        const p = s.propios, f = s.franquicias;
+        switch (key) {
+            case 'supervisora':              return s.supervisora;
+            case 'venta_pp':                 return p.venta.cant;
+            case 'venta_fq':                 return f.venta.cant;
+            case 'venta_total':              return p.venta.premio + f.venta.premio;
+            case 'crec_pp':                  return p.crecimiento.cant;
+            case 'crec_fq':                  return f.crecimiento.cant;
+            case 'crec_total':               return p.crecimiento.premio + f.crecimiento.premio;
+            case 'tkt_prom_cant':            return p.ticket_promedio.cant;
+            case 'tkt_prom_premio':          return p.ticket_promedio.premio;
+            case 'tkt_2do_cant':             return p.ticket_2do.cant;
+            case 'tkt_2do_premio':           return p.ticket_2do.premio;
+            case 'tkt_3er_cant':             return p.ticket_3er.cant;
+            case 'tkt_3er_premio':           return p.ticket_3er.premio;
+            case 'total_premios':            return s.total_premios;
+            case 'pct_cumplimiento_cadena':  return s.pct_cumplimiento_cadena;
+            default:                         return null;
+        }
+    }
 
     async function loadFiltros() {
         const data = await Premios.apiFetch('filtros.php');
@@ -59,22 +86,28 @@ const PremiosSupervisoras = (() => {
     // Encabezados abreviados a pedido del cliente (headers lo más cortos posible, con
     // tooltip para el significado completo): "C. PP." = Canal Propios, "C. FQ." = Canal
     // Franquicias, "T." = Total del canal, "Obj." = Objetivo, "Tkt." = Ticket.
-    function th(texto, titulo, attrsExtra = '') {
-        return `<th title="${titulo}" ${attrsExtra}>${texto}</th>`;
+    // $titulo vacío/omitido = sin tooltip (evita el cursor "?" de .premios-table th[title]
+    // en columnas cuyo nombre ya se explica solo).
+    function th(texto, titulo = '', attrsExtra = '', key = null) {
+        const tituloAttr = titulo ? ` title="${titulo}"` : '';
+        const keyAttr = key ? ` data-sort-key="${key}"` : '';
+        const contenido = key ? `${texto} ${iconoOrden(_sortState, key)}` : texto;
+        return `<th${tituloAttr}${keyAttr} ${attrsExtra}>${contenido}</th>`;
     }
 
     // Objetivo Venta / Objetivo Crecimiento: Locales Propios | Franquicias | Total (premio propios + premio franquicias).
     // Tickets (Promedio/2do/3er): Locales | Total — no aplican a franquicias.
-    // % Cumpl. Cadena (última columna): de los 3 indicadores secundarios (Ticket Promedio,
+    // % Cumpl. Coach (última columna): de los 3 indicadores secundarios (Ticket Promedio,
     // Ticket 2do y 3er Producto) de cada local PROPIO real de esa supervisora, cuántos
     // llegan a su benchmark de marca — 5 locales = 15 indicadores en la base del cálculo
-    // (ver PremiosDB::pctCumplimientoCadenaIndicadores). Distinto del "cant" de premio de
+    // (ver PremiosDB::pctCumplimientoCoach). Distinto del "cant" de premio de
     // Objetivo Venta/Crecimiento, que es un conteo a nivel empresa.
     function renderTabla(supervisoras, pctCadenaTotal) {
         const wrap = $('tabla-resumen-wrap');
         if (!wrap) return;
 
-        const filas = supervisoras.map(s => {
+        const supervisorasOrdenadas = ordenarPor(supervisoras, _sortState, valorOrden);
+        const filas = supervisorasOrdenadas.map(s => {
             const p = s.propios;
             const f = s.franquicias;
             return `<tr>
@@ -105,22 +138,22 @@ const PremiosSupervisoras = (() => {
             <table class="premios-table">
                 <thead>
                     <tr>
-                        ${th('Supervisora', 'Supervisora', 'rowspan="2"')}
+                        ${th('Supervisora', 'Supervisora', 'rowspan="2"', 'supervisora')}
                         ${th('Obj. Vta.', 'Objetivo de Venta', 'colspan="3" class="th-center"')}
                         ${th('Obj. Crec.', 'Objetivo de Crecimiento', 'colspan="3" class="th-center"')}
                         ${th('Tkt. Prom.', 'Premio por Ticket Promedio', 'colspan="2" class="th-center"')}
                         ${th('Tkt. 2°P.', 'Premio por Ticket 2do Producto', 'colspan="2" class="th-center"')}
                         ${th('Tkt. 3°P.', 'Premio por Ticket 3er Producto', 'colspan="2" class="th-center"')}
-                        ${th('Tot. Premios', 'Total de Premios (suma de todos los conceptos)', 'rowspan="2" class="th-num th-total"')}
-                        ${th('%Cumpl.Cad.', '% Cumplimiento de Cadena: indicadores de Ticket Promedio, 2do y 3er Producto que llegan al benchmark de marca, sobre el total de indicadores de la cadena', 'rowspan="2" class="th-num"')}
+                        ${th('Tot. Premios', 'Total de Premios (suma de todos los conceptos)', 'rowspan="2" class="th-num th-total"', 'total_premios')}
+                        ${th('%Cumpl.Coach', '% Cumplimiento Coach: indicadores de Ticket Promedio, 2do y 3er Producto que llegan al benchmark de marca, sobre el total de indicadores de la cadena', 'rowspan="2" class="th-num"', 'pct_cumplimiento_cadena')}
                         ${thAcciones}
                     </tr>
                     <tr>
-                        ${th('C. PP.', 'Canal Propios', 'class="th-center"')}${th('C. FQ.', 'Canal Franquicias', 'class="th-center"')}${th('T.', 'Total (Canal Propios + Canal Franquicias)', 'class="th-center th-premio"')}
-                        ${th('C. PP.', 'Canal Propios', 'class="th-center"')}${th('C. FQ.', 'Canal Franquicias', 'class="th-center"')}${th('T.', 'Total (Canal Propios + Canal Franquicias)', 'class="th-center th-premio"')}
-                        ${th('C. PP.', 'Canal Propios (no aplica a Franquicias)', 'class="th-center"')}${th('T.', 'Importe total del premio', 'class="th-center th-premio"')}
-                        ${th('C. PP.', 'Canal Propios (no aplica a Franquicias)', 'class="th-center"')}${th('T.', 'Importe total del premio', 'class="th-center th-premio"')}
-                        ${th('C. PP.', 'Canal Propios (no aplica a Franquicias)', 'class="th-center"')}${th('T.', 'Importe total del premio', 'class="th-center th-premio"')}
+                        ${th('C. PP.', 'Canal Propios', 'class="th-center"', 'venta_pp')}${th('C. FQ.', 'Canal Franquicias', 'class="th-center"', 'venta_fq')}${th('T.', 'Total (Canal Propios + Canal Franquicias)', 'class="th-center th-premio"', 'venta_total')}
+                        ${th('C. PP.', 'Canal Propios', 'class="th-center"', 'crec_pp')}${th('C. FQ.', 'Canal Franquicias', 'class="th-center"', 'crec_fq')}${th('T.', 'Total (Canal Propios + Canal Franquicias)', 'class="th-center th-premio"', 'crec_total')}
+                        ${th('C. PP.', 'Canal Propios (no aplica a Franquicias)', 'class="th-center"', 'tkt_prom_cant')}${th('T.', 'Importe total del premio', 'class="th-center th-premio"', 'tkt_prom_premio')}
+                        ${th('C. PP.', 'Canal Propios (no aplica a Franquicias)', 'class="th-center"', 'tkt_2do_cant')}${th('T.', 'Importe total del premio', 'class="th-center th-premio"', 'tkt_2do_premio')}
+                        ${th('C. PP.', 'Canal Propios (no aplica a Franquicias)', 'class="th-center"', 'tkt_3er_cant')}${th('T.', 'Importe total del premio', 'class="th-center th-premio"', 'tkt_3er_premio')}
                     </tr>
                 </thead>
                 <tbody>${filas}</tbody>
@@ -133,6 +166,11 @@ const PremiosSupervisoras = (() => {
                     </tr>
                 </tfoot>
             </table>`;
+
+        attachSortHandlers(wrap, key => {
+            _sortState = cicloOrden(_sortState, key);
+            renderTabla(_lastResumen, _lastPctCadenaTotal);
+        });
 
         if (_puedeGestionar) {
             wrap.querySelectorAll('.btn-enviar-mail').forEach(btn => {
@@ -149,6 +187,12 @@ const PremiosSupervisoras = (() => {
 
     async function enviarMailSupervisora(btn) {
         const supervisora = btn.dataset.supervisora;
+        const confirma = await Premios.confirmModal(
+            `¿Confirmás el envío del mail de premios a <strong>${supervisora}</strong>?`,
+            { titulo: 'Enviar mail' }
+        );
+        if (!confirma) return;
+
         btn.disabled = true;
         const original = btn.innerHTML;
         btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
@@ -192,7 +236,7 @@ const PremiosSupervisoras = (() => {
                 'Locales (Ticket Prom.)', 'Total Ticket Promedio',
                 'Locales (2do Prod.)', 'Total Ticket 2do Prod.',
                 'Locales (3er Prod.)', 'Total Ticket 3er Prod.',
-                'Total premios', '% Cumpl. Cadena'],
+                'Total premios', '% Cumpl. Coach'],
             rows: _lastResumen.map(s => [
                 s.supervisora,
                 s.propios.venta.cant, s.franquicias.venta.cant, s.propios.venta.premio + s.franquicias.venta.premio,
@@ -350,7 +394,10 @@ const PremiosSupervisoras = (() => {
         modal.innerHTML = `<div class="modal-emails-box modal-avance-box">
             <div class="modal-emails-header">
                 <span>Avance de Venta — ${supervisora}</span>
-                <button class="modal-emails-cerrar" id="modal-avance-cerrar"><i class="bi bi-x-lg"></i></button>
+                <div class="modal-emails-header-acciones">
+                    <button class="modal-emails-cerrar" id="modal-avance-ayuda" title="¿Cómo se calcula esto?"><i class="bi bi-question-circle"></i></button>
+                    <button class="modal-emails-cerrar" id="modal-avance-cerrar"><i class="bi bi-x-lg"></i></button>
+                </div>
             </div>
             <div class="modal-emails-body" id="modal-avance-body">
                 <div class="premios-loading">Cargando…</div>
@@ -358,6 +405,7 @@ const PremiosSupervisoras = (() => {
         </div>`;
         modal.classList.add('visible');
         modal.querySelector('#modal-avance-cerrar').onclick = () => modal.classList.remove('visible');
+        modal.querySelector('#modal-avance-ayuda').onclick = () => Premios.alertModal(htmlAyudaAvance(), { tono: 'info', titulo: 'Cómo se calcula el avance' });
         modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('visible'); };
 
         try {
@@ -372,6 +420,26 @@ const PremiosSupervisoras = (() => {
         } catch (err) {
             modal.querySelector('#modal-avance-body').innerHTML = `<p class="text-red" style="padding:16px;">${err.message}</p>`;
         }
+    }
+
+    /**
+     * Contenido del botón de ayuda (ⓘ) del modal de avance: lo que no entra cómodo en un
+     * tooltip corto (sobre todo la fórmula de "% Cumpl. Coach", que necesita un ejemplo).
+     */
+    function htmlAyudaAvance() {
+        return `<ul style="margin:0;padding-left:18px;line-height:1.55;">
+            <li>Es un <strong>avance PARCIAL</strong> (días 1 en adelante) — no es el cierre del mes ni un premio calculado.</li>
+            <li>El <strong>Objetivo</strong> es el real del mes completo, no un objetivo prorateado a los días transcurridos —
+                por eso el % de cumplimiento suele verse bajo o negativo a mitad de mes, es esperado.</li>
+            <li><strong>Ticket Promedio</strong>: facturación ÷ cantidad de tickets, redondeado hacia arriba a la centena.</li>
+            <li><strong>% Tickets 2do/3er Producto</strong>: de todos los tickets, cuántos incluyeron un segundo/tercer producto
+                distinto (venta cruzada).</li>
+            <li><strong>% Cumpl. Coach</strong>: de esos 3 indicadores (Ticket Promedio, % 2do y % 3er Producto), por cada
+                sucursal, cuántos superan el promedio de <strong>toda la cadena</strong> en este período — 5 sucursales = 15
+                indicadores en la base del cálculo, no un promedio de 3 porcentajes.</li>
+            <li>El <i class="bi bi-check-circle-fill" style="color:#16a34a;"></i> verde en una celda indica que esa sucursal
+                supera el promedio de la cadena para ese indicador puntual.</li>
+        </ul>`;
     }
 
     /**
@@ -434,10 +502,10 @@ const PremiosSupervisoras = (() => {
                     <div class="avance-resumen-pct ${claseResumen}"><i class="bi ${iconoResumen}"></i> ${textoResumen}</div>
                 </div>
                 <div class="avance-resumen-secundarios">
-                    <div class="avance-mini-kpi"><span class="avance-mini-kpi-val">${fmt.money(data.ticket_promedio)}</span><span class="avance-mini-kpi-label">Ticket Promedio</span></div>
-                    <div class="avance-mini-kpi"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_ticket_2do)}</span><span class="avance-mini-kpi-label">Tickets 2do Prod.</span></div>
-                    <div class="avance-mini-kpi"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_ticket_3er)}</span><span class="avance-mini-kpi-label">Tickets 3er Prod.</span></div>
-                    <div class="avance-mini-kpi"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_cumplimiento_cadena)}</span><span class="avance-mini-kpi-label">Cumpl. Cadena</span></div>
+                    <div class="avance-mini-kpi" title="Facturación ÷ cantidad de tickets"><span class="avance-mini-kpi-val">${fmt.money(data.ticket_promedio)}</span><span class="avance-mini-kpi-label">Ticket Promedio</span></div>
+                    <div class="avance-mini-kpi" title="% de tickets que incluyeron un 2do producto distinto"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_ticket_2do)}</span><span class="avance-mini-kpi-label">Tickets 2do Prod.</span></div>
+                    <div class="avance-mini-kpi" title="% de tickets que incluyeron un 3er producto distinto"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_ticket_3er)}</span><span class="avance-mini-kpi-label">Tickets 3er Prod.</span></div>
+                    <div class="avance-mini-kpi" title="Ver el botón de ayuda (ⓘ) para el detalle del cálculo"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_cumplimiento_cadena)}</span><span class="avance-mini-kpi-label">Cumpl. Coach</span></div>
                 </div>
             </div>
             <div class="avance-detalle">
@@ -446,19 +514,19 @@ const PremiosSupervisoras = (() => {
                     <table class="premios-table">
                         <thead>
                             <tr>
-                                ${th('Sucursal', 'Sucursal', 'rowspan="2"')}
-                                ${th('Venta', 'Facturación acumulada a la fecha vs. objetivo real del mes completo', 'colspan="4" class="th-center"')}
-                                ${th('Indicadores Secundarios', 'Ticket promedio y venta cruzada — mismos indicadores que premian en el cierre mensual', 'colspan="4" class="th-center"')}
+                                ${th('Sucursal', '', 'rowspan="2"')}
+                                ${th('Venta', '', 'colspan="4" class="th-center"')}
+                                ${th('Indicadores Secundarios', 'Mismos indicadores que premian en el cierre mensual, calculados sobre el avance parcial', 'colspan="4" class="th-center"')}
                             </tr>
                             <tr>
-                                ${th('Facturación', 'Facturación acumulada a la fecha', 'class="th-num"')}
-                                ${th('Objetivo', 'Objetivo real del mes completo, no prorateado a la fecha', 'class="th-num"')}
-                                ${th('% Cumpl.', '% Cumplimiento del objetivo de venta', 'class="th-num"')}
+                                ${th('Facturación', '', 'class="th-num"')}
+                                ${th('Objetivo', 'Objetivo real del mes completo — no prorateado a la fecha, por eso el % Cumpl. suele verse bajo a mitad de mes', 'class="th-num"')}
+                                ${th('% Cumpl.', '% Cumplimiento vs. el objetivo del mes completo (no vs. un objetivo parcial)', 'class="th-num"')}
                                 ${th('Var %', 'Variación de facturación vs. mismo período del año anterior', 'class="th-num"')}
-                                ${th('Tkt. Prom.', 'Ticket Promedio', 'class="th-num"')}
-                                ${th('% 2do Prod.', '% Tickets con 2do producto', 'class="th-num"')}
-                                ${th('% 3er Prod.', '% Tickets con 3er producto', 'class="th-num"')}
-                                ${th('% Cad.', '% Cumplimiento de Cadena', 'class="th-num"')}
+                                ${th('Tkt. Prom.', 'Ticket Promedio: facturación ÷ cantidad de tickets', 'class="th-num"')}
+                                ${th('% 2do Prod.', '% de tickets que incluyeron un 2do producto distinto (venta cruzada)', 'class="th-num"')}
+                                ${th('% 3er Prod.', '% de tickets que incluyeron un 3er producto distinto (venta cruzada)', 'class="th-num"')}
+                                ${th('% Coach', '% Cumplimiento Coach — ver el botón de ayuda (ⓘ) para el detalle del cálculo', 'class="th-num"')}
                             </tr>
                         </thead>
                         <tbody>${filasHtml}</tbody>
@@ -487,6 +555,7 @@ const PremiosSupervisoras = (() => {
     }
 
     async function load() {
+        _sortState = nuevoEstadoOrden();
         const data = await apiFetch('resumen.php');
         updatePeriodoLabel(data.periodo);
         actualizarUltimaActualizacion(data);

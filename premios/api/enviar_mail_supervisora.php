@@ -59,30 +59,23 @@ try {
 
     $filasSup    = $db->datosPropios($supervisora);
     $propios     = $db->premiosPropiosSupervisora($supervisora, $filasSup, $propiosTodos, $filasTodas, $benchmarks);
-    $franquicias = $db->premiosFranquiciasSupervisora($conteosFranquiciaEmpresa, $importesFranquiciaPorSup[$supervisora] ?? []);
+    $franquicias = $db->premiosFranquiciasSupervisora($supervisora, $conteosFranquiciaEmpresa, $importesFranquiciaPorSup[$supervisora] ?? []);
     $totalPremios = $propios['total'] + $franquicias['total'];
 
-    // Subtotal de cadena (misma agregación que el renglón de supervisora en api/propios.php)
-    // para la fila "Total" de la tabla del mail y para % Cumpl. Cadena.
-    $sumFactCIva = array_sum(array_column($filasSup, 'imp_fact'));
-    $sumObj      = array_sum(array_column($filasSup, 'imp_obj'));
-    $sumFactAnt  = array_sum(array_column($filasSup, 'imp_fact_ant'));
-    $sumTickets  = array_sum(array_column($filasSup, 'tickets'));
-    $sumT2       = array_sum(array_column($filasSup, 'tickets_2do_prod'));
-    $sumT3       = array_sum(array_column($filasSup, 'tickets_3er_prod'));
-    $subtotal = [
-        'cumplimiento_obj'        => $db->cumplimientoObjVenta($sumFactCIva, $sumObj),
-        'facturacion_var'         => $db->facturacionVarPct($sumFactCIva, $sumFactAnt),
-        'ticket_promedio'         => $db->ticketPromedioEst($sumFactCIva, $sumTickets),
-        'pct_ticket_2do'          => $sumTickets > 0 ? $sumT2 / $sumTickets : 0.0,
-        'pct_ticket_3er'          => $sumTickets > 0 ? $sumT3 / $sumTickets : 0.0,
-        'pct_cumplimiento_cadena' => $db->pctCumplimientoCadenaIndicadores($filasSup, $benchmarks),
+    // Fila "Total" del mail = total de TODA la cadena (todas las supervisoras + Ecommerce),
+    // no el propio de esta supervisora — ver PremiosDB::totalGeneralPropios().
+    $benchmarksCadena = [
+        'ticket_marca' => $benchmarks['ticket_marca'],
+        'pct2_marca'   => $benchmarks['pct2_marca'],
+        'pct3_marca'   => $benchmarks['pct3_marca'],
     ];
+    $totalGeneral = $db->totalGeneralPropios($db->getSupervisoras(), $benchmarks['var_marca'], $benchmarksCadena);
 
-    $html = MailPremios::renderDetalleSupervisora($db, $supervisora, $filasSup, $subtotal, $benchmarks, $totalPremios, $da, $ha);
+    $html = MailPremios::renderDetalleSupervisora($db, $supervisora, $filasSup, $totalGeneral, $benchmarks, $totalPremios, $da, $ha);
 
     $asunto = "Detalle de Premios - $supervisora - " . date('d/m/Y', strtotime($ha));
-    (new MailPremios())->enviar([$email], $asunto, $html);
+    // Johanna en copia en el mail individual a cada supervisora, a pedido del cliente.
+    (new MailPremios())->enviar([$email], $asunto, $html, MailPremios::PROFILE_DEFAULT, ['johanna.bolig@xl.com.ar']);
 
     ob_clean();
     echo json_encode(['ok' => true, 'email' => $email]);

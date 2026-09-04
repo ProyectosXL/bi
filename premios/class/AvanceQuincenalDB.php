@@ -243,16 +243,16 @@ class AvanceQuincenalDB
     }
 
     /**
-     * % de indicadores secundarios (Ticket Promedio + Ticket 2do Producto + Ticket 3er
-     * Producto) que llegan a su benchmark de marca, sobre el TOTAL de indicadores posibles de
-     * la supervisora — mismo criterio que PremiosDB::pctCumplimientoCadenaIndicadores(), pero
-     * sobre las sucursales de avancePorSucursal() (CENTRAL ya viene excluida por
-     * mapeoSucursalSupervisora(), así que no hace falta filtrarla de nuevo acá).
+     * % Cumplimiento Coach (ex "% Cumpl. Cadena", renombrado a pedido del cliente,
+     * 2026-09-01 — la fórmula NO cambió): mismo criterio que
+     * PremiosDB::pctCumplimientoCoach(), pero sobre las sucursales de avancePorSucursal()
+     * (CENTRAL ya viene excluida por mapeoSucursalSupervisora(), así que no hace falta
+     * filtrarla de nuevo acá).
      *
      * @param array $filasSucursal  Sucursales de una supervisora (avancePorSupervisora()[n]['sucursales'])
      * @param array $benchmarks     ['ticket_marca'=>float,'pct2_marca'=>float,'pct3_marca'=>float]
      */
-    public function pctCumplimientoCadenaIndicadores(array $filasSucursal, array $benchmarks): float
+    public function pctCumplimientoCoach(array $filasSucursal, array $benchmarks): float
     {
         $total = 0;
         $cumple = 0;
@@ -335,7 +335,7 @@ class AvanceQuincenalDB
                 'ticket_promedio'         => $this->ticketPromedioEst($datos['facturacion_total'], $datos['tickets_total']),
                 'pct_ticket_2do'          => $datos['tickets_total'] > 0 ? $datos['tickets_2do_total'] / $datos['tickets_total'] : 0.0,
                 'pct_ticket_3er'          => $datos['tickets_total'] > 0 ? $datos['tickets_3er_total'] / $datos['tickets_total'] : 0.0,
-                'pct_cumplimiento_cadena' => $this->pctCumplimientoCadenaIndicadores($datos['sucursales'], $benchmarks),
+                'pct_cumplimiento_cadena' => $this->pctCumplimientoCoach($datos['sucursales'], $benchmarks),
                 // Mismos benchmarks para toda supervisora (calculados sobre TODA la cadena, no
                 // repetidos por sucursal) — se devuelven acá, no en una consulta aparte, para no
                 // volver a correr avancePorSucursal()/mapeoSucursalSupervisora(). El front los usa

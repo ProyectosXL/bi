@@ -170,16 +170,19 @@ fecha de última actualización es anterior a ese límite.
 - **Benchmark de marca — Locales Propios** (sin filtro de sucursal/supervisora) = variación
   de marca **+ 10 puntos ADITIVO** (`benchmarkVarMarca()`). Confirmado por DAX:
   `Facturación Var % All = CALCULATE([Facturación Var %], ALL(...)) + 0.1`.
-- **Benchmark de marca — Franquicias**: acá el +10% es **MULTIPLICATIVO**, no aditivo —
-  `(1 + var%) * 1.1 - 1` (`benchmarkVarMarcaFranquicias()`). Confirmado por DAX:
-  `Facturación Var % All Franq. = CALCULATE([Facturación Var % Franq.], ALL(...)) * 1.1`,
-  donde `[Facturación Var % Franq.]` está en formato ratio por un error de paréntesis en el
-  `.pbix` original (`DIVIDE(SUM(IMP_FACT), SUM(IMP_FACT_ANT)-1)` — el "-1" quedó dentro del
-  denominador, sin efecto práctico, pero el resultado es un ratio ≈ FACT/FACT_ANT en vez de
-  un delta). **No usar la misma fórmula de benchmark para ambos canales** — es la causa real
-  de la discrepancia "21 vs 20" en `Premio Obj. Crecimiento Cant. Franq.` que tardamos varias
-  rondas en encontrar (afectaba solo a sucursales franquicia muy cercanas al límite, como
-  ADROGUE).
+- **Benchmark de marca — Franquicias** (`benchmarkVarMarcaFranquicias()`): a pedido del
+  cliente (2026-09-02), ahora usa el MISMO criterio ADITIVO (+10pp) que Locales Propios —
+  delega directo en `benchmarkVarMarca()`. Antes usaba un ajuste MULTIPLICATIVO
+  (`(1 + var%) * 1.1 - 1`), confirmado contra el DAX real del `.pbix` original
+  (`Facturación Var % All Franq. = CALCULATE([Facturación Var % Franq.], ALL(...)) * 1.1`,
+  con `[Facturación Var % Franq.]` en formato ratio por un error de paréntesis en el `.pbix`
+  original — `DIVIDE(SUM(IMP_FACT), SUM(IMP_FACT_ANT)-1)`, el "-1" quedó dentro del
+  denominador sin efecto práctico). Esa fórmula multiplicativa daba un benchmark
+  visiblemente más exigente con crecimientos altos (ej. +8,9% real → +19,8% con ×1.1, vs.
+  +18,9% con +10pp), lo cual generaba confusión — divergencia intencional del reporte
+  original. La discrepancia histórica "21 vs 20" en `Premio Obj. Crecimiento Cant. Franq.`
+  (afectaba a ADROGUE) fue resuelta bajo la fórmula multiplicativa vieja — con el cambio a
+  +10pp el conteo puede volver a diferir levemente y es esperado.
 - **Premio Objetivo Venta / Crecimiento (Locales Propios)**: confirmado contra el DAX real.
   Para TODAS las supervisoras excepto Carolina Commendatore, la CANTIDAD de sucursales que
   cumplen es un número A NIVEL EMPRESA (mismas medidas `ALL(SUPERVISORA)` que en Franquicias),
@@ -237,15 +240,20 @@ No usa Chart.js (el tablero original no tiene gráficos, solo cards y tablas).
   20 y **las 7 supervisoras coinciden exacto, dólar por dólar**, con la captura real del
   tablero de Power BI (Carolina $160.000, Elina $241.000, Josefina $378.000, Julieta
   $144.000, Nahir $396.000, Natalia $225.000, Sonia $313.000).
+  **Actualización (2026-09-02)**: a pedido del cliente se cambió el benchmark de Franquicias
+  de multiplicativo a aditivo (+10pp, igual que Locales Propios) — esta validación "exacto,
+  dólar por dólar" ya no aplica tal cual, es esperado que el conteo de crecimiento en
+  Franquicias difiera levemente del tablero de Power BI original a partir de ahora.
 - El % de variación de la fila Total en Franquicias no coincidió (probablemente el original
   promedia el % por fila en vez de recalcular sobre la suma) — es una celda de detalle
   aislada, no afecta ningún monto de premio; pendiente de revisar si hace falta
   pixel-perfect ahí también.
 - **KPI "Facturación Var % Marca" (Vistas Locales Propios y Franquicias)**: muestra el
-  BENCHMARK (con el ajuste +10pp/×1.1 ya aplicado), no el agregado crudo — confirmado
-  contra el KPI real de Locales Propios (302,07 % = 292,07 % + 10pp). `api/propios.php`
-  y `api/franquicias.php` usan `benchmarkVarMarca()`/`benchmarkVarMarcaFranquicias()` para
-  ese KPI puntual, no `facturacionVarMarca()`.
+  BENCHMARK (con el ajuste +10pp ya aplicado en ambos canales, ver "Benchmark de marca —
+  Franquicias" arriba), no el agregado crudo — confirmado contra el KPI real de Locales
+  Propios (302,07 % = 292,07 % + 10pp). `api/propios.php` y `api/franquicias.php` usan
+  `benchmarkVarMarca()`/`benchmarkVarMarcaFranquicias()` para ese KPI puntual, no
+  `facturacionVarMarca()`.
 - **Tabla "Facturación vs. Objetivos por Sucursales" (Locales Propios) — validada 100%
   exacta contra el tablero real**, incluida la fila "TODAS"/ECOMMERCE y el Total general
   ($6.142.648.265 de facturación C/IVA, $2.005.791.046 de objetivo, todos los % y el ticket
