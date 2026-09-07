@@ -58,12 +58,11 @@ try {
     // Generalmente para el stock físico se mantiene general o según sucursal física.
     
     // 3. Totales actuales de Stock (Último Día)
-    // Central Valorización: NO filtra PACKAGING.
-    // Locales Valorización: SÍ filtra PACKAGING (RUBRO <> 'PACKAGING').
-    // Ambas Unidades (CANT_STOCK): SÍ filtran PACKAGING.
+    // Central: NO filtra PACKAGING (incluye Unidades y Valorización).
+    // Locales: SÍ filtra PACKAGING (RUBRO <> 'PACKAGING' en Unidades y Valorización).
     $sqlTotales = "
         SELECT 
-            SUM(CASE WHEN DESC_SUCURSAL = 'CENTRAL' AND (RUBRO IS NULL OR RUBRO <> 'PACKAGING') THEN CANT_STOCK ELSE 0 END) as stock_central,
+            SUM(CASE WHEN DESC_SUCURSAL = 'CENTRAL' THEN CANT_STOCK ELSE 0 END) as stock_central,
             SUM(CASE WHEN DESC_SUCURSAL = 'CENTRAL' THEN VALORIZACION ELSE 0 END) as val_central,
             
             SUM(CASE WHEN DESC_SUCURSAL <> 'CENTRAL' AND (RUBRO IS NULL OR RUBRO <> 'PACKAGING') THEN CANT_STOCK ELSE 0 END) as stock_locales,
@@ -113,11 +112,11 @@ try {
     sqlsrv_free_stmt($stmtFact);
 
     // 5. Tabla: Valorización Stock Sucursales (Último Día)
-    // Para la lista de sucursales, aplicamos el filtro de PACKAGING en unidades, y condicional en valorizacion (Central vs Locales)
+    // Central incluye PACKAGING en unidades y valorización; Locales excluye PACKAGING.
     $sqlSucs = "
         SELECT 
             DESC_SUCURSAL as sucursal,
-            SUM(CASE WHEN RUBRO IS NULL OR RUBRO <> 'PACKAGING' THEN CANT_STOCK ELSE 0 END) as stock,
+            SUM(CASE WHEN DESC_SUCURSAL = 'CENTRAL' OR (RUBRO IS NULL OR RUBRO <> 'PACKAGING') THEN CANT_STOCK ELSE 0 END) as stock,
             SUM(CASE WHEN DESC_SUCURSAL = 'CENTRAL' OR (RUBRO IS NULL OR RUBRO <> 'PACKAGING') THEN VALORIZACION ELSE 0 END) as valorizacion
         FROM SJ_STOCK_LOCALES
         $whereStock
@@ -160,7 +159,7 @@ try {
         SELECT 
             u.anio,
             u.mes,
-            SUM(CASE WHEN s.RUBRO IS NULL OR s.RUBRO <> 'PACKAGING' THEN s.CANT_STOCK ELSE 0 END) as stock,
+            SUM(CASE WHEN s.DESC_SUCURSAL = 'CENTRAL' OR (s.RUBRO IS NULL OR s.RUBRO <> 'PACKAGING') THEN s.CANT_STOCK ELSE 0 END) as stock,
             SUM(CASE WHEN s.DESC_SUCURSAL = 'CENTRAL' OR (s.RUBRO IS NULL OR s.RUBRO <> 'PACKAGING') THEN s.VALORIZACION ELSE 0 END) as valorizacion
         FROM SJ_STOCK_LOCALES s
         INNER JOIN UltimaFechaMes u ON s.FECHA = u.max_fecha
