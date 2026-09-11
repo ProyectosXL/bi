@@ -123,6 +123,9 @@ try {
         <button class="tab-btn" id="tab-btn-franquicias" role="tab" aria-controls="tab-franquicias" aria-selected="false" data-titulo="FRANQUICIAS">
             <i class="bi bi-building"></i>&nbsp; Franquicias
         </button>
+        <button class="tab-btn" id="tab-btn-ecommerce" role="tab" aria-controls="tab-ecommerce" aria-selected="false" data-titulo="PREMIOS ECOMMERCE">
+            <i class="bi bi-cart-check"></i>&nbsp; Premios Ecommerce
+        </button>
         <div class="tab-nav-acciones">
             <button class="tab-reload-btn" id="btn-info-carga" title="¿Cuándo se actualizan los datos?">
                 <i class="bi bi-question-circle"></i>
@@ -208,6 +211,40 @@ try {
     </div>
     <!-- /tab-franquicias -->
 
+    <!-- ══ PESTAÑA: PREMIOS ECOMMERCE ═══════════════════════════════════ -->
+    <div id="tab-ecommerce" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-ecommerce">
+        <main class="dash-content">
+
+            <!-- Avisos: período parcial (el objetivo es del mes completo) y KPIs manuales
+                 sin cargar. Se pinta desde js/ecommerce.js, queda vacío si no hay nada. -->
+            <div id="ecom-banners-wrap"></div>
+
+            <div class="premio-hero-grid" id="hero-ecommerce-wrap">
+                <div class="premios-loading">Cargando…</div>
+            </div>
+
+            <div class="premios-card">
+                <div class="premios-section-header">
+                    <i class="bi bi-table"></i>&nbsp; Premios por Concepto
+                    <button class="btn-export-excel" id="btn-ecom-cargar-kpis" style="display:none;">
+                        <i class="bi bi-pencil-square"></i> Cargar órdenes y conversión
+                    </button>
+                    <button class="btn-export-excel" id="btn-ecom-escalas" style="display:none;">
+                        <i class="bi bi-sliders"></i> Escalas de premios
+                    </button>
+                    <button class="btn-export-excel" id="btn-export-ecommerce">
+                        <i class="bi bi-file-earmark-excel"></i> Excel
+                    </button>
+                </div>
+                <div class="table-wrap" id="tabla-ecommerce-wrap">
+                    <div class="premios-loading">Cargando…</div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+    <!-- /tab-ecommerce -->
+
 </div><!-- /dash-wrap -->
 
 <!-- SheetJS (Excel export) -->
@@ -221,6 +258,7 @@ $jsFiles = [
     '/bi/premios/js/supervisoras.js',
     '/bi/premios/js/propios.js',
     '/bi/premios/js/franquicias.js',
+    '/bi/premios/js/ecommerce.js',
 ];
 foreach ($jsFiles as $f):
     $v = @filemtime($_SERVER['DOCUMENT_ROOT'] . $f) ?: 1;
@@ -273,21 +311,38 @@ const Spinner = (() => {
         { btn: 'tab-btn-resumen',     pane: 'tab-resumen',     name: 'resumen'     },
         { btn: 'tab-btn-propios',     pane: 'tab-propios',     name: 'propios'     },
         { btn: 'tab-btn-franquicias', pane: 'tab-franquicias', name: 'franquicias' },
+        { btn: 'tab-btn-ecommerce',   pane: 'tab-ecommerce',   name: 'ecommerce'   },
     ];
 
-    const loaded = { resumen: false, propios: false, franquicias: false };
+    const loaded = { resumen: false, propios: false, franquicias: false, ecommerce: false };
 
     const SPINNER_MSGS = {
         resumen    : 'Cargando Premios Supervisoras…',
         propios    : 'Cargando Locales Propios…',
         franquicias: 'Cargando Franquicias…',
+        ecommerce  : 'Cargando Premios Ecommerce…',
     };
 
     const loaders = {
         resumen    : () => PremiosSupervisoras.load(),
         propios    : () => PremiosPropios.load(),
         franquicias: () => PremiosFranquicias.load(),
+        ecommerce  : () => PremiosEcommerce.load(),
     };
+
+    /**
+     * Premios Ecommerce no se filtra por supervisora (son personas del área, no
+     * supervisoras de local) ni tiene comparativa interanual — mostrar esos dos controles
+     * ahí sería mostrar filtros que no hacen nada. Se ocultan al entrar y se restauran al
+     * salir; el resto del toolbar (período) sí aplica.
+     */
+    function ajustarToolbar(tabName) {
+        const esEcommerce = tabName === 'ecommerce';
+        const sel = document.getElementById('sel-supervisora');
+        const lbl = document.querySelector('label[for="sel-supervisora"]');
+        const prev = document.getElementById('periodo-previo-label');
+        [sel, lbl, prev].forEach(el => { if (el) el.style.display = esEcommerce ? 'none' : ''; });
+    }
 
     function loadTab(name) {
         if (loaded[name]) return Promise.resolve();
@@ -308,6 +363,7 @@ const Spinner = (() => {
         if (tab) {
             document.getElementById('topbar-vista-actual').textContent =
                 document.getElementById(tab.btn).dataset.titulo ?? '';
+            ajustarToolbar(tab.name);
             loadTab(tab.name);
         }
     }
@@ -361,6 +417,21 @@ const Spinner = (() => {
                 <li>El botón <strong>"Avance 15 días"</strong> (en Premios Supervisoras) es
                     distinto: muestra un avance <strong>parcial</strong> de venta de los primeros
                     días del mes en curso — no es el cierre del mes ni un premio calculado.</li>
+                <li>En <strong>Premios Ecommerce</strong>, la facturación sale de la misma tabla
+                    mensual que las otras pestañas (por eso el total coincide con la fila ECOMMERCE
+                    de Locales Propios). Las <strong>órdenes</strong> salen de Tango y se actualizan
+                    a diario. Lo único de <strong>carga manual</strong> es la tasa de conversión y
+                    el objetivo de órdenes — si falta cargar un mes, la pestaña lo avisa arriba.</li>
+                <li>En esa pestaña, el total del canal y los importes de VTEX y ML por separado
+                    salen de <strong>dos tablas distintas</strong> (la mensual no separa los
+                    canales), y esas tablas hoy <strong>no coinciden entre sí</strong>: las partes
+                    no suman el total. Es una diferencia de las fuentes, no del cálculo — todos
+                    los importes son medidos, ninguno estimado.</li>
+                <li>La facturación de <strong>Premios Ecommerce</strong> es la de la BI, que
+                    <strong>no coincide con los paneles de VTEX y Mercado Libre</strong>: esos
+                    incluyen el envío y el precio bruto, y la BI contabiliza como venta solo el
+                    producto neto de descuentos. Por eso los premios pueden dar distinto que en la
+                    planilla vieja.</li>
             </ul>`,
             { tono: 'info', titulo: '¿Cuándo se actualizan los datos?' }
         );

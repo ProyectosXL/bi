@@ -114,8 +114,13 @@ class PremiosDB
         // conocida del origen de datos, no de este código.
     }
 
-    /** Lista de fines de mes (Y-m-d) que cubre un rango [desde,hasta]. */
-    private static function finesDeMes(string $desde, string $hasta): array
+    /**
+     * Lista de fines de mes (Y-m-d) que cubre un rango [desde,hasta].
+     * Public: la reusa PremiosEcommerceDB (helper de calendario puro, sin regla de
+     * negocio — no aplica acá el criterio de duplicación deliberada de fórmulas de
+     * premio que hay entre esta clase y AvanceQuincenalDB).
+     */
+    public static function finesDeMes(string $desde, string $hasta): array
     {
         $fechas = [];
         $cursor = new DateTime(date('Y-m-01', strtotime($desde)));

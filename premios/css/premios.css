@@ -325,6 +325,10 @@
     transition   : color var(--transition), border-color var(--transition);
 }
 .btn-export-excel:hover { color: var(--accent2); border-color: var(--accent2); }
+/* Cuando hay más de un botón en el header, solo el primero empuja al grupo a la derecha
+   (si no, el margin-left:auto de cada uno reparte el espacio libre ENTRE ellos y quedan
+   desparramados). Afecta también al header de Premios Supervisoras, que ya tenía dos. */
+.premios-section-header .btn-export-excel ~ .btn-export-excel { margin-left: 0; }
 
 /* ── Columna de acciones (mail / controlado) en la tabla de Premios Supervisoras ── */
 .premios-table td.td-acciones { white-space: nowrap; text-align: right; }
@@ -588,9 +592,164 @@
 }
 .premios-loading i { animation: spin .8s linear infinite; }
 
+/* ═══════════════════════════════════════════════════════════
+   PESTAÑA "PREMIOS ECOMMERCE"
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Banners de aviso (período parcial / KPIs sin cargar / tasa estimada) ──
+   `:empty` evita que el wrapper vacío aporte un gap de .dash-content cuando no
+   hay ningún aviso que mostrar. ── */
+#ecom-banners-wrap { display: flex; flex-direction: column; gap: 10px; }
+#ecom-banners-wrap:empty { display: none; }
+
+.ecom-banner {
+    display      : flex;
+    align-items  : flex-start;
+    gap          : 10px;
+    padding      : 10px 14px;
+    border-radius: var(--radius-sm);
+    border       : 1px solid;
+    font-size    : .82rem;
+    line-height  : 1.45;
+}
+.ecom-banner i { font-size: 1rem; line-height: 1.3; flex-shrink: 0; }
+/* Informativo: el dato está bien, hay que leerlo con una aclaración. */
+.ecom-banner-aviso { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+/* Falta un dato de carga manual: bloquea el cálculo de algún concepto. */
+.ecom-banner-falta { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+
+/* ── Card de total del área: color propio, para que no se confunda con una
+   persona más si se suman integrantes (que usan el ciclo .c0….c6). ── */
+.premio-hero-card.premio-hero-total { background: var(--bg-header); }
+
+/* ── Modales de gestión (carga de KPIs / escalas): más anchos que el resto,
+   porque son formularios de dos columnas y no listas de una línea. ── */
+.modal-ecom-box { width: min(560px, 94vw); }
+
+/* Carga manual de órdenes / sesiones / conversión */
+.ecom-kpi-mes { display: flex; align-items: center; gap: 8px; }
+.ecom-kpi-mes select { flex: 1; }
+
+.ecom-kpi-canal {
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding      : 10px 12px;
+    background   : var(--bg-card2);
+}
+.ecom-kpi-canal-titulo {
+    font-family   : var(--font-display);
+    font-weight   : 600;
+    font-size     : .82rem;
+    letter-spacing: .04em;
+    color         : var(--text-1);
+    margin-bottom : 8px;
+}
+.ecom-kpi-grid {
+    display              : grid;
+    grid-template-columns: 1fr 120px;
+    align-items          : center;
+    gap                  : 6px 10px;
+}
+.ecom-kpi-grid label { font-size: .8rem; color: var(--text-2); }
+.ecom-kpi-hint { color: var(--text-3); font-weight: 400; font-size: .74rem; }
+.ecom-kpi-input {
+    width        : 100%;
+    padding      : 5px 8px;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size    : .82rem;
+    font-family  : inherit;
+    text-align   : right;
+}
+/* ── Cada persona, un bloque cerrado ──────────────────────────────────────
+   Las filas de una persona van en su propio <tbody> y se les dibuja un marco alrededor:
+   borde izquierdo/derecho en la primera y última celda de cada fila, y borde arriba/abajo
+   en la primera y última fila del bloque. Es la forma de "encerrar" un grupo dentro de una
+   sola tabla, y tiene que ser una sola tabla para que las columnas de todas las personas
+   queden alineadas entre sí (si no, comparar un premio contra otro se vuelve incómodo).
+   Funciona gracias a `border-collapse: collapse` de .table-wrap table. ── */
+#tabla-ecommerce-wrap tbody.ecom-bloque td:first-child     { border-left : 2px solid #c7d2fe; }
+#tabla-ecommerce-wrap tbody.ecom-bloque td:last-child      { border-right: 2px solid #c7d2fe; }
+#tabla-ecommerce-wrap tbody.ecom-bloque tr:first-child td  { border-top  : 2px solid #c7d2fe; }
+#tabla-ecommerce-wrap tbody.ecom-bloque tr:last-child  td  { border-bottom: 2px solid #c7d2fe; }
+
+/* Espaciador entre bloques: hace de margen (las filas de tabla no admiten margin).
+   Va en su propio <tbody> para quedar fuera del marco del bloque anterior. */
+#tabla-ecommerce-wrap tbody.ecom-espacio td,
+#tabla-ecommerce-wrap tbody.ecom-espacio tr:hover td {
+    height    : 14px;
+    padding   : 0;
+    border    : none;
+    background: var(--bg-card);
+}
+
+/* Cierre del bloque: el premio total de esa persona, DEBAJO de sus conceptos. La fila del
+   nombre abre el bloque sin ningún importe y esta lo cierra, así hay un solo número que
+   puede leerse como "el total de esta persona". Comparte fondo con la cabecera. */
+.premios-table tr.row-total-persona td {
+    font-weight: 700;
+    background : #eef2ff;
+    border-top : 2px solid #c7d2fe;
+}
+
+/* Sesiones al lado de la tasa de conversión: contexto, no un dato del cálculo. */
+.premios-table .ecom-sesiones { font-size: .72rem; color: var(--text-3); cursor: help; }
+
+/* Columna Objetivo de los conceptos de umbral absoluto (tasa de conversión): no es un
+   objetivo cargado sino el escalón de la escala que se alcanzó, así que lleva cursor de
+   ayuda para que se note que hay una explicación detrás. */
+.premios-table .ecom-objetivo-escala { cursor: help; }
+
+/* Órdenes de Tango: se muestran, no se cargan. Mismo alto que un input para que la
+   grilla de dos columnas no se desalinee. */
+.ecom-kpi-readonly {
+    padding    : 5px 8px;
+    font-size  : .82rem;
+    font-weight: 600;
+    color      : var(--text-1);
+    text-align : right;
+}
+/* Tasa deducida de las órdenes de Tango ÷ sesiones — NO es la que se liquida, es un
+   control contra el error de magnitud de tipear "83" queriendo decir 0,83. */
+.ecom-kpi-control { font-size: .74rem; color: var(--accent2); margin-top: 6px; min-height: 1em; }
+.ecom-kpi-meta { font-size: .72rem; color: var(--text-3); margin-top: 4px; font-style: italic; }
+
+/* Escalas de premio */
+.ecom-escala-persona {
+    font-family   : var(--font-display);
+    font-weight   : 700;
+    font-size     : .9rem;
+    color         : var(--text-1);
+    border-bottom : 1px solid var(--border);
+    padding-bottom: 4px;
+    margin-top    : 6px;
+}
+.ecom-escala-concepto {
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding      : 8px 10px;
+    background   : var(--bg-card2);
+}
+.ecom-escala-titulo { font-size: .8rem; font-weight: 600; color: var(--text-1); margin-bottom: 6px; }
+.ecom-escala-tramos { display: flex; flex-direction: column; gap: 5px; margin-bottom: 6px; }
+.ecom-escala-fila { display: flex; align-items: center; gap: 6px; }
+.ecom-escala-umbral, .ecom-escala-importe {
+    padding      : 4px 7px;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size    : .8rem;
+    font-family  : inherit;
+    text-align   : right;
+}
+.ecom-escala-umbral  { width: 84px; }
+.ecom-escala-importe { width: 110px; }
+.ecom-escala-unidad  { font-size: .74rem; color: var(--text-3); min-width: 48px; }
+.ecom-escala-quitar  { margin-left: auto; }
+
 /* ── RESPONSIVE ──────────────────────────────────────────── */
 @media (max-width: 768px) {
     .premio-hero-grid { grid-template-columns: repeat(2, 1fr); }
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }
     .avance-resumen-secundarios { grid-template-columns: repeat(2, 1fr); }
+    .ecom-kpi-grid { grid-template-columns: 1fr 90px; }
 }
