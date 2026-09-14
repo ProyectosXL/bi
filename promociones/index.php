@@ -166,6 +166,9 @@ $ultimaAct = date('d/m/Y H:i:s');
         <button class="tab-btn" id="tab-btn-detalle" role="tab" aria-controls="tab-detalle" aria-selected="false">
             <i class="bi bi-table"></i>&nbsp; Detalle
         </button>
+        <button class="tab-btn" id="tab-btn-rubros" role="tab" aria-controls="tab-rubros" aria-selected="false">
+            <i class="bi bi-box-seam"></i>&nbsp; Rubros
+        </button>
         <?php if (!$isGrupo): ?>
         <button class="tab-btn" id="tab-btn-envio" role="tab" aria-controls="tab-envio" aria-selected="false">
             <i class="bi bi-envelope-at-fill"></i>&nbsp; Envíos Mensuales
@@ -364,6 +367,32 @@ $ultimaAct = date('d/m/Y H:i:s');
     </div>
     <!-- /tab-detalle -->
 
+    <!-- ══ PESTAÑA: RUBROS ═════════════════════════════════════════════ -->
+    <div id="tab-rubros" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-rubros">
+        <main class="dash-content">
+
+            <div class="promo-section-header">
+                <i class="bi bi-box-seam"></i>&nbsp; Unidades x Rubro
+                <button class="btn-export-excel" id="btn-export-rubros">
+                    <i class="bi bi-file-earmark-excel"></i> Excel
+                </button>
+            </div>
+            <div class="promo-detalle-wrap" id="rubros-wrap">
+                <div class="promo-loading">Cargando…</div>
+            </div>
+
+            <p style="margin-top:12px; font-size:0.8rem; color:var(--text-3); line-height:1.5;">
+                <i class="bi bi-info-circle"></i>
+                La promoción se aplica al <strong>ticket</strong>, no al artículo.
+                «Unid. C/Promo» cuenta todas las unidades de un ticket que tuvo al menos un pago
+                con promoción, por lo que no es una atribución por producto.
+                Se excluyen los rubros CONCEPTO y PACKAGING.
+            </p>
+
+        </main>
+    </div>
+    <!-- /tab-rubros -->
+
     <?php if (!$isGrupo): ?>
     <!-- ══ PESTAÑA: ENVÍOS MENSUALES ═══════════════════════════════════ -->
     <div id="tab-envio" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-envio">
@@ -497,6 +526,7 @@ $jsFiles = [
     '/bi/promociones/js/promociones.js',
     '/bi/promociones/js/mensual.js',
     '/bi/promociones/js/detalle.js',
+    '/bi/promociones/js/rubros.js',
     '/bi/promociones/js/envio.js',
 ];
 foreach ($jsFiles as $f):
@@ -522,15 +552,17 @@ window.BI_CONFIG = {
         { btn: 'tab-btn-resumen',  pane: 'tab-resumen',  name: 'resumen'  },
         { btn: 'tab-btn-mensual',  pane: 'tab-mensual',  name: 'mensual'  },
         { btn: 'tab-btn-detalle',  pane: 'tab-detalle',  name: 'detalle'  },
+        { btn: 'tab-btn-rubros',   pane: 'tab-rubros',   name: 'rubros'   },
         { btn: 'tab-btn-envio',    pane: 'tab-envio',    name: 'envio'    },
     ].filter(t => document.getElementById(t.btn) && document.getElementById(t.pane));
 
-    const loaded = { resumen: false, mensual: false, detalle: false, envio: false };
+    const loaded = { resumen: false, mensual: false, detalle: false, rubros: false, envio: false };
 
     const SPINNER_MSGS = {
         resumen : 'Cargando Resumen…',
         mensual : 'Cargando Evolución Mensual…',
         detalle : 'Cargando Detalle…',
+        rubros  : 'Cargando Unidades x Rubro…',
         envio   : 'Cargando Envíos Mensuales…',
     };
 
@@ -538,6 +570,7 @@ window.BI_CONFIG = {
         resumen : () => Promociones.loadAll(),
         mensual : () => PromoMensual.load(),
         detalle : () => Promise.all([PromoDetalle.loadSucursales(), PromoDetalle.loadPromociones()]),
+        rubros  : () => PromoRubros.load(),
         envio   : () => PromoEnvio.load(),
     };
 

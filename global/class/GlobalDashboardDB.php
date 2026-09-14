@@ -938,7 +938,7 @@ class GlobalDashboardDB
         if ($this->origen === 'franquicias') {
             // Query remote franchises (sucursales habilitadas o principales)
             $remoteRows = $this->query("
-                SELECT NRO_SUCURSAL AS NRO_SUCURS, DESC_SUCURSAL, TANGO, HABILITADO
+                SELECT NRO_SUCURSAL AS NRO_SUCURS, DESC_SUCURSAL, TANGO, HABILITADO, NRO_SUC_MADRE
                 FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS
                 WHERE CANAL LIKE 'FRANQUICIA%' OR NRO_SUCURSAL >= 500
             ");
@@ -954,24 +954,70 @@ class GlobalDashboardDB
                 $localMap[(int)$r['NRO_SUCURS']] = trim($r['SUCURSAL'] ?? '');
             }
 
-            $seenIds = [];
-
-            // 1. Agregar todas las sucursales remotas
+            // Un mismo local puede estar representado por varios NRO_SUCURSAL:
+            //   - la hija apunta a su madre por NRO_SUC_MADRE (igual criterio que
+            //     usa promociones/ para deduplicar);
+            //   - tras un cambio de razón social el código viejo queda con
+            //     HABILITADO=0 y el mismo DESC_SUCURSAL que el nuevo.
+            // Sin colapsarlos el selector ofrecía una sola entrada por nombre pero
+            // con el NRO_SUCURS de la hija —que no tiene ventas—, y el tablero
+            // mostraba todo en cero. Elegimos un único código por local:
+            // habilitado antes que deshabilitado, y con ventas antes que sin ventas.
+            $porNro = [];
             foreach ($remoteRows as $row) {
-                $id = (int)$row['NRO_SUCURS'];
-                if (isset($seenIds[$id])) continue;
+                $porNro[(int)$row['NRO_SUCURS']] = $row;
+            }
 
-                $hab = $row['HABILITADO'] ?? null;
+            // Hija → madre (con tope de saltos por si el maestro tuviera un ciclo)
+            $canon = function (int $id) use ($porNro): int {
+                for ($i = 0; $i < 5; $i++) {
+                    $madre = $porNro[$id]['NRO_SUC_MADRE'] ?? null;
+                    if ($madre === null || $madre === '' || !isset($porNro[(int)$madre])) break;
+                    $id = (int)$madre;
+                }
+                return $id;
+            };
+
+            $descDe = function (int $id) use ($porNro, $localMap): string {
+                return trim($porNro[$id]['DESC_SUCURSAL'] ?? '')
+                    ?: ($localMap[$id] ?? ('Suc. ' . $id));
+            };
+
+            // Menor es mejor: [no habilitado, sin ventas, nro] — el nro desempata
+            // de forma estable para que el selector no cambie entre requests.
+            $rank = function (int $id) use ($porNro, $localMap): array {
+                $hab = $porNro[$id]['HABILITADO'] ?? null;
+                return [
+                    ($hab == 1 || $hab === '1') ? 0 : 1,
+                    isset($localMap[$id]) ? 0 : 1,
+                    $id,
+                ];
+            };
+
+            // Un elegido por nombre, sobre los códigos ya colapsados por madre
+            $elegidoPorNombre = [];
+            foreach (array_keys($porNro) as $idOriginal) {
+                $id  = $canon((int)$idOriginal);
+                $key = strtoupper($descDe($id));
+                if (!isset($elegidoPorNombre[$key]) || $rank($id) < $rank($elegidoPorNombre[$key])) {
+                    $elegidoPorNombre[$key] = $id;
+                }
+            }
+
+            // Todo código presente en el maestro queda representado por su elegido:
+            // se marcan como vistos para que el paso 2 no los reinserte.
+            $seenIds = array_fill_keys(array_keys($porNro), true);
+
+            // 1. Agregar un registro por local
+            foreach ($elegidoPorNombre as $id) {
+                $hab = $porNro[$id]['HABILITADO'] ?? null;
                 $isActive = ($hab == 1 || $hab === '1');
                 if ($soloActivas && !$isActive) continue;
 
-                $desc = trim($row['DESC_SUCURSAL'] ?? '') ?: ($localMap[$id] ?? ('Suc. ' . $id));
-
                 $result[] = [
                     'NRO_SUCURS'    => $id,
-                    'DESC_SUCURSAL' => $desc,
+                    'DESC_SUCURSAL' => $descDe($id),
                 ];
-                $seenIds[$id] = true;
             }
 
             // 2. Agregar cualquier sucursal de ventas local que no estuviese en SUCURSALES_LAKERS

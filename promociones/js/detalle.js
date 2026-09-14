@@ -168,7 +168,11 @@ const PromoDetalle = (() => {
         /* Fila total */
         const total = {};
         if (showTotal) {
-            const numKeys = cols.filter(c => c.align === 'right' && c.key !== 'var_fac').map(c => c.key);
+            // Las columnas con recalcTotal son ratios o variaciones: sumarlas no
+            // significa nada, se calculan aparte una vez que están los subtotales.
+            const numKeys = cols
+                .filter(c => c.align === 'right' && c.key !== 'var_fac' && typeof c.recalcTotal !== 'function')
+                .map(c => c.key);
             numKeys.forEach(k => {
                 total[k] = rows.reduce((s, r) => s + (r[k] ?? 0), 0);
             });
@@ -180,6 +184,9 @@ const PromoDetalle = (() => {
                 total.pct_costo_total = total.costo_total / denomTotal;
                 total.pct_promo_fac   = (total.fac_cpromo ?? 0) / denomTotal;
             }
+            cols.forEach(c => {
+                if (typeof c.recalcTotal === 'function') total[c.key] = c.recalcTotal(total, rows);
+            });
         }
 
         let html = `<table class="promo-detalle-table"><thead><tr>`;
@@ -527,5 +534,9 @@ const PromoDetalle = (() => {
         loadSucursales,
         loadPromociones,
         onMonedaChange,
+        // Reutilizables por otras pestañas (ver js/rubros.js)
+        renderTabla,
+        bindExportBtn,
+        exportarExcel,
     };
 })();

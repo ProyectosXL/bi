@@ -255,6 +255,7 @@ const Promociones = (() => {
                 if (_lastDonuts) renderDonuts(_lastDonuts);
                 if (typeof PromoMensual !== 'undefined') PromoMensual.onMonedaChange();
                 if (typeof PromoDetalle !== 'undefined') PromoDetalle.onMonedaChange();
+                if (typeof PromoRubros  !== 'undefined') PromoRubros.onMonedaChange();
             });
         });
         const tccLabel   = $('moneda-tcc-label');

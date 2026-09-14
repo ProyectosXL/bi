@@ -691,6 +691,136 @@ class PromocionesDB
     }
 
     /* ──────────────────────────────────────────────
+     *  UNIDADES POR RUBRO
+     * ────────────────────────────────────────────── */
+
+    /**
+     * Fragmento WHERE + params para restringir sucursales del lado de
+     * BI_SALES_SUCURSALES, cuya columna es NRO_SUCURS (no NRO_SUCURSAL).
+     * Cubre el filtro del selector y la restricción del perfil GRUPO.
+     */
+    private function filtroSucursalVentas(array $fp, string $alias): array
+    {
+        $sqls   = [];
+        $params = [];
+
+        if (!empty($fp['sucursal'])) {
+            $sqls[]   = "AND {$alias}.NRO_SUCURS = ?";
+            $params[] = (int)$fp['sucursal'];
+        }
+        if (($_SESSION['tipo'] ?? '') === 'GRUPO') {
+            [$sfG, $pG] = Filters::sucursalesGrupo($_SESSION['sucursalesGrupo'] ?? [], $alias, 'NRO_SUCURS');
+            $sqls[] = $sfG;
+            $params = array_merge($params, $pG);
+        }
+
+        return [implode(' ', $sqls), $params];
+    }
+
+    /**
+     * Penetración de las promociones por RUBRO.
+     *
+     * BI_PROMOCIONES es de grano ticket × medio de pago y no tiene RUBRO ni
+     * CANTIDAD, así que las unidades salen de BI_SALES_SUCURSALES (grano línea
+     * de venta) cruzada por FECHA + NRO_SUCURS + N_COMP.
+     *
+     * IMPORTANTE — dos cosas que no se pueden tocar sin romper los números:
+     *   1. El CTE `tk` deduplica BI_PROMOCIONES a UN renglón por ticket con un
+     *      flag cp. Sin ese GROUP BY, un ticket pagado con varias tarjetas
+     *      multiplicaría las unidades de sus líneas.
+     *   2. El JOIN es LEFT: las unidades TOTALES del rubro no pueden depender
+     *      de que el ticket exista en BI_PROMOCIONES.
+     *
+     * Supuesto: la promoción aplica al TICKET, no a la línea. "Unidades con
+     * promo" = todas las unidades de un ticket que tuvo al menos un pago con
+     * promoción. No hay atribución por artículo — el dato no existe.
+     *
+     * Los filtros Banco / Promoción / excluir_promociones aplican sólo al CTE
+     * (numerador); Sucursal y perfil GRUPO aplican a los dos lados del join.
+     */
+    public function getUnidadesPorRubro(
+        string $da, string $ha,
+        string $dp, string $hp,
+        array  $fp
+    ): array {
+        $haX = (new DateTime($ha))->modify('+1 day')->format('Y-m-d');
+        $hpX = (new DateTime($hp))->modify('+1 day')->format('Y-m-d');
+
+        [$cpSql, $cpParams] = $this->cpExpr($fp, 'p');
+        [$sfF,   $pF]       = $this->buildFiltros($fp, 'p', false);
+        [$sfG,   $pG]       = $this->grupoFiltro('p');
+        [$sfS,   $pS]       = $this->filtroSucursalVentas($fp, 's');
+
+        $params = array_merge(
+            $cpParams,
+            [$da, $haX, $dp, $hpX],          // CTE tk: rango que cubre ambos períodos
+            $pF, $pG,
+            [$da, $haX, $dp, $hpX],          // flags is_a / is_p
+            [$da, $haX, $dp, $hpX],          // WHERE del derived de ventas
+            $pS
+        );
+
+        $rows = $this->query("
+            WITH tk AS (
+                SELECT p.FECHA,
+                       p.NRO_SUCURSAL,
+                       p.N_COMP COLLATE DATABASE_DEFAULT AS N_COMP,
+                       MAX({$cpSql}) AS cp
+                FROM BI_PROMOCIONES p WITH (NOLOCK)
+                WHERE (
+                    (p.FECHA >= ? AND p.FECHA < ?)
+                    OR (p.FECHA >= ? AND p.FECHA < ?)
+                )
+                  {$sfF} {$sfG}
+                GROUP BY p.FECHA, p.NRO_SUCURSAL, p.N_COMP COLLATE DATABASE_DEFAULT
+            )
+            SELECT
+                s.RUBRO,
+                ISNULL(SUM(CASE WHEN s.is_a=1                       THEN s.CANTIDAD ELSE 0 END),0) AS unid_tot_act,
+                ISNULL(SUM(CASE WHEN s.is_a=1 AND ISNULL(tk.cp,0)=1 THEN s.CANTIDAD ELSE 0 END),0) AS unid_cp_act,
+                ISNULL(SUM(CASE WHEN s.is_a=1 AND ISNULL(tk.cp,0)=1 THEN s.IMPORTE  ELSE 0 END),0) AS fact_cp_act,
+                ISNULL(SUM(CASE WHEN s.is_p=1                       THEN s.CANTIDAD ELSE 0 END),0) AS unid_tot_prev,
+                ISNULL(SUM(CASE WHEN s.is_p=1 AND ISNULL(tk.cp,0)=1 THEN s.CANTIDAD ELSE 0 END),0) AS unid_cp_prev
+            FROM (
+                SELECT s.RUBRO, s.CANTIDAD, s.IMPORTE, s.FECHA, s.NRO_SUCURS, s.N_COMP,
+                    CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN 1 ELSE 0 END AS is_a,
+                    CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN 1 ELSE 0 END AS is_p
+                FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
+                WHERE (
+                    (s.FECHA >= ? AND s.FECHA < ?)
+                    OR (s.FECHA >= ? AND s.FECHA < ?)
+                )
+                  AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
+                  {$sfS}
+            ) s
+            LEFT JOIN tk ON tk.FECHA        = s.FECHA
+                        AND tk.NRO_SUCURSAL = s.NRO_SUCURS
+                        AND tk.N_COMP       = s.N_COMP COLLATE DATABASE_DEFAULT
+            GROUP BY s.RUBRO
+            ORDER BY unid_cp_act DESC
+        ", $params);
+
+        $varFn = fn($a, $p) => $p != 0 ? ($a - $p) / $p : ($a > 0 ? 1 : 0);
+
+        return array_map(function($r) use ($varFn): array {
+            $uTot     = (float)$r['unid_tot_act'];
+            $uCp      = (float)$r['unid_cp_act'];
+            $uTotPrev = (float)$r['unid_tot_prev'];
+            $uCpPrev  = (float)$r['unid_cp_prev'];
+            return [
+                'rubro'                => $r['RUBRO'],
+                'unid_total'           => $uTot,
+                'unid_cpromo'          => $uCp,
+                'pct_penetracion'      => $uTot != 0 ? $uCp / $uTot : 0,
+                'fact_cpromo'          => (float)$r['fact_cp_act'],
+                'unid_cpromo_prev'     => $uCpPrev,
+                'var_unid_cp'          => $varFn($uCp, $uCpPrev),
+                'pct_penetracion_prev' => $uTotPrev != 0 ? $uCpPrev / $uTotPrev : 0,
+            ];
+        }, $rows);
+    }
+
+    /* ──────────────────────────────────────────────
      *  LISTAS PARA FILTROS
      * ────────────────────────────────────────────── */
 
