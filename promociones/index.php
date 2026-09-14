@@ -672,6 +672,7 @@ window.BI_CONFIG = {
 
     // Inicializar módulos
     Promociones.initMonedaToggle();
+    Promociones.initTooltips();
     Promociones.initDonutModals();
     PromoMensual.init();
 

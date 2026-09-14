@@ -36,6 +36,16 @@ const PromoDetalle = (() => {
         return pos ? 'var-pos' : 'var-neg';
     }
 
+    /**
+     * Variación para la fila Total. El valor del período previo se manda en el
+     * JSON pero no tiene columna propia, así que se suma desde las filas.
+     */
+    function varTotal(actual, rows, prevKey) {
+        const prev = rows.reduce((s, r) => s + (r[prevKey] ?? 0), 0);
+        const act  = actual ?? 0;
+        return prev !== 0 ? (act - prev) / prev : (act > 0 ? 1 : 0);
+    }
+
     function escHtml(s) {
         return String(s ?? '')
             .replace(/&/g, '&amp;')
@@ -52,22 +62,50 @@ const PromoDetalle = (() => {
     /* ── COLUMNAS tabla sucursales ── */
     const COLS_SUC = [
         { key: 'sucursal',         label: 'Sucursal',      align: 'left',  fmt: v => v ?? '—',     xlFmt: null,     sortKey: 'sucursal'      },
-        { key: 'fac_total',        label: 'Fact. Total',   align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'fac_total'     },
-        { key: 'fac_cpromo',       label: 'Fact. C/Promo', align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'fac_cpromo'    },
-        { key: 'tickets_cpromo',   label: 'Tickets C/P',   align: 'right', fmt: num,                xlFmt: 'number', sortKey: 'tickets_cpromo'},
-        { key: 'costo_total',      label: 'Costo Total',   align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'costo_total'   },
-        { key: 'pct_costo_total',  label: '% Costo/FAC',   align: 'right', fmt: n => pct(n, 2),     xlFmt: 'pct1',   sortKey: 'pct_costo_total', invertVar: true },
-        { key: 'pct_promo_fac',    label: '% Promo/FAC',   align: 'right', fmt: n => pct(n, 2),     xlFmt: 'pct1',   sortKey: 'pct_promo_fac' },
+        { key: 'fac_total',        label: 'Fact. Total',   align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'fac_total',
+          tip: 'Facturación total de la sucursal en el período, con y sin promoción. Si arriba hay un banco seleccionado, cuenta sólo lo pagado con ese banco.' },
+        { key: 'fac_cpromo',       label: 'Fact. C/Promo', align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'fac_cpromo',
+          tip: 'Facturación de los tickets que llevaron al menos una promoción.' },
+        { key: 'tickets_total',    label: 'Tickets Tot.',  align: 'right', fmt: num,                xlFmt: 'number', sortKey: 'tickets_total',
+          tip: 'Todos los tickets (comprobantes FAC) de la sucursal, con y sin promoción.' },
+        { key: 'tickets_cpromo',   label: 'Tickets C/P',   align: 'right', fmt: num,                xlFmt: 'number', sortKey: 'tickets_cpromo',
+          tip: 'Tickets que llevaron al menos una promoción. Mismo criterio que el KPI «Tickets con Promo» del Resumen.' },
+        {
+            key: 'var_tickets_cpromo', label: 'Var. T. C/P', align: 'right', fmt: varPct, xlFmt: 'pct1', sortKey: 'var_tickets_cpromo',
+            tip: 'Crecimiento de los tickets con promo contra el mismo período del año anterior.',
+            recalcTotal: (t, rows) => varTotal(t.tickets_cpromo, rows, 'tickets_cpromo_prev'),
+        },
+        {
+            key: 'pct_tickets_cpromo', label: '% Tickets C/P', align: 'right', fmt: n => pct(n, 1), xlFmt: 'pct1', sortKey: 'pct_tickets_cpromo',
+            tip: 'Tickets C/P sobre Tickets Tot.: qué parte de las ventas de la sucursal usó alguna promoción.',
+            recalcTotal: t => (t.tickets_total > 0 ? t.tickets_cpromo / t.tickets_total : 0),
+        },
+        { key: 'promos_usadas',    label: 'Promos Usadas', align: 'right', fmt: num,                xlFmt: 'number', sortKey: 'promos_usadas',
+          tip: 'Cantidad de promociones aplicadas. Un ticket puede llevar más de una: las combinadas («PROMO A / BANCO B») cuentan 2.' },
+        {
+            key: 'var_promos_usadas', label: 'Var. Promos', align: 'right', fmt: varPct, xlFmt: 'pct1', sortKey: 'var_promos_usadas',
+            tip: 'Crecimiento de las promociones aplicadas contra el mismo período del año anterior. Ojo: con una promoción filtrada, si el año pasado se llamaba distinto el período previo da 0.',
+            recalcTotal: (t, rows) => varTotal(t.promos_usadas, rows, 'promos_usadas_prev'),
+        },
+        { key: 'costo_total',      label: 'Costo Total',   align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'costo_total',
+          tip: 'Costo financiero de las promociones: cargo del banco más costo operativo de ventas.' },
+        { key: 'pct_costo_total',  label: '% Costo/FAC',   align: 'right', fmt: n => pct(n, 2),     xlFmt: 'pct1',   sortKey: 'pct_costo_total', invertVar: true,
+          tip: 'Costo Total sobre la facturación TOTAL de la sucursal (no sobre la facturación con promo). Cuanto más bajo, mejor.' },
+        { key: 'pct_promo_fac',    label: '% Promo/FAC',   align: 'right', fmt: n => pct(n, 2),     xlFmt: 'pct1',   sortKey: 'pct_promo_fac',
+          tip: 'Facturación con promo sobre la facturación total: cuánto de lo que vendió la sucursal pasó por una promoción.' },
     ];
 
-    const COL_COD_CLIENT = { key: 'cod_client', label: 'Cod. Cliente', align: 'left', fmt: v => v ?? '—', xlFmt: null, sortKey: 'cod_client' };
-    const COL_RECONOCIMIENTO_SUC = { key: 'reconocimiento', label: 'Reconocimiento $ (s/IVA)', align: 'right', fmt: moneyInt, xlFmt: 'money', sortKey: 'reconocimiento' };
+    const COL_COD_CLIENT = { key: 'cod_client', label: 'Cod. Cliente', align: 'left', fmt: v => v ?? '—', xlFmt: null, sortKey: 'cod_client',
+        tip: 'Código de cliente de la franquicia en el sistema de locales.' };
+    const COL_RECONOCIMIENTO_SUC = { key: 'reconocimiento', label: 'Reconocimiento $ (s/IVA)', align: 'right', fmt: moneyInt, xlFmt: 'money', sortKey: 'reconocimiento',
+        tip: 'Lo que se le reconoce a la franquicia: la mitad del costo de promociones, sin IVA (costo ÷ 1,21 × 0,5).' };
     const COL_CON_DIFERENCIAS = {
         key: 'con_diferencias',
         label: 'Con Diferencias',
         align: 'center',
         xlFmt: null,
         sortKey: 'con_diferencias',
+        tip: 'Si hay diferencias entre la venta que informó la franquicia y la registrada en el período. «Sin Tango» = franquicia nueva, sin sistema conectado.',
         fmt: (v, row) => {
             if (row && row.sin_tango === true) {
                 return '<span class="badge-dif-sintango">Sin Tango</span>';
@@ -83,6 +121,7 @@ const PromoDetalle = (() => {
         align: 'center',
         xlFmt: null,
         sortKey: 'comunicado',
+        tip: 'Si ya se le envió a la franquicia el reporte mensual de promociones por mail.',
         fmt: v => {
             if (v === true)  return '<span class="badge-com-si">&#10003; SÍ</span>';
             if (v === false) return '<span class="badge-com-no">&#215; NO</span>';
@@ -95,6 +134,7 @@ const PromoDetalle = (() => {
         align: 'center',
         xlFmt: null,
         sortKey: 'con_conexion',
+        tip: 'Si la sucursal tuvo conexión con Tango durante el período. Sin conexión, sus datos de promociones pueden estar incompletos.',
         fmt: (v, row) => {
             if (row && row.sin_tango === true) {
                 return '<span style="color:var(--text-3)">—</span>';
@@ -119,6 +159,7 @@ const PromoDetalle = (() => {
         align: 'center',
         xlFmt: null,
         sortKey: 'banco',
+        tip: 'Bancaria si la promoción está asociada a un banco; Interna si no tiene banco asignado.',
         fmt: (v, row) => {
             if (!row) return '—';
             const esBancaria = row.banco && row.banco.trim() !== '' && row.banco.toUpperCase() !== 'DESCONOCIDO';
@@ -130,17 +171,26 @@ const PromoDetalle = (() => {
     };
 
     const COLS_PROM = [
-        { key: 'promocion',       label: 'Promoción',      align: 'left',  fmt: v => v ?? '—',     xlFmt: null,     sortKey: 'promocion'    },
-        { key: 'banco',           label: 'Banco',          align: 'left',  fmt: v => v ?? '—',     xlFmt: null,     sortKey: 'banco'        },
-        { key: 'fac_cpromo',      label: 'Fact. C/Promo',  align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'fac_cpromo'   },
-        { key: 'fac_prev',        label: 'Fact. C/P prev', align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'fac_prev'     },
-        { key: 'var_fac',         label: 'Var. Fact.',     align: 'right', fmt: varPct,             xlFmt: 'pct1',   sortKey: 'var_fac'      },
-        { key: 'tickets_cpromo',  label: 'Tickets',        align: 'right', fmt: num,                xlFmt: 'number', sortKey: 'tickets_cpromo'},
-        { key: 'costo_total',     label: 'Costo Total',    align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'costo_total'  },
-        { key: 'pct_costo_total', label: '% Costo/FAC',    align: 'right', fmt: n => pct(n, 2),     xlFmt: 'pct1',   sortKey: 'pct_costo_total', invertVar: true },
+        { key: 'promocion',       label: 'Promoción',      align: 'left',  fmt: v => v ?? '—',     xlFmt: null,     sortKey: 'promocion',
+          tip: 'Nombre de la promoción tal como viene cargada. Las que llevan « / » son tickets con más de una promo aplicada, y se cuentan aparte de las simples.' },
+        { key: 'banco',           label: 'Banco',          align: 'left',  fmt: v => v ?? '—',     xlFmt: null,     sortKey: 'banco',
+          tip: 'Banco asociado a la promoción. «DESCONOCIDO» o vacío significa que es una promoción interna, no bancaria.' },
+        { key: 'fac_cpromo',      label: 'Fact. C/Promo',  align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'fac_cpromo',
+          tip: 'Facturación de los tickets que usaron esta promoción, en el período seleccionado.' },
+        { key: 'fac_prev',        label: 'Fact. C/P prev', align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'fac_prev',
+          tip: 'Lo mismo en el mismo período del año anterior. Si la promoción se llamaba distinto el año pasado, da 0.' },
+        { key: 'var_fac',         label: 'Var. Fact.',     align: 'right', fmt: varPct,             xlFmt: 'pct1',   sortKey: 'var_fac',
+          tip: 'Crecimiento de la facturación contra el año anterior. Un +100% suele significar que la promoción no existía con ese nombre.' },
+        { key: 'tickets_cpromo',  label: 'Tickets',        align: 'right', fmt: num,                xlFmt: 'number', sortKey: 'tickets_cpromo',
+          tip: 'Tickets que usaron esta promoción.' },
+        { key: 'costo_total',     label: 'Costo Total',    align: 'right', fmt: moneyInt,           xlFmt: 'money',  sortKey: 'costo_total',
+          tip: 'Costo financiero de la promoción: cargo del banco más costo operativo de ventas.' },
+        { key: 'pct_costo_total', label: '% Costo/FAC',    align: 'right', fmt: n => pct(n, 2),     xlFmt: 'pct1',   sortKey: 'pct_costo_total', invertVar: true,
+          tip: 'Costo Total sobre la facturación de esta promoción. Cuanto más bajo, más barata resultó.' },
     ];
 
-    const COL_RECONOCIMIENTO_PROM = { key: 'reconocimiento', label: 'Reconocimiento $ (s/IVA)', align: 'right', fmt: moneyInt, xlFmt: 'money', sortKey: 'reconocimiento' };
+    const COL_RECONOCIMIENTO_PROM = { key: 'reconocimiento', label: 'Reconocimiento $ (s/IVA)', align: 'right', fmt: moneyInt, xlFmt: 'money', sortKey: 'reconocimiento',
+        tip: 'Lo que se le reconoce a la franquicia por esta promoción: la mitad del costo, sin IVA (costo ÷ 1,21 × 0,5).' };
 
     function getActiveCOLS_PROM() {
         const base = esFranquicias() ? [...COLS_PROM, COL_RECONOCIMIENTO_PROM] : COLS_PROM;
@@ -194,7 +244,11 @@ const PromoDetalle = (() => {
             const sortIcon = sortState.key === c.sortKey
                 ? (sortState.dir > 0 ? ' sorted-asc' : ' sorted-desc')
                 : '';
-            html += `<th class="${sortIcon}" style="text-align:${c.align}" data-sort="${c.sortKey}">${c.label}</th>`;
+            // El tooltip va en data-tip; lo muestra el listener delegado de
+            // Promociones.initTooltips(), que sobrevive a estos re-render.
+            const tipAttr = c.tip ? ` data-tip="${escHtml(c.tip)}"` : '';
+            const label   = c.tip ? `<span class="th-tip">${c.label}</span>` : c.label;
+            html += `<th class="${sortIcon}" style="text-align:${c.align}" data-sort="${c.sortKey}"${tipAttr}>${label}</th>`;
         });
         html += '</tr></thead><tbody>';
 

@@ -413,6 +413,70 @@ GO
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   11) "PROMOS USADAS" — validar el conteo por separador ' / '
+   ═══════════════════════════════════════════════════════════════════════════
+   La columna "Promos Usadas" del Detalle por Sucursal cuenta promociones
+   APLICADAS, no renglones. Como el modelo concatena las promos de un mismo
+   ticket en una sola etiqueta separadas por ' / ', el conteo es
+   (separadores + 1). Este bloque valida los dos supuestos de esa cuenta.
+
+   11.1) ¿El separador ' / ' es confiable?
+   Lista las etiquetas que contienen ' / ' con la cantidad de promos que se les
+   está asignando.
+
+   Qué mirar:
+     · Que cada fila con promos=2 sea efectivamente DOS promos, no un nombre que
+       casualmente lleva ' / ' en el medio.
+     · Ojo con nombres tipo '(DM 25/8 AL 14/9)': esos llevan '/' SIN espacios,
+       así que no cuentan como separador. Es correcto.
+     · Si aparece una promo con un nombre que legítimamente incluye ' / ', el
+       conteo la estaría partiendo mal — avisar.
+   ═══════════════════════════════════════════════════════════════════════════ */
+SELECT p.DESC_PROMOCION_TARJETA,
+       1 + (LEN(p.DESC_PROMOCION_TARJETA + '.')
+            - LEN(REPLACE(p.DESC_PROMOCION_TARJETA, ' / ', '') + '.')) / 3 AS promos_contadas,
+       COUNT(*) AS filas
+FROM dbo.BI_PROMOCIONES p WITH (NOLOCK)
+WHERE p.DESC_PROMOCION_TARJETA LIKE '% / %'
+  AND p.FECHA >= '2026-01-01'
+GROUP BY p.DESC_PROMOCION_TARJETA
+ORDER BY promos_contadas DESC, filas DESC;
+GO
+
+/* 11.2) ¿Cuánto pesa el doble conteo por ticket multi-renglón?
+   promos_usadas suma por RENGLÓN. Si un ticket se pagó con dos tarjetas y las
+   dos tienen promo, cuenta las dos (son dos aplicaciones). Este bloque mide
+   cuántas de esas hay, y cuánto cambiaría el número si se contara una sola vez
+   por combinación ticket+promo.
+
+   Qué mirar:
+     · dif_pct ≈ 0  →  el doble conteo es marginal, la columna se lee directo.
+     · dif_pct alto →  conviene revisar si "aplicaciones" o "tickets con esa
+                       promo" es lo que se quiere mostrar.
+   ═══════════════════════════════════════════════════════════════════════════ */
+DECLARE @desde DATE = '2026-08-31';
+DECLARE @hasta DATE = '2026-09-12';
+
+WITH pc AS (
+    SELECT p.FECHA, p.NRO_SUCURSAL, p.N_COMP, p.DESC_PROMOCION_TARJETA,
+           1 + (LEN(p.DESC_PROMOCION_TARJETA + '.')
+                - LEN(REPLACE(p.DESC_PROMOCION_TARJETA, ' / ', '') + '.')) / 3 AS promos
+    FROM dbo.BI_PROMOCIONES p WITH (NOLOCK)
+    WHERE p.FECHA >= @desde AND p.FECHA < @hasta
+      AND p.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
+)
+SELECT
+    (SELECT SUM(promos) FROM pc)                                        AS por_renglon,
+    (SELECT SUM(promos) FROM (
+        SELECT DISTINCT FECHA, NRO_SUCURSAL, N_COMP, DESC_PROMOCION_TARJETA, promos FROM pc
+     ) d)                                                               AS por_ticket_promo,
+    (SELECT COUNT(*) FROM pc) - (SELECT COUNT(*) FROM (
+        SELECT DISTINCT FECHA, NRO_SUCURSAL, N_COMP, DESC_PROMOCION_TARJETA FROM pc
+     ) d2)                                                              AS renglones_duplicados;
+GO
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
    9) ¿QUÉ ES "SIN RUBRO"?   — pendiente
    ═══════════════════════════════════════════════════════════════════════════
    El bloque 5 devolvió 1030 unidades bajo RUBRO = 'SIN RUBRO', con CERO

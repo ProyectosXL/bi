@@ -242,6 +242,70 @@ const Promociones = (() => {
         }).join('');
     }
 
+    /* ── Tooltips ──
+     * Un único listener delegado en document para cualquier [data-tip] del
+     * tablero. Delegado a propósito: renderTabla() reconstruye el innerHTML de
+     * la tabla en cada sort, así que rebindear por elemento se perdería.
+     * El tooltip es position:fixed en <body> para que no lo recorte el
+     * overflow de .promo-detalle-wrap. */
+    function initTooltips() {
+        let tip = null;
+
+        function hide() {
+            if (tip) tip.style.display = 'none';
+        }
+
+        function show(target) {
+            const text = target.dataset.tip;
+            if (!text) return;
+
+            if (!tip) {
+                tip = document.createElement('div');
+                tip.className = 'promo-tooltip';
+                document.body.appendChild(tip);
+            }
+            tip.textContent   = text;
+            tip.style.display = 'block';
+
+            // Posicionar recién con el tooltip visible, para poder medirlo.
+            const r  = target.getBoundingClientRect();
+            const tw = tip.offsetWidth;
+            const th = tip.offsetHeight;
+
+            let left = r.left + r.width / 2 - tw / 2;
+            left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+
+            let top = r.top - th - 8;
+            if (top < 8) top = r.bottom + 8;   // no entra arriba → va abajo
+
+            tip.style.left = Math.round(left) + 'px';
+            tip.style.top  = Math.round(top) + 'px';
+        }
+
+        document.addEventListener('mouseover', e => {
+            const t = e.target.closest?.('[data-tip]');
+            if (t) show(t);
+        });
+        document.addEventListener('mouseout', e => {
+            const from = e.target.closest?.('[data-tip]');
+            if (!from) return;
+            // Pasar del <th> al <span> de adentro no es salir: evita el parpadeo.
+            if (e.relatedTarget?.closest?.('[data-tip]') === from) return;
+            hide();
+        });
+        // Al ordenar, renderTabla reemplaza el <th> y el mouseout nunca llega.
+        document.addEventListener('click', hide);
+        // Accesible por teclado
+        document.addEventListener('focusin',  e => {
+            const t = e.target.closest?.('[data-tip]');
+            if (t) show(t);
+        });
+        document.addEventListener('focusout', hide);
+        // position:fixed no sigue al contenedor que scrollea → esconderlo.
+        document.addEventListener('scroll', hide, true);
+        window.addEventListener('resize', hide);
+    }
+
     /* ── Toggle moneda ── */
     function initMonedaToggle() {
         document.querySelectorAll('.moneda-btn').forEach(btn => {
@@ -784,6 +848,7 @@ const Promociones = (() => {
         setLoading,
         fmt,
         initMonedaToggle,
+        initTooltips,
         initDonutModals,
         initSearchableSelect,
         syncSearchableSelect,

@@ -105,6 +105,78 @@ cláusula SELECT, en lugar de un filtro WHERE.
 
 ---
 
+## Tickets en el Detalle por Sucursal
+
+`getDetalleSucursales()` devuelve **tres** medidas distintas sobre tickets, que
+no hay que confundir:
+
+| Campo | Qué es |
+|-------|--------|
+| `tickets_total`       | Todos los tickets `FAC` de la sucursal, con y sin promo |
+| `tickets_cpromo`      | Sólo los que llevan promo (flag `cp`) |
+| `var_tickets_cpromo`  | Variación de `tickets_cpromo` vs. el período previo |
+| `pct_tickets_cpromo`  | `tickets_cpromo / tickets_total` |
+| `promos_usadas`       | Cuántas promociones se **aplicaron** en total |
+| `var_promos_usadas`   | Variación de `promos_usadas` vs. el período previo |
+
+`tickets_cpromo` es el que tiene que cuadrar con el KPI "Tickets con Promo" del
+Resumen (`getKPIsBulk`). Puede haber una diferencia de pocos tickets: el KPI
+hace un `COUNT(DISTINCT N_COMP)` global y el detalle cuenta por sucursal y
+después suma, así que un mismo `N_COMP` repetido en dos sucursales se cuenta una
+vez en el KPI y dos en el detalle.
+
+> **Histórico:** hasta septiembre 2026 la columna rotulada "Tickets C/P" en esta
+> tabla traía en realidad el total de tickets — al `COUNT` le faltaba la
+> condición `cp=1`. Por eso nunca coincidió con el KPI del Resumen. Si comparás
+> contra un Excel exportado antes de esa fecha, la columna vieja equivale a la
+> actual `tickets_total`.
+
+### Cómo se cuentan las promos aplicadas
+
+Un ticket puede llevar **más de una promo**, y el modelo NO crea un renglón por
+promo: las **concatena en una sola etiqueta separadas por `' / '`**. Así,
+`'PROMO DIA DEL MAESTRO / CUENTA DNI - PROVINCIA'` son DOS promociones en un
+renglón.
+
+Por eso `promos_usadas` no cuenta filas: cuenta **separadores + 1**.
+
+```sql
+1 + (LEN(DESC_PROMOCION_TARJETA + '.')
+     - LEN(REPLACE(DESC_PROMOCION_TARJETA, ' / ', '') + '.')) / 3
+```
+
+El `'.'` concatenado de los dos lados protege los espacios finales, que `LEN()`
+recorta — hay promos cargadas como `'BANCO PROVINCIA '`. Es la misma convención
+de separador que usa `detalle.js` para marcar las filas combinadas
+(`row-combinada`).
+
+Cuidado con dos cosas:
+
+- Los nombres con `/` **sin espacios** no son combinaciones y no se parten bien:
+  `'40%OFF 2DA UNIDAD (DM 25/8 AL 14/9)'` cuenta como una sola promo, que es lo
+  correcto.
+- La suma es **por renglón**, no por ticket. Si un ticket se pagó con dos
+  tarjetas y ambas llevan promo, cuenta las dos — son dos aplicaciones.
+  `sql/valida_promo.sql` bloque 11 valida los dos supuestos y mide cuánto pesa
+  el segundo.
+
+### Comparativo contra el período previo
+
+`getDetalleSucursales()` recibe los cuatro límites (`$da, $ha, $dp, $hp`) y
+resuelve los dos períodos en **un solo scan** con flags `is_a` / `is_p`, igual
+que `getKPIsBulk()`. De ahí salen `var_tickets_cpromo` y `var_promos_usadas`.
+
+El `HAVING` mira **sólo el período actual**, así que la tabla sigue listando las
+sucursales con promo hoy: una que tuvo promo el año pasado y este año no, no
+aparece.
+
+Los valores absolutos del período previo viajan en el JSON
+(`tickets_cpromo_prev`, `promos_usadas_prev`) pero **no tienen columna**: se usan
+para que la fila Total pueda recalcular las variaciones sobre los subtotales, vía
+el helper `varTotal()` de `detalle.js`.
+
+---
+
 ## Unidades x Rubro — el cruce con las líneas de venta
 
 `BI_PROMOCIONES` es de grano **ticket × medio de pago**: no tiene `RUBRO` ni
@@ -192,3 +264,9 @@ SheetJS (xlsx) 0.18.5
 - `js/rubros.js` no tiene render propio: reutiliza `PromoDetalle.renderTabla()`,
   que acepta un `recalcTotal` por columna para los ratios que la fila Total no
   puede sumar (`pct_penetracion`, `var_unid_cp`).
+- **Tooltips de encabezado**: agregando `tip: '…'` a una columna, `renderTabla()`
+  emite `data-tip` en el `<th>` y subraya el label. Los muestra
+  `Promociones.initTooltips()`, un único listener delegado en `document` —
+  delegado a propósito, porque `renderTabla()` reconstruye el `innerHTML` en cada
+  sort y un bind por elemento se perdería. El tooltip es `position: fixed` en
+  `<body>` para que no lo recorte el `overflow` de `.promo-detalle-wrap`.

@@ -464,26 +464,81 @@ class PromocionesDB
      *  DETALLE POR SUCURSAL
      * ────────────────────────────────────────────── */
 
-    public function getDetalleSucursales(string $da, string $ha, array $fp): array
-    {
+    /**
+     * Detalle por sucursal. Sobre los tickets devuelve TRES medidas distintas:
+     *
+     *   tickets_total  — todos los tickets FAC de la sucursal (sin importar promo).
+     *   tickets_cpromo — sólo los que llevan promo (flag cp). Éste es el que
+     *                    tiene que cuadrar con el KPI "Tickets con Promo" del
+     *                    Resumen (getKPIsBulk).
+     *   promos_usadas  — cuántas promociones se APLICARON en total. Ver nota abajo.
+     *
+     * Las tres, más la facturación y los costos, se calculan para el período
+     * actual (is_a) y el previo (is_p) en un solo scan, igual que getKPIsBulk.
+     * De ahí salen var_tickets_cpromo y var_promos_usadas.
+     *
+     * CÓMO SE CUENTAN LAS PROMOS APLICADAS
+     * Un ticket puede llevar más de una promo, y el modelo NO crea un renglón
+     * por promo: las concatena en una sola etiqueta separadas por ' / '
+     * (p. ej. 'PROMO DIA DEL MAESTRO / CUENTA DNI - PROVINCIA' son DOS promos).
+     * Por eso promos_usadas cuenta los separadores + 1, en vez de contar filas.
+     * Misma convención que usa detalle.js para marcar las filas combinadas.
+     *
+     * La suma es por RENGLÓN de BI_PROMOCIONES, no por ticket: si un ticket se
+     * pagó con dos tarjetas y ambas tienen promo, cuenta las dos (son dos
+     * aplicaciones). Ver promociones/sql/valida_promo.sql, bloque 11, para
+     * medir cuánto pesa ese caso.
+     *
+     * OJO: el filtro de Banco de la barra superior SÍ entra al WHERE, así que
+     * con un banco elegido el denominador (tickets_total, igual que fact_total)
+     * pasa a ser "tickets pagados con ese banco", no el total de la sucursal.
+     * El cross-filter de la tabla de promociones no afecta a estos números:
+     * sólo resalta filas (ver applyPromoFilter en detalle.js).
+     */
+    public function getDetalleSucursales(
+        string $da, string $ha,
+        string $dp, string $hp,
+        array  $fp
+    ): array {
         $haX = (new DateTime($ha))->modify('+1 day')->format('Y-m-d');
+        $hpX = (new DateTime($hp))->modify('+1 day')->format('Y-m-d');
 
         [$cpSql, $cpParams] = $this->cpExpr($fp, 's');
         [$sfF,   $pF]       = $this->buildFiltros($fp, 's', false);
         [$sfG,   $pG]       = $this->grupoFiltro('s');
 
-        $params = array_merge($cpParams, [$da, $haX], $pF, $pG);
+        $params = array_merge(
+            $cpParams,
+            [$da, $haX, $dp, $hpX],   // flags is_a / is_p
+            [$da, $haX, $dp, $hpX],   // WHERE que cubre ambos períodos
+            $pF, $pG
+        );
+
+        // Promos aplicadas en el renglón = separadores ' / ' + 1.
+        // El '.' concatenado de los dos lados protege los espacios finales, que
+        // LEN() recorta (hay promos cargadas como 'BANCO PROVINCIA ').
+        $promoCount = "(1 + (LEN(s.DESC_PROMOCION_TARJETA + '.')
+                             - LEN(REPLACE(s.DESC_PROMOCION_TARJETA, ' / ', '') + '.')) / 3)";
+
+        $tcFac = "s.T_COMP COLLATE Latin1_General_BIN = 'FAC'";
 
         $sql = "
             SELECT
                 s.NRO_SUCURSAL,
                 MAX(s.SUCURSAL) COLLATE Modern_Spanish_CI_AI AS sucursal_nombre,
-                ISNULL(SUM(s.IMPORTE_TO),0) AS fact_total,
-                COUNT(DISTINCT CASE WHEN s.T_COMP COLLATE Latin1_General_BIN = 'FAC' THEN s.N_COMP END) AS tickets,
-                ISNULL(SUM(CASE WHEN cp=1 THEN s.IMPORTE_TO ELSE 0 END),0) AS fact_cpromo,
-                ISNULL(SUM(CASE WHEN cp=1 THEN ISNULL(s.COSTO,0) ELSE 0 END),0) AS costo_promo,
-                ISNULL(SUM(ISNULL(s.COSTO_PROMO_BANCARIA,0)),0) AS costo_banc,
-                ISNULL(SUM(ISNULL(s.COSTO_PROMO_VENTAS,0)),0)   AS costo_ventas";
+                ISNULL(SUM(CASE WHEN is_a=1 THEN s.IMPORTE_TO ELSE 0 END),0) AS fact_total,
+                COUNT(DISTINCT CASE WHEN is_a=1 AND {$tcFac}
+                                    THEN s.N_COMP END)                       AS tickets_total,
+                COUNT(DISTINCT CASE WHEN is_a=1 AND cp=1 AND {$tcFac}
+                                    THEN s.N_COMP END)                       AS tickets_cpromo,
+                COUNT(DISTINCT CASE WHEN is_p=1 AND cp=1 AND {$tcFac}
+                                    THEN s.N_COMP END)                       AS tickets_cpromo_prev,
+                ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 THEN {$promoCount} ELSE 0 END),0) AS promos_usadas,
+                ISNULL(SUM(CASE WHEN is_p=1 AND cp=1 THEN {$promoCount} ELSE 0 END),0) AS promos_usadas_prev,
+                ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 THEN s.IMPORTE_TO ELSE 0 END),0)  AS fact_cpromo,
+                ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 THEN ISNULL(s.COSTO,0) ELSE 0 END),0) AS costo_promo,
+                ISNULL(SUM(CASE WHEN is_a=1 THEN ISNULL(s.COSTO_PROMO_BANCARIA,0) ELSE 0 END),0) AS costo_banc,
+                ISNULL(SUM(CASE WHEN is_a=1 THEN ISNULL(s.COSTO_PROMO_VENTAS,0)   ELSE 0 END),0) AS costo_ventas";
 
         if ($this->origen === 'franquicias') {
             $sql .= ", MAX(sl.cod_client) AS cod_client";
@@ -492,9 +547,15 @@ class PromocionesDB
         $sql .= "
             FROM (
                 SELECT s.*,
-                    {$cpSql} AS cp
+                    {$cpSql} AS cp,
+                    CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN 1 ELSE 0 END AS is_a,
+                    CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN 1 ELSE 0 END AS is_p
                 FROM BI_PROMOCIONES s WITH (NOLOCK)
-                WHERE s.FECHA >= ? AND s.FECHA < ? {$sfF} {$sfG}
+                WHERE (
+                    (s.FECHA >= ? AND s.FECHA < ?)
+                    OR (s.FECHA >= ? AND s.FECHA < ?)
+                )
+                  {$sfF} {$sfG}
             ) s";
 
         if ($this->origen === 'franquicias') {
@@ -503,29 +564,45 @@ class PromocionesDB
                 ON sl.NRO_SUCURSAL = s.NRO_SUCURSAL";
         }
 
+        // El HAVING mira sólo el período actual: la tabla sigue listando las
+        // sucursales con promo HOY, como antes de agregar el comparativo.
         $sql .= "
             GROUP BY s.NRO_SUCURSAL
-            HAVING SUM(CASE WHEN cp=1 THEN s.IMPORTE_TO ELSE 0 END) > 0
+            HAVING SUM(CASE WHEN is_a=1 AND cp=1 THEN s.IMPORTE_TO ELSE 0 END) > 0
             ORDER BY fact_total DESC";
 
         $rows = $this->query($sql, $params);
 
-        $sucursalesTradicionales = array_map(function($r): array {
+        $varFn = fn($a, $p) => $p != 0 ? ($a - $p) / $p : ($a > 0 ? 1 : 0);
+
+        $sucursalesTradicionales = array_map(function($r) use ($varFn): array {
             $ft  = (float)$r['fact_total'];
             $fc  = (float)$r['fact_cpromo'];
             $cto = (float)$r['costo_promo'];
+            $tt  = (int)$r['tickets_total'];
+            $tc  = (int)$r['tickets_cpromo'];
+            $tcp = (int)$r['tickets_cpromo_prev'];
+            $pu  = (int)$r['promos_usadas'];
+            $pup = (int)$r['promos_usadas_prev'];
             $res = [
-                'nro_sucursal'    => (int)$r['NRO_SUCURSAL'],
-                'sucursal'        => $r['sucursal_nombre'],
-                'fac_total'       => $ft,
-                'fac_cpromo'      => $fc,
-                'tickets_cpromo'  => (int)$r['tickets'],
-                'costo_total'     => $cto,
-                'costo_banc'      => (float)$r['costo_banc'],
-                'costo_ventas'    => (float)$r['costo_ventas'],
-                'pct_costo_total' => $ft > 0 ? $cto / $ft : 0,
-                'pct_promo_fac'   => $ft > 0 ? $fc  / $ft : 0,
-                'sin_tango'       => false,
+                'nro_sucursal'        => (int)$r['NRO_SUCURSAL'],
+                'sucursal'            => $r['sucursal_nombre'],
+                'fac_total'           => $ft,
+                'fac_cpromo'          => $fc,
+                'tickets_total'       => $tt,
+                'tickets_cpromo'      => $tc,
+                'tickets_cpromo_prev' => $tcp,
+                'var_tickets_cpromo'  => $varFn($tc, $tcp),
+                'pct_tickets_cpromo'  => $tt > 0 ? $tc / $tt : 0,
+                'promos_usadas'       => $pu,
+                'promos_usadas_prev'  => $pup,
+                'var_promos_usadas'   => $varFn($pu, $pup),
+                'costo_total'         => $cto,
+                'costo_banc'          => (float)$r['costo_banc'],
+                'costo_ventas'        => (float)$r['costo_ventas'],
+                'pct_costo_total'     => $ft > 0 ? $cto / $ft : 0,
+                'pct_promo_fac'       => $ft > 0 ? $fc  / $ft : 0,
+                'sin_tango'           => false,
             ];
             if ($this->origen === 'franquicias') {
                 $res['cod_client'] = $r['cod_client'] ?? '—';
@@ -584,18 +661,25 @@ class PromocionesDB
                         $ctoEstimado = $ft * $pctCostoPromedio;
 
                         $sucursalesTradicionales[] = [
-                            'nro_sucursal'    => $nro,
-                            'sucursal'        => $ro['sucursal_nombre'] ?? 'Sucursal ' . $nro,
-                            'fac_total'       => $ft,
-                            'fac_cpromo'      => 0, // no posee Tango
-                            'tickets_cpromo'  => 0,
-                            'costo_total'     => $ctoEstimado,
-                            'costo_banc'      => 0,
-                            'costo_ventas'    => 0,
-                            'pct_costo_total' => $pctCostoPromedio,
-                            'pct_promo_fac'   => 0,
-                            'cod_client'      => $ro['cod_client'] ?? '—',
-                            'sin_tango'       => true,
+                            'nro_sucursal'        => $nro,
+                            'sucursal'            => $ro['sucursal_nombre'] ?? 'Sucursal ' . $nro,
+                            'fac_total'           => $ft,
+                            'fac_cpromo'          => 0, // no posee Tango
+                            'tickets_total'       => 0,
+                            'tickets_cpromo'      => 0,
+                            'tickets_cpromo_prev' => 0,
+                            'var_tickets_cpromo'  => 0,
+                            'pct_tickets_cpromo'  => 0,
+                            'promos_usadas'       => 0,
+                            'promos_usadas_prev'  => 0,
+                            'var_promos_usadas'   => 0,
+                            'costo_total'         => $ctoEstimado,
+                            'costo_banc'          => 0,
+                            'costo_ventas'        => 0,
+                            'pct_costo_total'     => $pctCostoPromedio,
+                            'pct_promo_fac'       => 0,
+                            'cod_client'          => $ro['cod_client'] ?? '—',
+                            'sin_tango'           => true,
                         ];
                     }
                 }

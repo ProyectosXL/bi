@@ -66,7 +66,7 @@ try {
         ob_clean();
         echo json_encode(['ok' => true, 'promociones' => $rows], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
     } else {
-        $rows = $db->getDetalleSucursales($da, $ha, $fp);
+        $rows = $db->getDetalleSucursales($da, $ha, $dp, $hp, $fp);
         ob_clean();
         echo json_encode(['ok' => true, 'sucursales' => $rows], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
     }
