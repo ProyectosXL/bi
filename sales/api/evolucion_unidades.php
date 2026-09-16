@@ -35,10 +35,13 @@ try {
     }
 
     $db   = new SalesDB();
+    if (isset($_GET['solo_activas'])) {
+        $db->setSoloActivas($_GET['solo_activas'] === '1' || $_GET['solo_activas'] === 'true');
+    }
     $anio = (int)date('Y');
 
     // Tabla de rubros
-    $rubros = $db->getEvolucionRubrosUnidades($da, $ha, $dp, $hp, $canal, $cliente, $grupo_empresario);
+    $rubros = $db->getEvolucionRubrosUnidades($da, $ha, $dp, $hp, $canal, $rubro, $cliente, $grupo_empresario);
 
     // Evolución mensual multi-año
     $evolucion = $db->getEvolucionMensualUnidades($canal, $rubro, 4, $cliente, $grupo_empresario);

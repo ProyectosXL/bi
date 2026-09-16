@@ -4,7 +4,9 @@
  * Análisis global (jerarquía, ranking rubros, evolución, vendedores).
  * Delega en AnalisisDB del módulo sucursales con configuración por origen.
  */
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 ob_start();
 set_time_limit(120);
 header('Content-Type: application/json; charset=utf-8');
@@ -12,6 +14,8 @@ header('Cache-Control: no-cache');
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/sucursales/class/AnalisisDB.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/sucursales/class/DashboardDB.php';
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
@@ -25,37 +29,28 @@ try {
     }
 
     $isGrupo = ($tipoSesion === 'GRUPO');
+    $sucursalesGrupo = $_SESSION['sucursalesGrupo'] ?? [];
 
-    // Override session tipo para que AnalisisDB use la db del origen seleccionado
     $origen = $isGrupo ? 'franquicias' : ($_GET['origen'] ?? 'argentina');
-    $origenToTipo = [
-        'argentina'   => 'LOCAL_PROPIO',
-        'uruguay'     => 'LOCAL_PROPIO_UY',
-        'franquicias' => 'FRANQUICIA',
-    ];
-    // Inyectar temporalmente el tipo para que AnalisisDB (que usa getConfig()) resuelva la DB correcta.
-    $tipoOriginal     = $_SESSION['tipo'];
-    $_SESSION['tipo'] = $origenToTipo[$origen] ?? 'LOCAL_PROPIO';
-    // No filtrar por sucursal (global: null = todas)
-    $numsucOriginal      = $_SESSION['numsuc'] ?? null;
     $sucursal = isset($_GET['sucursal']) && $_GET['sucursal'] !== '' ? $_GET['sucursal'] : null;
 
     // GRUPO: validar sucursal solicitada
     if ($isGrupo && $sucursal !== null) {
-        if (!in_array($sucursal, $_SESSION['sucursalesGrupo'] ?? [], true)) {
+        if (!in_array($sucursal, $sucursalesGrupo, true)) {
             http_response_code(403);
             echo json_encode(['ok' => false, 'error' => 'Sucursal no autorizada']);
             exit;
         }
     }
-    $_SESSION['numsuc']  = $sucursal ?? null; // null = sin filtro
+
+    // Liberar lock de sesión para permitir peticiones paralelas concurrentes
+    session_write_close();
 
     $action   = $_GET['action']   ?? 'ranking_rubros';
     $periodo  = $_GET['periodo']  ?? 'mes_actual';
     $vendedor = (isset($_GET['vendedor']) && $_GET['vendedor'] !== '') ? $_GET['vendedor'] : '%';
     $rubro    = (isset($_GET['rubro'])    && $_GET['rubro']    !== '') ? $_GET['rubro']    : '%';
 
-    require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/sucursales/class/DashboardDB.php';
     if ($periodo === 'custom') {
         $da        = (isset($_GET['desde']) && $_GET['desde'] !== '') ? $_GET['desde'] : date('Y-m-01');
         $ha        = (isset($_GET['hasta']) && $_GET['hasta'] !== '') ? $_GET['hasta'] : date('Y-m-d', strtotime('-1 day'));
@@ -69,9 +64,14 @@ try {
         [$desde_act, $hasta_act, $desde_prev, $hasta_prev] = DashboardDB::calcularPeriodo($periodo);
     }
 
-    $db = new AnalisisDB();
-    if ($isGrupo && !empty($_SESSION['sucursalesGrupo'])) {
-        $db->setGrupoSucursales($_SESSION['sucursalesGrupo']);
+    $soloActivas = (!empty($_GET['solo_activas']) && $_GET['solo_activas'] === '1');
+    $filtros = Filters::fromRequest($_GET, $origen);
+
+    $db = new AnalisisDB($origen);
+    $db->setSoloActivas($soloActivas);
+    $db->setFiltros($filtros);
+    if ($isGrupo && !empty($sucursalesGrupo)) {
+        $db->setGrupoSucursales($sucursalesGrupo);
     }
 
     $response = ['ok' => true];
@@ -89,9 +89,16 @@ try {
             break;
 
         case 'cards_rubros':
-            $act  = $db->getRubrosCards($desde_act, $hasta_act, $sucursal, $vendedor);
-            $prev = $db->getRubrosCards($desde_prev, $hasta_prev, $sucursal, $vendedor);
-            $response['cards'] = $db->mergeCards($act, $prev);
+            $targetRubros = [
+                'BILLETERAS DE VINILICO',
+                'CALZADOS',
+                'CAMPERAS',
+                'CARTERAS DE CUERO',
+                'CARTERAS DE VINILICO',
+            ];
+            $act  = $db->getRubrosCards($desde_act, $hasta_act, $sucursal, $targetRubros, $vendedor);
+            $prev = $db->getRubrosCards($desde_prev, $hasta_prev, $sucursal, $targetRubros, $vendedor);
+            $response['cards'] = $db->mergeCards($act, $prev, $targetRubros);
             break;
 
         case 'ranking_rubros':
@@ -126,10 +133,9 @@ try {
             $tipoTienda_evo = (!$isGrupo && isset($_GET['tipo_tienda']) && $_GET['tipo_tienda'] !== '') ? $_GET['tipo_tienda'] : null;
             $canal_evo      = (!$isGrupo && $origen === 'argentina' && isset($_GET['canal']) && $_GET['canal'] !== '') ? $_GET['canal'] : null;
             $dbGlobal       = new GlobalDashboardDB($origen);
-            // Para GRUPO: $_SESSION['tipo'] fue sobreescrito a 'FRANQUICIA'; inyectar sucursales
-            // explícitamente para que grupoFiltro() funcione sin leer la sesión.
-            if ($isGrupo && !empty($_SESSION['sucursalesGrupo'])) {
-                $dbGlobal->setGrupoSucursales($_SESSION['sucursalesGrupo']);
+            $dbGlobal->setSoloActivas($soloActivas);
+            if ($isGrupo && !empty($sucursalesGrupo)) {
+                $dbGlobal->setGrupoSucursales($sucursalesGrupo);
             }
             if ($action === 'evolucion_facturacion') {
                 $response['evolucion'] = $dbGlobal->getEvolucionMensualFacturacion(
@@ -148,18 +154,10 @@ try {
             $response = ['ok' => false, 'error' => "Acción desconocida: {$action}"];
     }
 
-    // Restaurar sesión
-    $_SESSION['tipo']   = $tipoOriginal;
-    $_SESSION['numsuc'] = $numsucOriginal;
-
     ob_clean();
     echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
 } catch (Throwable $e) {
-    // Restaurar sesión en caso de error
-    if (isset($tipoOriginal))    $_SESSION['tipo']   = $tipoOriginal;
-    if (isset($numsucOriginal))  $_SESSION['numsuc'] = $numsucOriginal;
-
     ob_clean();
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => $e->getMessage()]);

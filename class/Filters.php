@@ -201,9 +201,9 @@ class Filters
                 }
             } else {
                 if ($canal === 'PROPIOS') {
-                    $sqls[] = "AND {$alias}.{$sucursalCol} NOT IN (1, 9)";
+                    $sqls[] = "AND {$alias}.{$sucursalCol} NOT IN (0, 1, 9)";
                 } elseif ($canal === 'ECOMMERCE') {
-                    $sqls[] = "AND {$alias}.{$sucursalCol} IN (1, 9)";
+                    $sqls[] = "AND {$alias}.{$sucursalCol} IN (0, 1, 9)";
                 }
             }
         }

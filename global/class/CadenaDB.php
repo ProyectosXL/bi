@@ -72,8 +72,8 @@ class CadenaDB
                 if ($canal === 'PROPIOS') $clauses[] = "{$alias}.CANAL = 'LOCALES PROPIOS'";
                 elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.CANAL = 'ECOMMERCE'";
             } else {
-                if ($canal === 'PROPIOS') $clauses[] = "{$alias}.NRO_SUCURS NOT IN (1, 9)";
-                elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.NRO_SUCURS IN (1, 9)";
+                if ($canal === 'PROPIOS') $clauses[] = "{$alias}.NRO_SUCURS NOT IN (0, 1, 9)";
+                elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.NRO_SUCURS IN (0, 1, 9)";
             }
         }
         if ($this->origen === 'franquicias') {
@@ -220,8 +220,8 @@ class CadenaDB
             $pGO[] = $tipoTienda;
         }
         if (!empty($canal) && $this->origen === 'argentina') {
-            if ($canal === 'PROPIOS') $sfGO .= " AND o.NRO_SUCURSAL NOT IN (1, 9)";
-            elseif ($canal === 'ECOMMERCE') $sfGO .= " AND o.NRO_SUCURSAL IN (1, 9)";
+            if ($canal === 'PROPIOS') $sfGO .= " AND o.NRO_SUCURSAL NOT IN (0, 1, 9)";
+            elseif ($canal === 'ECOMMERCE') $sfGO .= " AND o.NRO_SUCURSAL IN (0, 1, 9)";
         }
         [$sfGGO, $pGGO] = $this->grupoFiltro('o', 'NRO_SUCURSAL');
         $sfGO .= ' ' . $sfGGO;

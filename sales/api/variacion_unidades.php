@@ -20,16 +20,18 @@ require_once __DIR__ . '/../class/SalesDB.php';
 
 try {
     $canal   = $_GET['canal']   ?? null;
+    $rubro   = $_GET['rubro']   ?? null;
     $cliente = $_GET['cliente'] ?? null;
-    $grupo_empresario = $_GET['grupo_empresario'] ?? null;
-
     $db = new SalesDB();
+    if (isset($_GET['solo_activas'])) {
+        $db->setSoloActivas($_GET['solo_activas'] === '1' || $_GET['solo_activas'] === 'true');
+    }
 
     // Variación mensual % (año actual vs año anterior)
-    $variacion = $db->getVariacionMensualUnidades($canal, null, $cliente, $grupo_empresario);
+    $variacion = $db->getVariacionMensualUnidades($canal, $rubro, $cliente, $grupo_empresario);
 
     // Participación por canal por año (apilado 100%)
-    $participacion = $db->getParticipacionCanalAnual(4);
+    $participacion = $db->getParticipacionCanalAnual($rubro, $cliente, $grupo_empresario, 4);
 
     ob_clean();
     echo json_encode([

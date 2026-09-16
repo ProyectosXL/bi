@@ -430,15 +430,40 @@ const Analisis = (() => {
 
     function renderEvolucion(data, canvasId, tipo) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas || !data?.series?.length) return;
-        if (_charts[canvasId]) { _charts[canvasId].destroy(); delete _charts[canvasId]; }
+        if (!canvas) return;
+        const wrap = canvas.closest('.chart-canvas-wrap') || canvas.parentElement;
 
-        // Guardar datos originales (en ARS) para re-render al cambiar moneda
-        if (tipo) _lastEvolucionData[tipo] = data;
+        // Destruir instancia existente en Chart.js y en caché local
+        const existingChart = typeof Chart !== 'undefined' ? Chart.getChart(canvas) : null;
+        if (existingChart) {
+            existingChart.destroy();
+        }
+        if (_charts[canvasId]) {
+            _charts[canvasId].destroy();
+            delete _charts[canvasId];
+        }
 
         // Actualizar título del card
         const tituloEl = document.getElementById('evolucion-titulo');
         if (tituloEl) tituloEl.textContent = evolucionTitulo(tipo);
+
+        // Remover mensaje previo si existía
+        wrap.querySelectorAll('.evolucion-empty-msg').forEach(el => el.remove());
+
+        if (!data?.series?.length) {
+            canvas.style.display = 'none';
+            const emptyEl = document.createElement('div');
+            emptyEl.className = 'evolucion-empty-msg';
+            emptyEl.style.cssText = 'color:var(--text-3);font-size:.85rem;padding:60px 20px;text-align:center;display:flex;align-items:center;justify-content:center;height:100%';
+            emptyEl.textContent = 'Sin datos de evolución para los filtros seleccionados';
+            wrap.appendChild(emptyEl);
+            return;
+        }
+
+        canvas.style.display = 'block';
+
+        // Guardar datos originales (en ARS) para re-render al cambiar moneda
+        if (tipo) _lastEvolucionData[tipo] = data;
 
         const fmtV  = evolucionFmt(tipo);
         const meses = data.meses ?? ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -466,7 +491,8 @@ const Analisis = (() => {
             type: 'line',
             data: { labels: meses, datasets },
             options: {
-                responsive: true,
+                responsive         : true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend    : { position: 'top', labels: { font: { size: 11 }, boxWidth: 14 } },
                     datalabels: { display: false },
@@ -489,7 +515,10 @@ const Analisis = (() => {
                         },
                     },
                 },
-                scales: { y: { ticks: { callback: v => fmtV(v) } } },
+                scales: {
+                    y: { ticks: { callback: v => fmtV(v) } },
+                    x: { ticks: { font: { size: 11 } } }
+                },
             }
         });
     }
@@ -559,6 +588,8 @@ const Analisis = (() => {
         }
 
         if (_modalEvChart) { _modalEvChart.destroy(); _modalEvChart = null; }
+        const existingModalChart = typeof Chart !== 'undefined' ? Chart.getChart(canvas) : null;
+        if (existingModalChart) existingModalChart.destroy();
 
         _modalEvChart = new Chart(canvas, {
             type: 'line',

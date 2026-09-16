@@ -22,8 +22,10 @@ require_once __DIR__ . '/../../class/Conexion.php';
 require_once __DIR__ . '/../class/SalesDB.php';
 
 try {
-    $canal = $_GET['canal'] ?? null;
-    $rubro = $_GET['rubro'] ?? null;
+    $canal   = $_GET['canal']   ?? null;
+    $rubro   = $_GET['rubro']   ?? null;
+    $cliente = $_GET['cliente'] ?? null;
+    $grupo_empresario = $_GET['grupo_empresario'] ?? null;
     
     // Conectamos a power
     $conn = (new Conexion())->conectar('power');
@@ -40,11 +42,7 @@ try {
     $ultimaFechaStr = $rowMax['ultima_fecha'] ?? date('Y-m-d', strtotime('-1 day'));
     $ultimaFechaObj = new DateTime($ultimaFechaStr);
     
-    // 2. Filtros dinámicos para Stock (canal/rubro)
-    // El canal en stock se puede mapear si corresponde, pero el stock es por local físico (sucursal).
-    // Si canal = 'LOCALES PROPIOS' o 'FRANQUICIAS' o 'MAYORISTAS' o 'ECOMMERCE',
-    // mapeamos según corresponda a las sucursales o dejamos general.
-    // La tabla SJ_STOCK_LOCALES contiene sucursales.
+    // 2. Filtros dinámicos para Stock (canal/rubro/sucursal)
     $whereStock = " WHERE FECHA = ? ";
     $paramsStock = [$ultimaFechaStr];
     
@@ -53,9 +51,16 @@ try {
         $whereStock .= " AND RUBRO = ? ";
         $paramsStock[] = $rubro;
     }
-    
-    // Si viene canal, se puede filtrar por sucursal si corresponde o ignorar para el stock físico si no aplica.
-    // Generalmente para el stock físico se mantiene general o según sucursal física.
+
+    // Si viene sucursal/cliente, filtramos en stock
+    if ($cliente) {
+        $cliArr = is_string($cliente) ? array_filter(array_map('trim', explode(',', $cliente))) : $cliente;
+        if (is_array($cliArr) && !empty($cliArr)) {
+            $placeholders = implode(',', array_fill(0, count($cliArr), '?'));
+            $whereStock .= " AND DESC_SUCURSAL IN ({$placeholders}) ";
+            $paramsStock = array_merge($paramsStock, array_values($cliArr));
+        }
+    }
     
     // 3. Totales actuales de Stock (Último Día)
     // Central: NO filtra PACKAGING (incluye Unidades y Valorización).
@@ -80,7 +85,6 @@ try {
     $totales['val_total']   = $totales['val_central'] + $totales['val_locales'];
 
     // 4. Facturación $ y Unidades Facturadas del Mes en Curso (de la última fecha disponible)
-    // Buscamos los datos en BI_SALES_LAKERS correspondientes al mes de esa última fecha de stock
     $anioMax = (int)$ultimaFechaObj->format('Y');
     $mesMax = (int)$ultimaFechaObj->format('m');
     
@@ -97,16 +101,24 @@ try {
         $wRubro = " AND RUBRO = ? ";
         $pRubro[] = $rubro;
     }
+    $wCliente = ""; $pCliente = [];
+    if ($cliente) {
+        $cliArr = is_string($cliente) ? array_filter(array_map('trim', explode(',', $cliente))) : $cliente;
+        if (is_array($cliArr) && !empty($cliArr)) {
+            $placeholders = implode(',', array_fill(0, count($cliArr), '?'));
+            $wCliente = " AND CLIENTE IN ({$placeholders}) ";
+            $pCliente = array_values($cliArr);
+        }
+    }
     
-    // La facturación de temporada y general lleva filtro canal locales propios si es el caso? No, facturación del mes general.
     $sqlFactMes = "
         SELECT 
             SUM(IMPORTE) as fact_mes,
             SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) as unid_mes
         FROM dbo.BI_SALES_LAKERS
-        WHERE YEAR(FECHA) = ? AND MONTH(FECHA) = ? $wCanal $wRubro
+        WHERE YEAR(FECHA) = ? AND MONTH(FECHA) = ? $wCanal $wRubro $wCliente
     ";
-    $paramsFact = array_merge([$anioMax, $mesMax], $pCanal, $pRubro);
+    $paramsFact = array_merge([$anioMax, $mesMax], $pCanal, $pRubro, $pCliente);
     $stmtFact = sqlsrv_query($conn, $sqlFactMes, $paramsFact);
     $factData = sqlsrv_fetch_array($stmtFact, SQLSRV_FETCH_ASSOC);
     sqlsrv_free_stmt($stmtFact);
@@ -186,11 +198,11 @@ try {
             SUM(IMPORTE) as facturacion,
             SUM(CASE WHEN RUBRO NOT IN ('CONCEPTO', 'PACKAGING') THEN CANTIDAD ELSE 0 END) as unidades
         FROM dbo.BI_SALES_LAKERS
-        WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro
+        WHERE FECHA >= ? AND FECHA <= ? $wCanal $wRubro $wCliente
         GROUP BY YEAR(FECHA), MONTH(FECHA)
         ORDER BY anio ASC, mes ASC
     ";
-    $paramsEvolVentas = array_merge([$fechaInicioStr, $ultimaFechaStr], $pCanal, $pRubro);
+    $paramsEvolVentas = array_merge([$fechaInicioStr, $ultimaFechaStr], $pCanal, $pRubro, $pCliente);
     $stmtEvolVts = sqlsrv_query($conn, $sqlEvolVentas, $paramsEvolVentas);
     
     $evolFinal = [];

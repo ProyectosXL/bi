@@ -184,6 +184,11 @@ try {
         <i class="bi bi-check2"></i> Aplicar
     </button>
 
+    <label class="comp-radio-label" style="margin-left:8px;white-space:nowrap" id="wrap-solo-activas">
+        <input type="checkbox" id="chk-solo-activas" checked>
+        Solo activas
+    </label>
+
     <!-- Switch Moneda -->
     <div class="currency-switch" id="currency-switch-wrap">
         <span class="currency-opt" id="lbl-ars">$ARS</span>
@@ -763,7 +768,8 @@ async function cargarClientesDisponibles() {
     }
 
     const periodo = document.getElementById('sel-periodo').value;
-    let url = `/bi/sales/api/clientes.php?canal=${encodeURIComponent(canalVal)}&periodo=${encodeURIComponent(periodo)}`;
+    const soloActivas = document.getElementById('chk-solo-activas')?.checked ? '1' : '0';
+    let url = `/bi/sales/api/clientes.php?canal=${encodeURIComponent(canalVal)}&periodo=${encodeURIComponent(periodo)}&solo_activas=${encodeURIComponent(soloActivas)}`;
     if (periodo === 'custom') {
         url += `&desde=${encodeURIComponent(document.getElementById('input-desde').value)}&hasta=${encodeURIComponent(document.getElementById('input-hasta').value)}`;
     }
@@ -1108,11 +1114,8 @@ function fmtM_converted(v) {
 }
 
 function fmtN(v) {
-    if (v === null || v === undefined) return '—';
-    const abs = Math.abs(v);
-    if      (abs >= 1e6) return (v/1e6).toFixed(2) + 'M';
-    else if (abs >= 1e3) return (v/1e3).toFixed(1) + 'K';
-    return Math.round(v).toLocaleString('es-AR');
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    return Math.round(Number(v)).toLocaleString('es-AR');
 }
 
 function fmtPct(v) {
@@ -1143,6 +1146,9 @@ function getParams() {
         p.set('desde', document.getElementById('input-desde').value);
         p.set('hasta', document.getElementById('input-hasta').value);
     }
+    const soloActivas = document.getElementById('chk-solo-activas')?.checked ? '1' : '0';
+    p.set('solo_activas', soloActivas);
+
     if (selectedClientes && selectedClientes.length > 0) {
         selectedClientes.forEach(c => p.append('cliente[]', c));
     }
@@ -2311,6 +2317,15 @@ document.getElementById('btn-aplicar').addEventListener('click', () => {
     tabsIniciadas.clear();
     cargarTab(tabActiva, true);
 });
+
+const chkSoloActivas = document.getElementById('chk-solo-activas');
+if (chkSoloActivas) {
+    chkSoloActivas.addEventListener('change', () => {
+        tabsIniciadas.clear();
+        cargarClientesDisponibles();
+        cargarTab(tabActiva, true);
+    });
+}
 
 document.getElementById('sel-periodo').addEventListener('change', function() {
     const custom = document.getElementById('custom-dates');

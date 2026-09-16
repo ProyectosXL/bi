@@ -532,10 +532,13 @@
 }
 .chart-canvas-wrap {
     padding   : 12px;
-    min-height: 220px;
+    height    : 280px;
     position  : relative;
 }
-.chart-canvas-wrap canvas { width: 100% !important; max-height: 220px; }
+.chart-canvas-wrap canvas {
+    width     : 100% !important;
+    height    : 100% !important;
+}
 
 /* Rubro card en análisis */
 .rubro-card {

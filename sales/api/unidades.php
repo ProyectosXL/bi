@@ -20,6 +20,7 @@ require_once __DIR__ . '/../class/SalesDB.php';
 
 try {
     $canal   = $_GET['canal']   ?? null;
+    $rubro   = $_GET['rubro']   ?? null;
     $cliente = $_GET['cliente'] ?? null;
     $grupo_empresario = $_GET['grupo_empresario'] ?? null;
     $periodo = $_GET['periodo'] ?? 'año_actual';
@@ -34,13 +35,16 @@ try {
     }
 
     $db = new SalesDB();
+    if (isset($_GET['solo_activas'])) {
+        $db->setSoloActivas($_GET['solo_activas'] === '1' || $_GET['solo_activas'] === 'true');
+    }
 
     // Tabla de unidades por rubro (actual vs año anterior)
-    $tabla = $db->getTablaUnidades($da, $ha, $dp, $hp, $canal, $cliente, $grupo_empresario);
+    $tabla = $db->getTablaUnidades($da, $ha, $dp, $hp, $canal, $rubro, $cliente, $grupo_empresario);
 
     // Tabla mensual de unidades por rubro del año en curso
     $anioActual = (int)date('Y');
-    $tablaMensual = $db->getTablaUnidadesMensualRubro($anioActual, $canal, $cliente, $grupo_empresario);
+    $tablaMensual = $db->getTablaUnidadesMensualRubro($anioActual, $canal, $rubro, $cliente, $grupo_empresario);
 
     ob_clean();
     echo json_encode([

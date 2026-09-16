@@ -35,6 +35,9 @@ try {
     }
 
     $db = new SalesDB();
+    if (isset($_GET['solo_activas'])) {
+        $db->setSoloActivas($_GET['solo_activas'] === '1' || $_GET['solo_activas'] === 'true');
+    }
 
     // 1) KPIs globales (sí usan el período seleccionado arriba)
     $kpis = $db->getKpisGenerales($da, $ha, $dp, $hp, $canal, $rubro, $cliente, $grupo_empresario);

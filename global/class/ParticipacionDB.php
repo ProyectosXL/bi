@@ -149,13 +149,9 @@ class ParticipacionDB
         ", array_merge([$desde, $hasta], $pG));
 
         // Descripción de sucursales
-        if (session_status() === PHP_SESSION_NONE) {
-            @session_start();
-        }
-        $key = 'sucursales_desc_cache_' . $this->origen;
-        if (isset($_SESSION[$key]) && is_array($_SESSION[$key])) {
-            $descMap = $_SESSION[$key];
-            session_write_close();
+        static $descMapCache = [];
+        if (isset($descMapCache[$this->origen])) {
+            $descMap = $descMapCache[$this->origen];
         } else {
             $rowsDesc = $this->query("
                 SELECT sl.NRO_SUCURSAL, sl.DESC_SUCURSAL
@@ -165,8 +161,7 @@ class ParticipacionDB
             foreach ($rowsDesc as $r) {
                 $descMap[(int)$r['NRO_SUCURSAL']] = $r['DESC_SUCURSAL'];
             }
-            $_SESSION[$key] = $descMap;
-            session_write_close();
+            $descMapCache[$this->origen] = $descMap;
         }
 
         // Grupo por sucursal (solo Argentina)

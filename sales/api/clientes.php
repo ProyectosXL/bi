@@ -28,6 +28,9 @@ try {
     }
 
     $db = new SalesDB();
+    if (isset($_GET['solo_activas'])) {
+        $db->setSoloActivas($_GET['solo_activas'] === '1' || $_GET['solo_activas'] === 'true');
+    }
     $clientes = $db->getClientes($canal, $da, $ha);
     echo json_encode(['ok' => true, 'clientes' => $clientes], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {

@@ -125,14 +125,6 @@ if (!class_exists('Conexion')) {
                 }
 
                 error_log("Conexión exitosa a: " . $serverDB[0] . " - " . $serverDB[1]);
-
-                // Iniciar sesión si no está iniciada
-                if (session_status() === PHP_SESSION_NONE) {
-                    session_start();
-                }
-
-                // este cid va a cambiar mil veces
-                $_SESSION['cid'] = $cid;
                 return $cid;
 
             } catch (PDOException $e) {

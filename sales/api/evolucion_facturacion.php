@@ -35,16 +35,19 @@ try {
     }
 
     $db   = new SalesDB();
+    if (isset($_GET['solo_activas'])) {
+        $db->setSoloActivas($_GET['solo_activas'] === '1' || $_GET['solo_activas'] === 'true');
+    }
     $anio = (int)date('Y');
 
     // Tabla de rubros (comparativo)
-    $rubros = $db->getEvolucionRubrosFacturacion($da, $ha, $dp, $hp, $canal, $cliente, $grupo_empresario);
+    $rubros = $db->getEvolucionRubrosFacturacion($da, $ha, $dp, $hp, $canal, $rubro, $cliente, $grupo_empresario);
 
     // Evolución mensual multi-año para el gráfico
     $evolucion = $db->getEvolucionMensualFacturacion($canal, $rubro, 4, $cliente, $grupo_empresario);
 
-    // Tabla mensual por canal
-    $tablaMensual = $db->getTablaFacturacionCanalMes($anio, $canal, $rubro, $cliente, $grupo_empresario);
+    // Tabla mensual por canal usando el rango exacto de fechas seleccionado
+    $tablaMensual = $db->getTablaFacturacionCanalMes($da, $canal, $rubro, $cliente, $grupo_empresario, $ha);
 
     ob_clean();
     echo json_encode([

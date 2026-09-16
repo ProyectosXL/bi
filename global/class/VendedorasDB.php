@@ -73,8 +73,8 @@ class VendedorasDB
                 if ($canal === 'PROPIOS') $clauses[] = "{$alias}.CANAL = 'LOCALES PROPIOS'";
                 elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.CANAL = 'ECOMMERCE'";
             } else {
-                if ($canal === 'PROPIOS') $clauses[] = "{$alias}.NRO_SUCURS NOT IN (1, 9)";
-                elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.NRO_SUCURS IN (1, 9)";
+                if ($canal === 'PROPIOS') $clauses[] = "{$alias}.NRO_SUCURS NOT IN (0, 1, 9)";
+                elseif ($canal === 'ECOMMERCE') $clauses[] = "{$alias}.NRO_SUCURS IN (0, 1, 9)";
             }
         }
         if ($this->origen === 'franquicias') {
@@ -184,8 +184,8 @@ class VendedorasDB
             $pH[] = $tipoTienda;
         }
         if (!empty($canal) && $this->origen === 'argentina') {
-            if ($canal === 'PROPIOS') $sfH .= " AND m.nro_sucursal NOT IN (1, 9)";
-            elseif ($canal === 'ECOMMERCE') $sfH .= " AND m.nro_sucursal IN (1, 9)";
+            if ($canal === 'PROPIOS') $sfH .= " AND m.nro_sucursal NOT IN (0, 1, 9)";
+            elseif ($canal === 'ECOMMERCE') $sfH .= " AND m.nro_sucursal IN (0, 1, 9)";
         }
         $rowsPresence = [];
         try {

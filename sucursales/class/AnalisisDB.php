@@ -10,6 +10,24 @@ class AnalisisDB
     private $conn;
     private $campoVendedor;
     private array $grupoSucursales = [];
+    private string $origen = 'argentina';
+    private bool $soloActivas = false;
+    private array $filtrosExtra = [];
+
+    public function setOrigen(string $origen): void
+    {
+        $this->origen = $origen;
+    }
+
+    public function setSoloActivas(bool $soloActivas): void
+    {
+        $this->soloActivas = $soloActivas;
+    }
+
+    public function setFiltros(array $filtros): void
+    {
+        $this->filtrosExtra = $filtros;
+    }
 
     public function setGrupoSucursales(array $ids): void
     {
@@ -23,10 +41,47 @@ class AnalisisDB
         return Filters::sucursalesGrupo($this->grupoSucursales, $alias);
     }
 
+    private function buildWhereFilter(
+        $sucursal = null,
+        $vendedor = '%',
+        $rubro = '%',
+        string $alias = 's',
+        bool $incluirVendedor = true,
+        bool $incluirRubro = false,
+        string $sucursalCol = 'NRO_SUCURS'
+    ): array {
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/Filters.php';
+        $fp = array_merge($this->filtrosExtra, [
+            'sucursal'     => $sucursal,
+            'vendedor'     => $vendedor,
+            'rubro'        => $rubro,
+            'solo_activas' => $this->soloActivas,
+        ]);
+
+        [$sql, $params] = Filters::build(
+            $fp,
+            $alias,
+            $this->campoVendedor,
+            $this->origen,
+            $incluirVendedor,
+            $incluirRubro,
+            $sucursalCol,
+            false // BI_SALES_SUCURSALES does not have CANAL column, uses NRO_SUCURS
+        );
+
+        [$sfG, $pG] = $this->grupoFiltro($alias);
+        if ($sfG) {
+            $sql .= ' ' . $sfG;
+            $params = array_merge($params, $pG);
+        }
+
+        return [$sql, $params];
+    }
+
     private function fromVentasSucursales(): string
     {
         $tipo = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
-        if ($tipo !== 'FRANQUICIA' && $tipo !== 'GRUPO') {
+        if ($this->origen !== 'franquicias' && $tipo !== 'FRANQUICIA' && $tipo !== 'GRUPO') {
             return '(SELECT * FROM BI_SALES_SUCURSALES WITH (NOLOCK))';
         }
         return "(
@@ -41,11 +96,16 @@ class AnalisisDB
         )";
     }
 
-    public function __construct()
+    public function __construct(?string $origen = null)
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/Class/Conexion.php';
         require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
-        $config = getConfig();
+        if ($origen !== null) {
+            $this->origen = $origen;
+            $config = getConfigForOrigen($origen);
+        } else {
+            $config = getConfig();
+        }
         $cid        = new Conexion();
         $this->conn = $cid->conectar($config['db']);
         $this->campoVendedor = $config['campo_vendedor'];
@@ -85,20 +145,7 @@ class AnalisisDB
         string $vendedor  = '%',
         $rubro     = '%'
     ): array {
-        $cv   = $this->campoVendedor;
-        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
-        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
-        
-        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        
-        [$rubVals, $rubClause] = $this->parseFilter($rubro);
-        $sfRS = $rubClause ? "AND s.RUBRO $rubClause" : "";
-        
-        $suc  = $sucVals;
-        $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $rub  = $rubVals;
-        [$sfG, $pG] = $this->grupoFiltro('s');
-        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
+        [$whereExtra, $paramsExtra] = $this->buildWhereFilter($nroSucurs, $vendedor, $rubro, 's', true, true);
 
         $from = $this->fromVentasSucursales();
         // Intentar con columna DESTINO; si no existe, usar constante
@@ -113,7 +160,7 @@ class AnalisisDB
             FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-              {$sfS} {$sfVS} {$sfRS}
+              {$whereExtra}
             GROUP BY
                 ISNULL(s.DESTINO, 'SIN DESTINO'),
                 s.RUBRO,
@@ -122,7 +169,7 @@ class AnalisisDB
         ";
 
         try {
-            return $this->query($sql, array_merge([$desde, $hasta], $suc, $vend, $rub));
+            return $this->query($sql, array_merge([$desde, $hasta], $paramsExtra));
         } catch (RuntimeException $e) {
             // Fallback si DESTINO no existe como columna
             $sqlFallback = "
@@ -136,11 +183,11 @@ class AnalisisDB
                 FROM {$from} s
                 WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
                   AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-                  {$sfS} {$sfVS} {$sfRS}
+                  {$whereExtra}
                 GROUP BY s.RUBRO, s.CATEGORIA
                 ORDER BY 2, 3
             ";
-            return $this->query($sqlFallback, array_merge([$desde, $hasta], $suc, $vend, $rub));
+            return $this->query($sqlFallback, array_merge([$desde, $hasta], $paramsExtra));
         }
     }
 
@@ -240,20 +287,8 @@ class AnalisisDB
         string $vendedor  = '%',
         $rubro     = '%'
     ): array {
-        $cv   = $this->campoVendedor;
-        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
-        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
-        
-        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        
-        [$rubVals, $rubClause] = $this->parseFilter($rubro);
-        $sfRS = $rubClause ? "AND s.RUBRO $rubClause" : "";
-        
-        $suc  = $sucVals;
-        $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $rub  = $rubVals;
-        [$sfG, $pG] = $this->grupoFiltro('s');
-        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
+        $cv = $this->campoVendedor;
+        [$whereExtra, $paramsExtra] = $this->buildWhereFilter($nroSucurs, $vendedor, $rubro, 's', true, true);
 
         // Etiqueta del vendedor: nombre completo si está disponible, código en caso contrario
         $selectVendLabel = $cv === 'DESC_VENDEDOR'
@@ -271,11 +306,11 @@ class AnalisisDB
             FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-              {$sfS} {$sfVS} {$sfRS}
+              {$whereExtra}
             GROUP BY s.COD_VENDED
             ORDER BY facturacion DESC
         ";
-        return $this->query($sql, array_merge([$desde, $hasta], $suc, $vend, $rub));
+        return $this->query($sql, array_merge([$desde, $hasta], $paramsExtra));
     }
 
     public function mergeVendedores(array $actual, array $previo): array
@@ -340,16 +375,7 @@ class AnalisisDB
     ): array {
         if (empty($targetRubros)) return [];
 
-        $cv   = $this->campoVendedor;
-        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
-        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
-        
-        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $suc  = $sucVals;
-        $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
-        [$sfG, $pG] = $this->grupoFiltro('s');
-        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
-
+        [$whereExtra, $paramsExtra] = $this->buildWhereFilter($nroSucurs, $vendedor, '%', 's', true, false);
         $placeholders = implode(',', array_fill(0, count($targetRubros), '?'));
 
         $from = $this->fromVentasSucursales();
@@ -361,10 +387,10 @@ class AnalisisDB
             FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO IN ({$placeholders})
-              {$sfS} {$sfVS}
+              {$whereExtra}
             GROUP BY s.RUBRO
         ";
-        return $this->query($sql, array_merge([$desde, $hasta], $targetRubros, $suc, $vend));
+        return $this->query($sql, array_merge([$desde, $hasta], $targetRubros, $paramsExtra));
     }
 
     public function mergeCards(array $actual, array $previo, array $targetRubros): array
@@ -403,37 +429,16 @@ class AnalisisDB
         $rubro     = '%',
         string $tipo      = 'unidades'
     ): array {
-        $cv   = $this->campoVendedor;
-        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
-        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
-        
-        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        
-        [$rubVals, $rubClause] = $this->parseFilter($rubro);
-        $sfRS = $rubClause ? "AND s.RUBRO $rubClause" : "";
-        
-        $suc  = $sucVals;
-        $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $rub  = $rubVals;
-        [$sfG, $pG] = $this->grupoFiltro('s');
-        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
-
         if ($tipo === 'tickets') {
-            // Tickets FAC
-            $sfT  = $sucClause ? "AND t.NRO_SUCURS $sucClause" : "";
-            $sfVT = $vendedor  !== '%'  ? "AND t.{$cv} = ?" : "";
-            $suc2  = $sucVals;
-            $vend2 = $vendedor  !== '%'  ? [$vendedor]  : [];
-            [$sfGT, $pGT] = $this->grupoFiltro('t');
-            $sfT .= ' ' . $sfGT; $suc2 = array_merge($suc2, $pGT);
+            [$whereExtraT, $paramsExtraT] = $this->buildWhereFilter($nroSucurs, $vendedor, '%', 't', true, false);
 
             $sqlMaxYear = "
                 SELECT MAX(YEAR(CAST(t.FECHA AS DATE))) AS max_year
                 FROM BI_SALES_TOTAL_TICKETS t
                 WHERE t.T_COMP = 'FAC'
-                  {$sfT}
+                  {$whereExtraT}
             ";
-            $rowMax = $this->queryOne($sqlMaxYear, array_merge($suc2));
+            $rowMax = $this->queryOne($sqlMaxYear, $paramsExtraT);
 
             $maxYear = (int)($rowMax['max_year'] ?? date('Y'));
             $minYear = $maxYear - 2;
@@ -446,21 +451,22 @@ class AnalisisDB
                 FROM BI_SALES_TOTAL_TICKETS t
                 WHERE t.T_COMP = 'FAC'
                   AND YEAR(CAST(t.FECHA AS DATE)) BETWEEN ? AND ?
-                  {$sfT} {$sfVT}
+                  {$whereExtraT}
                 GROUP BY YEAR(CAST(t.FECHA AS DATE)), MONTH(CAST(t.FECHA AS DATE))
                 ORDER BY 1, 2
             ";
-            $rows = $this->query($sql, array_merge([$minYear, $maxYear], $suc2, $vend2));
+            $rows = $this->query($sql, array_merge([$minYear, $maxYear], $paramsExtraT));
         } else {
             // Unidades
+            [$whereExtraS, $paramsExtraS] = $this->buildWhereFilter($nroSucurs, $vendedor, $rubro, 's', true, true);
             $from = $this->fromVentasSucursales();
             $sqlMaxYear = "
                 SELECT MAX(YEAR(CAST(s.FECHA AS DATE))) AS max_year
                 FROM {$from} s
                 WHERE s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-                  {$sfS}
+                  {$whereExtraS}
             ";
-            $rowMax = $this->queryOne($sqlMaxYear, $suc);
+            $rowMax = $this->queryOne($sqlMaxYear, $paramsExtraS);
 
             $maxYear = (int)($rowMax['max_year'] ?? date('Y'));
             $minYear = $maxYear - 2;
@@ -474,11 +480,11 @@ class AnalisisDB
                 FROM {$from} s
                 WHERE s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
                   AND YEAR(CAST(s.FECHA AS DATE)) BETWEEN ? AND ?
-                  {$sfS} {$sfVS} {$sfRS}
+                  {$whereExtraS}
                 GROUP BY YEAR(CAST(s.FECHA AS DATE)), MONTH(CAST(s.FECHA AS DATE))
                 ORDER BY 1, 2
             ";
-            $rows = $this->query($sql, array_merge([$minYear, $maxYear], $suc, $vend, $rub));
+            $rows = $this->query($sql, array_merge([$minYear, $maxYear], $paramsExtraS));
         }
 
         // Construir series
@@ -521,15 +527,7 @@ class AnalisisDB
         $nroSucurs = null,
         string $vendedor  = '%'
     ): array {
-        $cv   = $this->campoVendedor;
-        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
-        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
-        
-        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        $suc  = $sucVals;
-        $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
-        [$sfG, $pG] = $this->grupoFiltro('s');
-        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
+        [$whereExtra, $paramsExtra] = $this->buildWhereFilter($nroSucurs, $vendedor, '%', 's', true, false);
 
         $from = $this->fromVentasSucursales();
         $sql = "
@@ -540,11 +538,11 @@ class AnalisisDB
             FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-              {$sfS} {$sfVS}
+              {$whereExtra}
             GROUP BY s.RUBRO
             ORDER BY unidades DESC
         ";
-        return $this->query($sql, array_merge([$desde, $hasta], $suc, $vend));
+        return $this->query($sql, array_merge([$desde, $hasta], $paramsExtra));
     }
 
     /* ──────────────────────────────────────────────
@@ -558,20 +556,7 @@ class AnalisisDB
         string $vendedor  = '%',
         $rubro     = ''
     ): array {
-        $cv   = $this->campoVendedor;
-        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
-        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
-        
-        $sfVS = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        
-        [$rubVals, $rubClause] = $this->parseFilter($rubro);
-        $sfR = $rubClause ? "AND s.RUBRO $rubClause" : "";
-        
-        $suc  = $sucVals;
-        $vend = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $rub  = $rubVals;
-        [$sfG, $pG] = $this->grupoFiltro('s');
-        $sfS .= ' ' . $sfG; $suc = array_merge($suc, $pG);
+        [$whereExtra, $paramsExtra] = $this->buildWhereFilter($nroSucurs, $vendedor, $rubro, 's', true, true);
 
         $from = $this->fromVentasSucursales();
         $sql = "
@@ -581,13 +566,12 @@ class AnalisisDB
                 ISNULL(SUM(s.IMPORTE), 0)  AS facturacion
             FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
-              {$sfR}
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-              {$sfS} {$sfVS}
+              {$whereExtra}
             GROUP BY ISNULL(s.CATEGORIA, 'SIN CATEGORÍA')
             ORDER BY unidades DESC
         ";
-        return $this->query($sql, array_merge([$desde, $hasta], $rub, $suc, $vend));
+        return $this->query($sql, array_merge([$desde, $hasta], $paramsExtra));
     }
 
     /* ──────────────────────────────────────────────
@@ -599,22 +583,9 @@ class AnalisisDB
         $nroSucurs = null, string $vendedor = '%',
         $rubro = '%', string $categoria = '%'
     ): array {
-        $cv   = $this->campoVendedor;
-        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
-        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
-        
-        $sfV  = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        
-        [$rubVals, $rubClause] = $this->parseFilter($rubro);
-        $sfR = $rubClause ? "AND s.RUBRO $rubClause" : "";
-        
-        $sfC  = $categoria !== '%'  ? "AND s.CATEGORIA = ?" : "";
-        $pS   = $sucVals;
-        $pV   = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $pR   = $rubVals;
-        $pC   = $categoria !== '%'  ? [$categoria] : [];
-        [$sfG, $pG] = $this->grupoFiltro('s');
-        $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
+        [$whereExtra, $paramsExtra] = $this->buildWhereFilter($nroSucurs, $vendedor, $rubro, 's', true, true);
+        $sfC = $categoria !== '%' ? "AND s.CATEGORIA = ?" : "";
+        $pC  = $categoria !== '%' ? [$categoria] : [];
 
         $from = $this->fromVentasSucursales();
         return $this->query("
@@ -626,10 +597,10 @@ class AnalisisDB
             FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-              {$sfS} {$sfV} {$sfR} {$sfC}
+              {$whereExtra} {$sfC}
             GROUP BY s.RUBRO, ISNULL(s.CATEGORIA, 'SIN CATEGORÍA')
             ORDER BY s.RUBRO, ISNULL(s.CATEGORIA, 'SIN CATEGORÍA')
-        ", array_merge([$desde, $hasta], $pS, $pV, $pR, $pC));
+        ", array_merge([$desde, $hasta], $paramsExtra, $pC));
     }
 
     public function getColoresProducto(
@@ -637,22 +608,9 @@ class AnalisisDB
         $nroSucurs = null, string $vendedor = '%',
         $rubro = '%', string $categoria = '%'
     ): array {
-        $cv   = $this->campoVendedor;
-        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
-        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
-        
-        $sfV  = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        
-        [$rubVals, $rubClause] = $this->parseFilter($rubro);
-        $sfR = $rubClause ? "AND s.RUBRO $rubClause" : "";
-        
-        $sfC  = $categoria !== '%'  ? "AND s.CATEGORIA = ?" : "";
-        $pS   = $sucVals;
-        $pV   = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $pR   = $rubVals;
-        $pC   = $categoria !== '%'  ? [$categoria] : [];
-        [$sfG, $pG] = $this->grupoFiltro('s');
-        $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
+        [$whereExtra, $paramsExtra] = $this->buildWhereFilter($nroSucurs, $vendedor, $rubro, 's', true, true);
+        $sfC = $categoria !== '%' ? "AND s.CATEGORIA = ?" : "";
+        $pC  = $categoria !== '%' ? [$categoria] : [];
 
         $from = $this->fromVentasSucursales();
         try {
@@ -664,10 +622,10 @@ class AnalisisDB
                 FROM {$from} s
                 WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
                   AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-                  {$sfS} {$sfV} {$sfR} {$sfC}
+                  {$whereExtra} {$sfC}
                 GROUP BY ISNULL(s.COLOR, 'SIN COLOR')
                 ORDER BY unidades DESC
-            ", array_merge([$desde, $hasta], $pS, $pV, $pR, $pC));
+            ", array_merge([$desde, $hasta], $paramsExtra, $pC));
         } catch (\Throwable $_) {
             return [];   // COLOR column may not exist in all origins
         }
@@ -677,17 +635,9 @@ class AnalisisDB
         string $desde, string $hasta,
         string $vendedor = '%', $rubro = '%', string $categoria = '%'
     ): array {
-        $cv  = $this->campoVendedor;
-        $sfV = $vendedor  !== '%' ? "AND s.{$cv} = ?" : "";
-        
-        [$rubVals, $rubClause] = $this->parseFilter($rubro);
-        $sfR = $rubClause ? "AND s.RUBRO $rubClause" : "";
-        
+        [$whereExtra, $paramsExtra] = $this->buildWhereFilter(null, $vendedor, $rubro, 's', true, true);
         $sfC = $categoria !== '%' ? "AND s.CATEGORIA = ?" : "";
-        $pV  = $vendedor  !== '%' ? [$vendedor]  : [];
-        $pR  = $rubVals;
         $pC  = $categoria !== '%' ? [$categoria] : [];
-        [$sfG, $pG] = $this->grupoFiltro('s');
 
         $from = $this->fromVentasSucursales();
         return $this->query("
@@ -698,30 +648,17 @@ class AnalisisDB
             FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-              {$sfV} {$sfR} {$sfC} {$sfG}
+              {$whereExtra} {$sfC}
             GROUP BY s.NRO_SUCURS
             ORDER BY unidades DESC
-        ", array_merge([$desde, $hasta], $pV, $pR, $pC, $pG));
+        ", array_merge([$desde, $hasta], $paramsExtra, $pC));
     }
 
     public function getTopCategoriasProducto(
         string $desde, string $hasta,
         $nroSucurs = null, string $vendedor = '%', $rubro = '%'
     ): array {
-        $cv  = $this->campoVendedor;
-        [$sucVals, $sucClause] = $this->parseFilter($nroSucurs, true);
-        $sfS = $sucClause ? "AND s.NRO_SUCURS $sucClause" : "";
-        
-        $sfV = $vendedor  !== '%'  ? "AND s.{$cv} = ?" : "";
-        
-        [$rubVals, $rubClause] = $this->parseFilter($rubro);
-        $sfR = $rubClause ? "AND s.RUBRO $rubClause" : "";
-        
-        $pS  = $sucVals;
-        $pV  = $vendedor  !== '%'  ? [$vendedor]  : [];
-        $pR  = $rubVals;
-        [$sfG, $pG] = $this->grupoFiltro('s');
-        $sfS .= ' ' . $sfG; $pS = array_merge($pS, $pG);
+        [$whereExtra, $paramsExtra] = $this->buildWhereFilter($nroSucurs, $vendedor, $rubro, 's', true, true);
 
         $from = $this->fromVentasSucursales();
         return $this->query("
@@ -733,10 +670,10 @@ class AnalisisDB
             FROM {$from} s
             WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND s.RUBRO NOT IN ('CONCEPTO','PACKAGING')
-              {$sfS} {$sfV} {$sfR}
+              {$whereExtra}
             GROUP BY s.RUBRO, ISNULL(s.CATEGORIA, 'SIN CATEGORÍA')
             ORDER BY unidades DESC
-        ", array_merge([$desde, $hasta], $pS, $pV, $pR));
+        ", array_merge([$desde, $hasta], $paramsExtra));
     }
 
     /* ──────────────────────────────────────────────

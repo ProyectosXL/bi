@@ -921,16 +921,14 @@ class GlobalDashboardDB
      *  LISTAS PARA FILTROS
      * ────────────────────────────────────────────── */
 
+    private static array $sucursalesListaCache = [];
+    private static array $activasIdsCache = [];
+
     public function getSucursalesLista(bool $soloActivas = false): array
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            @session_start();
-        }
-        $key = 'sucursales_lista_cache_' . $this->origen . '_' . ($soloActivas ? '1' : '0');
-        if (isset($_SESSION[$key]) && is_array($_SESSION[$key])) {
-            $res = $_SESSION[$key];
-            session_write_close();
-            return $res;
+        $key = $this->origen . '_' . ($soloActivas ? '1' : '0');
+        if (isset(self::$sucursalesListaCache[$key])) {
+            return self::$sucursalesListaCache[$key];
         }
 
         $result = [];
@@ -1057,21 +1055,15 @@ class GlobalDashboardDB
             }
         }
 
-        $_SESSION[$key] = $result;
-        session_write_close();
+        self::$sucursalesListaCache[$key] = $result;
         return $result;
     }
 
     public function getSucursalesActivasIds(): array
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            @session_start();
-        }
-        $key = 'activas_ids_cache_' . $this->origen;
-        if (isset($_SESSION[$key]) && is_array($_SESSION[$key])) {
-            $res = $_SESSION[$key];
-            session_write_close();
-            return $res;
+        $key = $this->origen;
+        if (isset(self::$activasIdsCache[$key])) {
+            return self::$activasIdsCache[$key];
         }
         $rows = $this->query("
             SELECT NRO_SUCURSAL
@@ -1079,8 +1071,7 @@ class GlobalDashboardDB
             WHERE HABILITADO = 1
         ");
         $ids = array_values(array_map(fn($r) => (int)$r['NRO_SUCURSAL'], $rows));
-        $_SESSION[$key] = $ids;
-        session_write_close();
+        self::$activasIdsCache[$key] = $ids;
         return $ids;
     }
 
