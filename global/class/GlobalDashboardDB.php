@@ -1226,10 +1226,14 @@ class GlobalDashboardDB
     public function getTiposLocalLista(): array
     {
         if ($this->origen !== 'franquicias') return [];
+        // CANAL LIKE 'FRANQUICIA%' (mismo criterio que getSucursalesLista): las
+        // 'FRANQUICIAS GA' son franquicias y su TIPO_LOCAL tiene que ofrecerse en
+        // el filtro. Con '=' quedaban fuera del listado aunque el filtro en sí
+        // (Filters::sucursal) nunca mira CANAL y sí las incluye al aplicarlo.
         return $this->query("
             SELECT DISTINCT sl.TIPO_LOCAL
             FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
-            WHERE sl.TIPO_LOCAL IS NOT NULL AND sl.HABILITADO = 1 AND sl.CANAL = 'FRANQUICIAS' AND sl.TIPO_LOCAL <> ''
+            WHERE sl.TIPO_LOCAL IS NOT NULL AND sl.HABILITADO = 1 AND sl.CANAL LIKE 'FRANQUICIA%' AND sl.TIPO_LOCAL <> ''
             ORDER BY sl.TIPO_LOCAL
         ");
     }
