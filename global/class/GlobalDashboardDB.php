@@ -924,6 +924,20 @@ class GlobalDashboardDB
     private static array $sucursalesListaCache = [];
     private static array $activasIdsCache = [];
 
+    /**
+     * Valor de SUCURSALES_LAKERS.CANAL para las franquicias con modelo GA.
+     * Es una variante de modelo de negocio DENTRO del universo de franquicias:
+     * no es un canal aparte, no se separa del filtro y suma en todos los totales
+     * y agrupaciones. Solo se distingue visualmente en los listados.
+     */
+    private const CANAL_FRANQUICIA_GA = 'FRANQUICIAS GA';
+
+    /** ¿El CANAL del maestro corresponde a una franquicia GA? */
+    public static function esCanalGa(?string $canal): bool
+    {
+        return strcasecmp(trim((string)$canal), self::CANAL_FRANQUICIA_GA) === 0;
+    }
+
     public function getSucursalesLista(bool $soloActivas = false): array
     {
         $key = $this->origen . '_' . ($soloActivas ? '1' : '0');
@@ -936,7 +950,7 @@ class GlobalDashboardDB
         if ($this->origen === 'franquicias') {
             // Query remote franchises (sucursales habilitadas o principales)
             $remoteRows = $this->query("
-                SELECT NRO_SUCURSAL AS NRO_SUCURS, DESC_SUCURSAL, TANGO, HABILITADO, NRO_SUC_MADRE
+                SELECT NRO_SUCURSAL AS NRO_SUCURS, DESC_SUCURSAL, TANGO, HABILITADO, NRO_SUC_MADRE, CANAL
                 FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS
                 WHERE CANAL LIKE 'FRANQUICIA%' OR NRO_SUCURSAL >= 500
             ");
@@ -992,13 +1006,20 @@ class GlobalDashboardDB
                 ];
             };
 
-            // Un elegido por nombre, sobre los códigos ya colapsados por madre
+            // Un elegido por nombre, sobre los códigos ya colapsados por madre.
+            // El flag GA se acumula por nombre —no por código— para que sobreviva
+            // a las dos pasadas de deduplicación: alcanza con que uno cualquiera
+            // de los códigos del local sea GA para que el elegido quede marcado.
             $elegidoPorNombre = [];
+            $gaPorNombre      = [];
             foreach (array_keys($porNro) as $idOriginal) {
                 $id  = $canon((int)$idOriginal);
                 $key = strtoupper($descDe($id));
                 if (!isset($elegidoPorNombre[$key]) || $rank($id) < $rank($elegidoPorNombre[$key])) {
                     $elegidoPorNombre[$key] = $id;
+                }
+                if (self::esCanalGa($porNro[$idOriginal]['CANAL'] ?? null)) {
+                    $gaPorNombre[$key] = true;
                 }
             }
 
@@ -1007,7 +1028,7 @@ class GlobalDashboardDB
             $seenIds = array_fill_keys(array_keys($porNro), true);
 
             // 1. Agregar un registro por local
-            foreach ($elegidoPorNombre as $id) {
+            foreach ($elegidoPorNombre as $key => $id) {
                 $hab = $porNro[$id]['HABILITADO'] ?? null;
                 $isActive = ($hab == 1 || $hab === '1');
                 if ($soloActivas && !$isActive) continue;
@@ -1015,6 +1036,7 @@ class GlobalDashboardDB
                 $result[] = [
                     'NRO_SUCURS'    => $id,
                     'DESC_SUCURSAL' => $descDe($id),
+                    'ES_GA'         => !empty($gaPorNombre[$key]),
                 ];
             }
 
@@ -1024,6 +1046,7 @@ class GlobalDashboardDB
                     $result[] = [
                         'NRO_SUCURS'    => $id,
                         'DESC_SUCURSAL' => $desc ?: ('Suc. ' . $id),
+                        'ES_GA'         => false,   // sin fila en el maestro: no hay CANAL que mirar
                     ];
                     $seenIds[$id] = true;
                 }
@@ -1034,9 +1057,11 @@ class GlobalDashboardDB
                 return strcasecmp($a['DESC_SUCURSAL'] ?? '', $b['DESC_SUCURSAL'] ?? '');
             });
         } else {
+            // ES_GA constante: el modelo GA solo existe dentro de franquicias, pero
+            // se emite igual para que el contrato del JSON sea uniforme.
             if ($soloActivas) {
                 $result = $this->query("
-                    SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL
+                    SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL, 0 AS ES_GA
                     FROM BI_SALES_SUCURSALES s
                     INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
                       ON sl.NRO_SUCURSAL = s.NRO_SUCURS
@@ -1045,7 +1070,7 @@ class GlobalDashboardDB
                 ");
             } else {
                 $result = $this->query("
-                    SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL
+                    SELECT DISTINCT s.NRO_SUCURS, sl.DESC_SUCURSAL, 0 AS ES_GA
                     FROM BI_SALES_SUCURSALES s
                     LEFT JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
                       ON sl.NRO_SUCURSAL = s.NRO_SUCURS
@@ -2207,7 +2232,7 @@ class GlobalDashboardDB
      * Usa conexión central porque la conexión principal apunta a power_franquicias.
      *
      * @param  int[]  $ids  IDs de NRO_SUCURSAL a resolver
-     * @return array[]      Filas con NRO_SUCURS y DESC_SUCURSAL
+     * @return array[]      Filas con NRO_SUCURS, DESC_SUCURSAL y ES_GA
      */
     public function getSucursalesPorIds(array $ids): array
     {
@@ -2216,13 +2241,21 @@ class GlobalDashboardDB
         $ph     = implode(',', array_fill(0, count($ids), '?'));
         $params = array_values(array_map('intval', $ids));
 
-        return $this->query(
-            "SELECT sl.NRO_SUCURSAL AS NRO_SUCURS, sl.DESC_SUCURSAL
+        $rows = $this->query(
+            "SELECT sl.NRO_SUCURSAL AS NRO_SUCURS, sl.DESC_SUCURSAL, sl.CANAL
              FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
              WHERE sl.NRO_SUCURSAL IN ({$ph})
              ORDER BY sl.DESC_SUCURSAL",
             $params
         );
+
+        // Acá no hay canonización hija→madre: los IDs vienen fijados por el perfil
+        // GRUPO, así que el flag sale directo del CANAL de cada fila.
+        return array_map(fn($r) => [
+            'NRO_SUCURS'    => (int)$r['NRO_SUCURS'],
+            'DESC_SUCURSAL' => $r['DESC_SUCURSAL'],
+            'ES_GA'         => self::esCanalGa($r['CANAL'] ?? null),
+        ], $rows);
     }
 
     /** Obtiene la última fecha/hora de actualización de los datos */
