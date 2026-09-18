@@ -991,8 +991,9 @@ const Dashboard = (() => {
             return 0;
         });
 
+        // El sort de arriba usa getRowNombre() (texto plano); el badge va solo acá.
         const dataRows = sorted.map(r => `<tr>
-            <td>${getRowNombre(r)}</td>
+            <td>${sucLabelHTML(r.nro_sucurs, getRowNombre(r))}</td>
             <td style="text-align:right">${moneyOrMask(r.facturacion)}</td>
             <td style="text-align:right">${r.facturacion_prev ? moneyOrMask(r.facturacion_prev) : '—'}</td>
             <td style="text-align:right">${iconVar(r.var_facturacion)}</td>

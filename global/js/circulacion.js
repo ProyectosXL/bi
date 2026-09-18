@@ -138,11 +138,12 @@ const Circulacion = (() => {
 
         tbody.innerHTML = sorted.map(r => {
             const nombre = getSucNombre(r.nro_sucurs) || r.desc_sucursal || ('Suc. ' + r.nro_sucurs);
+            const label  = typeof Dashboard !== 'undefined' ? Dashboard.sucLabelHTML(r.nro_sucurs, nombre) : nombre;
             const claseAtr  = semaforoClass(r.atraccion,  avgAtraccion);
             const claseConv = semaforoClass(r.conversion, avgConversion);
             const sinSensor = !r.tiene_sensor;
             return `<tr class="${sinSensor ? 'circ-sin-sensor' : ''}">
-                <td class="td-nombre">${nombre}${sinSensor ? ' <i class="bi bi-exclamation-triangle-fill circ-icon-sin-sensor" title="Sin sensor de tráfico en el período"></i>' : ''}</td>
+                <td class="td-nombre">${label}${sinSensor ? ' <i class="bi bi-exclamation-triangle-fill circ-icon-sin-sensor" title="Sin sensor de tráfico en el período"></i>' : ''}</td>
                 <td class="text-right">${r.tiene_sensor ? fmt.num(r.merodeo) : '—'}</td>
                 <td class="text-right">${r.tiene_sensor ? fmt.num(r.ingresos) : '—'}</td>
                 <td class="text-right">${fmt.num(r.tickets)}</td>

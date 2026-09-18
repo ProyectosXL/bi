@@ -44,8 +44,9 @@ const Cadena = (() => {
 
     /* ── Columnas de la tabla ────────────────── */
     const COLS = [
+        // fmt va al HTML de la tabla (lleva badge); val va al Excel (texto plano).
         { key: 'nro_sucurs',            label: 'Sucursal',
-          fmt: r => r._isTotal ? 'TOTAL' : (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(r.nro_sucurs) : 'Suc. ' + r.nro_sucurs),
+          fmt: r => r._isTotal ? 'TOTAL' : (typeof Dashboard !== 'undefined' ? Dashboard.sucLabelHTML(r.nro_sucurs) : 'Suc. ' + r.nro_sucurs),
           val: r => r._isTotal ? 'TOTAL' : (typeof Dashboard !== 'undefined' ? Dashboard.getSucNombre(r.nro_sucurs) : 'Suc. ' + r.nro_sucurs),
           xlFmt: 'text',  align: 'left',  sortKey: 'desc_sucursal' },
         { key: 'objetivo_total',        label: 'Objetivo Mes',

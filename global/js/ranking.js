@@ -168,7 +168,9 @@ const Ranking = (() => {
             const deltaUn  = (s.delta_var_unidades ?? 0);
             return `<tr data-nro="${s.nro_sucurs}">
                 <td>${rankBadgeHTML(s.rank)}</td>
-                <td class="td-nombre">${s.nombre ?? ('Suc. ' + s.nro_sucurs)}</td>
+                <td class="td-nombre">${typeof Dashboard !== 'undefined'
+                    ? Dashboard.sucLabelHTML(s.nro_sucurs, s.nombre ?? ('Suc. ' + s.nro_sucurs))
+                    : (s.nombre ?? ('Suc. ' + s.nro_sucurs))}</td>
                 <td>
                     <div class="score-gauge-wrap">
                         <span class="score-pill ${sc}">${s.score.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>

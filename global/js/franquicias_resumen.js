@@ -69,7 +69,8 @@ const FranquiciasResumen = (function () {
         `;
 
         _state.sucursales.forEach(s => {
-            html += `<th style="position:sticky; top:0; z-index:20; background:var(--bg-header); color:#fff; text-align:right; min-width:140px">${s.nombre}</th>`;
+            const label = typeof Dashboard !== 'undefined' ? Dashboard.sucLabelHTML(s.nro, s.nombre) : s.nombre;
+            html += `<th style="position:sticky; top:0; z-index:20; background:var(--bg-header); color:#fff; text-align:right; min-width:140px">${label}</th>`;
         });
 
         html += `

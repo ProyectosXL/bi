@@ -191,13 +191,20 @@ const Liquidacion = (function () {
         }
     }
 
-    function getSucursalName(nro) {
-        const sel = document.getElementById('sel-sucursal');
-        if (sel) {
-            const opt = sel.querySelector(`option[value="${nro}"]`);
-            if (opt) return opt.textContent;
+    /**
+     * Etiqueta HTML de la sucursal (nombre + badge GA).
+     * Antes leía el .textContent del <option> del selector; ahora usa el mapa
+     * central de Dashboard, que es la misma fuente que puebla ese selector y
+     * además trae el flag GA. El fallback al <option> queda por si el helper
+     * no estuviera disponible.
+     */
+    function getSucursalLabel(nro) {
+        if (typeof Dashboard !== 'undefined' && Dashboard.sucLabelHTML) {
+            return Dashboard.sucLabelHTML(nro);
         }
-        return `Sucursal ${nro}`;
+        const sel = document.getElementById('sel-sucursal');
+        const opt = sel?.querySelector(`option[value="${nro}"]`);
+        return opt ? opt.textContent : `Sucursal ${nro}`;
     }
 
     function renderAll() {
@@ -249,7 +256,7 @@ const Liquidacion = (function () {
                 totalUnid += s.unidades;
                 totalRef += (s.referencias || 0);
                 const tr = document.createElement('tr');
-                const name = getSucursalName(s.nro_sucurs);
+                const name = getSucursalLabel(s.nro_sucurs);
                 tr.innerHTML = `
                     <td style="font-weight:600">${name}</td>
                     <td style="text-align:right">${fmtMoney(s.facturacion)}</td>
