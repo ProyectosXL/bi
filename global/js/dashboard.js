@@ -991,8 +991,9 @@ const Dashboard = (() => {
             return 0;
         });
 
+        // El sort de arriba usa getRowNombre() (texto plano); el badge va solo acá.
         const dataRows = sorted.map(r => `<tr>
-            <td>${getRowNombre(r)}</td>
+            <td>${sucLabelHTML(r.nro_sucurs, getRowNombre(r))}</td>
             <td style="text-align:right">${moneyOrMask(r.facturacion)}</td>
             <td style="text-align:right">${r.facturacion_prev ? moneyOrMask(r.facturacion_prev) : '—'}</td>
             <td style="text-align:right">${iconVar(r.var_facturacion)}</td>
@@ -1196,9 +1197,41 @@ const Dashboard = (() => {
 
     /* ── Mapa de nombres de sucursales (compartido con otros módulos) ── */
     const _sucNombres = {};   // nro_sucurs (int) → nombre
+    let   _sucEsGa    = {};   // nro_sucurs (int) → true si CANAL = 'FRANQUICIAS GA'
 
     function getSucNombre(nro) {
         return _sucNombres[+nro] ?? ('Suc. ' + nro);
+    }
+
+    /**
+     * ¿La sucursal es una franquicia con modelo GA?
+     * El mapa lo puebla únicamente loadFilters() desde filtros.php, que es la
+     * única fuente que trae CANAL. renderTablaSucursales() también alimenta
+     * _sucNombres, pero con filas de kpis.php que no lo traen.
+     */
+    function isSucGa(nro) {
+        return _sucEsGa[+nro] === true;
+    }
+
+    /**
+     * Etiqueta de sucursal con el badge "GA" al lado del nombre.
+     * Punto único para todos los render de tabla de global/js: no duplicar esta
+     * lógica en cada archivo.
+     *
+     * Devuelve HTML, así que NO sirve para ordenar, exportar a Excel ni para
+     * labels/tooltips de Chart.js — para eso está getSucNombre(), que sigue
+     * devolviendo texto plano.
+     *
+     * @param  {number|string} nro     NRO_SUCURS
+     * @param  {string} [nombre]       nombre ya resuelto por el llamador, cuando
+     *                                 la fila trae uno propio; si se omite, se
+     *                                 busca en el mapa central.
+     * @return {string}                HTML listo para innerHTML
+     */
+    function sucLabelHTML(nro, nombre) {
+        const txt = nombre ?? getSucNombre(nro);
+        if (!isSucGa(nro)) return txt;
+        return `${txt}<span class="suc-badge-ga" title="Franquicia GA">GA</span>`;
     }
 
     /* ── Custom searchable select ───────────── */
@@ -1398,9 +1431,14 @@ const Dashboard = (() => {
                 }
             }
 
-            // Poblar mapa de nombres
+            // Poblar mapa de nombres y de flags GA. El de nombres es acumulativo
+            // (también lo alimenta renderTablaSucursales); el de GA se reemplaza
+            // entero porque filtros.php es la fuente completa y autoritativa para
+            // el origen actual — así un cambio de origen no deja flags colgados.
+            _sucEsGa = {};
             rawSucursales.forEach(s => {
                 _sucNombres[+s.NRO_SUCURS] = s.DESC_SUCURSAL ?? ('Suc. ' + s.NRO_SUCURS);
+                if (s.ES_GA) _sucEsGa[+s.NRO_SUCURS] = true;
             });
 
             // IDs de sucursales activas (para filtro client-side)
@@ -1770,7 +1808,7 @@ const Dashboard = (() => {
     }
 
     return {
-        loadAll, loadFilters, getParams, buildQS, getSucNombre,
+        loadAll, loadFilters, getParams, buildQS, getSucNombre, isSucGa, sucLabelHTML,
         initSearchableSelect, syncSearchableSelect,
         isSoloActivas, getSucursalesActivasIds,
         convertir, convertirConFecha, moneyPrefix,

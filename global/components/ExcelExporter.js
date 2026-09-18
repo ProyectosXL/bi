@@ -131,11 +131,18 @@ const ExcelExporter = (() => {
         ];
         const ws = XLSX.utils.aoa_to_sheet(wsData);
         
+        /* Exportamos sobre un clon sin los badges de pantalla: sheet_add_dom lee
+           el innerHTML de cada celda y le quita las etiquetas, con lo cual un
+           <span> decorativo se pegaría al texto ("LOMAS DE ZAMORAGA"). El clon
+           puede estar desprendido del documento porque no hace falta layout. */
+        const exportEl = tableEl.cloneNode(true);
+        exportEl.querySelectorAll('.suc-badge-ga').forEach(el => el.remove());
+
         /* Agregamos la tabla a partir de la fila 5 */
-        XLSX.utils.sheet_add_dom(ws, tableEl, { origin: "A5" });
+        XLSX.utils.sheet_add_dom(ws, exportEl, { origin: "A5" });
 
         /* Formatear celdas basadas en data-t="n" y texto original del DOM */
-        const domRows = tableEl.querySelectorAll('tr');
+        const domRows = exportEl.querySelectorAll('tr');
         domRows.forEach((tr, ri) => {
             const domCells = tr.querySelectorAll('th, td');
             domCells.forEach((td, ci) => {

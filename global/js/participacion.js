@@ -225,8 +225,9 @@ const Participacion = (() => {
             const totalCell = `<td style="text-align:center;padding:5px 8px;border-left:3px solid var(--border);font-size:.80rem;font-weight:600">${pctFmt(sucTotF)}</td>
                                <td style="text-align:center;padding:5px 8px;font-size:.78rem;color:var(--text-2)">${pctFmt(sucTotU)}</td>`;
 
+            const label = typeof Dashboard !== 'undefined' ? Dashboard.sucLabelHTML(s.nro_sucurs, nombre) : nombre;
             return `<tr>
-                <td style="white-space:nowrap;font-size:.80rem;padding:5px 12px 5px 22px">${nombre}</td>
+                <td style="white-space:nowrap;font-size:.80rem;padding:5px 12px 5px 22px">${label}</td>
                 ${cells}${totalCell}
             </tr>`;
         }).join('');
