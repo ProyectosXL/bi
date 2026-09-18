@@ -664,6 +664,32 @@
 .trend-badge.pos { background: rgba(22,163,74,.12); color: var(--pos); }
 .trend-badge.neg { background: rgba(220,38,38,.12);  color: var(--neg); }
 
+/* ── Badge GA (franquicias con modelo GA) ───────────────── */
+/* Variante de modelo de negocio dentro de franquicias: no se separa del filtro
+   ni de los totales, solo se distingue visualmente en los listados. Se inserta
+   al lado del nombre de la sucursal vía Dashboard.sucLabelHTML().
+   Paleta ámbar con fondo pleno + texto oscuro, igual criterio que .score-pill
+   y .rank-badge: legible tanto sobre celdas claras como sobre los <th> oscuros
+   de las tablas de franquicias. */
+.suc-badge-ga {
+    display        : inline-block;
+    margin-left    : 5px;
+    padding        : 0 5px;
+    border         : 1px solid #fde68a;
+    border-radius  : 4px;
+    background     : #fef3c7;
+    color          : #92400e;
+    font-family    : var(--font-display);
+    font-size      : .62rem;
+    font-weight    : 700;
+    line-height    : 1.45;
+    letter-spacing : .4px;
+    vertical-align : middle;
+    /* No parte el nombre ni se comprime en columnas angostas o en mobile. */
+    white-space    : nowrap;
+    flex-shrink    : 0;
+}
+
 /* ── Botón volver drilldown ─────────────────────────────── */
 .btn-volver-ranking,
 .btn-volver {
