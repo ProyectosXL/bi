@@ -84,11 +84,9 @@ try {
         $hasta,
         $comentario !== '' ? $comentario : null,
         $fila['pct_var'],
-        $fila['ticket_promedio'],
-        $fila['pct_ticket_2do'],
-        $fila['pct_ticket_3er'],
         $fila['pct_cumplimiento_cadena'],
-        $fila['benchmarks']
+        $fila['benchmarks'],
+        $fila['marca']
     );
 
     $destinatarios = array_values(array_unique(array_merge([$email], $cfg['emails'])));

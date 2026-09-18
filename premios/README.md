@@ -215,6 +215,15 @@ fecha de última actualización es anterior a ese límite.
   condición dual de crecimiento × `MAX(P_OBJ_CREC_VTA_F)`. Confirmado contra el DAX real.
 - **Semáforo**: verde (`text-green`) si el KPI supera su benchmark, rojo (`text-red`) si no,
   sin color si la sucursal no tiene datos en el período (`sin_datos`).
+- **Resumen mensual a RRHH — solo con el mes CERRADO** (`periodoCerrado()`, pedido del
+  cliente 2026-09-16). Marcar todas las supervisoras como "Controlado" dispara el envío
+  automático (`api/marcar_controlado.php`), pero ese disparo ahora exige que el último mes
+  del período haya terminado: el 30 de septiembre todavía no cuenta, recién el 1 de octubre.
+  El estado "Controlado" se guarda igual; lo único que se posterga es el mail. El botón
+  manual "Enviar resumen mensual" aplica la misma regla (`api/enviar_resumen_mensual.php`
+  responde 409). Como el disparo automático es por TRANSICIÓN (no todas → todas), si se
+  marcó todo con el mes abierto no hay re-disparo al cerrar: hay que usar el botón manual, o
+  desmarcar y volver a marcar una supervisora.
 
 Ver comentarios en `class/PremiosDB.php` para el detalle método a método.
 

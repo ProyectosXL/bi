@@ -236,6 +236,17 @@
     font-weight : 700;
 }
 
+/* ── Fila "Marca XL": referencia de cadena debajo del Total de la supervisora ──
+   Gris/azulada a propósito, distinta del ámbar del Total: no es "lo que hizo esta
+   supervisora" sino el promedio de TODA la cadena contra el que se compara cada sucursal. */
+.premios-table tr.fila-marca td {
+    background  : #f1f5f9;
+    color       : #334155;
+    border-top  : 1px dashed #94a3b8;
+    font-weight : 600;
+}
+.premios-table tr.fila-marca .fila-marca-hint { font-weight: 400; color: #64748b; font-size: 11px; }
+
 /* ── Resalte de columnas "Premio" / "Total premios" (Vista Premios Supervisoras) ── */
 .premios-table th.th-premio { background: #2554c7; }
 .premios-table td.td-premio { background: #eff6ff; color: #1d4ed8; font-weight: 600; }

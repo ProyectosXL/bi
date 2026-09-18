@@ -598,6 +598,44 @@ class PremiosDB
     }
 
     /**
+     * true si el período ya está CERRADO, o sea si su último mes terminó: el último día
+     * del último mes cubierto quedó estrictamente antes de hoy. Un período que incluye el
+     * mes en curso NO está cerrado, aunque las supervisoras ya lo hayan marcado
+     * "Controlado" — a mitad de mes los importes todavía se mueven.
+     *
+     * El resumen mensual a RRHH (MailPremios::enviarResumenMensual()) es el número final
+     * que se paga, así que no puede salir de un mes abierto: lo chequean tanto el disparo
+     * automático (api/marcar_controlado.php) como el botón manual
+     * (api/enviar_resumen_mensual.php). Pedido del cliente, 2026-09-16.
+     *
+     * Ojo: si el 30 de septiembre cae hoy, septiembre todavía NO está cerrado — recién lo
+     * está el 1 de octubre.
+     */
+    public function periodoCerrado(?string $hoy = null): bool
+    {
+        if (!$this->mesesActual) return false;
+        $ultimoMes = max($this->mesesActual);
+        return $ultimoMes < ($hoy ?? date('Y-m-d'));
+    }
+
+    /** Texto único para la UI y la respuesta de la API cuando se bloquea un envío por mes abierto. */
+    public function motivoPeriodoAbierto(): string
+    {
+        $ultimoMes = $this->mesesActual ? max($this->mesesActual) : null;
+        if (!$ultimoMes) {
+            return 'El resumen mensual solo se manda con el mes cerrado, y no se pudo determinar el mes del período elegido.';
+        }
+        $dt      = new DateTime($ultimoMes);
+        $meses   = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        $mesTxt  = $meses[(int) $dt->format('n')] . ' ' . $dt->format('Y');
+        $desdeTxt = (clone $dt)->modify('+1 day')->format('d/m/Y');
+        return "El resumen mensual solo se manda con el mes cerrado, y $mesTxt todavía está en curso. "
+             . 'Las supervisoras pueden quedar en "Controlado" igual, pero el resumen recién se puede enviar '
+             . "a partir del $desdeTxt.";
+    }
+
+    /**
      * true si TODAS las supervisoras activas (getSupervisoras()) están marcadas
      * "Controlado" para ese mes. Usado para disparar el envío automático del resumen
      * mensual — ver MailPremios::enviarResumenMensual() y api/marcar_controlado.php.

@@ -11,6 +11,14 @@
  * TRANSICIÓN (antes: no todas / después: todas) en vez de con una bandera de "ya enviado
  * este mes", para que si alguien reabre una supervisora y luego la vuelve a cerrar, el
  * resumen se vuelva a mandar — probablemente cambiaron números y RRHH debe verlos.
+ *
+ * Condición previa a ese disparo: el mes tiene que estar CERRADO (PremiosDB::periodoCerrado()).
+ * Marcar todo "Controlado" a mitad de mes no manda nada — los importes todavía se mueven y
+ * el resumen es el número final que se paga. Como el disparo es por transición, si se marcó
+ * todo con el mes abierto NO hay un re-disparo automático cuando el mes cierra: una vez
+ * cerrado hay que usar el botón manual "Enviar resumen mensual" (o desmarcar y volver a
+ * marcar una supervisora). Así queda a la vista de quien controla, en vez de mandarse solo
+ * días después sin que nadie lo mire.
  */
 session_start();
 ob_start();
@@ -57,15 +65,23 @@ try {
 
     $resumenAutoEnviado = false;
     $resumenAutoError = null;
+    $resumenAutoBloqueado = null;
     if (!$todasControladasAntes && $todasControladasDespues) {
-        try {
-            MailPremios::enviarResumenMensual($db, $da, $ha);
-            $resumenAutoEnviado = true;
-        } catch (Throwable $e) {
-            // No se aborta la respuesta por esto: el estado "Controlado" ya quedó grabado
-            // correctamente. Se informa el error para que la UI avise y quede el botón
-            // manual de "Enviar resumen mensual" como respaldo.
-            $resumenAutoError = $e->getMessage();
+        // El mes en curso no dispara nada: los importes todavía se mueven y el resumen a
+        // RRHH es el número final que se paga (pedido del cliente, 2026-09-16). El estado
+        // "Controlado" sí se guarda igual — lo único que se posterga es el mail.
+        if (!$db->periodoCerrado()) {
+            $resumenAutoBloqueado = $db->motivoPeriodoAbierto();
+        } else {
+            try {
+                MailPremios::enviarResumenMensual($db, $da, $ha);
+                $resumenAutoEnviado = true;
+            } catch (Throwable $e) {
+                // No se aborta la respuesta por esto: el estado "Controlado" ya quedó grabado
+                // correctamente. Se informa el error para que la UI avise y quede el botón
+                // manual de "Enviar resumen mensual" como respaldo.
+                $resumenAutoError = $e->getMessage();
+            }
         }
     }
 
@@ -77,6 +93,7 @@ try {
         'estado' => $estado,
         'resumen_auto_enviado' => $resumenAutoEnviado,
         'resumen_auto_error' => $resumenAutoError,
+        'resumen_auto_bloqueado' => $resumenAutoBloqueado,
     ]);
 
 } catch (Throwable $e) {

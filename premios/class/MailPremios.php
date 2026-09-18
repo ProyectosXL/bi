@@ -308,13 +308,16 @@ class MailPremios
      * @param ?string $comentarioJohanna Mensaje libre que Johanna escribe en el modal antes de mandar
      *        (ver api/enviar_avance_quincenal.php) — no se persiste en ningún lado, solo viaja en el
      *        cuerpo de este mail. Si viene vacío/null no se renderiza el bloque.
-     * @param ?float $ticketPromedio,$pctTicket2do,$pctTicket3er,$pctCumplimientoCadena
-     *        Retorno de AvanceQuincenalDB::avancePorSupervisora()[n] — mismos campos que la
-     *        tabla de "Locales Propios" del dashboard, pero calculados sobre las tablas diarias
-     *        del avance parcial (ver AvanceQuincenalDB::pctCumplimientoCoach()).
+     * @param float $pctCumplimientoCadena AvanceQuincenalDB::avancePorSupervisora()[n] — es el
+     *        único indicador secundario que SÍ es de la supervisora (cuántos de los indicadores
+     *        de sus sucursales superan a la marca, ver AvanceQuincenalDB::pctCumplimientoCoach()).
+     *        El Ticket Promedio y el % de 2do/3er producto de la zona no se muestran: sólo van
+     *        los de la marca, en la fila "Marca XL" (ver filaMarcaAvance()).
      * @param array $benchmarks ['ticket_marca','pct2_marca','pct3_marca'] — mismo array que
      *        AvanceQuincenalDB::avancePorSupervisora()[n]['benchmarks'], para pintar cada
      *        indicador en verde/rojo igual criterio que renderDetalleSupervisora().
+     * @param array $marca AvanceQuincenalDB::avancePorSupervisora()[n]['marca'] — la fila
+     *        "Marca XL" (toda la cadena). Si viene vacío no se renderiza esa fila.
      */
     public static function renderAvanceSupervisora(
         string $supervisora,
@@ -326,11 +329,9 @@ class MailPremios
         string $hasta,
         ?string $comentarioJohanna = null,
         ?float $pctVar = null,
-        float $ticketPromedio = 0.0,
-        float $pctTicket2do = 0.0,
-        float $pctTicket3er = 0.0,
         float $pctCumplimientoCadena = 0.0,
-        array $benchmarks = ['ticket_marca' => 0.0, 'pct2_marca' => 0.0, 'pct3_marca' => 0.0]
+        array $benchmarks = ['ticket_marca' => 0.0, 'pct2_marca' => 0.0, 'pct3_marca' => 0.0],
+        array $marca = []
     ): string {
         $periodoTxt = date('d/m/Y', strtotime($desde)) . ' al ' . date('d/m/Y', strtotime($hasta));
 
@@ -383,18 +384,48 @@ class MailPremios
             . '</tr>'
             . $filasHtml
             . '<tr>'
-            . '<td style="padding:6px 10px;font-weight:700;background:#fffbeb;">Total</td>'
+            . '<td style="padding:6px 10px;font-weight:700;background:#fffbeb;">Total ' . self::esc($supervisora) . '</td>'
             . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::money($facturacionTotal) . '</td>'
             . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::money($objetivoTotal) . '</td>'
             . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;color:#92400e;">' . self::pct($pctCumplimiento) . '</td>'
             . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;color:#92400e;">' . self::pct($pctVar) . '</td>'
-            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::money($ticketPromedio) . '</td>'
-            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($pctTicket2do) . '</td>'
-            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">' . self::pct($pctTicket3er) . '</td>'
+            // Tkt. Prom. / % 2do / % 3er van vacíos a propósito — ver filaMarcaAvance().
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">—</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">—</td>'
+            . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;">—</td>'
             . '<td style="padding:6px 10px;text-align:right;font-weight:700;background:#fffbeb;color:#92400e;">' . self::pct($pctCumplimientoCadena) . '</td>'
             . '</tr>'
+            . self::filaMarcaAvance($marca)
             . '</table>'
             . '</body></html>';
+    }
+
+    /**
+     * Fila "Marca XL (toda la cadena)" del mail de avance — los mismos valores de cadena
+     * contra los que ya se pintan en verde/rojo las celdas de cada sucursal
+     * (AvanceQuincenalDB::avancePorSupervisora()['marca'] == ['benchmarks']), pero explícitos.
+     * Antes la única fila en negrita era el "Total" de la supervisora y se leía como si fuera
+     * el KPI de la marca — por eso "no coincidía" con el tablero de ventas y "cambiaba" entre
+     * supervisoras (2026-09-16, reporte de Johanna). Mismo criterio que el mail de cierre
+     * mensual, que desde 2026-09-02 muestra la cadena completa en su fila Total (ver
+     * renderDetalleSupervisora()). El % Coach queda en "—": es un indicador POR supervisora.
+     */
+    private static function filaMarcaAvance(array $marca): string
+    {
+        if (!$marca) return '';
+        $td = 'padding:6px 10px;text-align:right;font-weight:600;background:#f1f5f9;color:#334155;';
+        return '<tr>'
+            . '<td style="padding:6px 10px;font-weight:600;background:#f1f5f9;color:#334155;">Marca XL '
+            . '<span style="font-weight:400;color:#64748b;font-size:11px;">(toda la cadena)</span></td>'
+            . '<td style="' . $td . '">' . self::money((float) $marca['facturacion']) . '</td>'
+            . '<td style="' . $td . '">' . self::money((float) $marca['objetivo']) . '</td>'
+            . '<td style="' . $td . '">' . self::pct($marca['pct_cumplimiento']) . '</td>'
+            . '<td style="' . $td . '">' . self::pct($marca['pct_var']) . '</td>'
+            . '<td style="' . $td . '">' . self::money((float) $marca['ticket_promedio']) . '</td>'
+            . '<td style="' . $td . '">' . self::pct((float) $marca['pct_ticket_2do']) . '</td>'
+            . '<td style="' . $td . '">' . self::pct((float) $marca['pct_ticket_3er']) . '</td>'
+            . '<td style="' . $td . '">—</td>'
+            . '</tr>';
     }
 
     /** Mismo criterio que AvanceQuincenalDB::ticketPromedioEst() — para pintar el Ticket Promedio por sucursal. */

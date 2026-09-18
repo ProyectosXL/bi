@@ -33,6 +33,17 @@ try {
     [$da, $ha, $dp, $hp] = PeriodHelper::fromRequest($input);
     $db = new PremiosDB($da, $ha, $dp, $hp);
 
+    // Misma regla que el disparo automático de api/marcar_controlado.php: el resumen es el
+    // número final que se paga, así que no sale de un mes todavía abierto (pedido del
+    // cliente, 2026-09-16). 409 = "el estado actual no permite la acción", no es un error
+    // del usuario ni del servidor.
+    if (!$db->periodoCerrado()) {
+        ob_clean();
+        http_response_code(409);
+        echo json_encode(['ok' => false, 'error' => $db->motivoPeriodoAbierto()]);
+        exit;
+    }
+
     $destinatarios = MailPremios::enviarResumenMensual($db, $da, $ha);
 
     ob_clean();

@@ -70,6 +70,11 @@ try {
         'is_outdated' => $isOutdated,
         'puede_gestionar' => isGlobalMode(),
         'mes_unico' => $mesUnico,
+        // El resumen mensual a RRHH solo sale con el mes cerrado — el front lo usa para
+        // avisar antes de intentarlo; el bloqueo real está en api/enviar_resumen_mensual.php
+        // y en el disparo automático de api/marcar_controlado.php.
+        'periodo_cerrado' => $db->periodoCerrado(),
+        'motivo_periodo_abierto' => $db->periodoCerrado() ? null : $db->motivoPeriodoAbierto(),
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
 } catch (Throwable $e) {

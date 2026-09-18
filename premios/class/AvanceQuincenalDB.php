@@ -283,7 +283,7 @@ class AvanceQuincenalDB
      * @param string[] $supervisorasActivas Lista de supervisoras a incluir (mismo orden que
      *        PremiosDB::getSupervisoras(), ya filtrado por visibilidad) — una sucursal cuyo
      *        mapeo apunte a una supervisora oculta/inactiva queda afuera del resultado.
-     * @return array<int,array{supervisora:string,sucursales:array,facturacion_total:float,facturacion_prev_total:float,objetivo_total:float,pct_cumplimiento:?float,pct_var:?float,ticket_promedio:float,pct_ticket_2do:float,pct_ticket_3er:float,pct_cumplimiento_cadena:float,benchmarks:array{ticket_marca:float,pct2_marca:float,pct3_marca:float}}>
+     * @return array<int,array{supervisora:string,sucursales:array,facturacion_total:float,facturacion_prev_total:float,objetivo_total:float,pct_cumplimiento:?float,pct_var:?float,ticket_promedio:float,pct_ticket_2do:float,pct_ticket_3er:float,pct_cumplimiento_cadena:float,benchmarks:array{ticket_marca:float,pct2_marca:float,pct3_marca:float},marca:array{facturacion:float,facturacion_prev:float,objetivo:float,pct_cumplimiento:?float,pct_var:?float,ticket_promedio:float,pct_ticket_2do:float,pct_ticket_3er:float}}>
      */
     public function avancePorSupervisora(array $supervisorasActivas): array
     {
@@ -302,6 +302,29 @@ class AvanceQuincenalDB
             'ticket_marca' => $this->ticketPromedioMarca($mapeadas),
             'pct2_marca'   => $this->pctTicketProductoMarca($mapeadas, 'tickets_2do_prod'),
             'pct3_marca'   => $this->pctTicketProductoMarca($mapeadas, 'tickets_3er_prod'),
+        ];
+
+        // Fila "Marca XL" — los MISMOS números de cadena que ya se usan como umbral verde/rojo
+        // de cada celda, pero explícitos. Hasta 2026-09-16 solo existían como benchmark
+        // invisible y la única fila en negrita de la tabla era el "Total" de la supervisora,
+        // así que se leía como si fuera el KPI de la marca (y "cambiaba" de una supervisora a
+        // otra). Mismo criterio que el mail de cierre mensual, que desde 2026-09-02 muestra el
+        // total de TODA la cadena en esa fila — ver MailPremios::renderDetalleSupervisora().
+        $marcaFact = 0.0; $marcaFactPrev = 0.0; $marcaObj = 0.0;
+        foreach ($mapeadas as $f) {
+            $marcaFact     += $f['facturacion'];
+            $marcaFactPrev += $f['facturacion_prev'];
+            $marcaObj      += $f['objetivo'];
+        }
+        $marca = [
+            'facturacion'      => $marcaFact,
+            'facturacion_prev' => $marcaFactPrev,
+            'objetivo'         => $marcaObj,
+            'pct_cumplimiento' => $this->pctCumplimiento($marcaFact, $marcaObj),
+            'pct_var'          => $this->pctVar($marcaFact, $marcaFactPrev),
+            'ticket_promedio'  => $benchmarks['ticket_marca'],
+            'pct_ticket_2do'   => $benchmarks['pct2_marca'],
+            'pct_ticket_3er'   => $benchmarks['pct3_marca'],
         ];
 
         $vacio = ['sucursales' => [], 'facturacion_total' => 0.0, 'facturacion_prev_total' => 0.0, 'objetivo_total' => 0.0, 'tickets_total' => 0, 'tickets_2do_total' => 0, 'tickets_3er_total' => 0];
@@ -332,6 +355,10 @@ class AvanceQuincenalDB
                 'objetivo_total'          => $datos['objetivo_total'],
                 'pct_cumplimiento'        => $this->pctCumplimiento($datos['facturacion_total'], $datos['objetivo_total']),
                 'pct_var'                 => $this->pctVar($datos['facturacion_total'], $datos['facturacion_prev_total']),
+                // Promedios de la ZONA. Se calculan pero NO se muestran ni en el modal ni en el
+                // mail (2026-09-16): el promedio de una supervisora no se premia ni se compara
+                // contra nada, y en negrita al pie de la tabla se leía como si fuera el KPI de
+                // XL. El único valor de referencia de estos 3 indicadores es el de 'marca'.
                 'ticket_promedio'         => $this->ticketPromedioEst($datos['facturacion_total'], $datos['tickets_total']),
                 'pct_ticket_2do'          => $datos['tickets_total'] > 0 ? $datos['tickets_2do_total'] / $datos['tickets_total'] : 0.0,
                 'pct_ticket_3er'          => $datos['tickets_total'] > 0 ? $datos['tickets_3er_total'] / $datos['tickets_total'] : 0.0,
@@ -341,6 +368,8 @@ class AvanceQuincenalDB
                 // volver a correr avancePorSucursal()/mapeoSucursalSupervisora(). El front los usa
                 // para pintar cada indicador en verde/rojo igual que la tabla de "Locales Propios".
                 'benchmarks'              => $benchmarks,
+                // Misma cadena para toda supervisora — es la fila "Marca XL" de la tabla.
+                'marca'                   => $marca,
             ];
         }
         return $out;

@@ -15,6 +15,10 @@ const PremiosSupervisoras = (() => {
     let _lastPctCadenaTotal = null;
     let _puedeGestionar = false;
     let _mesUnico = null;
+    // El resumen mensual a RRHH solo sale con el mes cerrado (ver PremiosDB::periodoCerrado()).
+    // Acá sirve para avisar antes de intentarlo; el bloqueo real es server-side.
+    let _periodoCerrado = false;
+    let _motivoPeriodoAbierto = null;
     // Se resetea a "sin orden" en cada load() — el tablero siempre arranca con el orden
     // original de getSupervisoras(), nunca recuerda el último click de un usuario entre cargas.
     let _sortState = nuevoEstadoOrden();
@@ -217,6 +221,12 @@ const PremiosSupervisoras = (() => {
             await load(); // repinta con el estado persistido (usuario/fecha incluidos)
             if (res.resumen_auto_enviado) {
                 await Premios.alertModal('Todas las supervisoras quedaron <strong>Controlado</strong> — se envió automáticamente el resumen mensual a RRHH.', { tono: 'exito', titulo: 'Resumen mensual enviado' });
+            } else if (res.resumen_auto_bloqueado) {
+                // El mes sigue abierto: el estado "Controlado" quedó guardado, pero el mail no sale.
+                // Ver PremiosDB::periodoCerrado() y el comentario de api/marcar_controlado.php.
+                await Premios.alertModal(
+                    `Todas las supervisoras quedaron <strong>Controlado</strong>, pero <strong>no se envió</strong> el resumen mensual.<br><br>${res.resumen_auto_bloqueado}`,
+                    { tono: 'info', titulo: 'Resumen mensual pendiente — mes abierto' });
             } else if (res.resumen_auto_error) {
                 await Premios.alertModal(`Todas las supervisoras quedaron Controlado, pero el envío automático del resumen mensual falló: ${res.resumen_auto_error}. Podés usar el botón "Enviar resumen mensual" para reintentarlo.`, { tono: 'error' });
             }
@@ -252,6 +262,13 @@ const PremiosSupervisoras = (() => {
     }
 
     async function enviarResumenMensual(btn) {
+        // Aviso temprano para no hacer pasar por el confirm a alguien que va a recibir un 409
+        // de api/enviar_resumen_mensual.php — ahí está el bloqueo real.
+        if (!_periodoCerrado) {
+            await Premios.alertModal(_motivoPeriodoAbierto ?? 'El resumen mensual solo se manda con el mes cerrado.',
+                { tono: 'info', titulo: 'Todavía no se puede enviar' });
+            return;
+        }
         const confirma = await Premios.confirmModal('¿Enviar el resumen mensual de premios a los destinatarios configurados?');
         if (!confirma) return;
         btn.disabled = true;
@@ -439,6 +456,18 @@ const PremiosSupervisoras = (() => {
                 indicadores en la base del cálculo, no un promedio de 3 porcentajes.</li>
             <li>El <i class="bi bi-check-circle-fill" style="color:#16a34a;"></i> verde en una celda indica que esa sucursal
                 supera el promedio de la cadena para ese indicador puntual.</li>
+            <li>La fila <strong>Total</strong> es la venta acumulada de <em>esta</em> supervisora (facturación, objetivo,
+                cumplimiento y variación). El Ticket Promedio y el % de 2do/3er producto van vacíos ahí a propósito:
+                el promedio de la zona no se premia ni se compara contra nada.</li>
+            <li>La fila <strong>Marca XL</strong> es el promedio de <strong>toda la cadena</strong> — es el único valor
+                de referencia de esos 3 indicadores, el que define los verdes/rojos de cada sucursal, y es idéntico
+                en el avance de todas las supervisoras.</li>
+            <li>Contra el <strong>tablero de Ventas</strong>: el % de 2do y 3er producto da igual. El
+                <strong>Ticket Promedio</strong> da ~1,4% más bajo acá porque descuenta las notas de crédito y
+                devoluciones (facturación neta, la misma que muestra la columna de al lado) y el tablero de Ventas no.
+                El de acá es el que corresponde: reproduce exactamente el ticket promedio del cierre mensual, que es
+                el que paga el premio. El alcance también es distinto: acá son sólo los locales propios de las
+                supervisoras, sin Ecommerce ni Casa Central.</li>
         </ul>`;
     }
 
@@ -449,9 +478,34 @@ const PremiosSupervisoras = (() => {
      * saber "¿cómo viene la supervisora?". Mismo lenguaje visual (badge-cumple verde/rojo) que
      * la tabla de "Locales Propios", vía Premios.cumplimientoCellHTML/badgeCellHTML.
      */
+    /**
+     * Fila "Marca XL (cadena)": los MISMOS valores de cadena contra los que se pintan en
+     * verde/rojo las celdas de cada sucursal (AvanceQuincenalDB::avancePorSupervisora()['marca']
+     * == ['benchmarks']), explícitos en la tabla. Antes solo existía la fila "Total" de la
+     * supervisora, que al ser la única en negrita se leía como si fuera el KPI de la marca — y
+     * por eso "cambiaba" entre una supervisora y otra (2026-09-16, reporte de Johanna).
+     * El % Coach no tiene fila de marca: es un indicador POR supervisora, no de la cadena.
+     */
+    function filaMarcaHTML(marca) {
+        if (!marca) return '';
+        return `<tr class="fila-marca">
+            <td>Marca XL <span class="fila-marca-hint">(toda la cadena)</span></td>
+            <td class="td-num">${fmt.money(marca.facturacion)}</td>
+            <td class="td-num">${fmt.money(marca.objetivo)}</td>
+            <td class="td-num">${fmt.pct(marca.pct_cumplimiento)}</td>
+            <td class="td-num">${fmt.pct(marca.pct_var)}</td>
+            <td class="td-num">${fmt.money(marca.ticket_promedio)}</td>
+            <td class="td-num">${fmt.pct(marca.pct_ticket_2do)}</td>
+            <td class="td-num">${fmt.pct(marca.pct_ticket_3er)}</td>
+            <td class="td-num">—</td>
+        </tr>`;
+    }
+
     function htmlModalAvance(data) {
         const diaHasta = new Date(data.hasta + 'T00:00:00').getDate();
         const bm = data.benchmarks ?? { ticket_marca: null, pct2_marca: null, pct3_marca: null };
+        // Mismos 3 números que bm, ya formateados como fila/tiles de marca — ver filaMarcaHTML().
+        const mk = data.marca ?? { ticket_promedio: null, pct_ticket_2do: null, pct_ticket_3er: null };
 
         // Mismo criterio que AvanceQuincenalDB::pctCumplimiento()/pctVar() (PHP) — recalculado
         // acá en vez de confiar en un % ya formateado, para poder decidir color/badge por fila.
@@ -501,10 +555,13 @@ const PremiosSupervisoras = (() => {
                     <div class="avance-progress"><div class="avance-progress-bar ${cumpleObjetivo ? 'cumple' : ''}" style="width:${barraPct}%"></div></div>
                     <div class="avance-resumen-pct ${claseResumen}"><i class="bi ${iconoResumen}"></i> ${textoResumen}</div>
                 </div>
+                <!-- Los 3 indicadores secundarios se muestran SIEMPRE con el valor de la marca,
+                     nunca promediados por supervisora: son el umbral contra el que se mide cada
+                     sucursal, y el promedio de la zona sólo se confundía con "el KPI de XL". -->
                 <div class="avance-resumen-secundarios">
-                    <div class="avance-mini-kpi" title="Facturación ÷ cantidad de tickets"><span class="avance-mini-kpi-val">${fmt.money(data.ticket_promedio)}</span><span class="avance-mini-kpi-label">Ticket Promedio</span></div>
-                    <div class="avance-mini-kpi" title="% de tickets que incluyeron un 2do producto distinto"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_ticket_2do)}</span><span class="avance-mini-kpi-label">Tickets 2do Prod.</span></div>
-                    <div class="avance-mini-kpi" title="% de tickets que incluyeron un 3er producto distinto"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_ticket_3er)}</span><span class="avance-mini-kpi-label">Tickets 3er Prod.</span></div>
+                    <div class="avance-mini-kpi" title="Ticket promedio de toda la cadena en este período — es el umbral de cada sucursal"><span class="avance-mini-kpi-val">${fmt.money(mk.ticket_promedio)}</span><span class="avance-mini-kpi-label">Ticket Promedio XL</span></div>
+                    <div class="avance-mini-kpi" title="% de tickets con 2do producto de toda la cadena — es el umbral de cada sucursal"><span class="avance-mini-kpi-val">${fmt.pct(mk.pct_ticket_2do)}</span><span class="avance-mini-kpi-label">Tickets 2do Prod. XL</span></div>
+                    <div class="avance-mini-kpi" title="% de tickets con 3er producto de toda la cadena — es el umbral de cada sucursal"><span class="avance-mini-kpi-val">${fmt.pct(mk.pct_ticket_3er)}</span><span class="avance-mini-kpi-label">Tickets 3er Prod. XL</span></div>
                     <div class="avance-mini-kpi" title="Ver el botón de ayuda (ⓘ) para el detalle del cálculo"><span class="avance-mini-kpi-val">${fmt.pct(data.pct_cumplimiento_cadena)}</span><span class="avance-mini-kpi-label">Cumpl. Coach</span></div>
                 </div>
             </div>
@@ -530,17 +587,24 @@ const PremiosSupervisoras = (() => {
                             </tr>
                         </thead>
                         <tbody>${filasHtml}</tbody>
-                        <tfoot><tr class="totales">
-                            <td>Total</td>
+                        <tfoot>
+                        <tr class="totales">
+                            <td>Total ${data.supervisora ?? ''}</td>
                             <td class="td-num">${fmt.money(data.facturacion_total)}</td>
                             <td class="td-num">${fmt.money(data.objetivo_total)}</td>
                             ${cumplimientoCellHTML(data.pct_cumplimiento)}
                             <td class="td-num">${fmt.pct(data.pct_var)}</td>
-                            ${badgeCellHTML(data.ticket_promedio, bm.ticket_marca, fmt.money(data.ticket_promedio), { titulo: 'Supera el ticket promedio de la cadena' })}
-                            ${badgeCellHTML(data.pct_ticket_2do, bm.pct2_marca, fmt.pct(data.pct_ticket_2do), { titulo: 'Supera el % tickets 2do producto de la cadena' })}
-                            ${badgeCellHTML(data.pct_ticket_3er, bm.pct3_marca, fmt.pct(data.pct_ticket_3er), { titulo: 'Supera el % tickets 3er producto de la cadena' })}
+                            <!-- Tkt. Prom. / % 2do / % 3er van vacíos a propósito: el promedio de la
+                                 zona no es un indicador que se premie ni se compare contra nada, y
+                                 puesto en negrita acá se leía como si fuera el KPI de XL. El valor
+                                 de referencia está en la fila "Marca XL" de abajo. -->
+                            <td class="td-num" title="El promedio de la zona no aplica — el valor de referencia es el de la fila Marca XL">—</td>
+                            <td class="td-num" title="El promedio de la zona no aplica — el valor de referencia es el de la fila Marca XL">—</td>
+                            <td class="td-num" title="El promedio de la zona no aplica — el valor de referencia es el de la fila Marca XL">—</td>
                             <td class="td-num td-total">${fmt.pct(data.pct_cumplimiento_cadena)}</td>
-                        </tr></tfoot>
+                        </tr>
+                        ${filaMarcaHTML(data.marca)}
+                        </tfoot>
                     </table>
                 </div>
                 <div class="avance-comentario-label"><i class="bi bi-chat-left-text"></i> Comentario (opcional, se manda junto al avance)</div>
@@ -564,6 +628,8 @@ const PremiosSupervisoras = (() => {
         _lastPctCadenaTotal = data.pct_cumplimiento_cadena_total ?? null;
         _puedeGestionar = data.puede_gestionar ?? false;
         _mesUnico = data.mes_unico ?? null;
+        _periodoCerrado = data.periodo_cerrado ?? false;
+        _motivoPeriodoAbierto = data.motivo_periodo_abierto ?? null;
 
         renderHeroCards(_lastResumen);
         renderTabla(_lastResumen, _lastPctCadenaTotal);
