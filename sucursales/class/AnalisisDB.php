@@ -681,18 +681,64 @@ class AnalisisDB
      * ────────────────────────────────────────────── */
 
     /**
+     * Tabla de stock de locales según la base a la que se conectó esta instancia.
+     * Se deriva de config['db'] y no de $_SESSION['tipo'] porque getConfig() manda
+     * tanto FRANQUICIA como GRUPO a power_franquicias.
+     */
+    private function tablaStockLocales(): string
+    {
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/class/config.php';
+        $db = $this->origen === 'franquicias'
+            ? 'power_franquicias'
+            : (getConfig()['db'] ?? 'power');
+        return $db === 'power_franquicias' ? 'BI_STOCK_FRANQUICIAS' : 'BI_STOCK_LOCALES';
+    }
+
+    /**
+     * Acota el stock a la sucursal (o al grupo) en contexto.
+     * Sin esto, filtrar por una sucursal devolvía el stock agregado de toda la red.
+     *
+     * Sólo BI_STOCK_FRANQUICIAS tiene NRO_SUCURSAL: la vista BI_STOCK_LOCALES
+     * identifica la sucursal por texto y no se puede cruzar de forma confiable,
+     * así que ahí se mantiene el comportamiento anterior.
+     *
+     * @return array [$sql, $params]
+     */
+    private function stockSucursalFrag(string $tabla): array
+    {
+        if ($tabla !== 'BI_STOCK_FRANQUICIAS') return ['', []];
+
+        $suc = $_SESSION['numsuc'] ?? null;
+        if ($suc !== null && $suc !== '' && $suc !== '%') {
+            return [' AND NRO_SUCURSAL = ?', [(int)$suc]];
+        }
+
+        $grupo = !empty($this->grupoSucursales)
+            ? $this->grupoSucursales
+            : (($_SESSION['tipo'] ?? '') === 'GRUPO' ? ($_SESSION['sucursalesGrupo'] ?? []) : []);
+
+        if (!empty($grupo)) {
+            $ids = array_values(array_map('intval', $grupo));
+            $ph  = implode(',', array_fill(0, count($ids), '?'));
+            return [" AND NRO_SUCURSAL IN ({$ph})", $ids];
+        }
+
+        return ['', []];
+    }
+
+    /**
      * Stock de locales/franquicias agrupado por RUBRO + CATEGORIA.
-     * Usa BI_STOCK_FRANQUICIAS para tipo FRANQUICIA, BI_STOCK_LOCALES para el resto.
+     * Usa BI_STOCK_FRANQUICIAS para franquicias, BI_STOCK_LOCALES para el resto.
      */
     public function getStockLocalesProducto(
         string $rubro = '%', string $categoria = '%'
     ): array {
-        $tipo  = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
-        $tabla = ($tipo === 'FRANQUICIA') ? 'BI_STOCK_FRANQUICIAS' : 'BI_STOCK_LOCALES';
+        $tabla = $this->tablaStockLocales();
         $sfR   = $rubro     !== '%' ? "AND ISNULL(RUBRO,'SIN RUBRO') = ?" : "";
         $sfC   = $categoria !== '%' ? "AND ISNULL(CATEGORIA,'SIN CATEGORÍA') = ?" : "";
         $pR    = $rubro     !== '%' ? [$rubro]     : [];
         $pC    = $categoria !== '%' ? [$categoria] : [];
+        [$sfS, $pS] = $this->stockSucursalFrag($tabla);
         try {
             return $this->query("
                 SELECT
@@ -700,9 +746,9 @@ class AnalisisDB
                     ISNULL(CATEGORIA, 'SIN CATEGORÍA')  AS CATEGORIA,
                     ISNULL(SUM(CANT_STOCK), 0)          AS stock_local
                 FROM {$tabla}
-                WHERE 1=1 {$sfR} {$sfC}
+                WHERE 1=1 {$sfR} {$sfC} {$sfS}
                 GROUP BY ISNULL(RUBRO,'SIN RUBRO'), ISNULL(CATEGORIA,'SIN CATEGORÍA')
-            ", array_merge($pR, $pC));
+            ", array_merge($pR, $pC, $pS));
         } catch (\Throwable $e) { return []; }
     }
 
@@ -735,22 +781,22 @@ class AnalisisDB
     public function getStockLocalesColores(
         string $rubro = '%', string $categoria = '%'
     ): array {
-        $tipo  = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
-        $tabla = ($tipo === 'FRANQUICIA') ? 'BI_STOCK_FRANQUICIAS' : 'BI_STOCK_LOCALES';
+        $tabla = $this->tablaStockLocales();
         $sfR   = $rubro     !== '%' ? "AND ISNULL(RUBRO,'SIN RUBRO') = ?" : "";
         $sfC   = $categoria !== '%' ? "AND ISNULL(CATEGORIA,'SIN CATEGORÍA') = ?" : "";
         $pR    = $rubro     !== '%' ? [$rubro]     : [];
         $pC    = $categoria !== '%' ? [$categoria] : [];
+        [$sfS, $pS] = $this->stockSucursalFrag($tabla);
         try {
             return $this->query("
                 SELECT
                     ISNULL(COLOR, 'SIN COLOR') AS COLOR,
                     ISNULL(SUM(CANT_STOCK), 0) AS stock_local
                 FROM {$tabla}
-                WHERE 1=1 {$sfR} {$sfC}
+                WHERE 1=1 {$sfR} {$sfC} {$sfS}
                 GROUP BY ISNULL(COLOR, 'SIN COLOR')
                 ORDER BY stock_local DESC
-            ", array_merge($pR, $pC));
+            ", array_merge($pR, $pC, $pS));
         } catch (\Throwable $e) { return []; }
     }
 

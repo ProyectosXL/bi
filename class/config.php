@@ -26,7 +26,9 @@ function getConfig(): array
                 'db'              => 'power_franquicias',
                 'campo_vendedor'  => 'DESC_VENDEDOR',
                 'tabla_objetivos' => 'dbo.BI_OBJETIVOS_FRANQUICIAS',
-                'features'        => ['grupos' => false],
+                // stock: BI_STOCK_FRANQUICIAS tiene NRO_SUCURSAL, ARTICULO y PRECIO,
+                // así que permite aislar por local y valorizar.
+                'features'        => ['grupos' => false, 'stock' => true],
             ];
 
         case 'LOCAL_PROPIO_UY':
@@ -35,7 +37,7 @@ function getConfig(): array
                 'campo_vendedor'  => 'DESC_VENDEDOR',
                 // Cross-DB: power_uy (POWER_BI_CONTROL_URUGUAY) y power (POWER_BI_CONTROL) están en el mismo servidor XL-APPS
                 'tabla_objetivos' => 'POWER_BI_CONTROL.dbo.BI_OBJETIVOS_SUCURSALES',
-                'features'        => ['grupos' => false],
+                'features'        => ['grupos' => false, 'stock' => false],
             ];
 
         case 'GERENCIA':
@@ -44,7 +46,7 @@ function getConfig(): array
                 'db'              => 'power',       // default; puede sobreescribirse por origen
                 'campo_vendedor'  => 'DESC_VENDEDOR',
                 'tabla_objetivos' => 'dbo.BI_OBJETIVOS_SUCURSALES',
-                'features'        => ['grupos' => false],
+                'features'        => ['grupos' => false, 'stock' => false],
                 'modo'            => 'GLOBAL',
                 'multi_origen'    => true,
                 'origenes'        => [
@@ -70,7 +72,9 @@ function getConfig(): array
                 'db'              => 'power',
                 'campo_vendedor'  => 'DESC_VENDEDOR',
                 'tabla_objetivos' => 'dbo.BI_OBJETIVOS_SUCURSALES',
-                'features'        => ['grupos' => true],
+                // stock: BI_STOCK_LOCALES es una vista sin NRO_SUCURSAL ni PRECIO,
+                // no permite aislar por local ni valorizar. Pendiente emparejar el esquema.
+                'features'        => ['grupos' => true, 'stock' => false],
             ];
     }
 }

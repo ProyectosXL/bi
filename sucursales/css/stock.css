@@ -1,0 +1,207 @@
+/* ══════════════════════════════════════════════════════════════
+   STOCK — sólo lo que no aporta analisis.css.
+   El árbol reusa .tabla-jerarquia, .tr-destino, .tr-rubro,
+   .tr-categoria, .toggle-icon, .indent-*, .td-jerarquia-num.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Cards de resumen ─────────────────────────────── */
+.stock-cards-grid {
+    display              : grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap                  : 12px;
+}
+
+.stock-card {
+    background   : var(--bg-card);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow   : var(--shadow);
+    padding      : 14px 16px;
+    display      : flex;
+    align-items  : center;
+    gap          : 14px;
+}
+
+.stock-card-icon {
+    width        : 40px;
+    height       : 40px;
+    flex-shrink  : 0;
+    border-radius: 10px;
+    display      : flex;
+    align-items  : center;
+    justify-content: center;
+    font-size    : 1.25rem;
+    background   : rgba(37, 99, 235, .12);
+    color        : var(--accent2);
+}
+
+.stock-card-label {
+    font-size     : .7rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color         : var(--text-3);
+}
+
+.stock-card-val {
+    font-family         : var(--font-display);
+    font-size           : 1.4rem;
+    font-weight         : 700;
+    color               : var(--text-1);
+    line-height         : 1.2;
+    font-variant-numeric: tabular-nums;
+}
+
+.stock-card-sub {
+    font-size: .72rem;
+    color    : var(--text-3);
+}
+
+/* ── Barra de filtros ─────────────────────────────── */
+.stock-filtros {
+    display    : flex;
+    align-items: center;
+    flex-wrap  : wrap;
+    gap        : 8px 12px;
+    padding    : 12px 14px;
+}
+
+.stock-filtros label {
+    font-size     : .7rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color         : var(--text-3);
+    font-weight   : 600;
+}
+
+.stock-filtros select {
+    font-family  : inherit;
+    font-size    : .8rem;
+    padding      : 6px 10px;
+    border       : 1px solid var(--border);
+    border-radius: 6px;
+    background   : var(--bg-card);
+    color        : var(--text-1);
+    max-width    : 220px;
+}
+
+.stock-buscar-wrap {
+    position   : relative;
+    flex       : 1 1 240px;
+    min-width  : 200px;
+    display    : flex;
+    align-items: center;
+}
+
+.stock-buscar-wrap .bi {
+    position     : absolute;
+    left         : 10px;
+    color        : var(--text-3);
+    font-size    : .85rem;
+    pointer-events: none;
+}
+
+.stock-buscar-wrap input {
+    width        : 100%;
+    font-family  : inherit;
+    font-size    : .8rem;
+    padding      : 6px 10px 6px 30px;
+    border       : 1px solid var(--border);
+    border-radius: 6px;
+    background   : var(--bg-card);
+    color        : var(--text-1);
+}
+
+.stock-btn-limpiar {
+    font-family  : inherit;
+    font-size    : .78rem;
+    padding      : 6px 12px;
+    border       : 1px solid var(--border);
+    border-radius: 6px;
+    background   : var(--bg-card2);
+    color        : var(--text-2);
+    cursor       : pointer;
+    transition   : background .12s;
+}
+.stock-btn-limpiar:hover { background: #e8eaf2; }
+
+.stock-meta {
+    margin-left: auto;
+    font-family: var(--font-body);
+    font-size  : .72rem;
+    font-weight: 400;
+    opacity    : .85;
+}
+
+/* ── Cuarto nivel del árbol: talles ───────────────── */
+.tr-talle td {
+    background   : var(--bg-card2);
+    color        : var(--text-2);
+    font-size    : .75rem;
+    padding      : 4px 12px;
+    border-bottom: 1px solid #f0f2f7;
+    border-left  : 1px solid var(--border);
+}
+.tr-talle td:first-child { border-left: none; }
+
+.indent-talle { padding-left: 76px !important; }
+
+/* Alinea los modelos sin hijos con los que sí tienen toggle. */
+.toggle-spacer {
+    display     : inline-block;
+    width       : 18px;
+    margin-right: 4px;
+}
+
+/* El árbol tiene orden jerárquico propio: sus headers no ordenan. */
+#tabla-stock thead th { cursor: default; }
+#tabla-stock thead th:hover { background: var(--bg-card2); }
+
+/* ── Detalle y estados ────────────────────────────── */
+.stock-det-loading {
+    padding    : 8px 12px 8px 52px;
+    color      : var(--text-3);
+    font-size  : .76rem;
+    font-style : italic;
+}
+.stock-det-loading .bi {
+    animation  : analisis-spin 1s linear infinite;
+    display    : inline-block;
+    margin-right: 6px;
+}
+
+.stock-td-sub {
+    color    : var(--text-3);
+    font-size: .74rem;
+}
+
+.stock-badge {
+    display      : inline-block;
+    padding      : 1px 6px;
+    margin-left  : 4px;
+    border-radius: 4px;
+    font-size    : .68rem;
+    font-weight  : 600;
+    background   : #eef2ff;
+    color        : var(--accent2);
+    white-space  : nowrap;
+}
+
+.stock-empty {
+    display        : flex;
+    align-items    : center;
+    justify-content: center;
+    gap            : 8px;
+    padding        : 32px;
+    color          : var(--text-3);
+    font-size      : .85rem;
+    text-align     : center;
+}
+
+/* ── Responsive ───────────────────────────────────── */
+@media (max-width: 1400px) {
+    .stock-cards-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+    .stock-cards-grid { grid-template-columns: 1fr; }
+    .stock-filtros select { max-width: 100%; flex: 1 1 140px; }
+}

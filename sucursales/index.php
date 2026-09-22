@@ -45,6 +45,7 @@ if (!isset($_SESSION['numsuc']) || !isset($_SESSION['descLocal'])) {
 require_once __DIR__ . '/../class/config.php';
 $config     = getConfig();
 $showGrupos = $config['features']['grupos'];
+$showStock  = $config['features']['stock'] ?? false;
 date_default_timezone_set('America/Argentina/Buenos_Aires');
 require_once __DIR__ . '/class/DashboardDB.php';
 $isOutdated = false;
@@ -72,6 +73,9 @@ $descLocal  = $_SESSION['descLocal'];
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/analisis.css">
     <link rel="stylesheet" href="css/grupos.css">
+    <?php if ($showStock): ?>
+    <link rel="stylesheet" href="css/stock.css">
+    <?php endif; ?>
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Chart.js 4.x + DataLabels Plugin -->
@@ -175,6 +179,11 @@ $descLocal  = $_SESSION['descLocal'];
         <button class="tab-btn" id="tab-btn-analisis" role="tab" aria-controls="tab-analisis" aria-selected="false">
             <i class="bi bi-graph-up-arrow"></i>&nbsp; Análisis
         </button>
+        <?php if ($showStock): ?>
+        <button class="tab-btn" id="tab-btn-stock" role="tab" aria-controls="tab-stock" aria-selected="false">
+            <i class="bi bi-box-seam"></i>&nbsp; Stock
+        </button>
+        <?php endif; ?>
         <?php if ($showGrupos): ?>
         <button class="tab-btn" id="tab-btn-grupos" role="tab" aria-controls="tab-grupos" aria-selected="false">
             <i class="bi bi-diagram-2-fill"></i>&nbsp; Grupos
@@ -546,6 +555,103 @@ $descLocal  = $_SESSION['descLocal'];
     </div>
     <!-- /tab-analisis -->
 
+    <!-- ══ PESTAÑA: STOCK ══════════════════════════════════════════ -->
+    <?php if ($showStock): ?>
+    <div id="tab-stock" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-stock">
+        <div class="analisis-content">
+
+            <!-- ── 1) RESUMEN ────────────────────────────────────── -->
+            <div class="stock-cards-grid" id="stock-resumen-cards">
+                <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
+            </div>
+
+            <!-- ── 2) FILTROS + BUSCADOR ─────────────────────────── -->
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-funnel-fill"></i> Filtros
+                    <span class="stock-meta" id="stock-meta"></span>
+                </div>
+                <div class="stock-filtros">
+                    <label for="stock-sel-rubro">Rubro</label>
+                    <select id="stock-sel-rubro"><option value="%">Todos</option></select>
+
+                    <label for="stock-sel-categoria">Categoría</label>
+                    <select id="stock-sel-categoria"><option value="%">Todas</option></select>
+
+                    <label for="stock-sel-temporada">Temporada</label>
+                    <select id="stock-sel-temporada"><option value="%">Todas</option></select>
+
+                    <label for="stock-sel-destino">Destino</label>
+                    <select id="stock-sel-destino"><option value="%">Todos</option></select>
+
+                    <div class="stock-buscar-wrap">
+                        <i class="bi bi-search"></i>
+                        <input type="search" id="stock-input-buscar" placeholder="Buscar por código, modelo o descripción...">
+                    </div>
+
+                    <button class="stock-btn-limpiar" id="stock-btn-limpiar" type="button">
+                        <i class="bi bi-x-circle"></i> Limpiar
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── 3) ÁRBOL RUBRO → CATEGORÍA → MODELO → TALLE ───── -->
+            <div class="analisis-card" id="stock-arbol-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-diagram-3-fill"></i> Stock del local
+                    <button class="info-btn" style="margin-left:auto"
+                        data-info-title="Stock del local"
+                        data-info-tips="Hacé clic en una fila para abrirla: rubro → categoría → modelo → talle|El detalle de cada categoría se pide al abrirla, por eso la primera vez tarda un instante|Los modelos con un solo talle lo muestran en la misma fila|No se incluye el rubro PACKAGING">
+                        <i class="bi bi-info-circle"></i>
+                    </button>
+                </div>
+                <div class="jerarquia-wrap">
+                    <table class="tabla-jerarquia" id="tabla-stock">
+                        <thead>
+                            <tr>
+                                <th style="min-width:280px">Rubro / Categoría / Modelo / Talle</th>
+                                <th style="min-width:200px">Descripción</th>
+                                <th style="min-width:110px">Temporada</th>
+                                <th style="min-width:100px;text-align:right">Unidades</th>
+                                <th style="min-width:80px;text-align:right">%</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" class="analisis-loading"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ── 4) RESULTADOS DE BÚSQUEDA ─────────────────────── -->
+            <div class="analisis-card" id="stock-busqueda-card" hidden>
+                <div class="analisis-section-header">
+                    <i class="bi bi-search"></i> Resultados de la búsqueda
+                    <span class="stock-meta" id="stock-busqueda-meta"></span>
+                </div>
+                <div class="jerarquia-wrap">
+                    <table class="tabla-jerarquia" id="tabla-stock-busqueda">
+                        <thead>
+                            <tr>
+                                <th style="min-width:150px">Código</th>
+                                <th style="min-width:200px">Descripción</th>
+                                <th style="min-width:70px">Talle</th>
+                                <th style="min-width:160px">Rubro</th>
+                                <th style="min-width:160px">Categoría</th>
+                                <th style="min-width:110px">Temporada</th>
+                                <th style="min-width:100px;text-align:right">Unidades</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <!-- /tab-stock -->
+    <?php endif; ?>
+
     <!-- ══ PESTAÑA: GRUPOS ═══════════════════════════════════════ -->
     <?php if ($showGrupos): ?>
     <div id="tab-grupos" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-grupos">
@@ -626,6 +732,9 @@ $descLocal  = $_SESSION['descLocal'];
 
 <script src="js/dashboard.js"></script>
 <script src="js/analisis.js"></script>
+<?php if ($showStock): ?>
+<script src="js/stock.js"></script>
+<?php endif; ?>
 <?php if ($showGrupos): ?>
 <script src="js/grupos.js"></script>
 <?php endif; ?>
@@ -636,22 +745,27 @@ $descLocal  = $_SESSION['descLocal'];
  */
 (function () {
     const SHOW_GRUPOS = <?= $showGrupos ? 'true' : 'false' ?>;
+    const SHOW_STOCK  = <?= $showStock  ? 'true' : 'false' ?>;
 
     const TABS = [
         { btn: 'tab-btn-kpis',     pane: 'tab-kpis',     name: 'kpis'     },
         { btn: 'tab-btn-analisis', pane: 'tab-analisis',  name: 'analisis' },
     ];
+    if (SHOW_STOCK) {
+        TABS.push({ btn: 'tab-btn-stock', pane: 'tab-stock', name: 'stock' });
+    }
     if (SHOW_GRUPOS) {
         TABS.push({ btn: 'tab-btn-grupos', pane: 'tab-grupos', name: 'grupos' });
     }
 
     // ── Estado de carga por pestaña ───────────────────────────────────
-    const loaded = { kpis: false, analisis: false, grupos: false };
+    const loaded = { kpis: false, analisis: false, stock: false, grupos: false };
 
     // ── Cargadores por pestaña ────────────────────────────────────────
     const loaders = {
         kpis    : () => Dashboard.loadAll(),
         analisis: () => Analisis.loadAll(),
+        stock   : () => Stock.loadAll(),
         grupos  : () => Grupos.loadAll(),
     };
 
