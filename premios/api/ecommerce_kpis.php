@@ -2,12 +2,12 @@
 /**
  * /bi/premios/api/ecommerce_kpis.php
  * Carga manual de los dos KPIs de ecommerce que no existen en ningún sistema propio:
- * la tasa de conversión (se toma del panel de VTEX) y el objetivo de órdenes del mes.
- * Las sesiones son opcionales, para ponderar la tasa en rangos de varios meses.
+ * las sesiones (se toman del panel de VTEX) y el objetivo de órdenes del mes.
  *
- * Las ÓRDENES REALES no se cargan: salen de Tango (ver PremiosEcommerceDB::ordenesReales).
- * El GET igual las devuelve por mes/canal, de solo lectura, para que quien carga la tasa
- * tenga a la vista cuántas órdenes contó Tango ese mes.
+ * Las ÓRDENES REALES no se cargan: salen de Tango (ver PremiosEcommerceDB::ordenesReales),
+ * y la TASA DE CONVERSIÓN tampoco: se calcula como órdenes ÷ sesiones. El GET devuelve las
+ * órdenes por mes/canal, de solo lectura, para que el modal muestre la tasa resultante
+ * mientras se tipean las sesiones.
  *
  * GET  ?mes=YYYY-MM-DD -> lo guardado para ese mes, por canal, + los meses elegibles.
  * POST {mes, canales[]} -> guarda (MERGE por mes+canal).
@@ -103,15 +103,11 @@ try {
             $vistos[$canal] = true;
 
             $sesiones = numeroOpcional($c['sesiones'] ?? null, "Sesiones ($canal)");
-            // La tasa está en PUNTOS DE PORCENTAJE (0,83 = 0,83 %) — el tope de 100 es lo
-            // que atrapa el error clásico de cargar "83" queriendo decir 0,83 %.
-            $tasa     = numeroOpcional($c['tasa_conversion'] ?? null, "Tasa de conversión ($canal)", 100);
             $objOrd   = numeroOpcional($c['objetivo_ordenes'] ?? null, "Objetivo de órdenes ($canal)");
 
             $porCanal[] = [
                 'canal'            => $canal,
                 'sesiones'         => $sesiones === null ? null : (int) round($sesiones),
-                'tasa_conversion'  => $tasa,
                 'objetivo_ordenes' => $objOrd,
             ];
         }
@@ -145,8 +141,8 @@ try {
     foreach ($db->kpisGuardados() as $f) {
         $guardado[strtoupper($f['canal'])] = $f;
     }
-    // Solo de lectura: cuántas órdenes contó Tango ese mes. Se muestra al lado de los
-    // campos editables para que quien carga la tasa tenga la referencia a la vista.
+    // Solo de lectura: cuántas órdenes contó Tango ese mes. Es el numerador de la tasa de
+    // conversión, que el modal recalcula en vivo con las sesiones que se tipean.
     $ordenesTango = $db->ordenesReales();
 
     // Una entrada por canal, siempre — así el modal puede pintar el form completo aunque
@@ -157,7 +153,6 @@ try {
             'canal'               => $canal,
             'ordenes_tango'       => $ordenesTango[$canal] ?? 0,
             'sesiones'            => $f['sesiones'] ?? null,
-            'tasa_conversion'     => $f['tasa_conversion'] ?? null,
             'objetivo_ordenes'    => $f['objetivo_ordenes'] ?? null,
             'actualizado_por'     => $f['actualizado_por'] ?? null,
             'fecha_actualizacion' => $f['fecha_actualizacion'] ?? null,

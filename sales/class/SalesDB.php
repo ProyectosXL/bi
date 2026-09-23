@@ -15,13 +15,15 @@ class SalesDB
 
     /** true para filtrar sólo sucursales/clientes activos (por defecto true). */
     private bool $soloActivas = true;
+
+    /** Cache de COD_CLIENT deshabilitados (SUCURSALES_LAKERS.HABILITADO = 0). */
     private ?array $inactivasCache = null;
 
     public function setSoloActivas(bool $val): void
     {
         $this->soloActivas = $val;
     }
-
+    
     public function isSoloActivas(): bool
     {
         return $this->soloActivas;
@@ -225,44 +227,41 @@ class SalesDB
         return " AND {$alias}.RUBRO NOT IN ('CONCEPTO', 'PACKAGING')";
     }
 
-    private function getInactivasNombres(): array
+    /**
+     * Códigos de cliente (COD_CLIENT) de los locales deshabilitados.
+     * Se discrimina por COD_CLIENT y no por DESC_SUCURSAL porque el nombre puede
+     * repetirse entre locales distintos (uno activo y otro cerrado); el código es
+     * lo que los diferencia. CABALLITO, TERRAZAS DE MAYO y MALVINAS quedan siempre
+     * incluidas aunque figuren como deshabilitadas.
+     */
+    private function getInactivasCodigos(): array
     {
         if ($this->inactivasCache !== null) {
             return $this->inactivasCache;
         }
 
-        $names = [
-            'FLORES 2',
-            'PILAR',
-            'PALMAS DEL PILAR',
-            'CHAMPAGNAT',
-            'SAN MARTIN',
-            'ACOYTE',
-            'V. DEL PARQUE',
-            'VILLA DEL PARQUE',
-            'ROSARIO PALACE G.',
-            'RURAL',
-            'GALERIAS',
-            ''
-        ];
+        $codigos = [];
 
         try {
-            $sql = "SELECT DISTINCT DESC_SUCURSAL FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS WHERE HABILITADO = 0";
+            $sql = "SELECT DISTINCT COD_CLIENT
+                    FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS
+                    WHERE HABILITADO = 0
+                      AND UPPER(LTRIM(RTRIM(DESC_SUCURSAL))) NOT IN ('CABALLITO', 'TERRAZAS DE MAYO', 'MALVINAS')";
             $stmt = sqlsrv_query($this->conn, $sql, [], $this->queryTimeoutOpt);
             if ($stmt) {
                 while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-                    $n = trim($r['DESC_SUCURSAL'] ?? '');
-                    if ($n !== '' && !in_array(strtoupper($n), ['CABALLITO', 'TERRAZAS DE MAYO', 'MALVINAS'], true)) {
-                        $names[] = $n;
+                    $c = trim((string)($r['COD_CLIENT'] ?? ''));
+                    if ($c !== '') {
+                        $codigos[] = $c;
                     }
                 }
                 sqlsrv_free_stmt($stmt);
             }
         } catch (\Throwable $e) {
-            // fallback a lista estática
+            // sin respuesta del servidor vinculado: no se excluye nada
         }
 
-        $this->inactivasCache = array_values(array_unique($names));
+        $this->inactivasCache = array_values(array_unique($codigos));
         return $this->inactivasCache;
     }
 
@@ -272,10 +271,12 @@ class SalesDB
     private function whereSoloActivasFrag(string $alias = 's'): array
     {
         if (!$this->soloActivas) return ['', []];
-        $inactivas = $this->getInactivasNombres();
-        if (empty($inactivas)) return ['', []];
-        $placeholders = implode(',', array_fill(0, count($inactivas), '?'));
-        return [" AND ({$alias}.CLIENTE IS NULL OR {$alias}.CLIENTE NOT IN ({$placeholders}))", $inactivas];
+
+        $codigos = $this->getInactivasCodigos();
+        if (empty($codigos)) return ['', []];
+
+        $ph = implode(',', array_fill(0, count($codigos), '?'));
+        return [" AND ({$alias}.COD_CLIENT IS NULL OR {$alias}.COD_CLIENT NOT IN ({$ph}))", $codigos];
     }
 
     private function fetchAll($stmt): array

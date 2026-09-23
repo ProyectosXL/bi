@@ -63,12 +63,6 @@ const PremiosEcommerce = (() => {
                 `<strong>Faltan KPIs de carga manual.</strong> Los conceptos que dependen de estos
                  datos figuran como "falta carga", no como incumplidos: ${detalle}`]);
         }
-        if (data.tasa_estimada) {
-            avisos.push(['aviso', 'bi-info-circle-fill',
-                `<strong>Tasa de conversión estimada.</strong> El período abarca varios meses y no
-                 hay sesiones cargadas, así que se promediaron las tasas de cada mes. Cargando las
-                 sesiones se recalcula correctamente (órdenes totales ÷ sesiones totales).`]);
-        }
 
         wrap.innerHTML = avisos.map(([tono, icono, texto]) => `
             <div class="ecom-banner ecom-banner-${tono}">
@@ -157,15 +151,14 @@ const PremiosEcommerce = (() => {
     }
 
     /**
-     * Las sesiones no entran en el cálculo (solo ponderan la tasa en períodos de varios
-     * meses), así que no llevan columna propia — pero se muestran junto a la tasa como
-     * contexto, para que quien las carga las vea reflejadas en algún lado.
+     * Las sesiones son el denominador de la tasa (órdenes de Tango ÷ sesiones), así que no
+     * llevan columna propia: se muestran junto a la tasa para que se vea de dónde sale.
      */
     function sufijoSesiones(c) {
         if (c.metrica !== 'TASA_CONVERSION' || !c.canal) return '';
         const s = _lastSesiones[c.canal];
         if (!s) return '';
-        return ` <span class="ecom-sesiones" title="Sesiones cargadas para el período en ${c.canal}. No afectan el premio: solo ponderan la tasa cuando el período abarca varios meses.">· ${fmt.num(s)} sesiones</span>`;
+        return ` <span class="ecom-sesiones" title="Sesiones cargadas para el período en ${c.canal}. La tasa es órdenes de Tango ÷ estas sesiones.">· ${fmt.num(s)} sesiones</span>`;
     }
 
     function filaConceptoHTML(c) {
@@ -274,20 +267,16 @@ const PremiosEcommerce = (() => {
     }
 
     /**
-     * Control de tipeo de la tasa: muestra la que se deduciría de las órdenes de Tango
-     * sobre las sesiones cargadas. NO es la que se liquida (la que vale es la tipeada, del
-     * panel de VTEX — ver README), pero sirve para darse cuenta de un error de magnitud:
-     * si alguien carga "83" queriendo decir 0,83 %, la referencia queda a dos órdenes de
-     * magnitud de distancia y salta a la vista.
+     * Tasa de conversión calculada (órdenes de Tango ÷ sesiones × 100), recalculada en vivo
+     * mientras se tipean las sesiones: es la misma cuenta que hace el backend para liquidar
+     * (PremiosEcommerceDB::tasasConversion), así se ve el resultado antes de guardar.
      */
-    function actualizarTasaControl(box, canal, ordenesTango) {
-        const el = box.querySelector(`.ecom-kpi-control[data-canal="${canal}"]`);
+    function actualizarTasaCalculada(box, canal, ordenesTango) {
+        const el = box.querySelector(`.ecom-kpi-tasa[data-canal="${canal}"]`);
         if (!el) return;
         const inp = box.querySelector(`.ecom-kpi-input[data-canal="${canal}"][data-campo="sesiones"]`);
         const sesiones = inp && inp.value !== '' ? Number(inp.value) : null;
-        el.textContent = (ordenesTango > 0 && sesiones > 0)
-            ? `Referencia: ${fmt.num(ordenesTango)} órdenes de Tango ÷ ${fmt.num(sesiones)} sesiones = ${fmt.num(ordenesTango / sesiones * 100, 2)} %`
-            : '';
+        el.textContent = sesiones > 0 ? `${fmt.num(ordenesTango / sesiones * 100, 2)} %` : '—';
     }
 
     function bloqueCanalHTML(c) {
@@ -299,11 +288,11 @@ const PremiosEcommerce = (() => {
                 <label>Órdenes <span class="ecom-kpi-hint">(de Tango, no se carga)</span></label>
                 <div class="ecom-kpi-readonly">${fmt.num(c.ordenes_tango)}</div>
                 <label>Objetivo de órdenes</label>    ${inputNum(c.canal, 'objetivo_ordenes', c.objetivo_ordenes, '1')}
-                <label>Sesiones <span class="ecom-kpi-hint">(opcional, no cambia el premio)</span></label>
+                <label>Sesiones <span class="ecom-kpi-hint">(del panel de VTEX)</span></label>
                                                       ${inputNum(c.canal, 'sesiones', c.sesiones, '1')}
-                <label>Tasa de conversión (%)</label> ${inputNum(c.canal, 'tasa_conversion', c.tasa_conversion, '0.01', 'ej. 0,83')}
+                <label>Tasa de conversión <span class="ecom-kpi-hint">(órdenes ÷ sesiones)</span></label>
+                <div class="ecom-kpi-readonly ecom-kpi-tasa" data-canal="${c.canal}">—</div>
             </div>
-            <div class="ecom-kpi-control" data-canal="${c.canal}"></div>
             ${c.fecha_actualizacion
                 ? `<div class="ecom-kpi-meta">Última carga: ${c.fecha_actualizacion} — ${c.actualizado_por ?? '—'}</div>`
                 : `<div class="ecom-kpi-meta">Sin cargar todavía para este mes.</div>`}
@@ -322,9 +311,9 @@ const PremiosEcommerce = (() => {
         if (!res.ok || !data.ok) throw new Error(data.error || `Error ${res.status}`);
 
         body.innerHTML = `
-            <p class="modal-config-hint">La tasa de conversión se toma del <strong>panel de
-               VTEX</strong> y va en <strong>puntos de porcentaje</strong> (0,83 = 0,83 %). Las
-               órdenes ya no se cargan: salen de Tango. Dejá un campo vacío para borrar el dato.</p>
+            <p class="modal-config-hint">Las sesiones se toman del <strong>panel de VTEX</strong>.
+               Las órdenes salen de Tango y la <strong>tasa de conversión se calcula sola</strong>
+               (órdenes ÷ sesiones). Dejá un campo vacío para borrar el dato.</p>
             <div class="ecom-kpi-mes">
                 <label for="modal-ecom-mes">Mes</label>
                 <select id="modal-ecom-mes">
@@ -345,9 +334,9 @@ const PremiosEcommerce = (() => {
         };
         body.querySelectorAll('.ecom-kpi-input').forEach(inp => {
             const c = data.canales.find(x => x.canal === inp.dataset.canal);
-            inp.addEventListener('input', () => actualizarTasaControl(body, inp.dataset.canal, c?.ordenes_tango ?? 0));
+            inp.addEventListener('input', () => actualizarTasaCalculada(body, inp.dataset.canal, c?.ordenes_tango ?? 0));
         });
-        data.canales.forEach(c => actualizarTasaControl(body, c.canal, c.ordenes_tango));
+        data.canales.forEach(c => actualizarTasaCalculada(body, c.canal, c.ordenes_tango));
 
         body.querySelector('#modal-ecom-kpis-guardar').onclick = (e) =>
             guardarKpis(modal, body, e.currentTarget);

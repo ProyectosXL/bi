@@ -10,8 +10,8 @@
  *   - POWER_BI_CONTROL.dbo.BI_T_PREMIOS_ECOM_PERSONAS   \
  *     POWER_BI_CONTROL.dbo.BI_T_PREMIOS_ECOM_CONCEPTOS   | quién cobra qué y con qué escala
  *     POWER_BI_CONTROL.dbo.BI_T_PREMIOS_ECOM_ESCALAS    /
- *   - POWER_BI_CONTROL.dbo.BI_T_PREMIOS_ECOM_KPIS       órdenes / sesiones / tasa de conversión
- *                                                        y objetivo de órdenes (CARGA MANUAL)
+ *   - POWER_BI_CONTROL.dbo.BI_T_PREMIOS_ECOM_KPIS       sesiones y objetivo de órdenes (CARGA
+ *                                                        MANUAL); la tasa de conversión se calcula
  *   Ver premios/sql/setup_premios_ecommerce.sql para el DDL y el seed.
  *
  * `sistemas` se consulta cross-database desde la conexión 'power' (mismo host XL-APPS),
@@ -413,7 +413,7 @@ class PremiosEcommerceDB
     {
         if (!$this->mesesActual) return [];
         $placeholders = implode(',', array_fill(0, count($this->mesesActual), '?'));
-        $sql = "SELECT MES, CANAL, SESIONES, TASA_CONVERSION, OBJETIVO_ORDENES,
+        $sql = "SELECT MES, CANAL, SESIONES, OBJETIVO_ORDENES,
                        ACTUALIZADO_POR, FECHA_ACTUALIZACION
                 FROM BI_T_PREMIOS_ECOM_KPIS
                 WHERE MES IN ($placeholders)";
@@ -427,7 +427,6 @@ class PremiosEcommerceDB
                 'mes'                 => $r['MES'] instanceof DateTimeInterface ? $r['MES']->format('Y-m-d') : (string) $r['MES'],
                 'canal'               => (string) $r['CANAL'],
                 'sesiones'            => $r['SESIONES'] === null ? null : (int) $r['SESIONES'],
-                'tasa_conversion'     => $r['TASA_CONVERSION'] === null ? null : (float) $r['TASA_CONVERSION'],
                 'objetivo_ordenes'    => $r['OBJETIVO_ORDENES'] === null ? null : (float) $r['OBJETIVO_ORDENES'],
                 'actualizado_por'     => $r['ACTUALIZADO_POR'],
                 'fecha_actualizacion' => $r['FECHA_ACTUALIZACION'] instanceof DateTimeInterface
@@ -441,29 +440,20 @@ class PremiosEcommerceDB
     /**
      * KPIs manuales agregados sobre el período, por canal.
      *
-     * Solo quedan dos datos de carga manual: la TASA DE CONVERSIÓN (se toma del panel de
-     * VTEX; no existe en ningún sistema propio porque nadie tiene el dato de sesiones) y el
-     * OBJETIVO de órdenes (no está en FP_ObjetivosFinales). Las órdenes reales ya NO se
-     * cargan: salen de Tango, ver ordenesReales().
+     * Quedan dos datos de carga manual: las SESIONES (solo existen en VTEX Analytics, no hay
+     * integración) y el OBJETIVO de órdenes (no está en FP_ObjetivosFinales). Las órdenes
+     * reales salen de Tango (ver ordenesReales()) y la tasa de conversión se CALCULA con
+     * las dos, ver tasasConversion().
      *
-     * El objetivo de órdenes SUMA los meses del rango. La tasa de conversión no se puede
-     * sumar ni promediar sin más:
-     *   - un solo mes → se usa su TASA_CONVERSION tal cual;
-     *   - varios meses CON sesiones cargadas → promedio PONDERADO por sesiones, que es la
-     *     forma correcta de promediar tasas cuando se conoce el tráfico de cada mes;
-     *   - varios meses SIN sesiones → promedio simple, marcado `tasa_estimada = true`.
+     * Ambos datos SUMAN los meses del rango. Los flags `*_completo` dicen si el dato está
+     * cargado en TODOS los meses del período: un concepto que dependa de un dato incompleto
+     * se muestra como "falta carga" (`sin_dato`) en vez de como "no cumplió".
      *
-     * La ponderación usa tasa y sesiones, ambas de VTEX: deliberadamente NO se recalcula la
-     * tasa como órdenes/sesiones, porque las órdenes son de Tango y cuentan ~9,6 % menos que
-     * VTEX — mezclarlas bajaría la tasa y, como la escala de conversión es de valores
-     * ABSOLUTOS, haría perder un tramo entero sin que cambiara el desempeño real.
+     * La columna TASA_CONVERSION de la tabla quedó de la época en que la tasa se tipeaba del
+     * panel de VTEX: ya no se lee ni se escribe, se conserva como histórico.
      *
-     * Los flags `*_completo` dicen si el dato está cargado en TODOS los meses del período:
-     * un concepto que dependa de un dato incompleto se muestra como "falta carga"
-     * (`sin_dato`) en vez de como "no cumplió".
-     *
-     * @return array<string,array{sesiones:?int,tasa_conversion:?float,objetivo_ordenes:?float,
-     *   objetivo_ordenes_completo:bool,tasa_completo:bool,tasa_estimada:bool,meses_cargados:int}>
+     * @return array<string,array{sesiones:?int,sesiones_completo:bool,objetivo_ordenes:?float,
+     *   objetivo_ordenes_completo:bool,meses_cargados:int}>
      */
     private function kpisManuales(): array
     {
@@ -477,45 +467,45 @@ class PremiosEcommerceDB
             $delCanal = array_values(array_filter($filas, fn($f) => strcasecmp($f['canal'], $canal) === 0));
 
             $sesiones = array_values(array_filter(array_column($delCanal, 'sesiones'), fn($v) => $v !== null));
-            $tasas    = array_values(array_filter(array_column($delCanal, 'tasa_conversion'), fn($v) => $v !== null));
             $objOrd   = array_values(array_filter(array_column($delCanal, 'objetivo_ordenes'), fn($v) => $v !== null));
 
-            $sumSesiones = $sesiones ? (int) array_sum($sesiones) : null;
-
-            // Filas que tienen tasa Y sesiones — las únicas ponderables.
-            $ponderables = array_values(array_filter(
-                $delCanal,
-                fn($f) => $f['tasa_conversion'] !== null && $f['sesiones'] !== null && $f['sesiones'] > 0
-            ));
-
-            $tasaEstimada = false;
-            if (count($tasas) === 1) {
-                $tasa = $tasas[0];
-            } elseif (count($ponderables) === count($tasas) && $tasas) {
-                $pesoTotal = array_sum(array_column($ponderables, 'sesiones'));
-                $tasa = array_sum(array_map(
-                    fn($f) => $f['tasa_conversion'] * $f['sesiones'],
-                    $ponderables
-                )) / $pesoTotal;
-            } elseif ($tasas) {
-                $tasa = array_sum($tasas) / count($tasas);
-                $tasaEstimada = true;
-            } else {
-                $tasa = null;
-            }
-
             $out[$canal] = [
-                'sesiones'                  => $sumSesiones,
-                'tasa_conversion'           => $tasa,
+                'sesiones'                  => $sesiones ? (int) array_sum($sesiones) : null,
+                'sesiones_completo'         => count($sesiones) === $cantMes && $cantMes > 0,
                 'objetivo_ordenes'          => $objOrd ? (float) array_sum($objOrd) : null,
                 'objetivo_ordenes_completo' => count($objOrd) === $cantMes && $cantMes > 0,
-                'tasa_completo'             => count($tasas)  === $cantMes && $cantMes > 0,
-                'tasa_estimada'             => $tasaEstimada,
                 'meses_cargados'            => count($delCanal),
             ];
         }
 
         return $this->kpisCache = $out;
+    }
+
+    /**
+     * Tasa de conversión del período por canal, en PUNTOS DE PORCENTAJE (0,83 = 0,83 %):
+     * órdenes de Tango ÷ sesiones cargadas × 100.
+     *
+     * Con varios meses se divide el total de órdenes por el total de sesiones, que ya es la
+     * tasa ponderada por tráfico — no hace falta promediar tasas mensuales.
+     *
+     * ⚠ Decisión del usuario (2026-09-23), tomada sabiendo el costo: las órdenes son de
+     * Tango, que cuenta ~9,6 % menos que VTEX, así que esta tasa da más baja que la del
+     * panel (julio 2026: 0,75 % contra 0,83 %). La escala de conversión es de valores
+     * ABSOLUTOS, así que esa diferencia puede costar un tramo — si hace falta compensarla,
+     * se ajustan los umbrales de la escala, no este cálculo.
+     *
+     * @return array<string,?float> Canal => tasa, null si no hay sesiones cargadas.
+     */
+    private function tasasConversion(): array
+    {
+        $ordenes = $this->ordenesReales();
+        $out = [];
+        foreach ($this->kpisManuales() as $canal => $k) {
+            $out[$canal] = ($k['sesiones'] ?? 0) > 0
+                ? $ordenes[$canal] / $k['sesiones'] * 100
+                : null;
+        }
+        return $out;
     }
 
     /**
@@ -533,7 +523,7 @@ class PremiosEcommerceDB
         // no puede hacer que se reclame la carga de un mes/canal que nadie usa.
         // ORD_VTEX no figura acá: las órdenes salen de Tango, no se cargan.
         $campoPorOrigen = [
-            'CONV_VTEX'    => ['VTEX', 'tasa_conversion'],
+            'CONV_VTEX'    => ['VTEX', 'sesiones'],   // la tasa se calcula con las sesiones
             'OBJ_ORD_VTEX' => ['VTEX', 'objetivo_ordenes'],
         ];
 
@@ -577,7 +567,7 @@ class PremiosEcommerceDB
      * no el agregado del rango que devuelve kpisManuales().
      *
      * @return array<int,array{mes:string,canal:string,sesiones:?int,
-     *   tasa_conversion:?float,objetivo_ordenes:?float,actualizado_por:?string,
+     *   objetivo_ordenes:?float,actualizado_por:?string,
      *   fecha_actualizacion:?string}>
      */
     public function kpisGuardados(): array
@@ -713,6 +703,7 @@ class PremiosEcommerceDB
         $real    = $this->realesFacturacion();
         $ordenes = $this->ordenesReales();
         $kpis    = $this->kpisManuales();
+        $tasas   = $this->tasasConversion();
 
         $reales = [
             'FACT_VTEX'    => $real['VTEX'],
@@ -722,7 +713,7 @@ class PremiosEcommerceDB
             // que manda es este — si algún día la mensual separa los canales, se invierte.
             'FACT_VTEX_ML' => $real['TOTAL'],
             'ORD_VTEX'     => (float) $ordenes['VTEX'],
-            'CONV_VTEX'    => $kpis['VTEX']['tasa_conversion'],
+            'CONV_VTEX'    => $tasas['VTEX'],
         ];
         $objetivos = [
             'OBJ_VTEX'     => $obj['VTEX'],
@@ -732,14 +723,16 @@ class PremiosEcommerceDB
             'NINGUNO'      => null,
         ];
         // Lo que sale de una tabla que se carga sola (facturación, órdenes) siempre está
-        // "completo"; los dos datos de carga manual, solo si están en TODOS los meses del
+        // "completo"; lo que depende de carga manual, solo si está en TODOS los meses del
         // período — si no, el concepto queda como "falta carga" en vez de "no cumplió".
+        // La tasa sin sesiones de algún mes daría órdenes de N meses sobre sesiones de
+        // menos meses: una tasa inflada, así que también queda como "falta carga".
         $completos = [
             'FACT_VTEX'    => true,
             'FACT_ML'      => true,
             'FACT_VTEX_ML' => true,
             'ORD_VTEX'     => true,
-            'CONV_VTEX'    => $kpis['VTEX']['tasa_completo'],
+            'CONV_VTEX'    => $kpis['VTEX']['sesiones_completo'],
             'OBJ_VTEX'     => true,
             'OBJ_ML'       => true,
             'OBJ_VTEX_ML'  => true,
@@ -759,7 +752,7 @@ class PremiosEcommerceDB
      *
      * @return array{personas:array<int,array>,total_general:float,
      *   objetivos:array{VTEX:float,ML:float},reales:array{TOTAL:float,VTEX:float,ML:float},
-     *   ordenes:array<string,int>,tasa_estimada:bool}
+     *   ordenes:array<string,int>,sesiones:array<string,?int>}
      */
     public function calcular(): array
     {
@@ -822,11 +815,9 @@ class PremiosEcommerceDB
             'objetivos'     => $this->objetivosFacturacion(),
             'reales'        => $this->realesFacturacion(),
             'ordenes'       => $this->ordenesReales(),
-            // Las sesiones no entran en ningún cálculo de premio (solo ponderan la tasa en
-            // períodos de varios meses), pero se exponen para poder mostrarlas: si alguien
-            // se tomó el trabajo de cargarlas, tiene que poder verlas reflejadas.
+            // Denominador de la tasa de conversión: se muestra junto a la tasa para que se
+            // vea de dónde sale.
             'sesiones'      => array_map(fn(array $k) => $k['sesiones'], $kpis),
-            'tasa_estimada' => (bool) ($kpis['VTEX']['tasa_estimada'] ?? false),
         ];
     }
 
@@ -840,7 +831,10 @@ class PremiosEcommerceDB
      * cargar. Los valores null se guardan como null (borrar un dato es válido).
      *
      * @param string $mes Fin de mes (Y-m-d) — validado por el endpoint.
-     * @param array<int,array{canal:string,sesiones:?int,tasa_conversion:?float,objetivo_ordenes:?float}> $porCanal
+     * TASA_CONVERSION no se toca: la tasa ahora se calcula (ver tasasConversion()) y la
+     * columna queda con lo que se había tipeado antes, como histórico.
+     *
+     * @param array<int,array{canal:string,sesiones:?int,objetivo_ordenes:?float}> $porCanal
      */
     public function guardarKpisMes(string $mes, array $porCanal, string $usuario): void
     {
@@ -850,19 +844,19 @@ class PremiosEcommerceDB
                 USING (SELECT CAST(? AS DATE) AS MES, CAST(? AS VARCHAR(10)) AS CANAL) AS s
                    ON t.MES = s.MES AND t.CANAL = s.CANAL
                 WHEN MATCHED THEN UPDATE SET
-                    SESIONES = ?, TASA_CONVERSION = ?, OBJETIVO_ORDENES = ?,
+                    SESIONES = ?, OBJETIVO_ORDENES = ?,
                     ACTUALIZADO_POR = ?, FECHA_ACTUALIZACION = GETDATE()
                 WHEN NOT MATCHED THEN INSERT
-                    (MES, CANAL, SESIONES, TASA_CONVERSION, OBJETIVO_ORDENES,
+                    (MES, CANAL, SESIONES, OBJETIVO_ORDENES,
                      ACTUALIZADO_POR, FECHA_ACTUALIZACION)
-                    VALUES (s.MES, s.CANAL, ?, ?, ?, ?, GETDATE());";
+                    VALUES (s.MES, s.CANAL, ?, ?, ?, GETDATE());";
 
         if (!sqlsrv_begin_transaction($this->connPower)) {
             throw new RuntimeException('No se pudo iniciar la transacción: ' . print_r(sqlsrv_errors(), true));
         }
         try {
             foreach ($porCanal as $c) {
-                $valores = [$c['sesiones'], $c['tasa_conversion'], $c['objetivo_ordenes'], $usuario];
+                $valores = [$c['sesiones'], $c['objetivo_ordenes'], $usuario];
                 $params = array_merge([$mes, $c['canal']], $valores, $valores);
                 if (sqlsrv_query($this->connPower, $sql, $params) === false) {
                     throw new RuntimeException('Error guardando BI_T_PREMIOS_ECOM_KPIS: ' . print_r(sqlsrv_errors(), true));
@@ -941,7 +935,7 @@ class PremiosEcommerceDB
      *
      * Se mira BI_T_ESTADISTICAS_VENTAS_PROPIOS y no la tabla diaria porque la facturación
      * —el dato que domina el cálculo— sale de ahí, y es la que se carga una vez por mes: es
-     * el eslabón lento. Las órdenes (diarias) y la tasa (carga manual) no mueven el badge.
+     * el eslabón lento. Las órdenes (diarias) y las sesiones (carga manual) no mueven el badge.
      */
     public function getUltimaActualizacion(): ?string
     {

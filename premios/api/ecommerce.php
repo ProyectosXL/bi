@@ -50,7 +50,6 @@ try {
         'objetivos'       => $res['objetivos'],
         'reales'          => $res['reales'],
         'sesiones'        => $res['sesiones'],
-        'tasa_estimada'   => $res['tasa_estimada'],
         'kpis_faltantes'  => $db->kpisFaltantes(),
         'carga_manual'    => $db->ultimaCargaManual(),
         'puede_gestionar' => isGlobalMode(),

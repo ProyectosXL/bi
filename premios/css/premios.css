@@ -703,7 +703,7 @@
     border-top : 2px solid #c7d2fe;
 }
 
-/* Sesiones al lado de la tasa de conversión: contexto, no un dato del cálculo. */
+/* Sesiones al lado de la tasa de conversión: su denominador, a la vista. */
 .premios-table .ecom-sesiones { font-size: .72rem; color: var(--text-3); cursor: help; }
 
 /* Columna Objetivo de los conceptos de umbral absoluto (tasa de conversión): no es un
@@ -711,8 +711,8 @@
    ayuda para que se note que hay una explicación detrás. */
 .premios-table .ecom-objetivo-escala { cursor: help; }
 
-/* Órdenes de Tango: se muestran, no se cargan. Mismo alto que un input para que la
-   grilla de dos columnas no se desalinee. */
+/* Órdenes de Tango y tasa calculada: se muestran, no se cargan. Mismo alto que un input
+   para que la grilla de dos columnas no se desalinee. */
 .ecom-kpi-readonly {
     padding    : 5px 8px;
     font-size  : .82rem;
@@ -720,9 +720,6 @@
     color      : var(--text-1);
     text-align : right;
 }
-/* Tasa deducida de las órdenes de Tango ÷ sesiones — NO es la que se liquida, es un
-   control contra el error de magnitud de tipear "83" queriendo decir 0,83. */
-.ecom-kpi-control { font-size: .74rem; color: var(--accent2); margin-top: 6px; min-height: 1em; }
 .ecom-kpi-meta { font-size: .72rem; color: var(--text-3); margin-top: 4px; font-style: italic; }
 
 /* Escalas de premio */

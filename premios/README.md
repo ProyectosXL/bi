@@ -405,27 +405,28 @@ mide ningún concepto de órdenes— pero sugiere que o los objetivos de ese can
 Tango cuenta las órdenes de ML con otro criterio que el panel (¿una orden con varios packs
 abierta en varios pedidos?). Sin investigar.
 
-### Tasa de conversión: carga manual, del panel de VTEX
+### Tasa de conversión: calculada, órdenes de Tango ÷ sesiones cargadas
 
-No existe en ninguna tabla ni hay integración con VTEX API / Google Analytics — verificado
-sobre todo el repo y sobre `v:\ecommerce`. El dato de **sesiones** (el denominador) no vive
-en ningún sistema propio, solo en VTEX Analytics. Se carga a mano desde el modal "Cargar
-órdenes y conversión" (solo `isGlobalMode()`), una fila por mes y canal.
+El dato de **sesiones** (el denominador) no vive en ningún sistema propio ni hay integración
+con VTEX API / Google Analytics — verificado sobre todo el repo y sobre `v:\ecommerce`: solo
+está en VTEX Analytics. Se carga a mano desde el modal "Cargar órdenes y conversión" (solo
+`isGlobalMode()`), una fila por mes y canal. La tasa se calcula sola
+(`PremiosEcommerceDB::tasasConversion()`) y el modal la muestra en vivo mientras se tipean
+las sesiones.
 
-- La `TASA_CONVERSION` va en **puntos de porcentaje** (`0,83` = 0,83 %). El input valida
-  `0 < v <= 100`, y al lado se muestra la tasa que darían las órdenes de Tango ÷ las sesiones
-  cargadas. Esa referencia **no es la que se liquida**: sirve solo para detectar un error de
-  magnitud (tipear "83" queriendo decir 0,83 % la deja a dos órdenes de distancia).
-- **Deliberadamente NO se calcula la tasa como órdenes ÷ sesiones.** Las órdenes son de Tango
-  y cuentan ~9,6 % menos que VTEX; la escala de conversión es de valores **absolutos**
-  (0,90 / 0,80 / 0,70), no un % contra objetivo, así que no hay forma de recalibrarla como sí
-  se puede con el objetivo de órdenes. Calcularla daría 0,75 en vez de 0,83 para julio 2026 y
-  le costaría a Vanesa un tramo entero ($240.000 → $220.000) sin que hubiera cambiado nada de
-  su desempeño real.
-- `SESIONES` es opcional: cuando el período abarca varios meses y están cargadas en todos, la
-  tasa se promedia **ponderada por sesiones** (la forma correcta de promediar tasas conociendo
-  el tráfico). Tasa y sesiones son ambas de VTEX, así que la ponderación no mezcla fuentes.
-  Sin sesiones, cae al promedio simple y el dashboard lo marca como "tasa estimada".
+- Va en **puntos de porcentaje** (`0,83` = 0,83 %): `órdenes / sesiones × 100`.
+- Con varios meses es **órdenes totales ÷ sesiones totales**, que ya es la tasa ponderada por
+  tráfico. Si falta cargar las sesiones de algún mes del período, el concepto queda en
+  "falta carga" (si no, se dividirían órdenes de N meses por sesiones de menos meses).
+- ⚠ **Decisión tomada el 2026-09-23 sabiendo el costo.** Hasta esa fecha la tasa se tipeaba
+  del panel de VTEX y deliberadamente NO se calculaba, porque las órdenes son de Tango y
+  cuentan ~9,6 % menos que VTEX. La escala de conversión es de valores **absolutos**
+  (0,90 / 0,80 / 0,70), no un % contra objetivo: julio 2026 da 0,75 calculada contra 0,83
+  del panel, y eso le cuesta a Vanesa un tramo ($240.000 → $220.000) sin que haya cambiado
+  su desempeño. Si hay que compensarlo, se bajan los umbrales de la escala ("Escalas de
+  premios"), no se toca el cálculo.
+- La columna `TASA_CONVERSION` de `BI_T_PREMIOS_ECOM_KPIS` quedó con lo tipeado antes de ese
+  cambio: ya no se lee ni se escribe, se conserva como histórico.
 - Si falta un dato que algún concepto necesita, ese concepto queda en **`sin_dato`**: premio
   $0 pero mostrado como "falta carga", no como incumplimiento, y el mes aparece en el banner
   de `kpis_faltantes`.
