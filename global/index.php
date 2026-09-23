@@ -9,18 +9,35 @@ if (!isset($_SESSION['username'])) {
     exit;
 }
 require_once __DIR__ . '/../class/config.php';
-$tipoSesion = $_SESSION['tipo'] ?? '';
-if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
+$tipoSesion = strtoupper(trim($_SESSION['tipo'] ?? ''));
+$rolNombre  = strtoupper(trim($_SESSION['fp_auth_user']['rol_nombre'] ?? $_SESSION['rol_nombre'] ?? ''));
+$esAdmin    = !empty($_SESSION['fp_auth_user']['es_admin']) || !empty($_SESSION['es_admin']);
+
+$esValido = in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO', 'ANALISTA', 'ANALISTAS', 'ANALISTA COMERCIAL', 'ANALISTAS COMERCIAL', 'COMERCIAL', 'ADMIN', 'ADMINISTRADOR', 'SISTEMAS'], true)
+    || strpos($tipoSesion, 'ANALISTA') !== false
+    || strpos($rolNombre, 'ANALISTA') !== false
+    || strpos($rolNombre, 'COMERCIAL') !== false
+    || $esAdmin
+    || empty($_SESSION['numsuc']);
+
+if (!$esValido) {
     header('Location: ../');
     exit;
 }
+
 $isGrupo         = ($tipoSesion === 'GRUPO');
 $esGrupo         = (bool)($_SESSION['esGrupo'] ?? false);
 $sucursalesGrupo = $isGrupo ? ($_SESSION['sucursalesGrupo'] ?? []) : [];
 if ($isGrupo) {
     $descLabel = $_SESSION['descLocal'] ?? 'GRUPO';
+} elseif (strpos($rolNombre, 'ANALISTA') !== false || strpos($tipoSesion, 'ANALISTA') !== false) {
+    $descLabel = 'ANALISTA COMERCIAL';
+} elseif ($tipoSesion === 'SUPERVISION' || strpos($rolNombre, 'SUPERVISOR') !== false) {
+    $descLabel = 'SUPERVISIÓN';
+} elseif ($tipoSesion === 'GERENCIA') {
+    $descLabel = 'GERENCIA';
 } else {
-    $descLabel = $tipoSesion === 'GERENCIA' ? 'GERENCIA' : 'SUPERVISIÓN';
+    $descLabel = $_SESSION['fp_auth_user']['nombre_completo'] ?? $_SESSION['nombreCompleto'] ?? ($esAdmin ? 'ADMINISTRACIÓN' : 'COMERCIAL');
 }
 date_default_timezone_set('America/Argentina/Buenos_Aires');
 

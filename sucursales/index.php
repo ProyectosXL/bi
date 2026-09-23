@@ -4,7 +4,9 @@
  * Dashboard de Sales — XL Extra Large
  * v2: Pestañas KPIs + Análisis
  */
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 if (!isset($_SESSION['username'])) {
     header('Location: ../sistemas/login.php');
     exit;
