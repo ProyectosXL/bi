@@ -22,10 +22,15 @@ try {
     $canal   = $_GET['canal']   ?? null;
     $rubro   = $_GET['rubro']   ?? null;
     $cliente = $_GET['cliente'] ?? null;
+    $grupo_empresario = $_GET['grupo_empresario'] ?? null;
+
     $db = new SalesDB();
     if (isset($_GET['solo_activas'])) {
         $db->setSoloActivas($_GET['solo_activas'] === '1' || $_GET['solo_activas'] === 'true');
     }
+
+    $anioActual = (int)date('Y');
+    $anioPrev   = $anioActual - 1;
 
     // Variación mensual % (año actual vs año anterior)
     $variacion = $db->getVariacionMensualUnidades($canal, $rubro, $cliente, $grupo_empresario);
@@ -38,6 +43,8 @@ try {
         'ok'           => true,
         'variacion'    => $variacion,
         'participacion'=> $participacion,
+        'anio_actual'  => $anioActual,
+        'anio_prev'    => $anioPrev,
     ], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 
 } catch (Throwable $e) {

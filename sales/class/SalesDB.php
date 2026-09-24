@@ -757,29 +757,43 @@ class SalesDB
         $anioAct  = (int)date('Y');
         $anioPrev = $anioAct - 1;
 
+        $mesActual = (int)date('n');
+
+        // Para el mes en curso, calcular el último día con datos para comparar período homólogo (MTD)
+        $sqlMaxDia = "SELECT MAX(DAY(FECHA)) as max_dia FROM dbo.BI_SALES_LAKERS WHERE YEAR(FECHA) = ? AND MONTH(FECHA) = ?";
+        $stmtMaxDia = sqlsrv_query($this->conn, $sqlMaxDia, [$anioAct, $mesActual], $this->queryTimeoutOpt);
+        $rMaxDia = $stmtMaxDia ? sqlsrv_fetch_array($stmtMaxDia, SQLSRV_FETCH_ASSOC) : null;
+        if ($stmtMaxDia) sqlsrv_free_stmt($stmtMaxDia);
+        $maxDiaActual = (int)($rMaxDia['max_dia'] ?? date('j'));
+
         $sql = "
             SELECT
                 MONTH(s.FECHA) AS mes,
                 SUM(CASE WHEN YEAR(s.FECHA) = ? THEN s.CANTIDAD ELSE 0 END) AS unid_act,
-                SUM(CASE WHEN YEAR(s.FECHA) = ? THEN s.CANTIDAD ELSE 0 END) AS unid_prev
+                SUM(CASE 
+                    WHEN YEAR(s.FECHA) = ? AND (MONTH(s.FECHA) < ? OR DAY(s.FECHA) <= ?) THEN s.CANTIDAD 
+                    ELSE 0 
+                END) AS unid_prev
             FROM dbo.BI_SALES_LAKERS s
             WHERE YEAR(s.FECHA) IN (?, ?) $wCanal $wRubro $wCliente $wGrupo $wAct
             " . $this->whereExcluirRubrosUnid() . "
             GROUP BY MONTH(s.FECHA)
             ORDER BY mes
         ";
-        $params = array_merge([$anioAct, $anioPrev, $anioAct, $anioPrev], $pCanal, $pRubro, $pCliente, $pGrupo, $pAct);
+        $params = array_merge([$anioAct, $anioPrev, $mesActual, $maxDiaActual, $anioAct, $anioPrev], $pCanal, $pRubro, $pCliente, $pGrupo, $pAct);
         $stmt   = sqlsrv_query($this->conn, $sql, $params, $this->queryTimeoutOpt);
         $rows   = $this->fetchAll($stmt);
 
-        return array_map(function($r) {
-            $ua = (float)$r['unid_act'];
-            $up = (float)$r['unid_prev'];
+        return array_map(function($r) use ($mesActual) {
+            $mes = (int)$r['mes'];
+            $ua  = (float)$r['unid_act'];
+            $up  = (float)$r['unid_prev'];
+            $isFuturo = ($mes > $mesActual && $ua == 0);
             return [
-                'mes'      => (int)$r['mes'],
+                'mes'      => $mes,
                 'unid_act' => $ua,
                 'unid_prev'=> $up,
-                'var'      => $up != 0 ? round(($ua - $up) / abs($up) * 100, 1) : null,
+                'var'      => (!$isFuturo && $up != 0) ? round(($ua - $up) / abs($up) * 100, 1) : null,
             ];
         }, $rows);
     }
