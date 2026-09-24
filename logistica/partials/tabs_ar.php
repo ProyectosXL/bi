@@ -801,3 +801,168 @@
 
     </div>
 </div>
+
+<!-- ─────────────────── TAB 8: EVOLUCIÓN TIPO DE REMISIÓN ─────────────── -->
+<div class="tab-pane" id="tab-evolucion-remision">
+    <div class="dash-content">
+
+        <!-- Barra de controles / Métricas y Filtros -->
+        <div class="remision-controls-bar">
+            <div class="remision-metric-toggle" role="group" aria-label="Seleccionar métrica">
+                <span class="remision-toggle-label"><i class="bi bi-sliders"></i> Métrica visualizada:</span>
+                <button type="button" class="rem-toggle-btn active" data-metric="unidades">
+                    <i class="bi bi-box-seam"></i> Unidades Facturadas
+                </button>
+                <button type="button" class="rem-toggle-btn" data-metric="pedidos">
+                    <i class="bi bi-card-checklist"></i> Cantidad de Pedidos
+                </button>
+            </div>
+            <div class="remision-filter-status" id="remision-filter-status" style="display:none">
+                <span class="filter-badge">
+                    <i class="bi bi-funnel-fill"></i> Filtrado por Mes: <strong id="rem-filter-mes-txt">—</strong>
+                </span>
+                <button type="button" class="btn-clear-rem-filter" id="btn-clear-rem-filter" title="Quitar filtro de mes">
+                    <i class="bi bi-x-circle-fill"></i> Ver todos los meses
+                </button>
+            </div>
+            <div class="remision-actions">
+                <button type="button" class="btn-export-excel" id="btn-export-remision-excel" title="Exportar tabla a Excel">
+                    <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI Cards Resumen -->
+        <div class="kpi-grid" id="kpis-evolucion-remision">
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(37,99,235,.1);color:var(--accent2)"><i class="bi bi-truck"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Distribución Total</div>
+                    <div class="kpi-value" id="kv-rem-dist-total">—</div>
+                    <div class="kpi-var" id="kvar-rem-dist-pct">—</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(0,168,120,.1);color:var(--accent)"><i class="bi bi-arrow-repeat"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Reposición Total</div>
+                    <div class="kpi-value" id="kv-rem-repo-total">—</div>
+                    <div class="kpi-var" id="kvar-rem-repo-pct">—</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-shop"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Locales Propios</div>
+                    <div class="kpi-value" id="kv-rem-propios-total">—</div>
+                    <div class="kpi-var" id="kvar-rem-propios-pct">—</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(124,58,237,.1);color:#7c3aed"><i class="bi bi-building"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Franquicias</div>
+                    <div class="kpi-value" id="kv-rem-franq-total">—</div>
+                    <div class="kpi-var" id="kvar-rem-franq-pct">—</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-check2-circle"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Total General</div>
+                    <div class="kpi-value" id="kv-rem-gran-total">—</div>
+                    <div class="kpi-var neu" id="kvar-rem-pedidos-total">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fila 1 de Gráficos: Universos Distribución y Reposición (Franquicias vs Propios) -->
+        <div class="resumen-row">
+            <!-- Gráfica 1: Universo Todas las Distribuciones -->
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-pie-chart"></i> 1. Universo: Todas las Distribuciones
+                    <span class="header-sub">% Franquicias vs % Propios · clic en una barra para filtrar</span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="chart-rem-distribuciones" height="270"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfica 2: Universo Todas las Reposiciones -->
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-pie-chart-fill"></i> 2. Universo: Todas las Reposiciones
+                    <span class="header-sub">% Franquicias vs % Propios · clic en una barra para filtrar</span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="chart-rem-reposiciones" height="270"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fila 2 de Gráficos: Universos Propios y Franquicias (Distribución vs Reposición) -->
+        <div class="resumen-row">
+            <!-- Gráfica 3: Universo Propios -->
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-shop-window"></i> 3. Universo: Pedidos de Locales Propios
+                    <span class="header-sub">% Distribución vs % Reposición · clic en una barra para filtrar</span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="chart-rem-propios" height="270"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfica 4: Universo Franquicias -->
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-building-check"></i> 4. Universo: Pedidos de Franquicias
+                    <span class="header-sub">% Distribución vs % Reposición · clic en una barra para filtrar</span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="chart-rem-franquicias" height="270"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fila 3 de Gráfico: Universo Total General -->
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-diagram-3-fill"></i> 5. Universo Total General (Franquicias + Propios)
+                <span class="header-sub">Distribución vs Reposición acumulado mensual · clic en una barra para filtrar</span>
+            </div>
+            <div class="chart-wrap">
+                <canvas id="chart-rem-total-general" height="250"></canvas>
+            </div>
+        </div>
+
+        <!-- Tabla de Detalle Mensual e Interactivo -->
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-table"></i> Detalle Mensual por Canal y Tipo de Remisión
+                <span class="header-sub">Filtrable por mes mediante clics en los gráficos</span>
+            </div>
+            <div class="table-wrap" style="max-height:450px;overflow-y:auto">
+                <table id="tabla-remision-detalle" class="tabla-drill">
+                    <thead>
+                        <tr>
+                            <th>Mes / Período</th>
+                            <th>Canal</th>
+                            <th>Tipo de Remisión</th>
+                            <th class="col-num">Cant. Pedidos</th>
+                            <th class="col-num">% Pedidos</th>
+                            <th class="col-num">Unid. Facturadas</th>
+                            <th class="col-num">% Unid. Fact.</th>
+                            <th class="col-num">Unid. Pedidas</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-remision-detalle"></tbody>
+                    <tfoot id="tfoot-remision-detalle"></tfoot>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+

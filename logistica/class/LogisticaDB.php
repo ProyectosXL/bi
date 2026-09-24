@@ -300,4 +300,18 @@ class LogisticaDB extends LogisticaDBBase
             'CLIENTE'
         );
     }
+
+    // ── Área 8: Evolución Tipo de Remisión ──────────────────────────────
+    public function getEvolucionRemision(string $desde, string $hasta, ?string $rubro = null): array
+    {
+        $sets = $this->execSP(
+            'EXEC dbo.RO_SP_EVOLUCION_REMISION ?,?,?',
+            [$desde, $hasta, $rubro]
+        );
+        return [
+            'evolucion' => $sets[0] ?? [],
+            'kpis'      => $sets[1][0] ?? [],
+            'detalle'   => $sets[2] ?? [],
+        ];
+    }
 }

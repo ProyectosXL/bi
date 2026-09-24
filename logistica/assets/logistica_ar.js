@@ -54,6 +54,17 @@
     let chartsPlanGauges = [];
     let chartsDespCanal  = [];
     let chartPickingDia  = null;
+
+    // Charts y estado para Evolución Tipo de Remisión
+    let chartRemDist     = null;
+    let chartRemRepo     = null;
+    let chartRemPropios  = null;
+    let chartRemFranq    = null;
+    let chartRemTotal    = null;
+    let remisionRawData  = null;
+    let remisionMetric   = 'unidades'; // 'unidades' | 'pedidos'
+    let remisionFilterMes = null;
+
     const ult7Data       = {};   // base ('picking-ult7'|'fact-ult7') -> { rows, title }
 
     // Detalle de artículos con diferencia (drill-down del detalle por rubro)
@@ -63,14 +74,15 @@
     const BASE = '/bi/logistica/ajax/';
 
     const TAB_SLICERS = {
-        'eficiencia'   : ['wrap-canal'],
-        'leadtime'     : [],
-        'stock'        : ['wrap-rubro', 'wrap-deposito'],
-        'prod-fact'    : ['wrap-tipo', 'wrap-rubro'],
-        'prod-picking' : ['wrap-usuario'],
-        'planificacion': ['wrap-canal'],
-        'despacho'     : ['wrap-canal', 'wrap-cliente'],
-        'pedidos'      : ['wrap-canal'],
+        'eficiencia'        : ['wrap-canal'],
+        'leadtime'          : [],
+        'stock'             : ['wrap-rubro', 'wrap-deposito'],
+        'prod-fact'         : ['wrap-tipo', 'wrap-rubro'],
+        'prod-picking'      : ['wrap-usuario'],
+        'planificacion'     : ['wrap-canal'],
+        'despacho'          : ['wrap-canal', 'wrap-cliente'],
+        'pedidos'           : ['wrap-canal'],
+        'evolucion-remision': ['wrap-rubro'],
     };
 
     const HELP = {
@@ -108,6 +120,11 @@
             'kv-pc-var'         : ['Variación absoluta', ['Diferencia en cantidad de pedidos entre el período actual y el año anterior.', 'Positivo indica más pedidos que el año anterior.']],
             'kv-pc-unid-ped'    : ['Unidades pedidas', ['Unidades solicitadas en los pedidos consolidados del período filtrado.']],
             'kv-pc-unid-fact'   : ['Unidades facturadas', ['Unidades ya facturadas correspondientes a los pedidos consolidados del período.']],
+            'kv-rem-dist-total' : ['Distribución Total', ['Total de unidades o pedidos distribuidos en el período seleccionado.']],
+            'kv-rem-repo-total' : ['Reposición Total', ['Total de unidades o pedidos repuestos en el período seleccionado.']],
+            'kv-rem-propios-total': ['Locales Propios', ['Total de unidades o pedidos para locales propios en el período.']],
+            'kv-rem-franq-total': ['Franquicias', ['Total de unidades o pedidos para franquicias en el período.']],
+            'kv-rem-gran-total' : ['Total General', ['Volumen global consolidado de Distribución + Reposición en Propios y Franquicias.']],
         },
         sections: {
             'gauges-canal'          : ['Eficiencia por canal', ['Cada gauge muestra la eficiencia (unidades facturadas / unidades pedidas) por canal.', 'La marca negra indica la meta del 95%. Verde ≥ 95%, amarillo ≥ 85%, rojo < 85%.']],
@@ -337,6 +354,7 @@
                 case 'planificacion': await loadPlanificacion(); break;
                 case 'despacho':      await loadDespacho();   break;
                 case 'pedidos':       await loadPedidos();    break;
+                case 'evolucion-remision': await loadEvolucionRemision(); break;
             }
             Cache[tab] = true;
         } catch (e) {
@@ -1422,6 +1440,384 @@
         </tr>`).join(''));
     }
 
+    // ── Área 8: Evolución Tipo de Remisión ──────────────────────────────
+    async function loadEvolucionRemision() {
+        const data = await apiFetch('evolucion_remision', { rubro: State.rubro });
+        remisionRawData = data;
+        renderEvolucionRemision();
+    }
+
+    function renderEvolucionRemision() {
+        if (!remisionRawData) return;
+        const evol = remisionRawData.evolucion || [];
+        const kpis = remisionRawData.kpis || {};
+        const isUnid = (remisionMetric === 'unidades');
+
+        // Totales basados en la métrica activa
+        const totalDist = isUnid ? parseFloat(kpis.TOTAL_DIST_UNID || 0) : parseFloat(kpis.TOTAL_DIST_PED || 0);
+        const totalRepo = isUnid ? parseFloat(kpis.TOTAL_REPO_UNID || 0) : parseFloat(kpis.TOTAL_REPO_PED || 0);
+        const totalProp = isUnid ? parseFloat(kpis.TOTAL_PROPIOS_UNID || 0) : parseFloat(kpis.TOTAL_PROPIOS_PED || 0);
+        const totalFran = isUnid ? parseFloat(kpis.TOTAL_FRANQ_UNID || 0) : parseFloat(kpis.TOTAL_FRANQ_PED || 0);
+        const totalGran = isUnid ? parseFloat(kpis.TOTAL_UNIDADES || 0) : parseFloat(kpis.TOTAL_PEDIDOS || 0);
+
+        // 1. KPI Cards
+        $('#kv-rem-dist-total').text(fmt.num(totalDist));
+        setVar('#kvar-rem-dist-pct', totalGran > 0 ? fmt.pct(totalDist / totalGran) + ' del total' : '—');
+
+        $('#kv-rem-repo-total').text(fmt.num(totalRepo));
+        setVar('#kvar-rem-repo-pct', totalGran > 0 ? fmt.pct(totalRepo / totalGran) + ' del total' : '—');
+
+        $('#kv-rem-propios-total').text(fmt.num(totalProp));
+        setVar('#kvar-rem-propios-pct', totalGran > 0 ? fmt.pct(totalProp / totalGran) + ' del total' : '—');
+
+        $('#kv-rem-franq-total').text(fmt.num(totalFran));
+        setVar('#kvar-rem-franq-pct', totalGran > 0 ? fmt.pct(totalFran / totalGran) + ' del total' : '—');
+
+        $('#kv-rem-gran-total').text(fmt.num(totalGran));
+        $('#kvar-rem-pedidos-total').text(
+            isUnid 
+                ? (fmt.num(kpis.TOTAL_PEDIDOS) + ' pedidos consolidados') 
+                : (fmt.num(kpis.TOTAL_UNIDADES) + ' unidades facturadas')
+        );
+
+        // 2. Gráficos (Labels: 'Ene 2026', 'Feb 2026', etc.)
+        const labels = evol.map(r => r.MES_NOMBRE + ' ' + r.ANIO);
+
+        // Paleta de colores acorde a XL
+        const COLOR_FRANQ = '#7c3aed';    // Violeta
+        const COLOR_PROP  = '#f59e0b';    // Ámbar
+        const COLOR_DIST  = '#2563eb';    // Azul
+        const COLOR_REPO  = '#00a878';    // Verde Esmeralda
+
+        // Gráfica 1: Universo Todas las Distribuciones (Franquicias vs Propios)
+        const d1Fran = evol.map(r => isUnid ? parseFloat(r.DIST_FRANQ_UNID || 0) : parseFloat(r.DIST_FRANQ_PED || 0));
+        const d1Prop = evol.map(r => isUnid ? parseFloat(r.DIST_PROPIOS_UNID || 0) : parseFloat(r.DIST_PROPIOS_PED || 0));
+        chartRemDist = createStackedRemChart(
+            chartRemDist,
+            'chart-rem-distribuciones',
+            labels,
+            [
+                { label: 'Franquicias', data: d1Fran, color: COLOR_FRANQ },
+                { label: 'Locales Propios', data: d1Prop, color: COLOR_PROP }
+            ],
+            'Distribuciones'
+        );
+
+        // Gráfica 2: Universo Todas las Reposiciones (Franquicias vs Propios)
+        const d2Fran = evol.map(r => isUnid ? parseFloat(r.REPO_FRANQ_UNID || 0) : parseFloat(r.REPO_FRANQ_PED || 0));
+        const d2Prop = evol.map(r => isUnid ? parseFloat(r.REPO_PROPIOS_UNID || 0) : parseFloat(r.REPO_PROPIOS_PED || 0));
+        chartRemRepo = createStackedRemChart(
+            chartRemRepo,
+            'chart-rem-reposiciones',
+            labels,
+            [
+                { label: 'Franquicias', data: d2Fran, color: COLOR_FRANQ },
+                { label: 'Locales Propios', data: d2Prop, color: COLOR_PROP }
+            ],
+            'Reposiciones'
+        );
+
+        // Gráfica 3: Universo Propios (Distribución vs Reposición)
+        const d3Dist = evol.map(r => isUnid ? parseFloat(r.DIST_PROPIOS_UNID || 0) : parseFloat(r.DIST_PROPIOS_PED || 0));
+        const d3Repo = evol.map(r => isUnid ? parseFloat(r.REPO_PROPIOS_UNID || 0) : parseFloat(r.REPO_PROPIOS_PED || 0));
+        chartRemPropios = createStackedRemChart(
+            chartRemPropios,
+            'chart-rem-propios',
+            labels,
+            [
+                { label: 'Distribución', data: d3Dist, color: COLOR_DIST },
+                { label: 'Reposición', data: d3Repo, color: COLOR_REPO }
+            ],
+            'Pedidos Propios'
+        );
+
+        // Gráfica 4: Universo Franquicias (Distribución vs Reposición)
+        const d4Dist = evol.map(r => isUnid ? parseFloat(r.DIST_FRANQ_UNID || 0) : parseFloat(r.DIST_FRANQ_PED || 0));
+        const d4Repo = evol.map(r => isUnid ? parseFloat(r.REPO_FRANQ_UNID || 0) : parseFloat(r.REPO_FRANQ_PED || 0));
+        chartRemFranq = createStackedRemChart(
+            chartRemFranq,
+            'chart-rem-franquicias',
+            labels,
+            [
+                { label: 'Distribución', data: d4Dist, color: COLOR_DIST },
+                { label: 'Reposición', data: d4Repo, color: COLOR_REPO }
+            ],
+            'Pedidos Franquicias'
+        );
+
+        // Gráfica 5: Universo Total General (Distribución vs Reposición)
+        const d5Dist = evol.map(r => isUnid ? parseFloat(r.DIST_TOTAL_UNID || 0) : parseFloat(r.DIST_TOTAL_PED || 0));
+        const d5Repo = evol.map(r => isUnid ? parseFloat(r.REPO_TOTAL_UNID || 0) : parseFloat(r.REPO_TOTAL_PED || 0));
+        chartRemTotal = createStackedRemChart(
+            chartRemTotal,
+            'chart-rem-total-general',
+            labels,
+            [
+                { label: 'Distribución', data: d5Dist, color: COLOR_DIST },
+                { label: 'Reposición', data: d5Repo, color: COLOR_REPO }
+            ],
+            'Total General'
+        );
+
+        // 3. Renderizado de la tabla de detalle
+        renderRemisionTabla();
+    }
+
+    function createStackedRemChart(existingChart, canvasId, labels, series, universeTitle) {
+        if (existingChart) existingChart.destroy();
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return null;
+
+        // Calcular porcentajes 100% por mes
+        const count = labels.length;
+        const pctSeries0 = [];
+        const pctSeries1 = [];
+        const rawTotals  = [];
+
+        for (let i = 0; i < count; i++) {
+            const v0 = series[0].data[i] || 0;
+            const v1 = series[1].data[i] || 0;
+            const sum = v0 + v1;
+            rawTotals.push(sum);
+            if (sum > 0) {
+                pctSeries0.push((v0 / sum) * 100);
+                pctSeries1.push((v1 / sum) * 100);
+            } else {
+                pctSeries0.push(0);
+                pctSeries1.push(0);
+            }
+        }
+
+        const isUnid = (remisionMetric === 'unidades');
+        const metricLabel = isUnid ? 'unidades' : 'pedidos';
+
+        // Plugin para dibujar directamente los valores y porcentajes sobre las barras
+        const stackedBarLabelsPlugin = {
+            id: 'stackedBarLabels_' + canvasId,
+            afterDatasetsDraw(chart) {
+                const { ctx } = chart;
+                ctx.save();
+
+                chart.data.datasets.forEach((dataset, dsIdx) => {
+                    const meta = chart.getDatasetMeta(dsIdx);
+                    if (meta.hidden) return;
+
+                    meta.data.forEach((bar, index) => {
+                        const pct = dataset.data[index] || 0;
+                        const rawVal = dataset.rawValues[index] || 0;
+                        if (pct < 5) return; // Si es menor a 5%, no dibujar dentro
+
+                        const { x, y, base } = bar;
+                        const height = Math.abs(base - y);
+                        if (height < 20) return;
+
+                        const centerY = (y + base) / 2;
+
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillStyle = '#ffffff';
+
+                        ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+                        ctx.shadowBlur = 4;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 1;
+
+                        if (height >= 38) {
+                            ctx.font = 'bold 12px Inter, system-ui, -apple-system, sans-serif';
+                            ctx.fillText(pct.toFixed(1) + '%', x, centerY - 7);
+                            ctx.font = '600 10.5px Inter, system-ui, -apple-system, sans-serif';
+                            ctx.fillText(fmt.num(rawVal), x, centerY + 8);
+                        } else {
+                            ctx.font = 'bold 11px Inter, system-ui, -apple-system, sans-serif';
+                            ctx.fillText(pct.toFixed(1) + '% (' + fmt.num(rawVal) + ')', x, centerY);
+                        }
+                    });
+                });
+
+                // Dibujar la suma total arriba de cada columna
+                const topMeta = chart.getDatasetMeta(chart.data.datasets.length - 1);
+                if (topMeta && !topMeta.hidden) {
+                    topMeta.data.forEach((bar, index) => {
+                        const total = rawTotals[index] || 0;
+                        if (total <= 0) return;
+                        const { x, y } = bar;
+
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        ctx.fillStyle = '#0f172a';
+                        ctx.shadowColor = 'transparent';
+                        ctx.shadowBlur = 0;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 0;
+                        ctx.font = 'bold 11px Inter, system-ui, -apple-system, sans-serif';
+                        ctx.fillText(fmt.num(total), x, y - 4);
+                    });
+                }
+
+                ctx.restore();
+            }
+        };
+
+        return new Chart(canvas, {
+            type: 'bar',
+            plugins: [stackedBarLabelsPlugin],
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: series[0].label,
+                        data: pctSeries0,
+                        backgroundColor: series[0].color,
+                        borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 4, bottomRight: 4 },
+                        maxBarThickness: 90,
+                        rawValues: series[0].data,
+                    },
+                    {
+                        label: series[1].label,
+                        data: pctSeries1,
+                        backgroundColor: series[1].color,
+                        borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 },
+                        maxBarThickness: 90,
+                        rawValues: series[1].data,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                onClick: function (evt, elements) {
+                    if (elements && elements.length) {
+                        const idx = elements[0].index;
+                        const evol = remisionRawData.evolucion || [];
+                        if (evol[idx]) {
+                            const sel = evol[idx].PERIODO;
+                            remisionFilterMes = (remisionFilterMes === sel) ? null : sel;
+                            updateRemisionFilterUI();
+                            renderRemisionTabla();
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        grid: { display: false },
+                        ticks: { font: { family: 'inherit', size: 11, weight: 600 } }
+                    },
+                    y: {
+                        stacked: true,
+                        min: 0,
+                        max: 114,
+                        grid: { color: 'rgba(0,0,0,0.06)' },
+                        ticks: {
+                            callback: v => v <= 100 ? v + '%' : '',
+                            font: { family: 'inherit', size: 11 }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            usePointStyle: true,
+                            font: { family: 'inherit', size: 12, weight: 600 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (ctx) {
+                                const dsIdx = ctx.datasetIndex;
+                                const dataIdx = ctx.dataIndex;
+                                const pctVal = ctx.parsed.y || 0;
+                                const rawVal = ctx.dataset.rawValues[dataIdx] || 0;
+                                return ` ${ctx.dataset.label}: ${pctVal.toFixed(1)}% (${fmt.num(rawVal)} ${metricLabel})`;
+                            },
+                            footer: function (items) {
+                                if (!items.length) return '';
+                                const dataIdx = items[0].dataIndex;
+                                const total = rawTotals[dataIdx] || 0;
+                                return `Total ${universeTitle}: ${fmt.num(total)} ${metricLabel} (100%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateRemisionFilterUI() {
+        if (remisionFilterMes) {
+            $('#rem-filter-mes-txt').text(remisionFilterMes);
+            $('#remision-filter-status').show();
+        } else {
+            $('#remision-filter-status').hide();
+        }
+    }
+
+    function renderRemisionTabla() {
+        if (!remisionRawData) return;
+        const allRows = remisionRawData.detalle || [];
+        const rows = remisionFilterMes 
+            ? allRows.filter(r => r.PERIODO === remisionFilterMes)
+            : allRows;
+
+        const $tbody = $('#tbody-remision-detalle').empty();
+        const $tfoot = $('#tfoot-remision-detalle').empty();
+
+        if (!rows.length) {
+            $tbody.html('<tr><td colspan="8"><div class="empty-state"><i class="bi bi-inbox"></i> Sin datos para el filtro seleccionado</div></td></tr>');
+            return;
+        }
+
+        // Totales del grupo visualizado
+        let totPed = 0, totFact = 0, totPedidas = 0;
+        rows.forEach(r => {
+            totPed     += parseFloat(r.CANT_PEDIDOS || 0);
+            totFact    += parseFloat(r.UNID_FACTURADAS || 0);
+            totPedidas += parseFloat(r.UNID_PEDIDAS || 0);
+        });
+
+        const html = rows.map(r => {
+            const peds = parseFloat(r.CANT_PEDIDOS || 0);
+            const fact = parseFloat(r.UNID_FACTURADAS || 0);
+            const pedi = parseFloat(r.UNID_PEDIDAS || 0);
+            const pctPed = totPed > 0 ? (peds / totPed) : 0;
+            const pctFact = totFact > 0 ? (fact / totFact) : 0;
+
+            const badgeCanal = r.CANAL_AGRUP === 'PROPIOS' 
+                ? '<span class="badge-estado badge-facturado" style="background:rgba(245,158,11,.15);color:#b45309">Locales Propios</span>'
+                : '<span class="badge-estado badge-facturado" style="background:rgba(124,58,237,.15);color:#7c3aed">Franquicias</span>';
+
+            const badgeTipo = r.TIPO_AGRUP === 'DISTRIBUCION'
+                ? '<span class="badge-estado badge-facturado" style="background:rgba(37,99,235,.15);color:#1d4ed8">Distribución</span>'
+                : '<span class="badge-estado badge-facturado" style="background:rgba(0,168,120,.15);color:#047857">Reposición</span>';
+
+            return `<tr>
+                <td><strong>${r.MES_ANIO || r.PERIODO}</strong></td>
+                <td>${badgeCanal}</td>
+                <td>${badgeTipo}</td>
+                <td class="col-num">${fmt.num(peds)}</td>
+                <td class="col-num">${fmt.pct(pctPed)}</td>
+                <td class="col-num">${fmt.num(fact)}</td>
+                <td class="col-num">${fmt.pct(pctFact)}</td>
+                <td class="col-num">${fmt.num(pedi)}</td>
+            </tr>`;
+        }).join('');
+
+        $tbody.html(html);
+
+        $tfoot.html(`<tr>
+            <td colspan="3"><strong>Total ${remisionFilterMes ? '(' + remisionFilterMes + ')' : 'Consolidado'}</strong></td>
+            <td class="col-num"><strong>${fmt.num(totPed)}</strong></td>
+            <td class="col-num"><strong>100.0%</strong></td>
+            <td class="col-num"><strong>${fmt.num(totFact)}</strong></td>
+            <td class="col-num"><strong>100.0%</strong></td>
+            <td class="col-num"><strong>${fmt.num(totPedidas)}</strong></td>
+        </tr>`);
+    }
+
     // ── Helpers de render ─────────────────────────────────────────────────
     function renderTablaSimple(sel, rows, rowFn, pedidoFn) {
         const $tbody = $(sel).empty();
@@ -1656,6 +2052,35 @@
         });
         $('#btn-perdida-expand').on('click', function (e) { e.stopPropagation(); openPerdidaModal(); });
         $('#perdida-12m-modal').on('click', '[data-close]', closePerdidaModal);
+
+        // Selector de métrica en Evolución Remisión
+        $('#tab-evolucion-remision').on('click', '.rem-toggle-btn', function () {
+            const metric = $(this).data('metric');
+            if (metric === remisionMetric) return;
+            $('#tab-evolucion-remision .rem-toggle-btn').removeClass('active');
+            $(this).addClass('active');
+            remisionMetric = metric;
+            renderEvolucionRemision();
+        });
+
+        // Botón limpiar filtro de mes en Evolución Remisión
+        $('#btn-clear-rem-filter').on('click', function () {
+            remisionFilterMes = null;
+            updateRemisionFilterUI();
+            renderRemisionTabla();
+        });
+
+        // Botón exportar Excel en Evolución Remisión
+        $('#btn-export-remision-excel').on('click', function () {
+            if (!remisionRawData) return;
+            if (typeof XLSX !== 'undefined') {
+                const table = document.getElementById('tabla-remision-detalle');
+                const wb = XLSX.utils.table_to_book(table, { sheet: 'Evolucion_Remision' });
+                XLSX.writeFile(wb, `Evolucion_Tipo_Remision_${State.desde}_${State.hasta}.xlsx`);
+            } else if (typeof ExcelExporter !== 'undefined') {
+                ExcelExporter.exportTable('#tabla-remision-detalle', 'Evolucion_Tipo_Remision');
+            }
+        });
 
         $(document).on('keydown', function (e) {
             if (e.key !== 'Escape') return;

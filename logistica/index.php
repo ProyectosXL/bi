@@ -138,6 +138,9 @@ $mesDesde  = date('Y-m-01');
     <button class="tab-btn" data-tab="pedidos">
         <i class="bi bi-card-list"></i> Pedidos
     </button>
+    <button class="tab-btn" data-tab="evolucion-remision">
+        <i class="bi bi-arrow-left-right"></i> Evolución Tipo De Remisión
+    </button>
 <?php else: ?>
     <button class="tab-btn active" data-tab="eficiencia-uy">
         <i class="bi bi-check2-circle"></i> Eficiencia

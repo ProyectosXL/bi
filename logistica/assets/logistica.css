@@ -860,3 +860,105 @@ body.modal-open { overflow: hidden; }
 }
 .tabla-sub th { color: var(--text-2); font-weight: 600; text-align: left; }
 .tabla-sub td.col-num, .tabla-sub th.col-num { text-align: right; }
+
+/* ── Evolución Tipo de Remisión ──────────────────────────────────────── */
+.remision-controls-bar {
+    display         : flex;
+    align-items     : center;
+    justify-content : space-between;
+    flex-wrap       : wrap;
+    gap             : 12px;
+    background      : var(--bg-card);
+    border          : 1px solid var(--border);
+    border-radius   : var(--radius);
+    padding         : 10px 16px;
+    box-shadow      : var(--shadow);
+}
+
+.remision-metric-toggle {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+}
+
+.remision-toggle-label {
+    font-size     : .78rem;
+    font-weight   : 600;
+    color         : var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    display       : flex;
+    align-items   : center;
+    gap           : 4px;
+}
+
+.rem-toggle-btn {
+    background   : var(--bg-card2);
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm, 6px);
+    color        : var(--text-2);
+    padding      : 6px 12px;
+    font-size    : .8rem;
+    font-weight  : 600;
+    cursor       : pointer;
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 6px;
+    transition   : all .15s ease;
+}
+
+.rem-toggle-btn:hover {
+    background: var(--bg-card);
+    color     : var(--text-1);
+    border-color: var(--text-3);
+}
+
+.rem-toggle-btn.active {
+    background   : var(--accent);
+    color        : #fff;
+    border-color : var(--accent);
+    box-shadow   : 0 2px 8px rgba(0, 168, 120, 0.25);
+}
+
+.remision-filter-status {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+}
+
+.filter-badge {
+    display       : inline-flex;
+    align-items   : center;
+    gap           : 6px;
+    background    : rgba(37, 99, 235, 0.1);
+    color         : var(--accent2);
+    border        : 1px solid rgba(37, 99, 235, 0.25);
+    border-radius : 20px;
+    padding       : 4px 12px;
+    font-size     : .78rem;
+    font-weight   : 600;
+}
+
+.btn-clear-rem-filter {
+    background   : transparent;
+    border       : none;
+    color        : var(--neg);
+    font-size    : .78rem;
+    font-weight  : 600;
+    cursor       : pointer;
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 4px;
+    padding      : 4px 8px;
+    border-radius: var(--radius-sm, 6px);
+    transition   : background .15s;
+}
+
+.btn-clear-rem-filter:hover {
+    background: rgba(220, 38, 38, 0.08);
+}
+
+.chart-clickable {
+    cursor: pointer;
+}
+
