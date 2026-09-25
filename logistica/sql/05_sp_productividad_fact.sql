@@ -14,7 +14,7 @@ GO
 --   IGNORAN @TIPO   → Pico facturación (máx. diario por usuario),
 --                     Días productivos, Pico x usuario,
 --                     Tendencia x día x usuario (mediana de días >200).
---   @RUBRO se aplica en todos los casos.
+--   @RUBRO y @CANAL se aplican en todos los casos.
 -- ============================================================
 
 IF OBJECT_ID('dbo.RO_SP_PRODUCTIVIDAD_FACTURACION','P') IS NOT NULL
@@ -25,7 +25,8 @@ CREATE PROCEDURE dbo.RO_SP_PRODUCTIVIDAD_FACTURACION
     @FECHA_DESDE DATE,
     @FECHA_HASTA DATE,
     @TIPO  NVARCHAR(100) = NULL,
-    @RUBRO NVARCHAR(100) = NULL
+    @RUBRO NVARCHAR(100) = NULL,
+    @CANAL NVARCHAR(100) = NULL   -- NULL = todos los canales
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -42,6 +43,7 @@ BEGIN
     WHERE FECHA_COMP BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND (@TIPO  IS NULL OR TIPO_FACTURACION = @TIPO)
       AND (@RUBRO IS NULL OR RUBRO = @RUBRO)
+      AND (@CANAL IS NULL OR CANAL = @CANAL)
       AND LTRIM(RTRIM(USUARIO)) <> ''
     GROUP BY UPPER(LTRIM(RTRIM(USUARIO))), FECHA_COMP;
 
@@ -53,6 +55,7 @@ BEGIN
     FROM dbo.BI_FACTURACION_LOGISTICA
     WHERE FECHA_COMP BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND (@RUBRO IS NULL OR RUBRO = @RUBRO)
+      AND (@CANAL IS NULL OR CANAL = @CANAL)
       AND LTRIM(RTRIM(USUARIO)) <> ''
     GROUP BY UPPER(LTRIM(RTRIM(USUARIO))), FECHA_COMP;
 
@@ -62,6 +65,7 @@ BEGIN
     FROM dbo.BI_FACTURACION_LOGISTICA
     WHERE FECHA_COMP BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND (@RUBRO IS NULL OR RUBRO = @RUBRO)
+      AND (@CANAL IS NULL OR CANAL = @CANAL)
       AND LTRIM(RTRIM(USUARIO)) <> ''
     GROUP BY UPPER(LTRIM(RTRIM(USUARIO)));
 
@@ -120,6 +124,7 @@ BEGIN
           AND FECHA_COMP <  @HOY
           AND (@TIPO  IS NULL OR TIPO_FACTURACION = @TIPO)
           AND (@RUBRO IS NULL OR RUBRO = @RUBRO)
+          AND (@CANAL IS NULL OR CANAL = @CANAL)
           AND LTRIM(RTRIM(USUARIO)) <> ''
         GROUP BY UPPER(LTRIM(RTRIM(USUARIO)))
     )

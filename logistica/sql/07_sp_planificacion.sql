@@ -75,7 +75,22 @@ BEGIN
         @PROX_HABIL                                      AS PROX_HABIL,
         @MAS_UNO                                         AS MAS_UNO,
         CAST(0.97 AS DECIMAL(5,2))                       AS META,
-        CAST(ISNULL(@PROM_PICK_7D, 0) AS DECIMAL(18,2)) AS PROM_UNID_DIA;
+        CAST(ISNULL(@PROM_PICK_7D, 0) AS DECIMAL(18,2)) AS PROM_UNID_DIA,
+        -- WIP: pendiente con entrega de hoy en adelante (vencidos aparte, 30 días)
+        (SELECT CAST(ISNULL(SUM(CAST(CANT_PEDIDO AS DECIMAL(18,2))), 0) AS DECIMAL(18,0))
+         FROM dbo.BI_T_DESPACHO_PEDIDOS
+         WHERE ESTADO = 'PENDIENTE' AND FECHA_ENTREGA >= @HOY
+           AND (@CANAL IS NULL OR CANAL = @CANAL))       AS WIP_UNID,
+        (SELECT COUNT(DISTINCT NRO_PEDIDO)
+         FROM dbo.BI_T_DESPACHO_PEDIDOS
+         WHERE ESTADO = 'PENDIENTE' AND FECHA_ENTREGA >= @HOY
+           AND (@CANAL IS NULL OR CANAL = @CANAL))       AS WIP_PED,
+        (SELECT CAST(ISNULL(SUM(CAST(CANT_PEDIDO AS DECIMAL(18,2))), 0) AS DECIMAL(18,0))
+         FROM dbo.BI_T_DESPACHO_PEDIDOS
+         WHERE ESTADO = 'PENDIENTE'
+           AND FECHA_ENTREGA <  @HOY
+           AND FECHA_ENTREGA >= DATEADD(DAY, -30, @HOY)
+           AND (@CANAL IS NULL OR CANAL = @CANAL))       AS VENC_UNID;
 
     -- ── Result set 2: ventanas (3 filas: HOY / PROX / MAS_UNO) ────────────
     ;WITH V AS (
@@ -150,5 +165,26 @@ BEGIN
       AND (@CANAL IS NULL OR b.CANAL = @CANAL)
     GROUP BY b.NRO_PEDIDO, b.NOMBRE_CLIENTE, b.CANAL, CAST(b.FECHA_ENTREGA AS DATE)
     ORDER BY b.FECHA_ENTREGA ASC, UNIDADES DESC;
+
+    -- ── Result set 5: WIP por día de entrega ─────────────────────────────
+    -- Hoy + próximos 10 días hábiles, una fila por fecha de entrega (incluye
+    -- no hábiles con pendiente dentro del tramo). El resto va en 'POSTERIOR'.
+    DECLARE @WIP_HASTA DATE;
+    SELECT @WIP_HASTA = MAX(FECHA)
+    FROM (SELECT TOP 10 FECHA FROM dbo.RO_T_CALENDARIO
+          WHERE FECHA > @HOY AND DIA_LABORAL = 1 ORDER BY FECHA) t;
+
+    SELECT
+        CASE WHEN b.FECHA_ENTREGA <= @WIP_HASTA
+             THEN CONVERT(VARCHAR(10), b.FECHA_ENTREGA, 23) ELSE 'POSTERIOR' END AS FECHA,
+        COUNT(DISTINCT b.NRO_PEDIDO)                                        AS PEDIDOS,
+        CAST(SUM(CAST(b.CANT_PEDIDO AS DECIMAL(18,2))) AS DECIMAL(18,0))    AS UNIDADES
+    FROM dbo.BI_T_DESPACHO_PEDIDOS b
+    WHERE b.ESTADO = 'PENDIENTE'
+      AND b.FECHA_ENTREGA >= @HOY
+      AND (@CANAL IS NULL OR b.CANAL = @CANAL)
+    GROUP BY CASE WHEN b.FECHA_ENTREGA <= @WIP_HASTA
+                  THEN CONVERT(VARCHAR(10), b.FECHA_ENTREGA, 23) ELSE 'POSTERIOR' END
+    ORDER BY 1;   -- 'POSTERIOR' ordena después de las fechas ISO
 END;
 GO

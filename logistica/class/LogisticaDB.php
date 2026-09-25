@@ -42,9 +42,9 @@ class LogisticaDB extends LogisticaDBBase
     }
 
     // ── Área 2: Lead time facturación ────────────────────────────────────
-    public function getLeadTime(string $desde, string $hasta): array
+    public function getLeadTime(string $desde, string $hasta, ?string $canal = null): array
     {
-        $sets = $this->execSP('EXEC dbo.RO_SP_LEADTIME_FACTURACION ?,?', [$desde, $hasta]);
+        $sets = $this->execSP('EXEC dbo.RO_SP_LEADTIME_FACTURACION ?,?,?', [$desde, $hasta, $canal]);
         $kpi  = $sets[0][0] ?? [];
         $total    = (int)($kpi['COMP_FACTURADOS'] ?? 0);
         $demorados = (int)($kpi['COMP_DEMORADOS']  ?? 0);
@@ -69,11 +69,11 @@ class LogisticaDB extends LogisticaDBBase
     }
 
     // ── Área 4: Productividad facturación ────────────────────────────────
-    public function getProductividadFact(string $desde, string $hasta, ?string $tipo, ?string $rubro): array
+    public function getProductividadFact(string $desde, string $hasta, ?string $tipo, ?string $rubro, ?string $canal = null): array
     {
         $sets = $this->execSP(
-            'EXEC dbo.RO_SP_PRODUCTIVIDAD_FACTURACION ?,?,?,?',
-            [$desde, $hasta, $tipo, $rubro]
+            'EXEC dbo.RO_SP_PRODUCTIVIDAD_FACTURACION ?,?,?,?,?',
+            [$desde, $hasta, $tipo, $rubro, $canal]
         );
         return [
             'kpis'     => $sets[0][0] ?? [],
@@ -113,6 +113,7 @@ class LogisticaDB extends LogisticaDBBase
             'ventanas'   => $ventanas,
             'pendientes' => $sets[2] ?? [],
             'demorados'  => $sets[3] ?? [],
+            'wip'        => $sets[4] ?? [],   // WIP por día de entrega
         ];
     }
 
@@ -164,6 +165,25 @@ class LogisticaDB extends LogisticaDBBase
             'tramos'   => $sets[1] ?? [],
             'clientes' => $sets[2] ?? [],
             'pedidos'  => $pedidos,
+        ];
+    }
+
+    // ── Área 10: Fill Rate por remito (un día) ───────────────────────────
+    public function getFillRate(?string $fecha, ?string $canal, ?string $tipo): array
+    {
+        $sets = $this->execSP('EXEC dbo.RO_SP_FILL_RATE ?,?,?', [$fecha, $canal, $tipo]);
+        // Mismo motivo que en getPedidosEstancados: el caché le quita los ceros.
+        $detalle = array_map(function ($r) {
+            $nro = trim((string)($r['NRO_PEDIDO'] ?? ''));
+            $r['NRO_PEDIDO'] = $nro === '' ? null : str_pad($nro, 13, '0', STR_PAD_LEFT);
+            return $r;
+        }, $sets[2] ?? []);
+        return [
+            'kpis'     => $sets[0][0] ?? [],
+            'apertura' => $sets[1] ?? [],
+            'detalle'  => $detalle,
+            'ingreso'       => $sets[3][0] ?? [],   // pedidos cargados el día anterior
+            'ingreso_canal' => $sets[4] ?? [],
         ];
     }
 

@@ -485,6 +485,11 @@
         <!-- Ventanas de entrega: HOY / PRÓXIMA / +1 -->
         <div class="plan-ventanas-header">
             <span class="plan-ventanas-title"><i class="bi bi-calendar-week"></i> Ventanas de entrega</span>
+            <span class="plan-wip-badge" id="pl-wip-badge">
+                <i class="bi bi-stack"></i>
+                WIP: <strong id="kv-pl-wip">—</strong> unid. en <strong id="kv-pl-wip-ped">—</strong> pedidos
+                <span class="plan-wip-venc" id="kv-pl-venc"></span>
+            </span>
             <span class="plan-prom-badge">
                 <i class="bi bi-person-lines-fill"></i>
                 Promedio picking / día (últ. 7d):
@@ -535,6 +540,17 @@
                 <?php endif; ?>
             </div>
             <?php endforeach; ?>
+        </div>
+
+        <!-- WIP: unidades pendientes por día de entrega, de hoy en adelante -->
+        <div class="analisis-card">
+            <div class="analisis-section-header" id="hdr-plan-wip">
+                <i class="bi bi-stack"></i> WIP por día de entrega
+                <span class="header-sub">Unidades pendientes de hoy en adelante · próximos 10 días hábiles</span>
+            </div>
+            <div class="chart-wrap">
+                <canvas id="chart-plan-wip" height="220"></canvas>
+            </div>
         </div>
 
         <!-- Pedidos pendientes (filtrable por ventana) -->
@@ -600,9 +616,17 @@
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-check2-all"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Eficacia despacho total</div>
+                    <div class="kpi-label">Eficacia total (incluye demorados)</div>
                     <div class="kpi-value" id="kv-dsp-efi">—</div>
                     <div class="kpi-var semaforo" id="kvar-dsp-efi"></div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-calendar2-check"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Despachado en término</div>
+                    <div class="kpi-value" id="kv-dsp-efi-desp">—</div>
+                    <div class="kpi-var semaforo" id="kvar-dsp-efi-desp"></div>
                 </div>
             </div>
             <div class="kpi-card">
@@ -1106,15 +1130,159 @@
 </div>
 
 <!-- ─────────────────── TAB 10: FILL RATE ─────────────────────────────── -->
-<!-- En construcción: falta definir contenido (KPIs, SP y endpoint).       -->
+<!-- Vista por remito: qué se remitió en el día, a qué pedido corresponde -->
+<!-- y cómo quedó el cumplimiento (acumulado actual) de ese pedido.       -->
 <div class="tab-pane" id="tab-fill-rate">
     <div class="dash-content">
 
+        <!-- Selector de día + tipo -->
+        <div class="plan-ventanas-header fr-header">
+            <span class="plan-ventanas-title"><i class="bi bi-calendar-day"></i> Remitos del día</span>
+            <div class="fr-dia" role="group" aria-label="Día de remitos">
+                <button type="button" class="fr-nav" id="fr-prev" title="Día anterior" aria-label="Día anterior"><i class="bi bi-chevron-left"></i></button>
+                <input type="date" id="fr-fecha" class="fr-fecha" aria-label="Fecha de remitos">
+                <button type="button" class="fr-nav" id="fr-next" title="Día siguiente" aria-label="Día siguiente"><i class="bi bi-chevron-right"></i></button>
+                <button type="button" class="fr-ultimo" id="fr-ultimo">Último día</button>
+            </div>
+            <div class="filter-pills" id="fr-tipo" role="group" aria-label="Tipo de remisión">
+                <button type="button" class="pill active" data-t="">Todos</button>
+                <button type="button" class="pill" data-t="REPOSICION">Reposición</button>
+                <button type="button" class="pill" data-t="DIST. INICIAL">Dist. Inicial</button>
+            </div>
+            <span class="header-sub" id="fr-carga">Vista por remito · para pedido vs cumplido ver Eficiencia</span>
+        </div>
+
+        <div class="kpi-grid" id="kpis-fill-rate">
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-box-seam"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Unidades remitidas</div>
+                    <div class="kpi-value" id="kv-fr-unid">—</div>
+                    <div class="kpi-var neu" id="kvar-fr-unid"></div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(0,168,120,.08);color:var(--accent)"><i class="bi bi-receipt"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Remitos</div>
+                    <div class="kpi-value" id="kv-fr-remitos">—</div>
+                    <div class="kpi-var neu" id="kvar-fr-remitos"></div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(124,58,237,.08);color:#7c3aed"><i class="bi bi-card-list"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Pedidos atendidos</div>
+                    <div class="kpi-value" id="kv-fr-pedidos">—</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-speedometer2"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Fill rate pedidos atendidos</div>
+                    <div class="kpi-value" id="kv-fr-rate">—</div>
+                    <div class="kpi-var semaforo" id="kvar-fr-rate"></div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-check2-all"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Pedidos completos</div>
+                    <div class="kpi-value" id="kv-fr-completos">—</div>
+                    <div class="kpi-var neu" id="kvar-fr-completos"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ingreso del día anterior: pedidos cargados en D−1 y su cumplimiento -->
+        <div class="analisis-card">
+            <div class="analisis-section-header" id="hdr-fr-ingreso">
+                <i class="bi bi-inbox"></i> Ingreso del día anterior
+                <span class="header-sub" id="fr-ing-fecha">Pedidos cargados el día anterior al elegido</span>
+            </div>
+            <div class="fr-ing-kpis">
+                <div class="fr-ing-kpi"><span>Pedidos cargados</span><b id="kv-fr-ing-ped">—</b></div>
+                <div class="fr-ing-kpi"><span>Unid. pedidas</span><b id="kv-fr-ing-unid">—</b></div>
+                <div class="fr-ing-kpi"><span>Remitidas (acum.)</span><b id="kv-fr-ing-rem">—</b></div>
+                <div class="fr-ing-kpi"><span>Pendientes</span><b id="kv-fr-ing-pend">—</b></div>
+                <div class="fr-ing-kpi"><span>% Cumplimiento</span><b id="kv-fr-ing-cumpl">—</b></div>
+                <div class="fr-ing-kpi"><span>Completos</span><b id="kv-fr-ing-comp">—</b></div>
+                <div class="fr-ing-kpi"><span>Remitido el día elegido</span><b id="kv-fr-ing-end">—</b></div>
+            </div>
+            <div class="table-wrap">
+                <table id="tabla-fr-ingreso">
+                    <thead>
+                        <tr>
+                            <th>Canal</th>
+                            <th class="col-num">Pedidos</th>
+                            <th class="col-num">Unid. pedidas</th>
+                            <th class="col-num">Remitidas acum.</th>
+                            <th class="col-num">Pendientes</th>
+                            <th class="col-num">% Cumpl.</th>
+                            <th class="col-num">Completos</th>
+                            <th class="col-num">Remitido el día</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-fr-ingreso"></tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="analisis-card">
             <div class="analisis-section-header">
-                <i class="bi bi-speedometer2"></i> Fill Rate
+                <i class="bi bi-diagram-3"></i> Apertura por canal y tipo
             </div>
-            <div class="empty-state"><i class="bi bi-cone-striped"></i>Pestaña en construcción</div>
+            <div class="table-wrap">
+                <table id="tabla-fr-apertura">
+                    <thead>
+                        <tr>
+                            <th>Canal</th>
+                            <th>Tipo</th>
+                            <th class="col-num">Unid. remitidas</th>
+                            <th class="col-num">Remitos</th>
+                            <th class="col-num">Pedidos</th>
+                            <th class="col-num">Completos</th>
+                            <th class="col-num">Fill rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-fr-apertura"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="analisis-card">
+            <div class="analisis-section-header" id="hdr-fr-detalle">
+                <i class="bi bi-list-ul"></i> Remito → pedido
+                <span class="header-sub" id="fr-count">Clic en un pedido para ver el detalle</span>
+                <div class="filter-pills" id="fr-filtro" role="group" aria-label="Filtrar por estado del pedido">
+                    <button type="button" class="pill active" data-f="ALL">Todos</button>
+                    <button type="button" class="pill" data-f="COMPLETO">Completos</button>
+                    <button type="button" class="pill" data-f="PARCIAL">Parciales</button>
+                    <button type="button" class="pill" data-f="SIN PEDIDO">Sin pedido</button>
+                </div>
+                <input type="search" class="est-busca" id="fr-busca" placeholder="Buscar remito, pedido o cliente…" aria-label="Buscar remito, pedido o cliente">
+            </div>
+            <div class="table-wrap" style="max-height:520px;overflow-y:auto">
+                <table id="tabla-fr-detalle">
+                    <thead>
+                        <tr>
+                            <th>Remito</th>
+                            <th>Pedido</th>
+                            <th>Fecha pedido</th>
+                            <th>Cliente</th>
+                            <th>Canal</th>
+                            <th>Tipo</th>
+                            <th class="col-num">Unid. remito</th>
+                            <th class="col-num">Unid. pedidas</th>
+                            <th class="col-num">Remitidas acum.</th>
+                            <th class="col-num">Pendientes</th>
+                            <th class="col-num">% Cumpl.</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-fr-detalle"></tbody>
+                </table>
+            </div>
         </div>
 
     </div>

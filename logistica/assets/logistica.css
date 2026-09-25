@@ -1019,3 +1019,73 @@ body.modal-open { overflow: hidden; }
     .est-busca { margin-left: 0; flex-basis: 100%; }
     #tab-estancados .plan-ventanas-header .header-sub { margin-left: 0; }
 }
+
+/* ── Fill Rate: selector de día ────────────────────────────────────────── */
+.fr-header { flex-wrap: wrap; justify-content: flex-start; }
+.fr-header .header-sub { margin-left: auto; }
+.fr-dia { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; }
+.fr-fecha {
+    padding      : 3px 8px;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm, 6px);
+    background   : var(--bg-card);
+    color        : var(--text-1);
+    font-size    : .78rem;
+}
+.fr-fecha:focus { outline: none; border-color: var(--accent); }
+.fr-nav, .fr-ultimo {
+    border       : 1px solid var(--border);
+    background   : transparent;
+    color        : var(--text-2);
+    border-radius: var(--radius-sm, 6px);
+    padding      : 3px 8px;
+    font-size    : .74rem;
+    font-weight  : 600;
+    cursor       : pointer;
+}
+.fr-nav:hover:not(:disabled), .fr-ultimo:hover:not(:disabled) { background: var(--bg-card2); color: var(--text-1); }
+.fr-nav:disabled, .fr-ultimo:disabled { opacity: .4; cursor: default; }
+#hdr-fr-detalle { flex-wrap: wrap; row-gap: 6px; }
+#hdr-fr-detalle .btn-export-excel { margin-left: 8px; }
+.badge-sin-pedido { background: rgba(100,116,139,.15); color: var(--text-2); }
+@media (max-width: 760px) {
+    .fr-dia { margin-left: 0; }
+    .fr-header .header-sub { margin-left: 0; }
+}
+
+/* ── Planificación: badge WIP ──────────────────────────────────────────── */
+.plan-wip-badge {
+    display    : flex;
+    align-items: center;
+    gap        : 6px;
+    font-size  : .8rem;
+    color      : var(--text-2);
+    margin-left: auto;
+    background   : rgba(37,99,235,.06);
+    border       : 1px solid rgba(37,99,235,.2);
+    border-radius: var(--radius);
+    padding      : 6px 14px 6px 10px;
+}
+.plan-wip-badge i      { color: var(--accent2); }
+.plan-wip-badge strong { color: var(--text-1); }
+.plan-wip-venc         { color: var(--neg); font-weight: 600; }
+
+/* ── Fill Rate: ingreso del día anterior ───────────────────────────────── */
+.fr-ing-kpis {
+    display              : grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap                  : 10px;
+    padding              : 12px 20px 4px;
+}
+.fr-ing-kpi {
+    display       : flex;
+    flex-direction: column;
+    gap           : 2px;
+    padding       : 8px 10px;
+    border        : 1px solid var(--border);
+    border-radius : var(--radius-sm, 6px);
+    background    : var(--bg-card2);
+}
+.fr-ing-kpi span { font-size: .72rem; color: var(--text-2); }
+.fr-ing-kpi b    { font-size: 1.05rem; color: var(--text-1); font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .plan-wip-badge { margin-left: 0; flex-wrap: wrap; } }

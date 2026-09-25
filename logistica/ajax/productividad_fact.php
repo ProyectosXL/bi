@@ -13,9 +13,10 @@ try {
     $hasta = isset($_GET['hasta']) && $_GET['hasta'] !== '' ? $_GET['hasta'] : date('Y-m-d');
     $tipo  = isset($_GET['tipo'])  && $_GET['tipo']  !== '' ? $_GET['tipo']  : null;
     $rubro = isset($_GET['rubro']) && $_GET['rubro'] !== '' ? $_GET['rubro'] : null;
+    $canal = isset($_GET['canal']) && $_GET['canal'] !== '' ? $_GET['canal'] : null;
 
     $db   = new LogisticaDB();
-    $data = $db->getProductividadFact($desde, $hasta, $tipo, $rubro);
+    $data = $db->getProductividadFact($desde, $hasta, $tipo, $rubro, $canal);
 
     ob_clean();
     echo json_encode(['ok' => true, 'data' => $data], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

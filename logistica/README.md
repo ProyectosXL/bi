@@ -40,6 +40,7 @@ Ejecutar en SQL Server Management Studio sobre `POWER_BI_CONTROL`, en orden:
 | 8 | `sql/09_sp_despacho.sql` | SP Área 6b: Despacho (`RO_SP_DESPACHO`) — eficacia por canal/cliente/pedido, demorados, evolución |
 | 9 | `sql/08_sp_pedidos_consolidados.sql` | SP Área 7: Pedidos consolidados |
 | 9b | `sql/11_sp_pedidos_estancados.sql` | SP Área 9: Pedidos estancados (`RO_SP_PEDIDOS_ESTANCADOS`) — sin cancelar, con saldo y antigüedad ≥ umbral (60/90/180/365) |
+| 9c | `sql/12_sp_fill_rate.sql` | SP Área 10: Fill Rate por remito (`RO_SP_FILL_RATE`) — remitos de un día → pedido → cumplimiento acumulado |
 | 10 | `sql/00_indices.sql` | Índices cubrientes (ejecutar en cualquier momento) |
 
 > **Nota:** el antiguo `RO_SP_DEMANDA_DESPACHO` quedó reemplazado por
@@ -83,7 +84,7 @@ logistica/
 │   ├── LogisticaDB_UY.php  Datos UY (extiende base, clave 'power_uy')
 │   └── LogisticaDBFactory.php  Fábrica: make($pais) → LogisticaDBBase
 ├── partials/
-│   ├── tabs_ar.php         9 tab-panes AR (incluido desde index.php)
+│   ├── tabs_ar.php         10 tab-panes AR (incluido desde index.php)
 │   └── tabs_uy.php         2 tab-panes UY (incluido desde index.php)
 ├── ajax/                   Endpoints AR (sin cambios)
 │   ├── filtros.php
@@ -96,7 +97,8 @@ logistica/
 │   ├── despacho.php
 │   ├── pedido_detalle.php  Detalle de un pedido (eficiencia por rubro) — modal
 │   ├── pedidos_consolidados.php
-│   └── pedidos_estancados.php  Pedidos estancados (dias, canal) — sin JSON_NUMERIC_CHECK
+│   ├── pedidos_estancados.php  Pedidos estancados (dias, canal) — sin JSON_NUMERIC_CHECK
+│   └── fill_rate.php          Fill Rate por remito (fecha, canal, tipo) — sin JSON_NUMERIC_CHECK
 ├── ajax/uy/                Endpoints UY
 │   ├── filtros.php         { canales, rubros }
 │   ├── eficiencia.php      getEficienciaUy(desde,hasta,canal,rubro,cotizacion)

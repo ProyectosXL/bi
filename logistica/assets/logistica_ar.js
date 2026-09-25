@@ -38,6 +38,12 @@
         estCliente  : '',      // filtro por clic en "Concentración por cliente"
         estancados  : [],
         estTotal    : 0,
+        frFecha     : '',      // Fill Rate: '' = último día con datos (lo resuelve el SP)
+        frFechaMax  : '',
+        frTipo      : '',      // '' | REPOSICION | DIST. INICIAL
+        frFiltro    : 'ALL',   // ALL | COMPLETO | PARCIAL | SIN PEDIDO
+        frBusca     : '',
+        frDetalle   : [],
         forceRefresh: false,
     };
 
@@ -56,6 +62,7 @@
     let chartProdFact    = null;
     let chartProdPicking = null;
     let chartPedidos     = null;
+    let chartPlanWip     = null;
     let chartDespEvol    = null;
     let chartsPlanGauges = [];
     let chartsDespCanal  = [];
@@ -81,21 +88,21 @@
 
     const TAB_SLICERS = {
         'eficiencia'        : ['wrap-canal'],
-        'leadtime'          : [],
+        'leadtime'          : ['wrap-canal'],
         'stock'             : ['wrap-rubro', 'wrap-deposito'],
-        'prod-fact'         : ['wrap-tipo', 'wrap-rubro'],
+        'prod-fact'         : ['wrap-tipo', 'wrap-rubro', 'wrap-canal'],
         'prod-picking'      : ['wrap-usuario'],
         'planificacion'     : ['wrap-canal'],
         'despacho'          : ['wrap-canal', 'wrap-cliente'],
         'pedidos'           : ['wrap-canal'],
         'evolucion-remision': ['wrap-rubro'],
         'estancados'        : ['wrap-canal'],
-        'fill-rate'         : [],   // en construcción: sin slicers ni carga todavía
+        'fill-rate'         : ['wrap-canal'],
     };
 
     const HELP = {
         kpis: {
-            'kv-efi'            : ['Eficiencia de remisión', ['Proporción de las unidades pedidas que ya fueron remitidas.', '= Unidades remitidas ÷ Unidades pedidas', 'Pedidos por fecha de pedido. Excluye cancelados, Dist. Inicial y pedidos sin ninguna unidad remitida.', 'Meta: 95%. Verde si se alcanza, rojo si está por debajo.']],
+            'kv-efi'            : ['Eficiencia de remisión', ['Proporción de las unidades pedidas que ya fueron remitidas.', '= Unidades remitidas ÷ Unidades pedidas', 'Pedidos por fecha de pedido. Excluye cancelados, Dist. Inicial y pedidos sin ninguna unidad remitida.', 'Meta: 95%. Verde si se alcanza, rojo si está por debajo.', 'Para ver lo remitido por día y a qué pedido corresponde cada remito, ver la pestaña Fill Rate.']],
             'kv-unid-ped'       : ['Unidades pedidas', ['Total de unidades solicitadas en los pedidos del período (misma base que la eficiencia).', '= Var. % = (Período actual − Año anterior) ÷ Año anterior', 'Año anterior: mismas fechas un año atrás, con los mismos filtros.']],
             'kv-unid-fact'      : ['Unidades remitidas', ['Unidades efectivamente remitidas de los pedidos del período y filtros activos.']],
             'kv-perdida'        : ['Pérdida de remisión', ['Importe pendiente de remitir de los pedidos del período.', '= Pérdida = Σ Importe pendiente', '= % Pérdida = Importe pendiente ÷ Importe pedido', 'Solo pedidos con al menos una unidad remitida; excluye cancelados y Dist. Inicial. "prev": mismo cálculo un año atrás.', 'Tocá el ícono de gráfico para dar vuelta la tarjeta y ver la evolución de los últimos 12 meses (ampliable).']],
@@ -104,7 +111,7 @@
             'kv-lt-total'       : ['Comprobantes remitidos', ['Cantidad de comprobantes de remisión distintos con fecha de comprobante en el período.']],
             'kv-lt-dem'         : ['Remisión demorada', ['Comprobantes con lead time mayor a 5 días corridos desde el pedido.', '= % Demorada = Comprobantes con lead time > 5 días ÷ Total de comprobantes', 'Lead time = Fecha de comprobante − Fecha de pedido, en días corridos (incluye fines de semana y feriados).', 'Rojo si supera el 10%.']],
             'kv-lt-prom'        : ['Lead time promedio', ['Promedio de días corridos entre la fecha del pedido y la fecha de remisión.', '= Σ (Fecha de comprobante − Fecha de pedido) ÷ Cantidad de renglones remitidos']],
-            'kv-lt-abiertos'    : ['Pedidos abiertos', ['Pedidos que hoy están en estado PENDIENTE.', 'No depende del rango de fechas seleccionado: muestra la situación actual.']],
+            'kv-lt-abiertos'    : ['Pedidos abiertos', ['Pedidos que hoy están en estado PENDIENTE.', 'No depende del rango de fechas seleccionado: muestra la situación actual. Respeta el filtro de canal.']],
             'kv-stock-tango'    : ['Stock Tango', ['Stock registrado en el sistema Tango para los rubros filtrados.']],
             'kv-stock-wms'      : ['Stock WMS', ['Stock registrado en el sistema WMS para los rubros filtrados.']],
             'kv-stock-dif'      : ['Diferencia neta', ['Diferencia entre stock WMS y stock Tango; los positivos y negativos se compensan.', '= Σ (WMS − Tango)', '= % = Diferencia neta ÷ Stock Tango', 'Verde si el desvío es menor al 1%.']],
@@ -112,15 +119,15 @@
             'kv-stock-prec'     : ['Precisión de inventario', ['Qué parte del stock coincide entre WMS y Tango, ponderado por unidades.', '= 1 − (Diferencia absoluta ÷ Stock Tango)', 'Meta ideal: 99% o superior.']],
             'kv-pf-prom-dia'    : ['Promedio por día', ['Promedio de unidades remitidas por día con actividad, según el tipo de remisión y rubro seleccionados.', '= Unidades remitidas ÷ Días con actividad']],
             'kv-pf-pico-dia'    : ['Pico x día', ['Mayor cantidad de unidades remitidas en un único día del período (respeta los filtros).', '= Máx (unidades remitidas por día)']],
-            'kv-pf-pico-user'   : ['Pico x usuario', ['Mayor cantidad de unidades remitidas por un usuario en un solo día. No depende del filtro de tipo de remisión.', '= Máx (unidades por usuario y día)']],
-            'kv-pf-tendencia'   : ['Tendencia x día x usuario', ['Rendimiento diario típico de un usuario. No depende del filtro de tipo de remisión.', '= Mediana (unidades por usuario y día), solo días con más de 200 unidades']],
+            'kv-pf-pico-user'   : ['Pico x usuario', ['Mayor cantidad de unidades remitidas por un usuario en un solo día. No depende del filtro de tipo de remisión. Respeta rubro y canal.', '= Máx (unidades por usuario y día)']],
+            'kv-pf-tendencia'   : ['Tendencia x día x usuario', ['Rendimiento diario típico de un usuario. No depende del filtro de tipo de remisión. Respeta rubro y canal.', '= Mediana (unidades por usuario y día), solo días con más de 200 unidades']],
             'kv-pp-prom-dia'    : ['Promedio unid./día', ['Promedio de unidades pickeadas por día con actividad en el período.', '= Unidades pickeadas ÷ Días con actividad']],
             'kv-pp-pico-dia'    : ['Pico por día', ['Mayor cantidad de unidades preparadas en un único día del período.', '= Máx (unidades por día)']],
             'kv-pp-pico-usuario': ['Pico por usuario', ['Mayor cantidad de unidades preparadas por un único picker en un solo día del período.', '= Máx (unidades por picker y día)']],
             'kv-pp-prom'        : ['Promedio por picker', ['Unidades que prepara un picker en un día típico de trabajo.', '= Promedio (unidades por picker y día), solo días con 3 h productivas o más']],
             'kv-pp-u-hora'      : ['Promedio unid./hora', ['Unidades pickeadas por hora productiva registrada en el período (todos los días, sin mínimo de horas).', '= Unidades pickeadas ÷ Horas productivas']],
             'kv-pp-prom-hs'     : ['Promedio tiempo productivo', ['Horas productivas de un picker en un día típico de trabajo.', '= Promedio (horas por picker y día), solo días con 3 h productivas o más']],
-            'kv-dsp-efi'        : ['Eficacia de despacho total', ['Proporción de comprobantes despachados en término.', '= En término ÷ (En término + Fuera de plazo + Demorados)', 'Despachados: por fecha de guía. Demorados (aún sin despachar): por fecha comprometida.', 'Meta: 95%. Verde si se alcanza, rojo por debajo.']],
+            'kv-dsp-efi'        : ['Eficacia total (incluye demorados)', ['Proporción de comprobantes en término sobre todo el universo: incluye los demorados que todavía no se despacharon.', '= En término ÷ (En término + Fuera de plazo + Demorados)', 'Despachados: por fecha de guía. Demorados (aún sin despachar): por fecha comprometida.', 'Meta: 95%. Verde si se alcanza, rojo por debajo.']],
             'kv-dsp-dem-dias'   : ['Promedio días pedidos demorados', ['Promedio de días de desvío de los comprobantes demorados y fuera de plazo.', '= Promedio (Fecha comprometida − Fecha de guía)', 'Si todavía no se despachó, se toma la fecha de hoy. Negativo = atraso.']],
             'kv-dsp-guia-dias'  : ['Promedio días guía vs despacho', ['Promedio de días entre la fecha de guía y la fecha comprometida, sobre los comprobantes despachados.', '= Promedio (Fecha comprometida − Fecha de guía)', 'Negativo = despachado después de lo comprometido.']],
             'kv-pc-ped'         : ['Pedidos del período', ['Cantidad de pedidos distintos en el rango de fechas y canal seleccionados (incluye todos los estados).', '= Var. % = (Período actual − Año anterior) ÷ Año anterior']],
@@ -136,6 +143,12 @@
             'kv-est-ped'        : ['Pedidos estancados', ['Pedidos sin cancelar, con saldo pendiente y con antigüedad mayor o igual al umbral elegido.', '= Pedidos con Σ Unidades pendientes > 0 y (Hoy − Fecha de pedido) ≥ umbral', 'Abajo: cuántos no tienen ninguna unidad remitida y cuántos están remitidos en parte.']],
             'kv-est-unid'       : ['Unidades pendientes', ['Unidades que faltan remitir en los pedidos estancados.', '= Σ Unidades pendientes']],
             'kv-est-imp'        : ['Importe pendiente', ['Importe del saldo sin remitir de los pedidos estancados.', '= Σ Importe pendiente']],
+            'kv-fr-unid'        : ['Unidades remitidas', ['Unidades de todos los remitos del día elegido (cantidad real de cada remito).', '= Σ Cantidad de los remitos del día', 'Abajo: unidades en remitos que no se pudieron vincular a un pedido (sobre todo Dist. Inicial).']],
+            'kv-fr-remitos'     : ['Remitos', ['Cantidad de remitos distintos emitidos en el día.', 'Un remito puede incluir artículos de varios pedidos.']],
+            'kv-fr-pedidos'     : ['Pedidos atendidos', ['Pedidos distintos que recibieron al menos una unidad en los remitos del día.']],
+            'kv-fr-rate'        : ['Fill rate de los pedidos atendidos', ['Cuánto de lo pedido ya está remitido, en los pedidos que se atendieron ese día.', '= Σ (Pedidas − Pendientes) ÷ Σ Pedidas de los pedidos atendidos', 'Es el cumplimiento acumulado actual del pedido (todos sus remitos a hoy), no el que tenía al momento del remito.', 'Meta: 95%.']],
+            'kv-dsp-efi-desp'   : ['Despachado en término', ['De todo lo que se despachó en el período, qué parte salió dentro de la fecha comprometida.', '= En término ÷ (En término + Fuera de plazo)', 'No cuenta los demorados que todavía no se despacharon (esos sí entran en la Eficacia total).', 'Meta: 95%.']],
+            'kv-fr-completos'   : ['Pedidos completos', ['Pedidos atendidos en el día que ya no tienen unidades pendientes.', '= Pedidos con pendientes = 0 ÷ Pedidos atendidos']],
             'kv-est-dias'       : ['Antigüedad promedio', ['Días corridos promedio desde la fecha del pedido hasta hoy.', '= Promedio (Hoy − Fecha de pedido)', 'Abajo: el pedido estancado más viejo.']],
         },
         sections: {
@@ -164,6 +177,10 @@
             'tabla-dem-pedido'      : ['Pedidos demorados — desglose por pedido', ['Detalle de pedidos demorados con estado, fecha comprometida y días de demora.']],
             'chart-pedidos-evol'    : ['Evolución mensual de pedidos', ['Cantidad de pedidos consolidados por mes en los últimos 12 meses.']],
             'tabla-pedidos'         : ['Pedidos consolidados', ['Detalle de pedidos con estado, canal, talón y unidades pedidas, pendientes y remitidas.']],
+            'chart-plan-wip'        : ['WIP por día de entrega', ['Trabajo en curso: unidades de pedidos pendientes con fecha de entrega de hoy en adelante, por día.', '= WIP = Σ Unidades pendientes con fecha de entrega ≥ hoy', 'Muestra hoy y los próximos 10 días hábiles; lo posterior se agrupa en una barra.', 'Vencidos (en el encabezado): pendientes con entrega ya vencida en los últimos 30 días, fuera del WIP.']],
+            'tabla-fr-ingreso'      : ['Ingreso del día anterior', ['Pedidos cargados el día calendario anterior al elegido (sin cancelados), y cuánto de eso ya se cumplió.', '= % Cumpl. = Σ (Pedidas − Pendientes) ÷ Σ Pedidas de los pedidos cargados ese día', 'Remitido el día elegido: unidades de esos pedidos que salieron en los remitos del día elegido.', 'Completos: pedidos sin unidades pendientes. El cumplimiento es el acumulado actual.']],
+            'tabla-fr-apertura'     : ['Apertura por canal y tipo', ['Unidades remitidas, remitos y pedidos atendidos del día por canal y tipo de remisión.', '= Fill rate = Σ (Pedidas − Pendientes) ÷ Σ Pedidas de los pedidos del grupo']],
+            'tabla-fr-detalle'      : ['Remito → pedido', ['Cada fila es un remito del día y uno de los pedidos que incluye, con el cumplimiento acumulado actual de ese pedido.', '= % Cumpl. = Remitidas acum. ÷ Unidades pedidas', 'Si un mismo artículo del remito figura en dos pedidos, sus unidades se reparten en proporción a lo pedido.', 'Sin pedido: remitos que no se pudieron vincular a un pedido.', 'Clic en una fila con pedido para ver el detalle por rubro.']],
             'tabla-est-tramos'      : ['Estancados por antigüedad', ['Pedidos estancados agrupados por días corridos desde la fecha del pedido.', 'Solo aparecen los tramos que superan el umbral elegido.']],
             'tabla-est-clientes'    : ['Concentración por cliente', ['Los 30 clientes con más importe pendiente en pedidos estancados: por dónde empezar a reclamar o depurar.', 'Clic en un cliente para filtrar el listado; clic de nuevo para quitar el filtro.']],
             'tabla-est-pedidos'     : ['Pedidos estancados', ['Pedidos sin cancelar, con saldo pendiente y antigüedad ≥ umbral, ordenados por importe pendiente.', 'Sin remitir: ninguna unidad remitida. Parcial: remitido en parte.', 'Muestra hasta 3.000 pedidos; el Excel exporta lo que se ve con los filtros aplicados.', 'Clic en un pedido para ver el detalle por rubro.']],
@@ -267,6 +284,20 @@
                 'Unidades pedidas.',
                 'Unidades pendientes de remitir.',
                 'Unidades ya remitidas.',
+            ],
+            'tabla-fr-detalle': [
+                'Número de remito.',
+                'Pedido al que corresponde (vacío: sin pedido asociado).',
+                'Fecha de ingreso del pedido.',
+                'Cliente.',
+                'Canal.',
+                'Tipo de remisión.',
+                'Unidades de este pedido que salieron en este remito.',
+                'Unidades pedidas en total en el pedido.',
+                'Unidades remitidas del pedido a hoy (todos sus remitos).',
+                'Unidades del pedido que todavía faltan remitir.',
+                'Cumplimiento acumulado: remitidas ÷ pedidas.',
+                'Completo: sin pendientes. Parcial: con saldo.',
             ],
             'tabla-est-pedidos': [
                 'Número de pedido.',
@@ -384,6 +415,7 @@
                 case 'pedidos':       await loadPedidos();    break;
                 case 'evolucion-remision': await loadEvolucionRemision(); break;
                 case 'estancados':    await loadEstancados(); break;
+                case 'fill-rate':     await loadFillRate();   break;
             }
             Cache[tab] = true;
         } catch (e) {
@@ -772,7 +804,7 @@
 
     // ── Área 2: Lead Time ─────────────────────────────────────────────────
     async function loadLeadTime() {
-        const data = await apiFetch('leadtime');
+        const data = await apiFetch('leadtime', { canal: State.canal });
         const k = data.kpis || {};
 
         $('#kv-lt-total').text(fmt.num(k.COMP_FACTURADOS));
@@ -950,7 +982,7 @@
 
     // ── Área 4: Productividad Facturación ─────────────────────────────────
     async function loadProdFact() {
-        const data = await apiFetch('productividad_fact', { tipo: State.tipo, rubro: State.rubroFact });
+        const data = await apiFetch('productividad_fact', { tipo: State.tipo, rubro: State.rubroFact, canal: State.canal });
         const k = data.kpis || {};
 
         $('#kv-pf-prom-dia').text(fmt.num(k.PROMEDIO_DIA));
@@ -1291,6 +1323,28 @@
         $('#pl-hoy-dem').text(fmt.num(k.PED_DEMORADOS));
         $('#kv-pl-prom-dia').text(fmt.num(k.PROM_UNID_DIA, 0));
 
+        // WIP: pendiente con entrega de hoy en adelante (vencidos aparte)
+        $('#kv-pl-wip').text(fmt.num(k.WIP_UNID));
+        $('#kv-pl-wip-ped').text(fmt.num(k.WIP_PED));
+        $('#kv-pl-venc').text(parseFloat(k.VENC_UNID) > 0 ? `· ${fmt.num(k.VENC_UNID)} vencidas (30 d)` : '');
+        const wip = data.wip || [];
+        if (chartPlanWip) chartPlanWip.destroy();
+        const wipOpts = chartOptions('Unidades', {}, { integer: true });
+        wipOpts.plugins.legend = { display: false };
+        chartPlanWip = new Chart($('#chart-plan-wip')[0], {
+            type: 'bar',
+            data: {
+                labels  : wip.map(r => r.FECHA === 'POSTERIOR' ? 'Posterior' : fmt.date(r.FECHA).substring(0, 5)),
+                datasets: [{
+                    label          : 'Unidades pendientes',
+                    data           : wip.map(r => parseFloat(r.UNIDADES) || 0),
+                    backgroundColor: wip.map(r => r.FECHA === 'POSTERIOR' ? 'rgba(100,116,139,.45)' : 'rgba(37,99,235,.65)'),
+                    borderRadius   : 4,
+                }],
+            },
+            options: wipOpts,
+        });
+
         State.pendientes = data.pendientes || [];
         renderPendientes();
 
@@ -1321,6 +1375,8 @@
 
         $('#kv-dsp-efi').text(fmt.pct(k.EFICACIA_TOTAL, 0));
         setVar('#kvar-dsp-efi', fmt.varLabel(k.EFICACIA_TOTAL, k.META));
+        $('#kv-dsp-efi-desp').text(k.EFICACIA_DESPACHADOS == null ? '—' : fmt.pct(k.EFICACIA_DESPACHADOS, 0));
+        setVar('#kvar-dsp-efi-desp', k.EFICACIA_DESPACHADOS == null ? { text: '', cls: 'neu' } : fmt.varLabel(k.EFICACIA_DESPACHADOS, k.META));
         const demD = k.DESVIO_PROM_DEMORADOS, guiaD = k.DESVIO_PROM_GUIA;
         $('#kv-dsp-dem-dias').text(fmtDias(demD)).css('color', parseFloat(demD) < 0 ? 'var(--neg)' : 'var(--text-1)');
         $('#kv-dsp-guia-dias').text(fmtDias(guiaD)).css('color', parseFloat(guiaD) < 0 ? 'var(--neg)' : 'var(--text-1)');
@@ -2109,6 +2165,155 @@
         });
     }
 
+    // ── Área 10: Fill Rate por remito ─────────────────────────────────────
+    let frExportInit = false;
+
+    function frAddDays(ymd, n) {   // aritmética en UTC para no correr el día por huso horario
+        const d = new Date(ymd + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().substring(0, 10);
+    }
+
+    async function loadFillRate() {
+        const data = await apiFetch('fill_rate', { fecha: State.frFecha, canal: State.canal, tipo: State.frTipo });
+        const k = data.kpis || {};
+
+        // El SP resuelve la fecha (último día con datos si vino vacía)
+        State.frFecha    = k.FECHA || State.frFecha;
+        State.frFechaMax = k.FECHA_MAX || '';
+        $('#fr-fecha').val(State.frFecha).attr('max', State.frFechaMax);
+        $('#fr-next').prop('disabled', !State.frFechaMax || State.frFecha >= State.frFechaMax);
+        $('#fr-ultimo').prop('disabled', !State.frFechaMax || State.frFecha === State.frFechaMax);
+        $('#fr-carga').text('Datos cargados hasta ' + fmt.date(State.frFechaMax) + ' · para pedido vs cumplido ver Eficiencia');
+
+        const ped = parseInt(k.PEDIDOS, 10) || 0;
+        $('#kv-fr-unid').text(fmt.num(k.UNID_REMITIDAS));
+        setVar('#kvar-fr-unid', { text: parseFloat(k.UNID_SIN_PEDIDO) > 0 ? fmt.num(k.UNID_SIN_PEDIDO) + ' sin pedido asociado' : '', cls: 'neu' });
+        $('#kv-fr-remitos').text(fmt.num(k.REMITOS));
+        setVar('#kvar-fr-remitos', { text: parseInt(k.REMITOS_SIN_PEDIDO, 10) > 0 ? fmt.num(k.REMITOS_SIN_PEDIDO) + ' sin pedido' : '', cls: 'neu' });
+        $('#kv-fr-pedidos').text(fmt.num(ped));
+        $('#kv-fr-rate').text(k.FILL_RATE == null ? '—' : fmt.pct(k.FILL_RATE));
+        setVar('#kvar-fr-rate', k.FILL_RATE == null ? { text: '', cls: 'neu' } : fmt.varLabel(k.FILL_RATE, k.META));
+        $('#kv-fr-completos').text(fmt.num(k.PED_COMPLETOS));
+        setVar('#kvar-fr-completos', { text: ped > 0 ? fmt.pct(k.PED_COMPLETOS / ped) + ' de los atendidos' : '', cls: 'neu' });
+
+        renderTablaSimple('#tbody-fr-apertura', data.apertura || [],
+            r => `<td>${escapeHtml(r.CANAL || '—')}</td><td>${escapeHtml(r.TIPO_FACTURACION || '—')}</td>` +
+                 `<td class="col-num">${fmt.num(r.UNID_REMITIDAS)}</td><td class="col-num">${fmt.num(r.REMITOS)}</td>` +
+                 `<td class="col-num">${fmt.num(r.PEDIDOS)}</td><td class="col-num">${fmt.num(r.PED_COMPLETOS)}</td>` +
+                 `<td class="col-num" style="color:${efiColor(r.FILL_RATE == null ? null : parseFloat(r.FILL_RATE))};font-weight:600">` +
+                 `${r.FILL_RATE == null ? '—' : fmt.pct(r.FILL_RATE)}</td>`
+        );
+
+        // Ingreso del día anterior (pedidos cargados en D−1)
+        const ing = data.ingreso || {};
+        const ingCumpl = ing.ING_CUMPL == null ? null : parseFloat(ing.ING_CUMPL);
+        $('#fr-ing-fecha').text(ing.ING_FECHA
+            ? `Pedidos cargados el ${fmt.date(ing.ING_FECHA)} · cumplimiento acumulado a hoy`
+            : 'Pedidos cargados el día anterior al elegido');
+        $('#kv-fr-ing-ped').text(fmt.num(ing.ING_PEDIDOS));
+        $('#kv-fr-ing-unid').text(fmt.num(ing.ING_UNID_PEDIDAS));
+        $('#kv-fr-ing-rem').text(fmt.num(ing.ING_UNID_REMITIDAS_ACUM));
+        $('#kv-fr-ing-pend').text(fmt.num(ing.ING_UNID_PENDIENTES));
+        $('#kv-fr-ing-cumpl').text(ingCumpl == null ? '—' : fmt.pct(ingCumpl)).css('color', efiColor(ingCumpl));
+        $('#kv-fr-ing-comp').text(fmt.num(ing.ING_COMPLETOS));
+        $('#kv-fr-ing-end').text(fmt.num(ing.ING_REMITIDAS_EN_D));
+        renderTablaSimple('#tbody-fr-ingreso', data.ingreso_canal || [],
+            r => {
+                const c = r.CUMPL == null ? null : parseFloat(r.CUMPL);
+                return `<td>${escapeHtml(r.CANAL || '—')}</td><td class="col-num">${fmt.num(r.PEDIDOS)}</td>` +
+                    `<td class="col-num">${fmt.num(r.UNID_PEDIDAS)}</td><td class="col-num">${fmt.num(r.UNID_REMITIDAS_ACUM)}</td>` +
+                    `<td class="col-num">${fmt.num(r.UNID_PENDIENTES)}</td>` +
+                    `<td class="col-num" style="color:${efiColor(c)};font-weight:600">${c == null ? '—' : fmt.pct(c)}</td>` +
+                    `<td class="col-num">${fmt.num(r.COMPLETOS)}</td><td class="col-num">${fmt.num(r.REMITIDAS_EN_D)}</td>`;
+            }
+        );
+
+        State.frDetalle = data.detalle || [];
+        renderFillRate();
+
+        if (!frExportInit) {
+            ExcelExporter.addExportButton(document.getElementById('hdr-fr-detalle'), exportFillRate);
+            frExportInit = true;
+        }
+    }
+
+    function filtrarFillRate() {
+        const q  = State.frBusca.trim().toUpperCase();
+        const q0 = q.replace(/^0+/, '');
+        return State.frDetalle.filter(r => {
+            if (State.frFiltro !== 'ALL' && r.ESTADO !== State.frFiltro) return false;
+            if (!q) return true;
+            const ped = String(r.NRO_PEDIDO || '');
+            return String(r.N_COMP || '').toUpperCase().includes(q) ||
+                   String(r.CLIENTE || '').toUpperCase().includes(q) ||
+                   ped.includes(q) || (q0 !== '' && ped.replace(/^0+/, '').includes(q0));
+        });
+    }
+
+    function renderFillRate() {
+        const rows = filtrarFillRate();
+        $('#fr-count').text(`${fmt.num(rows.length)} filas · clic en un pedido para ver el detalle`);
+        const BADGE = {
+            'COMPLETO'  : ['badge-facturado',  'Completo'],
+            'PARCIAL'   : ['badge-parcial',    'Parcial'],
+            'SIN PEDIDO': ['badge-sin-pedido', 'Sin pedido'],
+            'SIN DATOS' : ['badge-sin-pedido', 'Sin datos'],
+        };
+        renderTablaSimple('#tbody-fr-detalle', rows,
+            r => {
+                const [bCls, bTxt] = BADGE[r.ESTADO] || ['badge-sin-pedido', r.ESTADO || '—'];
+                const cumpl = r.CUMPL == null ? null : parseFloat(r.CUMPL);
+                return `<td>${escapeHtml(r.N_COMP)}</td><td>${escapeHtml(r.NRO_PEDIDO || '—')}</td>` +
+                    `<td>${fmt.date(r.FECHA_PEDI)}</td>` +
+                    `<td title="${escapeHtml(r.CLIENTE || '')}">${escapeHtml(r.CLIENTE || '—')}</td>` +
+                    `<td>${escapeHtml(r.CANAL || '—')}</td><td>${escapeHtml(r.TIPO_FACTURACION || '—')}</td>` +
+                    `<td class="col-num">${fmt.num(r.UNID_REMITO)}</td><td class="col-num">${fmt.num(r.UNID_PEDIDAS)}</td>` +
+                    `<td class="col-num">${fmt.num(r.UNID_REMITIDAS_ACUM)}</td><td class="col-num">${fmt.num(r.UNID_PENDIENTES)}</td>` +
+                    `<td class="col-num" style="color:${efiColor(cumpl)};font-weight:600">${cumpl == null ? '—' : fmt.pct(cumpl)}</td>` +
+                    `<td><span class="badge-estado ${bCls}">${bTxt}</span></td>`;
+            },
+            r => r.NRO_PEDIDO || null
+        );
+    }
+
+    function exportFillRate() {
+        const rows = filtrarFillRate();
+        if (!rows.length) {
+            alert('No hay filas para exportar con los filtros actuales.');
+            return;
+        }
+        const filtros = [
+            'Remitos del ' + fmt.date(State.frFecha),
+            State.canal  ? 'Canal: ' + State.canal : '',
+            State.frTipo ? 'Tipo: ' + State.frTipo : '',
+            State.frFiltro !== 'ALL' ? 'Estado: ' + State.frFiltro : '',
+            State.frBusca.trim() ? 'Búsqueda: ' + State.frBusca.trim() : '',
+        ].filter(Boolean).join(' · ');
+        const num = v => (v == null || v === '') ? '' : parseFloat(v);
+        ExcelExporter.export({
+            title     : `Fill Rate — ${filtros}`,
+            headers   : ['Remito', 'Pedido', 'Talón', 'Fecha pedido', 'Cliente', 'Canal', 'Tipo', 'Estado Tango',
+                         'Unid. remito', 'Unid. pedidas', 'Remitidas acum.', 'Pendientes', '% Cumplimiento', 'Estado'],
+            rows      : rows.map(r => [
+                r.N_COMP || '', r.NRO_PEDIDO || '', r.TALON_PED ?? '', r.FECHA_PEDI ? fmt.date(r.FECHA_PEDI) : '',
+                r.CLIENTE || '', r.CANAL || '', r.TIPO_FACTURACION || '', r.ESTADO_TANGO || '',
+                num(r.UNID_REMITO), num(r.UNID_PEDIDAS), num(r.UNID_REMITIDAS_ACUM), num(r.UNID_PENDIENTES),
+                num(r.CUMPL), r.ESTADO || '',
+            ]),
+            colFormats: ['text', 'text', 'num', 'text', 'text', 'text', 'text', 'text', 'num1', 'num', 'num', 'num', 'pct', 'text'],
+            filename  : 'fill_rate_' + State.frFecha,
+        });
+    }
+
+    function frIrA(fecha) {
+        if (!fecha || fecha === State.frFecha) return;
+        if (State.frFechaMax && fecha > State.frFechaMax) fecha = State.frFechaMax;
+        State.frFecha = fecha;
+        delete Cache['fill-rate'];
+        loadTab('fill-rate');
+    }
+
     function efiColor(pct) {
         if (pct == null) return 'var(--text-1)';
         return pct >= 0.95 ? 'var(--pos)' : pct >= 0.85 ? 'var(--accent3)' : 'var(--neg)';
@@ -2251,6 +2456,33 @@
             if (State.estCliente) $(this).addClass('activo');
             renderEstancados();
         });
+        // Fill Rate: día y tipo recalculan en el servidor; estado y búsqueda filtran en el cliente
+        $('#fr-fecha').on('change', function () { frIrA(this.value); });
+        $('#fr-prev').on('click', function () { if (State.frFecha) frIrA(frAddDays(State.frFecha, -1)); });
+        $('#fr-next').on('click', function () { if (State.frFecha) frIrA(frAddDays(State.frFecha, 1)); });
+        $('#fr-ultimo').on('click', function () { frIrA(State.frFechaMax); });
+        $('#fr-tipo').on('click', '.pill', function () {
+            const t = String($(this).data('t') || '');
+            if (t === State.frTipo) return;
+            $('#fr-tipo .pill').removeClass('active');
+            $(this).addClass('active');
+            State.frTipo = t;
+            delete Cache['fill-rate'];
+            loadTab('fill-rate');
+        });
+        $('#fr-filtro').on('click', '.pill', function () {
+            $('#fr-filtro .pill').removeClass('active');
+            $(this).addClass('active');
+            State.frFiltro = $(this).data('f');
+            renderFillRate();
+        });
+        let frBuscaTimer = null;
+        $('#fr-busca').on('input', function () {
+            clearTimeout(frBuscaTimer);
+            const v = this.value;
+            frBuscaTimer = setTimeout(() => { State.frBusca = v; renderFillRate(); }, 200);
+        });
+
         $('#est-cliente-activo').on('click', '#est-cliente-quitar', function () {
             State.estCliente = '';
             $('#tbody-est-clientes tr.est-cli-row').removeClass('activo');
