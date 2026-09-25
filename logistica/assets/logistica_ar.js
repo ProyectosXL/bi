@@ -1523,30 +1523,36 @@
 
         // Gráfica 1: Universo Todas las Distribuciones (Franquicias vs Propios)
         const d1Fran = evol.map(r => isUnid ? parseFloat(r.DIST_FRANQ_UNID || 0) : parseFloat(r.DIST_FRANQ_PED || 0));
+        const d1FranLoc = evol.map(r => parseInt(r.DIST_FRANQ_LOCALES || 0));
         const d1Prop = evol.map(r => isUnid ? parseFloat(r.DIST_PROPIOS_UNID || 0) : parseFloat(r.DIST_PROPIOS_PED || 0));
+        const d1PropLoc = evol.map(r => parseInt(r.DIST_PROPIOS_LOCALES || 0));
         chartRemDist = createStackedRemChart(
             chartRemDist,
             'chart-rem-distribuciones',
             labels,
             [
-                { label: 'Franquicias', data: d1Fran, color: COLOR_FRANQ },
-                { label: 'Locales Propios', data: d1Prop, color: COLOR_PROP }
+                { label: 'Franquicias', data: d1Fran, locales: d1FranLoc, color: COLOR_FRANQ },
+                { label: 'Locales Propios', data: d1Prop, locales: d1PropLoc, color: COLOR_PROP }
             ],
-            'Distribuciones'
+            'Distribuciones',
+            true
         );
 
         // Gráfica 2: Universo Todas las Reposiciones (Franquicias vs Propios)
         const d2Fran = evol.map(r => isUnid ? parseFloat(r.REPO_FRANQ_UNID || 0) : parseFloat(r.REPO_FRANQ_PED || 0));
+        const d2FranLoc = evol.map(r => parseInt(r.REPO_FRANQ_LOCALES || 0));
         const d2Prop = evol.map(r => isUnid ? parseFloat(r.REPO_PROPIOS_UNID || 0) : parseFloat(r.REPO_PROPIOS_PED || 0));
+        const d2PropLoc = evol.map(r => parseInt(r.REPO_PROPIOS_LOCALES || 0));
         chartRemRepo = createStackedRemChart(
             chartRemRepo,
             'chart-rem-reposiciones',
             labels,
             [
-                { label: 'Franquicias', data: d2Fran, color: COLOR_FRANQ },
-                { label: 'Locales Propios', data: d2Prop, color: COLOR_PROP }
+                { label: 'Franquicias', data: d2Fran, locales: d2FranLoc, color: COLOR_FRANQ },
+                { label: 'Locales Propios', data: d2Prop, locales: d2PropLoc, color: COLOR_PROP }
             ],
-            'Reposiciones'
+            'Reposiciones',
+            true
         );
 
         // Gráfica 3: Universo Propios (Distribución vs Reposición)
@@ -1595,7 +1601,7 @@
         renderRemisionTabla();
     }
 
-    function createStackedRemChart(existingChart, canvasId, labels, series, universeTitle) {
+    function createStackedRemChart(existingChart, canvasId, labels, series, universeTitle, hasLocales = false) {
         if (existingChart) existingChart.destroy();
         const canvas = document.getElementById(canvasId);
         if (!canvas) return null;
@@ -1637,6 +1643,9 @@
                     meta.data.forEach((bar, index) => {
                         const pct = dataset.data[index] || 0;
                         const rawVal = dataset.rawValues[index] || 0;
+                        const locs = dataset.locales ? (dataset.locales[index] || 0) : null;
+                        const prom = (locs && locs > 0) ? (rawVal / locs) : null;
+
                         if (pct < 5) return; // Si es menor a 5%, no dibujar dentro
 
                         const { x, y, base } = bar;
@@ -1654,7 +1663,19 @@
                         ctx.shadowOffsetX = 0;
                         ctx.shadowOffsetY = 1;
 
-                        if (height >= 38) {
+                        if (locs != null && height >= 48) {
+                            ctx.font = 'bold 12px Inter, system-ui, -apple-system, sans-serif';
+                            ctx.fillText(pct.toFixed(1) + '%', x, centerY - 12);
+                            ctx.font = '600 10px Inter, system-ui, -apple-system, sans-serif';
+                            ctx.fillText(fmt.num(rawVal), x, centerY);
+                            ctx.font = '500 9px Inter, system-ui, -apple-system, sans-serif';
+                            ctx.fillText(`${locs} loc · ⌀ ${fmt.num(prom, 0)}`, x, centerY + 11);
+                        } else if (locs != null && height >= 34) {
+                            ctx.font = 'bold 11px Inter, system-ui, -apple-system, sans-serif';
+                            ctx.fillText(pct.toFixed(1) + '% (' + fmt.num(rawVal) + ')', x, centerY - 6);
+                            ctx.font = '500 9px Inter, system-ui, -apple-system, sans-serif';
+                            ctx.fillText(`⌀ ${fmt.num(prom, 0)} (${locs} loc)`, x, centerY + 6);
+                        } else if (height >= 38) {
                             ctx.font = 'bold 12px Inter, system-ui, -apple-system, sans-serif';
                             ctx.fillText(pct.toFixed(1) + '%', x, centerY - 7);
                             ctx.font = '600 10.5px Inter, system-ui, -apple-system, sans-serif';
@@ -1703,6 +1724,7 @@
                         borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 4, bottomRight: 4 },
                         maxBarThickness: 90,
                         rawValues: series[0].data,
+                        locales: series[0].locales || null,
                     },
                     {
                         label: series[1].label,
@@ -1711,6 +1733,7 @@
                         borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 },
                         maxBarThickness: 90,
                         rawValues: series[1].data,
+                        locales: series[1].locales || null,
                     }
                 ]
             },
@@ -1760,11 +1783,21 @@
                     tooltip: {
                         callbacks: {
                             label: function (ctx) {
+                                const ds = ctx.dataset;
                                 const dsIdx = ctx.datasetIndex;
                                 const dataIdx = ctx.dataIndex;
                                 const pctVal = ctx.parsed.y || 0;
-                                const rawVal = ctx.dataset.rawValues[dataIdx] || 0;
-                                return ` ${ctx.dataset.label}: ${pctVal.toFixed(1)}% (${fmt.num(rawVal)} ${metricLabel})`;
+                                const rawVal = ds.rawValues[dataIdx] || 0;
+                                const locs   = ds.locales ? (ds.locales[dataIdx] || 0) : null;
+
+                                if (locs != null && locs > 0) {
+                                    const prom = rawVal / locs;
+                                    return [
+                                        ` ${ds.label}: ${pctVal.toFixed(1)}% (${fmt.num(rawVal)} ${metricLabel})`,
+                                        `    ↳ ${locs} ptos. venta | Promedio: ${fmt.num(prom, 1)} ${metricLabel}/local`
+                                    ];
+                                }
+                                return ` ${ds.label}: ${pctVal.toFixed(1)}% (${fmt.num(rawVal)} ${metricLabel})`;
                             },
                             footer: function (items) {
                                 if (!items.length) return '';
@@ -1799,22 +1832,29 @@
         const $tfoot = $('#tfoot-remision-detalle').empty();
 
         if (!rows.length) {
-            $tbody.html('<tr><td colspan="8"><div class="empty-state"><i class="bi bi-inbox"></i> Sin datos para el filtro seleccionado</div></td></tr>');
+            $tbody.html('<tr><td colspan="11"><div class="empty-state"><i class="bi bi-inbox"></i> Sin datos para el filtro seleccionado</div></td></tr>');
             return;
         }
 
         // Totales del grupo visualizado
-        let totPed = 0, totFact = 0, totPedidas = 0;
+        let totPed = 0, totFact = 0, totPedidas = 0, totLocales = 0;
         rows.forEach(r => {
+            totLocales += parseInt(r.CANT_LOCALES || 0);
             totPed     += parseFloat(r.CANT_PEDIDOS || 0);
             totFact    += parseFloat(r.UNID_FACTURADAS || 0);
             totPedidas += parseFloat(r.UNID_PEDIDAS || 0);
         });
 
+        const globalPromPed = totLocales > 0 ? (totPed / totLocales) : 0;
+        const globalPromFact = totLocales > 0 ? (totFact / totLocales) : 0;
+
         const html = rows.map(r => {
+            const locs = parseInt(r.CANT_LOCALES || 0);
             const peds = parseFloat(r.CANT_PEDIDOS || 0);
             const fact = parseFloat(r.UNID_FACTURADAS || 0);
             const pedi = parseFloat(r.UNID_PEDIDAS || 0);
+            const promPed = locs > 0 ? (peds / locs) : 0;
+            const promFact = locs > 0 ? (fact / locs) : 0;
             const pctPed = totPed > 0 ? (peds / totPed) : 0;
             const pctFact = totFact > 0 ? (fact / totFact) : 0;
 
@@ -1830,9 +1870,12 @@
                 <td><strong>${r.MES_ANIO || r.PERIODO}</strong></td>
                 <td>${badgeCanal}</td>
                 <td>${badgeTipo}</td>
+                <td class="col-num">${fmt.num(locs)}</td>
                 <td class="col-num">${fmt.num(peds)}</td>
+                <td class="col-num" style="color:var(--accent2);font-weight:600">${fmt.num(promPed, 1)}</td>
                 <td class="col-num">${fmt.pct(pctPed)}</td>
                 <td class="col-num">${fmt.num(fact)}</td>
+                <td class="col-num" style="color:var(--accent);font-weight:600">${fmt.num(promFact, 1)}</td>
                 <td class="col-num">${fmt.pct(pctFact)}</td>
                 <td class="col-num">${fmt.num(pedi)}</td>
             </tr>`;
@@ -1842,9 +1885,12 @@
 
         $tfoot.html(`<tr>
             <td colspan="3"><strong>Total ${remisionFilterMes ? '(' + remisionFilterMes + ')' : 'Consolidado'}</strong></td>
+            <td class="col-num"><strong>${fmt.num(totLocales)}</strong></td>
             <td class="col-num"><strong>${fmt.num(totPed)}</strong></td>
+            <td class="col-num" style="color:var(--accent2)"><strong>${fmt.num(globalPromPed, 1)}</strong></td>
             <td class="col-num"><strong>100.0%</strong></td>
             <td class="col-num"><strong>${fmt.num(totFact)}</strong></td>
+            <td class="col-num" style="color:var(--accent)"><strong>${fmt.num(globalPromFact, 1)}</strong></td>
             <td class="col-num"><strong>100.0%</strong></td>
             <td class="col-num"><strong>${fmt.num(totPedidas)}</strong></td>
         </tr>`);

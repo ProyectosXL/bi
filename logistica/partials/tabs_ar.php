@@ -941,7 +941,7 @@
         <div class="analisis-card">
             <div class="analisis-section-header">
                 <i class="bi bi-table"></i> Detalle Mensual por Canal y Tipo de Remisión
-                <span class="header-sub">Filtrable por mes mediante clics en los gráficos</span>
+                <span class="header-sub">Incluye cantidad de locales y promedio por punto de venta · filtrable por mes</span>
             </div>
             <div class="table-wrap" style="max-height:450px;overflow-y:auto">
                 <table id="tabla-remision-detalle" class="tabla-drill">
@@ -950,9 +950,16 @@
                             <th>Mes / Período</th>
                             <th>Canal</th>
                             <th>Tipo de Remisión</th>
+                            <th class="col-num">Cant. Locales</th>
                             <th class="col-num">Cant. Pedidos</th>
+                            <th class="col-num">Prom. Ped./Loc.</th>
                             <th class="col-num">% Pedidos</th>
+<<<<<<< HEAD
                             <th class="col-num">Unid. Remitidas</th>
+=======
+                            <th class="col-num">Unid. Facturadas</th>
+                            <th class="col-num">Prom. Unid./Loc.</th>
+>>>>>>> b14411c3bd81a6c33b1016861ee18c9cb519d2bf
                             <th class="col-num">% Unid. Fact.</th>
                             <th class="col-num">Unid. Pedidas</th>
                         </tr>

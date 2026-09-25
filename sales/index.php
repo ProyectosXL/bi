@@ -471,6 +471,16 @@ try {
             </div>
         </div>
 
+        <!-- Tabla desglose mensual de unidades y variación -->
+        <div class="table-card" style="margin-top:16px;">
+            <div class="table-card-header">
+                <i class="bi bi-table"></i>&nbsp; Desglose Mensual de Unidades y Variación (Año Actual vs Año Anterior)
+            </div>
+            <div class="table-wrap" id="tabla-variacion-mensual-wrap">
+                <div class="analisis-loading" style="padding:20px"><i class="bi bi-arrow-repeat"></i> <span class="loading-text">Cargando</span></div>
+            </div>
+        </div>
+
     </main>
 </div>
 <!-- /tab-variacion -->
@@ -1526,11 +1536,99 @@ async function cargarVariacion(force = false) {
         // Gráfico participación apilado
         buildParticipacionChart(data.participacion);
 
+        // Tabla desglose mensual de unidades y variación
+        renderTablaVariacionMensual(data.variacion, data.anio_actual, data.anio_prev);
+
     } catch(e) {
         console.error('Error variacion:', e);
     } finally {
         doneLoading();
     }
+}
+
+function renderTablaVariacionMensual(rows, anioAct, anioPrev) {
+    const wrap = document.getElementById('tabla-variacion-mensual-wrap');
+    if (!wrap) return;
+    if (!rows || rows.length === 0) {
+        wrap.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-3)">Sin datos</div>';
+        return;
+    }
+
+    const anioA = anioAct || new Date().getFullYear();
+    const anioP = anioPrev || (anioA - 1);
+    const mesActual = new Date().getMonth() + 1;
+
+    const thStyle = 'background:var(--bg-header);color:rgba(255,255,255,.9);padding:7px 12px;text-align:right;font-family:var(--font-display);font-weight:600;font-size:.82rem;white-space:nowrap';
+    const thLStyle = 'background:var(--bg-header);color:rgba(255,255,255,.9);padding:7px 12px;text-align:left;font-family:var(--font-display);font-weight:600;font-size:.82rem;white-space:nowrap';
+
+    let html = `
+        <table style="width:100%;border-collapse:collapse;font-size:.84rem">
+            <thead>
+                <tr>
+                    <th style="${thLStyle}">Mes</th>
+                    <th style="${thStyle}">Unidades ${anioA}</th>
+                    <th style="${thStyle}">Unidades ${anioP}</th>
+                    <th style="${thStyle}">Diferencia</th>
+                    <th style="${thStyle}">Var %</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    let totAct = 0, totPrev = 0;
+
+    rows.forEach(r => {
+        const mesIdx = r.mes - 1;
+        const nombreMes = MESES[mesIdx] || `Mes ${r.mes}`;
+        const ua = r.unid_act || 0;
+        const up = r.unid_prev || 0;
+        const diff = ua - up;
+        const vPct = r.var;
+
+        const isFuturo = (r.mes > mesActual && ua === 0);
+        
+        if (!isFuturo) {
+            totAct += ua;
+            totPrev += up;
+        }
+
+        const strAct = isFuturo ? '—' : fmtN(ua);
+        const strPrev = fmtN(up);
+        const strDiff = isFuturo ? '—' : (diff > 0 ? '+' : '') + fmtN(diff);
+        const diffClass = isFuturo ? '' : varClass(diff);
+        const strVar = (vPct !== null && vPct !== undefined) ? fmtPct(vPct) : '—';
+        const varCls = (vPct !== null && vPct !== undefined) ? varClass(vPct) : '';
+
+        html += `
+            <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 12px;font-weight:500;white-space:nowrap">${nombreMes}</td>
+                <td style="padding:6px 12px;text-align:right;font-weight:600;white-space:nowrap">${strAct}</td>
+                <td style="padding:6px 12px;text-align:right;color:var(--text-3);white-space:nowrap">${strPrev}</td>
+                <td style="padding:6px 12px;text-align:right;font-weight:500;white-space:nowrap" class="${diffClass}">${strDiff}</td>
+                <td style="padding:6px 12px;text-align:right;font-weight:600;white-space:nowrap" class="${varCls}">${strVar}</td>
+            </tr>
+        `;
+    });
+
+    // Fila Total Acumulado YTD
+    const totDiff = totAct - totPrev;
+    const totVar = totPrev > 0 ? (totDiff / totPrev) * 100 : null;
+
+    html += `
+            </tbody>
+            <tfoot>
+                <tr style="background:var(--bg-header);color:rgba(255,255,255,.95);font-weight:700">
+                    <td style="padding:8px 12px;white-space:nowrap">Total Acumulado YTD</td>
+                    <td style="padding:8px 12px;text-align:right;white-space:nowrap">${fmtN(totAct)}</td>
+                    <td style="padding:8px 12px;text-align:right;white-space:nowrap;opacity:.85">${fmtN(totPrev)}</td>
+                    <td style="padding:8px 12px;text-align:right;white-space:nowrap" class="${varClass(totDiff)}">${(totDiff > 0 ? '+' : '') + fmtN(totDiff)}</td>
+                    <td style="padding:8px 12px;text-align:right;white-space:nowrap" class="${varClass(totVar)}">${fmtPct(totVar)}</td>
+                </tr>
+            </tfoot>
+        </table>
+    `;
+
+    wrap.innerHTML = html;
 }
 
 // ── PESTAÑA: UNIDADES ────────────────────────────────────────────
@@ -1875,8 +1973,8 @@ function buildVariacionChart(rows) {
             datasets: [{
                 label: '% Variación',
                 data: values,
-                backgroundColor: values.map(v => v >= 0 ? 'rgba(16,185,129,.7)' : 'rgba(239,68,68,.7)'),
-                borderColor   : values.map(v => v >= 0 ? '#10b981' : '#ef4444'),
+                backgroundColor: values.map(v => v === null ? 'transparent' : (v >= 0 ? 'rgba(16,185,129,.7)' : 'rgba(239,68,68,.7)')),
+                borderColor   : values.map(v => v === null ? 'transparent' : (v >= 0 ? '#10b981' : '#ef4444')),
                 borderWidth: 1,
             }]
         },
@@ -1886,16 +1984,16 @@ function buildVariacionChart(rows) {
             plugins: {
                 legend: { display: false },
                 datalabels: {
-                    display: true,
-                    color: ctx => ctx.dataset.data[ctx.dataIndex] >= 0 ? '#065f46' : '#991b1b',
-                    anchor: ctx => ctx.dataset.data[ctx.dataIndex] >= 0 ? 'end' : 'start',
-                    align: ctx => ctx.dataset.data[ctx.dataIndex] >= 0 ? 'top' : 'bottom',
-                    formatter: v => v !== null ? fmtPct(v) : '',
+                    display: ctx => ctx.dataset.data[ctx.dataIndex] !== null,
+                    color: ctx => (ctx.dataset.data[ctx.dataIndex] || 0) >= 0 ? '#065f46' : '#991b1b',
+                    anchor: ctx => (ctx.dataset.data[ctx.dataIndex] || 0) >= 0 ? 'end' : 'start',
+                    align: ctx => (ctx.dataset.data[ctx.dataIndex] || 0) >= 0 ? 'top' : 'bottom',
+                    formatter: v => v !== null && v !== undefined ? fmtPct(v) : '',
                     font: { size: 10, weight: '600' }
                 },
                 tooltip: {
                     callbacks: {
-                        label: ctx => `Variación: ${fmtPct(ctx.raw)}`
+                        label: ctx => ctx.raw !== null ? `Variación: ${fmtPct(ctx.raw)}` : 'Sin datos'
                     }
                 }
             },
