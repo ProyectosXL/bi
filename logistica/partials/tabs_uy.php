@@ -9,7 +9,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon"><i class="bi bi-percent"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Eficiencia facturación</div>
+                    <div class="kpi-label">Eficiencia remisión</div>
                     <div class="kpi-value" id="kv-uy-efi">—</div>
                     <div class="kpi-var" id="kvar-uy-efi"></div>
                 </div>
@@ -24,7 +24,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-check-circle"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Unidades facturadas</div>
+                    <div class="kpi-label">Unidades remitidas</div>
                     <div class="kpi-value" id="kv-uy-unid-fact">—</div>
                 </div>
             </div>
@@ -93,7 +93,7 @@
                             <th>Cliente / N° pedido</th>
                             <th>Fecha</th>
                             <th class="col-num">Unid. pedidas</th>
-                            <th class="col-num">Unid. facturadas</th>
+                            <th class="col-num">Unid. remitidas</th>
                             <th class="col-num">% Eficiencia</th>
                         </tr>
                     </thead>
@@ -113,7 +113,7 @@
                         <tr>
                             <th>Rubro</th>
                             <th class="col-num">U. pedidas</th>
-                            <th class="col-num">U. facturadas</th>
+                            <th class="col-num">U. remitidas</th>
                             <th class="col-num">Eficiencia</th>
                         </tr>
                     </thead>

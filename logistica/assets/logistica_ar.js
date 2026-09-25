@@ -29,9 +29,15 @@
         rubroFact: '',
         usuario  : '',
         cliente  : '',
-        tipo     : 'REPOSICION',   // Facturación arranca filtrando por Reposición (como el tablero viejo)
+        tipo     : 'REPOSICION',   // Remisión arranca filtrando por Reposición (como el tablero viejo)
         pendFiltro : 'HOY',
         pendientes : [],
+        estDias     : 90,      // Estancados: antigüedad mínima
+        estSituacion: 'ALL',   // ALL | SIN REMITIR | PARCIAL
+        estBusca    : '',
+        estCliente  : '',      // filtro por clic en "Concentración por cliente"
+        estancados  : [],
+        estTotal    : 0,
         forceRefresh: false,
     };
 
@@ -83,62 +89,68 @@
         'despacho'          : ['wrap-canal', 'wrap-cliente'],
         'pedidos'           : ['wrap-canal'],
         'evolucion-remision': ['wrap-rubro'],
+        'estancados'        : ['wrap-canal'],
+        'fill-rate'         : [],   // en construcción: sin slicers ni carga todavía
     };
 
     const HELP = {
         kpis: {
-            'kv-efi'            : ['Eficiencia de facturación', ['Unidades facturadas sobre unidades pedidas en el período.', 'Meta: 95%. Verde si se alcanza, rojo si está por debajo.']],
-            'kv-unid-ped'       : ['Unidades pedidas', ['Total de unidades solicitadas en los pedidos del período.', 'La variación compara contra el mismo período del año anterior.']],
-            'kv-unid-fact'      : ['Unidades facturadas', ['Unidades efectivamente facturadas dentro del período y filtros activos.']],
-            'kv-perdida'        : ['Pérdida de facturación', ['Importe de los pedidos que no se llegó a facturar (importe pendiente).', '% Pérdida: peso sobre el importe pedido. "prev": mismo período del año anterior.', 'Tocá el ícono de gráfico para dar vuelta la tarjeta y ver la evolución de los últimos 12 meses (ampliable).']],
-            'kv-importe'        : ['Importe facturado', ['Importe total facturado en el período y filtros activos, expresado en pesos.']],
-            'kv-pedidos'        : ['Pedidos totales', ['Cantidad de pedidos incluidos en el cálculo de eficiencia.', 'La variación compara contra el mismo período del año anterior.']],
-            'kv-lt-total'       : ['Comprobantes facturados', ['Total de comprobantes de facturación emitidos en el período seleccionado.']],
-            'kv-lt-dem'         : ['Facturación demorada', ['Comprobantes con lead time mayor a 5 días hábiles desde el pedido.', 'El porcentaje se calcula sobre el total de comprobantes del período.']],
-            'kv-lt-prom'        : ['Lead time promedio', ['Promedio de días corridos entre la fecha del pedido y la fecha de facturación.']],
-            'kv-lt-abiertos'    : ['Pedidos abiertos', ['Pedidos con al menos una unidad sin facturar al cierre del período.']],
+            'kv-efi'            : ['Eficiencia de remisión', ['Proporción de las unidades pedidas que ya fueron remitidas.', '= Unidades remitidas ÷ Unidades pedidas', 'Pedidos por fecha de pedido. Excluye cancelados, Dist. Inicial y pedidos sin ninguna unidad remitida.', 'Meta: 95%. Verde si se alcanza, rojo si está por debajo.']],
+            'kv-unid-ped'       : ['Unidades pedidas', ['Total de unidades solicitadas en los pedidos del período (misma base que la eficiencia).', '= Var. % = (Período actual − Año anterior) ÷ Año anterior', 'Año anterior: mismas fechas un año atrás, con los mismos filtros.']],
+            'kv-unid-fact'      : ['Unidades remitidas', ['Unidades efectivamente remitidas de los pedidos del período y filtros activos.']],
+            'kv-perdida'        : ['Pérdida de remisión', ['Importe pendiente de remitir de los pedidos del período.', '= Pérdida = Σ Importe pendiente', '= % Pérdida = Importe pendiente ÷ Importe pedido', 'Solo pedidos con al menos una unidad remitida; excluye cancelados y Dist. Inicial. "prev": mismo cálculo un año atrás.', 'Tocá el ícono de gráfico para dar vuelta la tarjeta y ver la evolución de los últimos 12 meses (ampliable).']],
+            'kv-importe'        : ['Importe remitido', ['Importe total remitido en el período y filtros activos, expresado en pesos.', '= Importe pedido − Importe pendiente']],
+            'kv-pedidos'        : ['Pedidos totales', ['Cantidad de pedidos distintos incluidos en el cálculo de eficiencia.', '= Var. % = (Período actual − Año anterior) ÷ Año anterior']],
+            'kv-lt-total'       : ['Comprobantes remitidos', ['Cantidad de comprobantes de remisión distintos con fecha de comprobante en el período.']],
+            'kv-lt-dem'         : ['Remisión demorada', ['Comprobantes con lead time mayor a 5 días corridos desde el pedido.', '= % Demorada = Comprobantes con lead time > 5 días ÷ Total de comprobantes', 'Lead time = Fecha de comprobante − Fecha de pedido, en días corridos (incluye fines de semana y feriados).', 'Rojo si supera el 10%.']],
+            'kv-lt-prom'        : ['Lead time promedio', ['Promedio de días corridos entre la fecha del pedido y la fecha de remisión.', '= Σ (Fecha de comprobante − Fecha de pedido) ÷ Cantidad de renglones remitidos']],
+            'kv-lt-abiertos'    : ['Pedidos abiertos', ['Pedidos que hoy están en estado PENDIENTE.', 'No depende del rango de fechas seleccionado: muestra la situación actual.']],
             'kv-stock-tango'    : ['Stock Tango', ['Stock registrado en el sistema Tango para los rubros filtrados.']],
             'kv-stock-wms'      : ['Stock WMS', ['Stock registrado en el sistema WMS para los rubros filtrados.']],
-            'kv-stock-dif'      : ['Diferencia neta', ['Diferencia entre stock WMS y stock Tango (WMS − Tango).', 'Desviaciones distintas de cero requieren revisión de inventario.']],
-            'kv-stock-dif-abs'  : ['Diferencia absoluta', ['Suma del valor absoluto de las diferencias por artículo (|WMS − Tango|).', 'Mide la magnitud total del desvío sin que los positivos y negativos se compensen.']],
-            'kv-stock-prec'     : ['Precisión de inventario', ['Porcentaje de artículos donde WMS y Tango coinciden exactamente.', 'Meta ideal: 99% o superior.']],
-            'kv-pf-prom-dia'    : ['Promedio por día', ['Promedio de unidades facturadas por día en el período, según el tipo de facturación y rubro seleccionados.']],
-            'kv-pf-pico-dia'    : ['Pico x día', ['Mayor cantidad de unidades facturadas en un único día del período (respeta los filtros).']],
-            'kv-pf-pico-user'   : ['Pico x usuario', ['Mayor cantidad de unidades facturadas por un usuario en un solo día. No depende del filtro de tipo de facturación.']],
-            'kv-pf-tendencia'   : ['Tendencia x día x usuario', ['Mediana de las unidades por usuario y día (considerando días con más de 200 unidades). Representa el rendimiento diario típico.']],
-            'kv-pp-prom-dia'    : ['Promedio unid./día', ['Promedio de unidades pickeadas por día productivo en el período.']],
-            'kv-pp-pico-dia'    : ['Pico por día', ['Mayor cantidad de unidades preparadas en un único día del período.']],
-            'kv-pp-pico-usuario': ['Pico por usuario', ['Mayor cantidad de unidades preparadas por un único picker en un solo día del período.']],
-            'kv-pp-prom'        : ['Promedio por picker', ['Promedio de unidades por día, considerando solo pickers con más de 3 horas productivas registradas.']],
-            'kv-pp-u-hora'      : ['Promedio unid./hora', ['Unidades pickeadas por hora productiva registrada en el período.']],
-            'kv-pp-prom-hs'     : ['Promedio tiempo productivo', ['Promedio de horas productivas por picker y día, considerando solo días con más de 3 horas registradas.']],
-            'kv-dsp-efi'        : ['Eficacia de despacho total', ['Comprobantes despachados en término sobre el total de comprobantes despachados en el período.', 'Meta: 95%. Verde si se alcanza, rojo por debajo.']],
-            'kv-dsp-dem-dias'   : ['Promedio días pedidos demorados', ['Promedio de días de demora de los pedidos demorados (vencidos) del período. Negativo = atraso respecto a la fecha comprometida.']],
-            'kv-dsp-guia-dias'  : ['Promedio días guía vs despacho', ['Promedio de días entre la fecha de guía y la fecha comprometida de despacho. Negativo = despachado después de lo comprometido.']],
-            'kv-pc-ped'         : ['Pedidos del período', ['Cantidad de pedidos consolidados en el rango de fechas y canal seleccionados.', 'La variación compara contra el mismo período del año anterior.']],
+            'kv-stock-dif'      : ['Diferencia neta', ['Diferencia entre stock WMS y stock Tango; los positivos y negativos se compensan.', '= Σ (WMS − Tango)', '= % = Diferencia neta ÷ Stock Tango', 'Verde si el desvío es menor al 1%.']],
+            'kv-stock-dif-abs'  : ['Diferencia absoluta', ['Magnitud total del desvío, sin que los positivos y negativos se compensen.', '= Σ |WMS − Tango|']],
+            'kv-stock-prec'     : ['Precisión de inventario', ['Qué parte del stock coincide entre WMS y Tango, ponderado por unidades.', '= 1 − (Diferencia absoluta ÷ Stock Tango)', 'Meta ideal: 99% o superior.']],
+            'kv-pf-prom-dia'    : ['Promedio por día', ['Promedio de unidades remitidas por día con actividad, según el tipo de remisión y rubro seleccionados.', '= Unidades remitidas ÷ Días con actividad']],
+            'kv-pf-pico-dia'    : ['Pico x día', ['Mayor cantidad de unidades remitidas en un único día del período (respeta los filtros).', '= Máx (unidades remitidas por día)']],
+            'kv-pf-pico-user'   : ['Pico x usuario', ['Mayor cantidad de unidades remitidas por un usuario en un solo día. No depende del filtro de tipo de remisión.', '= Máx (unidades por usuario y día)']],
+            'kv-pf-tendencia'   : ['Tendencia x día x usuario', ['Rendimiento diario típico de un usuario. No depende del filtro de tipo de remisión.', '= Mediana (unidades por usuario y día), solo días con más de 200 unidades']],
+            'kv-pp-prom-dia'    : ['Promedio unid./día', ['Promedio de unidades pickeadas por día con actividad en el período.', '= Unidades pickeadas ÷ Días con actividad']],
+            'kv-pp-pico-dia'    : ['Pico por día', ['Mayor cantidad de unidades preparadas en un único día del período.', '= Máx (unidades por día)']],
+            'kv-pp-pico-usuario': ['Pico por usuario', ['Mayor cantidad de unidades preparadas por un único picker en un solo día del período.', '= Máx (unidades por picker y día)']],
+            'kv-pp-prom'        : ['Promedio por picker', ['Unidades que prepara un picker en un día típico de trabajo.', '= Promedio (unidades por picker y día), solo días con 3 h productivas o más']],
+            'kv-pp-u-hora'      : ['Promedio unid./hora', ['Unidades pickeadas por hora productiva registrada en el período (todos los días, sin mínimo de horas).', '= Unidades pickeadas ÷ Horas productivas']],
+            'kv-pp-prom-hs'     : ['Promedio tiempo productivo', ['Horas productivas de un picker en un día típico de trabajo.', '= Promedio (horas por picker y día), solo días con 3 h productivas o más']],
+            'kv-dsp-efi'        : ['Eficacia de despacho total', ['Proporción de comprobantes despachados en término.', '= En término ÷ (En término + Fuera de plazo + Demorados)', 'Despachados: por fecha de guía. Demorados (aún sin despachar): por fecha comprometida.', 'Meta: 95%. Verde si se alcanza, rojo por debajo.']],
+            'kv-dsp-dem-dias'   : ['Promedio días pedidos demorados', ['Promedio de días de desvío de los comprobantes demorados y fuera de plazo.', '= Promedio (Fecha comprometida − Fecha de guía)', 'Si todavía no se despachó, se toma la fecha de hoy. Negativo = atraso.']],
+            'kv-dsp-guia-dias'  : ['Promedio días guía vs despacho', ['Promedio de días entre la fecha de guía y la fecha comprometida, sobre los comprobantes despachados.', '= Promedio (Fecha comprometida − Fecha de guía)', 'Negativo = despachado después de lo comprometido.']],
+            'kv-pc-ped'         : ['Pedidos del período', ['Cantidad de pedidos distintos en el rango de fechas y canal seleccionados (incluye todos los estados).', '= Var. % = (Período actual − Año anterior) ÷ Año anterior']],
             'kv-pc-ped-aa'      : ['Pedidos año anterior', ['Pedidos del mismo rango de fechas en el año anterior, para comparación directa.']],
-            'kv-pc-var'         : ['Variación absoluta', ['Diferencia en cantidad de pedidos entre el período actual y el año anterior.', 'Positivo indica más pedidos que el año anterior.']],
+            'kv-pc-var'         : ['Variación absoluta', ['Diferencia en cantidad de pedidos entre el período actual y el año anterior.', '= Pedidos del período − Pedidos año anterior', 'Positivo indica más pedidos que el año anterior.']],
             'kv-pc-unid-ped'    : ['Unidades pedidas', ['Unidades solicitadas en los pedidos consolidados del período filtrado.']],
-            'kv-pc-unid-fact'   : ['Unidades facturadas', ['Unidades ya facturadas correspondientes a los pedidos consolidados del período.']],
-            'kv-rem-dist-total' : ['Distribución Total', ['Total de unidades o pedidos distribuidos en el período seleccionado.']],
-            'kv-rem-repo-total' : ['Reposición Total', ['Total de unidades o pedidos repuestos en el período seleccionado.']],
-            'kv-rem-propios-total': ['Locales Propios', ['Total de unidades o pedidos para locales propios en el período.']],
-            'kv-rem-franq-total': ['Franquicias', ['Total de unidades o pedidos para franquicias en el período.']],
-            'kv-rem-gran-total' : ['Total General', ['Volumen global consolidado de Distribución + Reposición en Propios y Franquicias.']],
+            'kv-pc-unid-fact'   : ['Unidades remitidas', ['Unidades ya remitidas correspondientes a los pedidos consolidados del período.']],
+            'kv-rem-dist-total' : ['Distribución Total', ['Unidades remitidas (o pedidos) de tipo Distribución, incluida Dist. Inicial, por fecha de pedido.', '= Locales propios + Franquicias']],
+            'kv-rem-repo-total' : ['Reposición Total', ['Unidades remitidas (o pedidos) de tipo Reposición, por fecha de pedido.', '= Locales propios + Franquicias']],
+            'kv-rem-propios-total': ['Locales Propios', ['Unidades remitidas (o pedidos) para locales propios en el período.', '= Distribución + Reposición']],
+            'kv-rem-franq-total': ['Franquicias', ['Unidades remitidas (o pedidos) para franquicias en el período.', '= Distribución + Reposición']],
+            'kv-rem-gran-total' : ['Total General', ['Volumen global de Locales Propios y Franquicias.', '= Distribución Total + Reposición Total']],
+            'kv-est-ped'        : ['Pedidos estancados', ['Pedidos sin cancelar, con saldo pendiente y con antigüedad mayor o igual al umbral elegido.', '= Pedidos con Σ Unidades pendientes > 0 y (Hoy − Fecha de pedido) ≥ umbral', 'Abajo: cuántos no tienen ninguna unidad remitida y cuántos están remitidos en parte.']],
+            'kv-est-unid'       : ['Unidades pendientes', ['Unidades que faltan remitir en los pedidos estancados.', '= Σ Unidades pendientes']],
+            'kv-est-imp'        : ['Importe pendiente', ['Importe del saldo sin remitir de los pedidos estancados.', '= Σ Importe pendiente']],
+            'kv-est-dias'       : ['Antigüedad promedio', ['Días corridos promedio desde la fecha del pedido hasta hoy.', '= Promedio (Hoy − Fecha de pedido)', 'Abajo: el pedido estancado más viejo.']],
         },
         sections: {
-            'gauges-canal'          : ['Eficiencia por canal', ['Cada gauge muestra la eficiencia (unidades facturadas / unidades pedidas) por canal.', 'La marca negra indica la meta del 95%. Verde ≥ 95%, amarillo ≥ 85%, rojo < 85%.']],
-            'chart-eficiencia'      : ['Evolución mensual de eficiencia', ['Eficiencia mensual de facturación: una línea por año (año actual vs. año anterior).', 'Bandas de color = umbrales: verde ≥ 95%, amarillo 85–95%, rojo < 85%.', 'La línea roja punteada marca la meta del 95%.']],
-            'tabla-efi-unid-cliente': ['% Eficiencia unidades por cliente', ['Los 10 clientes con menor eficiencia (unidades facturadas / pedidas) en el período.']],
+            'gauges-canal'          : ['Eficiencia por canal', ['Cada gauge muestra la eficiencia (unidades remitidas / unidades pedidas) por canal.', 'La marca negra indica la meta del 95%. Verde ≥ 95%, amarillo ≥ 85%, rojo < 85%.']],
+            'chart-eficiencia'      : ['Evolución mensual de eficiencia', ['Eficiencia mensual de remisión: una línea por año (año actual vs. año anterior).', 'Bandas de color = umbrales: verde ≥ 95%, amarillo 85–95%, rojo < 85%.', 'La línea roja punteada marca la meta del 95%.']],
+            'tabla-efi-unid-cliente': ['% Eficiencia unidades por cliente', ['Los 10 clientes con menor eficiencia (unidades remitidas / pedidas) en el período.']],
             'tabla-efi-unid-rubro'  : ['% Eficiencia unidades por rubro', ['Eficiencia de unidades por rubro, ordenada de menor a mayor.']],
             'tabla-efi-pedidos'     : ['% Eficiencia por pedido y cliente', ['Eficiencia por pedido, agrupada por cliente. Clic en un cliente para desplegar sus pedidos.', 'Clic en un pedido para ver el detalle por rubro.']],
-            'chart-leadtime-hist'   : ['Distribución de lead times', ['Cantidad de comprobantes agrupados por días de demora entre pedido y facturación.', 'Barras rojas: más de 5 días (demorados). Barras verdes: en término.']],
-            'chart-leadtime-evol'   : ['Evolución de facturación demorada', ['Porcentaje mensual de comprobantes con lead time mayor a 5 días.', 'Muestra la tendencia de demoras en los últimos 12 meses.']],
+            'chart-leadtime-hist'   : ['Distribución de lead times', ['Cantidad de comprobantes agrupados por días corridos de demora entre pedido y remisión.', 'Barras rojas: más de 5 días (demorados). Barras verdes: en término.']],
+            'chart-leadtime-evol'   : ['Evolución de remisión demorada', ['Porcentaje mensual de comprobantes con lead time mayor a 5 días corridos.', 'Muestra la tendencia de demoras en los últimos 12 meses.']],
             'chart-stock'           : ['Diferencia de stock por rubro', ['Compara stock Tango vs. WMS en los principales rubros logísticos.', 'Diferencias significativas entre barras indican desvíos de inventario.']],
             'tabla-stock'           : ['Detalle de stock por rubro', ['Tabla con stock Tango, WMS, diferencia neta, diferencia porcentual y precisión de inventario por rubro.']],
-            'chart-prod-fact'       : ['Facturación diaria', ['Unidades facturadas por día en el período seleccionado.']],
-            'tabla-usuarios-fact'   : ['Indicadores por usuario', ['Unidades facturadas, participación, pico y tendencia por usuario. Pico y días productivos no dependen del filtro de tipo de facturación.']],
-            'tabla-fact-ult7'       : ['Unidades facturadas por usuario (últimos 7 días)', ['Unidades facturadas por día y usuario en los últimos 7 días. Clic en una fecha para ver el gráfico de ese día.']],
+            'chart-prod-fact'       : ['Remisión diaria', ['Unidades remitidas por día en el período seleccionado.']],
+            'tabla-usuarios-fact'   : ['Indicadores por usuario', ['Unidades remitidas, participación, pico y tendencia por usuario. Pico y días productivos no dependen del filtro de tipo de remisión.']],
+            'tabla-fact-ult7'       : ['Unidades remitidas por usuario (últimos 7 días)', ['Unidades remitidas por día y usuario en los últimos 7 días. Clic en una fecha para ver el gráfico de ese día.']],
             'chart-prod-picking'    : ['Picking diario', ['Barras azules: unidades pickeadas por día. Línea naranja: promedio de unidades por hora productiva.']],
             'tabla-usuarios-picking': ['Productividad por picker', ['Resumen de unidades, porcentaje del equipo, pico, mediana, horas y promedio por hora para cada picker.']],
             'tabla-picking-ult7'    : ['Últimos 7 días por picker', ['Unidades pickeadas por día y picker en los últimos 7 días con actividad.', 'Las columnas de totales suman unidades y horas del período completo.']],
@@ -151,27 +163,30 @@
             'tabla-dem-cliente'     : ['Pedidos demorados promedio por cliente', ['Promedio de días de demora y cantidad de pedidos demorados por cliente en el período.']],
             'tabla-dem-pedido'      : ['Pedidos demorados — desglose por pedido', ['Detalle de pedidos demorados con estado, fecha comprometida y días de demora.']],
             'chart-pedidos-evol'    : ['Evolución mensual de pedidos', ['Cantidad de pedidos consolidados por mes en los últimos 12 meses.']],
-            'tabla-pedidos'         : ['Pedidos consolidados', ['Detalle de pedidos con estado, canal, talón y unidades pedidas, pendientes y facturadas.']],
+            'tabla-pedidos'         : ['Pedidos consolidados', ['Detalle de pedidos con estado, canal, talón y unidades pedidas, pendientes y remitidas.']],
+            'tabla-est-tramos'      : ['Estancados por antigüedad', ['Pedidos estancados agrupados por días corridos desde la fecha del pedido.', 'Solo aparecen los tramos que superan el umbral elegido.']],
+            'tabla-est-clientes'    : ['Concentración por cliente', ['Los 30 clientes con más importe pendiente en pedidos estancados: por dónde empezar a reclamar o depurar.', 'Clic en un cliente para filtrar el listado; clic de nuevo para quitar el filtro.']],
+            'tabla-est-pedidos'     : ['Pedidos estancados', ['Pedidos sin cancelar, con saldo pendiente y antigüedad ≥ umbral, ordenados por importe pendiente.', 'Sin remitir: ninguna unidad remitida. Parcial: remitido en parte.', 'Muestra hasta 3.000 pedidos; el Excel exporta lo que se ve con los filtros aplicados.', 'Clic en un pedido para ver el detalle por rubro.']],
         },
         tableHeaders: {
             'tabla-efi-unid-cliente': [
                 'Cliente.',
                 'Unidades pedidas en el período.',
-                'Unidades facturadas en el período.',
-                'Eficiencia: facturadas / pedidas. Verde ≥ 95%, amarillo 85–95%, rojo < 85%.',
+                'Unidades remitidas en el período.',
+                'Eficiencia: remitidas / pedidas. Verde ≥ 95%, amarillo 85–95%, rojo < 85%.',
             ],
             'tabla-efi-unid-rubro': [
                 'Rubro.',
                 'Unidades pedidas en el período.',
-                'Unidades facturadas en el período.',
-                'Eficiencia: facturadas / pedidas. Verde ≥ 95%, amarillo 85–95%, rojo < 85%.',
+                'Unidades remitidas en el período.',
+                'Eficiencia: remitidas / pedidas. Verde ≥ 95%, amarillo 85–95%, rojo < 85%.',
             ],
             'tabla-efi-pedidos': [
                 'Cliente (agrupado) / número de pedido al desplegar.',
                 'Fecha del pedido.',
                 'Unidades pedidas.',
-                'Unidades facturadas.',
-                'Eficiencia: facturadas / pedidas.',
+                'Unidades remitidas.',
+                'Eficiencia: remitidas / pedidas.',
             ],
             'tabla-stock': [
                 'Rubro logístico.',
@@ -182,13 +197,13 @@
                 'Precisión: coincidencia exacta entre WMS y Tango.',
             ],
             'tabla-usuarios-fact': [
-                'Usuario de facturación (agrupado sin distinguir mayúsculas).',
-                'Unidades facturadas en el período (según tipo y rubro).',
-                'Participación sobre el total facturado del período.',
+                'Usuario de remisión (agrupado sin distinguir mayúsculas).',
+                'Unidades remitidas en el período (según tipo y rubro).',
+                'Participación sobre el total remitido del período.',
                 'Pico: máximo de unidades en un solo día (no depende del tipo).',
                 'Tendencia: mediana de unidades por día del usuario.',
-                'Días productivos (no depende del tipo de facturación).',
-                'Unidades facturadas en los últimos 30 días.',
+                'Días productivos (no depende del tipo de remisión).',
+                'Unidades remitidas en los últimos 30 días.',
             ],
             'tabla-usuarios-picking': [
                 'Usuario picker.',
@@ -250,8 +265,21 @@
                 'Fecha de ingreso del pedido.',
                 'Talón asociado.',
                 'Unidades pedidas.',
-                'Unidades pendientes de facturar.',
-                'Unidades ya facturadas.',
+                'Unidades pendientes de remitir.',
+                'Unidades ya remitidas.',
+            ],
+            'tabla-est-pedidos': [
+                'Número de pedido.',
+                'Fecha de ingreso del pedido.',
+                'Días corridos desde el pedido. Ámbar: 180–365. Rojo: más de 365.',
+                'Canal del pedido.',
+                'Cliente.',
+                'Tipo de remisión.',
+                'Estado del pedido en Tango.',
+                'Sin remitir: ninguna unidad remitida. Parcial: remitido en parte.',
+                'Unidades pedidas.',
+                'Unidades pendientes de remitir.',
+                'Importe pendiente de remitir.',
             ],
         },
     };
@@ -355,6 +383,7 @@
                 case 'despacho':      await loadDespacho();   break;
                 case 'pedidos':       await loadPedidos();    break;
                 case 'evolucion-remision': await loadEvolucionRemision(); break;
+                case 'estancados':    await loadEstancados(); break;
             }
             Cache[tab] = true;
         } catch (e) {
@@ -989,7 +1018,7 @@
             </tr>`).join(''));
         }
 
-        renderUlt7('fact-ult7', data.ultimos7 || [], { hours: false, title: 'Facturación del' });
+        renderUlt7('fact-ult7', data.ultimos7 || [], { hours: false, title: 'Remisión del' });
     }
 
     // ── Área 5: Productividad Picking ─────────────────────────────────────
@@ -1461,23 +1490,26 @@
         const totalGran = isUnid ? parseFloat(kpis.TOTAL_UNIDADES || 0) : parseFloat(kpis.TOTAL_PEDIDOS || 0);
 
         // 1. KPI Cards
+        // setVar espera { text, cls }: participación sobre el total general
+        const pctDelTotal = v => ({ text: totalGran > 0 ? fmt.pct(v / totalGran) + ' del total' : '—', cls: 'neu' });
+
         $('#kv-rem-dist-total').text(fmt.num(totalDist));
-        setVar('#kvar-rem-dist-pct', totalGran > 0 ? fmt.pct(totalDist / totalGran) + ' del total' : '—');
+        setVar('#kvar-rem-dist-pct', pctDelTotal(totalDist));
 
         $('#kv-rem-repo-total').text(fmt.num(totalRepo));
-        setVar('#kvar-rem-repo-pct', totalGran > 0 ? fmt.pct(totalRepo / totalGran) + ' del total' : '—');
+        setVar('#kvar-rem-repo-pct', pctDelTotal(totalRepo));
 
         $('#kv-rem-propios-total').text(fmt.num(totalProp));
-        setVar('#kvar-rem-propios-pct', totalGran > 0 ? fmt.pct(totalProp / totalGran) + ' del total' : '—');
+        setVar('#kvar-rem-propios-pct', pctDelTotal(totalProp));
 
         $('#kv-rem-franq-total').text(fmt.num(totalFran));
-        setVar('#kvar-rem-franq-pct', totalGran > 0 ? fmt.pct(totalFran / totalGran) + ' del total' : '—');
+        setVar('#kvar-rem-franq-pct', pctDelTotal(totalFran));
 
         $('#kv-rem-gran-total').text(fmt.num(totalGran));
         $('#kvar-rem-pedidos-total').text(
             isUnid 
                 ? (fmt.num(kpis.TOTAL_PEDIDOS) + ' pedidos consolidados') 
-                : (fmt.num(kpis.TOTAL_UNIDADES) + ' unidades facturadas')
+                : (fmt.num(kpis.TOTAL_UNIDADES) + ' unidades remitidas')
         );
 
         // 2. Gráficos (Labels: 'Ene 2026', 'Feb 2026', etc.)
@@ -1879,7 +1911,7 @@
                 pmetaItem('Fecha pedido', fmt.date(h.FECHA_PEDI)) +
                 pmetaItem('Talón', h.TALON_PED != null ? h.TALON_PED : '—') +
                 pmetaItem('U. pedidas', fmt.num(tot.CANT_PEDID)) +
-                pmetaItem('U. facturadas', fmt.num(tot.CANT_FACT)) +
+                pmetaItem('U. remitidas', fmt.num(tot.CANT_FACT)) +
                 `<div class="pmeta-item pmeta-efi"><span class="pmeta-label">% Eficiencia</span>` +
                 `<span class="pmeta-val" style="color:${efiColor(efi)}">${efi == null ? '—' : fmt.pct(efi, 0)}</span></div>`
             );
@@ -1906,6 +1938,131 @@
         }
     }
 
+    // ── Área 9: Pedidos estancados ────────────────────────────────────────
+    let estExportInit = false;
+
+    async function loadEstancados() {
+        const data = await apiFetch('pedidos_estancados', { dias: State.estDias, canal: State.canal });
+        const k = data.kpis || {};
+        const money = v => '$ ' + fmt.num(v, 0);
+        const sub   = (sr, pa) => ({ text: `Sin remitir: ${sr} · Parcial: ${pa}`, cls: 'neu' });
+
+        $('#kv-est-ped').text(fmt.num(k.PEDIDOS));
+        setVar('#kvar-est-ped', sub(fmt.num(k.PED_SIN_REMITIR), fmt.num(k.PED_PARCIAL)));
+        $('#kv-est-unid').text(fmt.num(k.UNID_PENDIENTES));
+        setVar('#kvar-est-unid', sub(fmt.num(k.UNID_SIN_REMITIR), fmt.num(k.UNID_PARCIAL)));
+        $('#kv-est-imp').text(money(k.IMPORTE_PENDIENTE));
+        setVar('#kvar-est-imp', sub(money(k.IMP_SIN_REMITIR), money(k.IMP_PARCIAL)));
+        $('#kv-est-dias').text(k.PEDIDOS > 0 ? fmt.num(k.DIAS_PROMEDIO, 0) + ' días' : '—');
+        setVar('#kvar-est-dias', { text: k.PEDIDOS > 0 ? 'Más viejo: ' + fmt.num(k.DIAS_MAX) + ' días' : '', cls: 'neu' });
+
+        renderTablaSimple('#tbody-est-tramos', data.tramos || [],
+            r => `<td>${escapeHtml(r.TRAMO)}</td><td class="col-num">${fmt.num(r.PEDIDOS)}</td>` +
+                 `<td class="col-num">${fmt.num(r.PED_SIN_REMITIR)}</td><td class="col-num">${fmt.num(r.UNID_PENDIENTES)}</td>` +
+                 `<td class="col-num">${money(r.IMPORTE_PENDIENTE)}</td>`
+        );
+
+        const clientes = data.clientes || [];
+        const $cli = $('#tbody-est-clientes').empty();
+        if (!clientes.length) {
+            $cli.append(`<tr><td colspan="6"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>`);
+        } else {
+            $cli.html(clientes.map(r => {
+                const c = String(r.CLIENTE || '');
+                return `<tr class="est-cli-row${c === State.estCliente ? ' activo' : ''}" data-cliente="${escapeHtml(c)}">` +
+                    `<td title="${escapeHtml(c)}">${escapeHtml(c) || '—'}</td><td>${escapeHtml(r.CANAL || '—')}</td>` +
+                    `<td class="col-num">${fmt.num(r.PEDIDOS)}</td><td class="col-num">${fmt.num(r.UNID_PENDIENTES)}</td>` +
+                    `<td class="col-num">${money(r.IMPORTE_PENDIENTE)}</td><td class="col-num">${fmt.num(r.DIAS_MAX)}</td></tr>`;
+            }).join(''));
+        }
+
+        State.estancados = data.pedidos || [];
+        State.estTotal   = parseInt(k.PEDIDOS, 10) || 0;
+        renderEstancados();
+
+        if (!estExportInit) {
+            ExcelExporter.addExportButton(document.getElementById('hdr-est-pedidos'), exportEstancados);
+            estExportInit = true;
+        }
+    }
+
+    function filtrarEstancados() {
+        const q  = State.estBusca.trim().toUpperCase();
+        const q0 = q.replace(/^0+/, '');   // permite buscar el pedido sin los ceros a la izquierda
+        return State.estancados.filter(r => {
+            if (State.estSituacion !== 'ALL' && r.SITUACION !== State.estSituacion) return false;
+            if (State.estCliente && String(r.CLIENTE || '') !== State.estCliente) return false;
+            if (!q) return true;
+            const ped = String(r.NRO_PEDIDO || '');
+            return String(r.CLIENTE || '').toUpperCase().includes(q) ||
+                   ped.includes(q) || (q0 !== '' && ped.replace(/^0+/, '').includes(q0));
+        });
+    }
+
+    function renderEstancados() {
+        const rows = filtrarEstancados();
+        const cargados = State.estancados.length;
+        const corte = State.estTotal > cargados
+            ? ` · se cargaron los ${fmt.num(cargados)} de mayor importe (de ${fmt.num(State.estTotal)})` : '';
+        $('#est-count').text(`${fmt.num(rows.length)} pedidos${corte} · clic para ver detalle`);
+
+        const $act = $('#est-cliente-activo');
+        if (State.estCliente) {
+            $act.html(`<i class="bi bi-funnel-fill"></i> Cliente: <b>${escapeHtml(State.estCliente)}</b>` +
+                      `<button type="button" id="est-cliente-quitar" title="Quitar filtro de cliente" aria-label="Quitar filtro de cliente"><i class="bi bi-x-circle-fill"></i></button>`)
+                .prop('hidden', false);
+        } else {
+            $act.empty().prop('hidden', true);
+        }
+
+        renderTablaSimple('#tbody-est-pedidos', rows,
+            r => {
+                const dias = parseInt(r.DIAS, 10);
+                const dCls = dias > 365 ? 'est-dias-alto' : dias >= 180 ? 'est-dias-medio' : '';
+                const sCls = r.SITUACION === 'SIN REMITIR' ? 'badge-sin-remitir' : 'badge-parcial';
+                const sTxt = r.SITUACION === 'SIN REMITIR' ? 'Sin remitir' : 'Parcial';
+                return `<td>${escapeHtml(r.NRO_PEDIDO)}</td><td>${fmt.date(r.FECHA_PEDI)}</td>` +
+                    `<td class="col-num ${dCls}">${fmt.num(dias)}</td><td>${escapeHtml(r.CANAL || '—')}</td>` +
+                    `<td title="${escapeHtml(r.CLIENTE || '')}">${escapeHtml(r.CLIENTE || '—')}</td>` +
+                    `<td>${escapeHtml(r.TIPO_FACTURACION || '—')}</td><td>${escapeHtml(r.ESTADO_TANGO || '—')}</td>` +
+                    `<td><span class="badge-estado ${sCls}">${sTxt}</span></td>` +
+                    `<td class="col-num">${fmt.num(r.UNID_PEDIDAS)}</td><td class="col-num">${fmt.num(r.UNID_PENDIENTES)}</td>` +
+                    `<td class="col-num">$ ${fmt.num(r.IMPORTE_PENDIENTE, 0)}</td>`;
+            },
+            r => r.NRO_PEDIDO
+        );
+    }
+
+    function exportEstancados() {
+        const rows = filtrarEstancados();
+        if (!rows.length) {
+            alert('No hay pedidos estancados para exportar con los filtros actuales.');
+            return;
+        }
+        const filtros = [
+            'Antigüedad ≥ ' + State.estDias + ' días',
+            State.canal ? 'Canal: ' + State.canal : '',
+            State.estSituacion !== 'ALL' ? 'Situación: ' + State.estSituacion : '',
+            State.estCliente ? 'Cliente: ' + State.estCliente : '',
+            State.estBusca.trim() ? 'Búsqueda: ' + State.estBusca.trim() : '',
+        ].filter(Boolean).join(' · ');
+        const corte = State.estTotal > State.estancados.length
+            ? ` (top ${State.estancados.length} de ${State.estTotal} por importe)` : '';
+        ExcelExporter.export({
+            title     : `Pedidos estancados — ${filtros}${corte}`,
+            headers   : ['Pedido', 'Talón', 'Fecha pedido', 'Días', 'Canal', 'Cliente', 'Tipo', 'Estado Tango', 'Situación',
+                         'Unid. pedidas', 'Unid. pendientes', 'Importe pedido', 'Importe pendiente'],
+            rows      : rows.map(r => [
+                String(r.NRO_PEDIDO || ''), r.TALON_PED, fmt.date(r.FECHA_PEDI), parseInt(r.DIAS, 10),
+                r.CANAL || '', r.CLIENTE || '', r.TIPO_FACTURACION || '', r.ESTADO_TANGO || '', r.SITUACION || '',
+                parseFloat(r.UNID_PEDIDAS || 0), parseFloat(r.UNID_PENDIENTES || 0),
+                parseFloat(r.IMPORTE_PEDIDO || 0), parseFloat(r.IMPORTE_PENDIENTE || 0),
+            ]),
+            colFormats: ['text', 'num', 'text', 'num', 'text', 'text', 'text', 'text', 'text', 'num', 'num', 'money', 'money'],
+            filename  : 'pedidos_estancados',
+        });
+    }
+
     function efiColor(pct) {
         if (pct == null) return 'var(--text-1)';
         return pct >= 0.95 ? 'var(--pos)' : pct >= 0.85 ? 'var(--accent3)' : 'var(--neg)';
@@ -1928,7 +2085,7 @@
         $('#sel-deposito').attr('title', 'Filtra el inventario por depósito.');
         $('#sel-usuario').attr('title', 'Filtra los datos por usuario.');
         $('#sel-cliente').attr('title', 'Filtra los datos por cliente.');
-        $('#sel-tipo').attr('title', 'Filtra por tipo de facturación.');
+        $('#sel-tipo').attr('title', 'Filtra por tipo de remisión.');
         $('#btn-aplicar').attr({ title: 'Aplicar fechas y filtros seleccionados.', 'aria-label': 'Aplicar filtros' });
         $('#btn-reload').attr({ title: 'Recargar la pestana activa con los filtros actuales.', 'aria-label': 'Recargar pestana activa' });
 
@@ -2016,6 +2173,42 @@
             $(this).addClass('active');
             State.pendFiltro = $(this).data('f');
             renderPendientes();
+        });
+
+        // Estancados: el umbral recalcula en el servidor; el resto filtra en el cliente
+        $('#est-umbral').on('click', '.pill', function () {
+            const d = parseInt($(this).data('d'), 10);
+            if (d === State.estDias) return;
+            $('#est-umbral .pill').removeClass('active');
+            $(this).addClass('active');
+            State.estDias    = d;
+            State.estCliente = '';
+            delete Cache['estancados'];
+            loadTab('estancados');
+        });
+        $('#est-situacion').on('click', '.pill', function () {
+            $('#est-situacion .pill').removeClass('active');
+            $(this).addClass('active');
+            State.estSituacion = $(this).data('s');
+            renderEstancados();
+        });
+        let estBuscaTimer = null;
+        $('#est-busca').on('input', function () {
+            clearTimeout(estBuscaTimer);
+            const v = this.value;
+            estBuscaTimer = setTimeout(() => { State.estBusca = v; renderEstancados(); }, 200);
+        });
+        $('#tbody-est-clientes').on('click', 'tr.est-cli-row', function () {
+            const c = $(this).attr('data-cliente');
+            State.estCliente = (State.estCliente === c) ? '' : c;
+            $('#tbody-est-clientes tr.est-cli-row').removeClass('activo');
+            if (State.estCliente) $(this).addClass('activo');
+            renderEstancados();
+        });
+        $('#est-cliente-activo').on('click', '#est-cliente-quitar', function () {
+            State.estCliente = '';
+            $('#tbody-est-clientes tr.est-cli-row').removeClass('activo');
+            renderEstancados();
         });
 
         // Drill-down del detalle por rubro (delegado: el tbody se re-renderiza)

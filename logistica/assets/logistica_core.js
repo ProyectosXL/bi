@@ -113,7 +113,8 @@
     function addInfoButton($target, title, tips, mode = 'append') {
         if (!$target || !$target.length || $target.find('.info-btn').length) return;
         const safeTitle = escapeHtml(title);
-        const safeTips = (tips || []).map(escapeHtml).join('|');
+        // JSON (no join con "|"): los tips pueden contener "|x|" (valor absoluto)
+        const safeTips = escapeHtml(JSON.stringify((tips || []).map(escapeHtml)));
         const $btn = jQuery(
             `<button type="button" class="info-btn" aria-label="Ver ayuda: ${safeTitle}" title="Ver ayuda" ` +
             `data-info-title="${safeTitle}" data-info-tips="${safeTips}">` +
@@ -136,11 +137,15 @@
             activeBtn = btn;
             btn.classList.add('active');
             const title = btn.dataset.infoTitle || '';
-            const tips = (btn.dataset.infoTips || '').split('|').filter(Boolean);
+            let tips = [];
+            try { tips = JSON.parse(btn.dataset.infoTips || '[]'); } catch (e) {}
             popover.innerHTML =
                 `<div class="info-popover-title"><i class="bi bi-info-circle-fill"></i>${title}</div>` +
-                tips.map(t => `<div class="info-popover-tip">` +
-                    `<i class="bi bi-lightbulb-fill info-popover-tip-icon"></i><span>${t}</span></div>`).join('');
+                tips.map(t => t.startsWith('=')
+                    // Tip que empieza con "=" → bloque de fórmula
+                    ? `<div class="info-popover-formula"><i class="bi bi-calculator"></i><span>${t.slice(1).trim()}</span></div>`
+                    : `<div class="info-popover-tip">` +
+                      `<i class="bi bi-lightbulb-fill info-popover-tip-icon"></i><span>${t}</span></div>`).join('');
             popover.style.display = 'block';
             position(btn);
         }

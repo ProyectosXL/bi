@@ -94,7 +94,7 @@ $mesDesde  = date('Y-m-01');
 
     <!-- Slicer Tipo facturación (prod. facturación) -->
     <span class="slicer-wrap" id="wrap-tipo" style="display:none">
-        <label for="sel-tipo">Tipo facturación</label>
+        <label for="sel-tipo">Tipo remisión</label>
         <select id="sel-tipo"><option value="">Todas</option></select>
     </span>
 
@@ -124,7 +124,7 @@ $mesDesde  = date('Y-m-01');
         <i class="bi bi-boxes"></i> Inventario
     </button>
     <button class="tab-btn" data-tab="prod-fact">
-        <i class="bi bi-receipt"></i> Prod. Facturación
+        <i class="bi bi-receipt"></i> Prod. Remisión
     </button>
     <button class="tab-btn" data-tab="prod-picking">
         <i class="bi bi-person-lines-fill"></i> Prod. Picking
@@ -140,6 +140,12 @@ $mesDesde  = date('Y-m-01');
     </button>
     <button class="tab-btn" data-tab="evolucion-remision">
         <i class="bi bi-arrow-left-right"></i> Evolución Tipo De Remisión
+    </button>
+    <button class="tab-btn" data-tab="estancados">
+        <i class="bi bi-hourglass-bottom"></i> Estancados
+    </button>
+    <button class="tab-btn" data-tab="fill-rate">
+        <i class="bi bi-speedometer2"></i> Fill Rate
     </button>
 <?php else: ?>
     <button class="tab-btn active" data-tab="eficiencia-uy">
@@ -182,7 +188,7 @@ $mesDesde  = date('Y-m-01');
                         <tr>
                             <th>Rubro</th>
                             <th class="col-num">Unidades pedidas</th>
-                            <th class="col-num">Unidades facturadas</th>
+                            <th class="col-num">Unidades remitidas</th>
                             <th class="col-num">% Eficiencia</th>
                         </tr>
                     </thead>

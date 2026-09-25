@@ -108,6 +108,22 @@
 
 .analisis-section-header .info-btn { margin-left: auto; }
 
+/* Fórmula dentro del info-popover (tips que empiezan con "=") */
+.info-popover-formula {
+    display      : flex;
+    align-items  : flex-start;
+    gap          : 8px;
+    margin-top   : 8px;
+    padding      : 6px 8px;
+    border-radius: 6px;
+    background   : rgba(255,255,255,.08);
+    border-left  : 3px solid var(--accent3);
+    font-family  : ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size    : .8rem;
+    color        : #fff;
+}
+.info-popover-formula .bi { color: var(--accent3); flex-shrink: 0; margin-top: 1px; }
+
 .table-wrap thead th[title],
 .kpi-label[title],
 .gauge-card[title],
@@ -962,3 +978,44 @@ body.modal-open { overflow: hidden; }
     cursor: pointer;
 }
 
+
+/* ── Pedidos estancados ────────────────────────────────────────────────── */
+#tab-estancados .plan-ventanas-header { flex-wrap: wrap; justify-content: flex-start; }
+#tab-estancados .plan-ventanas-header .header-sub { margin-left: auto; }
+#hdr-est-pedidos { flex-wrap: wrap; row-gap: 6px; }
+.est-busca {
+    margin-left  : auto;
+    min-width    : 200px;
+    padding      : 4px 10px;
+    border       : 1px solid var(--border);
+    border-radius: var(--radius-sm, 6px);
+    background   : var(--bg-card);
+    color        : var(--text-1);
+    font-size    : .78rem;
+}
+.est-busca:focus { outline: none; border-color: var(--accent); }
+#hdr-est-pedidos .btn-export-excel { margin-left: 8px; }
+.est-cliente-activo {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+    padding    : 6px 20px;
+    font-size  : .78rem;
+    color      : var(--text-2);
+    background : var(--bg-card2);
+}
+.est-cliente-activo[hidden] { display: none; }
+.est-cliente-activo button {
+    border: 0; background: transparent; color: var(--neg); cursor: pointer; font-size: .9rem; padding: 0 2px;
+}
+#tbody-est-clientes tr.est-cli-row { cursor: pointer; }
+#tbody-est-clientes tr.est-cli-row:hover > td,
+#tbody-est-clientes tr.est-cli-row.activo > td { background: var(--bg-card2); }
+.badge-sin-remitir { background: rgba(220,38,38,.1);   color: var(--neg); }
+.badge-parcial     { background: rgba(245,158,11,.15); color: #b45309; }
+.est-dias-alto  { color: var(--neg);     font-weight: 700; }
+.est-dias-medio { color: var(--accent3); font-weight: 600; }
+@media (max-width: 760px) {
+    .est-busca { margin-left: 0; flex-basis: 100%; }
+    #tab-estancados .plan-ventanas-header .header-sub { margin-left: 0; }
+}

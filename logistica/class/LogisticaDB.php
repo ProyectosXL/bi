@@ -149,6 +149,24 @@ class LogisticaDB extends LogisticaDBBase
         ];
     }
 
+    // ── Área 9: Pedidos estancados (situación actual) ────────────────────
+    public function getPedidosEstancados(int $dias, ?string $canal): array
+    {
+        $sets = $this->execSP('EXEC dbo.RO_SP_PEDIDOS_ESTANCADOS ?,?', [$dias, $canal]);
+        // El caché de execSP guarda con JSON_NUMERIC_CHECK y le quita los ceros
+        // a la izquierda a NRO_PEDIDO: se restituye el formato de 13 dígitos.
+        $pedidos = array_map(function ($r) {
+            $r['NRO_PEDIDO'] = str_pad(trim((string)$r['NRO_PEDIDO']), 13, '0', STR_PAD_LEFT);
+            return $r;
+        }, $sets[3] ?? []);
+        return [
+            'kpis'     => $sets[0][0] ?? [],
+            'tramos'   => $sets[1] ?? [],
+            'clientes' => $sets[2] ?? [],
+            'pedidos'  => $pedidos,
+        ];
+    }
+
     // ── Detalle de un pedido (eficiencia por rubro) ──────────────────────
     public function getPedidoDetalle(string $pedido): array
     {

@@ -8,7 +8,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon"><i class="bi bi-percent"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Eficiencia facturación</div>
+                    <div class="kpi-label">Eficiencia remisión</div>
                     <div class="kpi-value" id="kv-efi">—</div>
                     <div class="kpi-var" id="kvar-efi"></div>
                 </div>
@@ -24,7 +24,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-check-circle"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Unidades facturadas</div>
+                    <div class="kpi-label">Unidades remitidas</div>
                     <div class="kpi-value" id="kv-unid-fact">—</div>
                     <div class="kpi-var neu" id="kvar-unid-fact"></div>
                 </div>
@@ -35,7 +35,7 @@
                     <div class="kpi-flip-face kpi-flip-front">
                         <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-exclamation-triangle"></i></div>
                         <div class="kpi-body">
-                            <div class="kpi-label">Pérdida facturación</div>
+                            <div class="kpi-label">Pérdida remisión</div>
                             <div class="kpi-value" id="kv-perdida">—</div>
                             <div class="kpi-foot">
                                 <div class="kpi-var" id="kvar-perdida"></div>
@@ -68,7 +68,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-currency-dollar"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Importe facturado</div>
+                    <div class="kpi-label">Importe remitido</div>
                     <div class="kpi-value" id="kv-importe">—</div>
                     <div class="kpi-var neu" id="kvar-importe"></div>
                 </div>
@@ -101,7 +101,7 @@
                             <tr>
                                 <th>Cliente</th>
                                 <th class="col-num">Unid. pedidas</th>
-                                <th class="col-num">Unid. facturadas</th>
+                                <th class="col-num">Unid. remitidas</th>
                                 <th class="col-num">% Eficiencia</th>
                             </tr>
                         </thead>
@@ -119,7 +119,7 @@
                             <tr>
                                 <th>Rubro</th>
                                 <th class="col-num">Unid. pedidas</th>
-                                <th class="col-num">Unid. facturadas</th>
+                                <th class="col-num">Unid. remitidas</th>
                                 <th class="col-num">% Eficiencia</th>
                             </tr>
                         </thead>
@@ -141,7 +141,7 @@
                             <th>Cliente / N° pedido</th>
                             <th>Fecha</th>
                             <th class="col-num">Unid. pedidas</th>
-                            <th class="col-num">Unid. facturadas</th>
+                            <th class="col-num">Unid. remitidas</th>
                             <th class="col-num">% Eficiencia</th>
                         </tr>
                     </thead>
@@ -152,7 +152,7 @@
 
         <div class="analisis-card">
             <div class="analisis-section-header">
-                <i class="bi bi-graph-up"></i> Evolución mensual — Eficiencia de facturación
+                <i class="bi bi-graph-up"></i> Evolución mensual — Eficiencia de remisión
             </div>
             <div class="chart-wrap">
                 <canvas id="chart-eficiencia" height="260"></canvas>
@@ -170,7 +170,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon"><i class="bi bi-file-earmark-check"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Comprobantes facturados</div>
+                    <div class="kpi-label">Comprobantes remitidos</div>
                     <div class="kpi-value" id="kv-lt-total">—</div>
                 </div>
             </div>
@@ -342,10 +342,10 @@
                     <thead>
                         <tr>
                             <th>Usuario</th>
-                            <th class="col-num">Unidades facturadas</th>
-                            <th class="col-num">% Unidades facturadas</th>
-                            <th class="col-num">Pico facturación</th>
-                            <th class="col-num">Tendencia facturación</th>
+                            <th class="col-num">Unidades remitidas</th>
+                            <th class="col-num">% Unidades remitidas</th>
+                            <th class="col-num">Pico remisión</th>
+                            <th class="col-num">Tendencia remisión</th>
                             <th class="col-num">Días productivos</th>
                             <th class="col-num">Unid. fact. últ. 30 días</th>
                         </tr>
@@ -357,7 +357,7 @@
 
         <div class="analisis-card">
             <div class="analisis-section-header">
-                <i class="bi bi-bar-chart"></i> Unidades facturadas por día
+                <i class="bi bi-bar-chart"></i> Unidades remitidas por día
             </div>
             <div class="chart-wrap">
                 <canvas id="chart-prod-fact" height="260"></canvas>
@@ -366,7 +366,7 @@
 
         <div class="analisis-card">
             <div class="analisis-section-header">
-                <i class="bi bi-calendar-week"></i> Unidades facturadas por usuario (Últ. 7 días)
+                <i class="bi bi-calendar-week"></i> Unidades remitidas por usuario (Últ. 7 días)
                 <span class="header-sub">Clic en un día para ver el gráfico</span>
             </div>
             <div class="table-wrap picking-ult7-wrap">
@@ -760,7 +760,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-check-circle"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Unidades facturadas</div>
+                    <div class="kpi-label">Unidades remitidas</div>
                     <div class="kpi-value" id="kv-pc-unid-fact">—</div>
                 </div>
             </div>
@@ -811,7 +811,7 @@
             <div class="remision-metric-toggle" role="group" aria-label="Seleccionar métrica">
                 <span class="remision-toggle-label"><i class="bi bi-sliders"></i> Métrica visualizada:</span>
                 <button type="button" class="rem-toggle-btn active" data-metric="unidades">
-                    <i class="bi bi-box-seam"></i> Unidades Facturadas
+                    <i class="bi bi-box-seam"></i> Unidades Remitidas
                 </button>
                 <button type="button" class="rem-toggle-btn" data-metric="pedidos">
                     <i class="bi bi-card-checklist"></i> Cantidad de Pedidos
@@ -952,7 +952,7 @@
                             <th>Tipo de Remisión</th>
                             <th class="col-num">Cant. Pedidos</th>
                             <th class="col-num">% Pedidos</th>
-                            <th class="col-num">Unid. Facturadas</th>
+                            <th class="col-num">Unid. Remitidas</th>
                             <th class="col-num">% Unid. Fact.</th>
                             <th class="col-num">Unid. Pedidas</th>
                         </tr>
@@ -966,3 +966,149 @@
     </div>
 </div>
 
+
+<!-- ─────────────────── TAB 9: PEDIDOS ESTANCADOS ─────────────────────── -->
+<div class="tab-pane" id="tab-estancados">
+    <div class="dash-content">
+
+        <!-- Umbral de antigüedad -->
+        <div class="plan-ventanas-header">
+            <span class="plan-ventanas-title"><i class="bi bi-hourglass-bottom"></i> Pedidos con saldo pendiente, sin cancelar</span>
+            <div class="filter-pills" id="est-umbral" role="group" aria-label="Antigüedad mínima">
+                <button type="button" class="pill" data-d="60">+60 días</button>
+                <button type="button" class="pill active" data-d="90">+90 días</button>
+                <button type="button" class="pill" data-d="180">+180 días</button>
+                <button type="button" class="pill" data-d="365">+365 días</button>
+            </div>
+            <span class="header-sub">Situación actual · no depende del rango de fechas</span>
+        </div>
+
+        <div class="kpi-grid" id="kpis-estancados">
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-hourglass-bottom"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Pedidos estancados</div>
+                    <div class="kpi-value" id="kv-est-ped">—</div>
+                    <div class="kpi-var neu" id="kvar-est-ped"></div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-box-seam"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Unidades pendientes</div>
+                    <div class="kpi-value" id="kv-est-unid">—</div>
+                    <div class="kpi-var neu" id="kvar-est-unid"></div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(220,38,38,.08);color:var(--neg)"><i class="bi bi-cash-stack"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Importe pendiente</div>
+                    <div class="kpi-value" id="kv-est-imp">—</div>
+                    <div class="kpi-var neu" id="kvar-est-imp"></div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:rgba(124,58,237,.08);color:#7c3aed"><i class="bi bi-calendar-x"></i></div>
+                <div class="kpi-body">
+                    <div class="kpi-label">Antigüedad promedio</div>
+                    <div class="kpi-value" id="kv-est-dias">—</div>
+                    <div class="kpi-var neu" id="kvar-est-dias"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="resumen-row">
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-bar-chart-steps"></i> Por antigüedad
+                </div>
+                <div class="table-wrap">
+                    <table id="tabla-est-tramos">
+                        <thead>
+                            <tr>
+                                <th>Antigüedad (días)</th>
+                                <th class="col-num">Pedidos</th>
+                                <th class="col-num">Sin remitir</th>
+                                <th class="col-num">Unid. pend.</th>
+                                <th class="col-num">Importe pend.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-est-tramos"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="analisis-card">
+                <div class="analisis-section-header">
+                    <i class="bi bi-people"></i> Concentración por cliente
+                    <span class="header-sub">Top 30 por importe · clic para filtrar el listado</span>
+                </div>
+                <div class="table-wrap" style="max-height:360px;overflow-y:auto">
+                    <table id="tabla-est-clientes">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Canal</th>
+                                <th class="col-num">Pedidos</th>
+                                <th class="col-num">Unid. pend.</th>
+                                <th class="col-num">Importe pend.</th>
+                                <th class="col-num">Máx. días</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-est-clientes"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="analisis-card">
+            <div class="analisis-section-header" id="hdr-est-pedidos">
+                <i class="bi bi-list-ul"></i> Pedidos estancados
+                <span class="header-sub" id="est-count">Clic en un pedido para ver el detalle</span>
+                <div class="filter-pills" id="est-situacion" role="group" aria-label="Filtrar por situación">
+                    <button type="button" class="pill active" data-s="ALL">Todos</button>
+                    <button type="button" class="pill" data-s="SIN REMITIR">Sin remitir</button>
+                    <button type="button" class="pill" data-s="PARCIAL">Parcial</button>
+                </div>
+                <input type="search" class="est-busca" id="est-busca" placeholder="Buscar pedido o cliente…" aria-label="Buscar pedido o cliente">
+            </div>
+            <div class="est-cliente-activo" id="est-cliente-activo" hidden></div>
+            <div class="table-wrap" style="max-height:480px;overflow-y:auto">
+                <table id="tabla-est-pedidos">
+                    <thead>
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Fecha pedido</th>
+                            <th class="col-num">Días</th>
+                            <th>Canal</th>
+                            <th>Cliente</th>
+                            <th>Tipo</th>
+                            <th>Estado Tango</th>
+                            <th>Situación</th>
+                            <th class="col-num">Unid. ped.</th>
+                            <th class="col-num">Unid. pend.</th>
+                            <th class="col-num">Importe pend.</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-est-pedidos"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ─────────────────── TAB 10: FILL RATE ─────────────────────────────── -->
+<!-- En construcción: falta definir contenido (KPIs, SP y endpoint).       -->
+<div class="tab-pane" id="tab-fill-rate">
+    <div class="dash-content">
+
+        <div class="analisis-card">
+            <div class="analisis-section-header">
+                <i class="bi bi-speedometer2"></i> Fill Rate
+            </div>
+            <div class="empty-state"><i class="bi bi-cone-striped"></i>Pestaña en construcción</div>
+        </div>
+
+    </div>
+</div>
