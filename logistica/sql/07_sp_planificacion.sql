@@ -76,7 +76,8 @@ BEGIN
         @MAS_UNO                                         AS MAS_UNO,
         CAST(0.97 AS DECIMAL(5,2))                       AS META,
         CAST(ISNULL(@PROM_PICK_7D, 0) AS DECIMAL(18,2)) AS PROM_UNID_DIA,
-        -- WIP: pendiente con entrega de hoy en adelante (vencidos aparte, 30 días)
+        -- Pendiente a despachar (cartera; el WIP real es RO_SP_WIP_PICKING):
+        -- entrega de hoy en adelante (vencidos aparte, 30 días)
         (SELECT CAST(ISNULL(SUM(CAST(CANT_PEDIDO AS DECIMAL(18,2))), 0) AS DECIMAL(18,0))
          FROM dbo.BI_T_DESPACHO_PEDIDOS
          WHERE ESTADO = 'PENDIENTE' AND FECHA_ENTREGA >= @HOY
@@ -166,7 +167,7 @@ BEGIN
     GROUP BY b.NRO_PEDIDO, b.NOMBRE_CLIENTE, b.CANAL, CAST(b.FECHA_ENTREGA AS DATE)
     ORDER BY b.FECHA_ENTREGA ASC, UNIDADES DESC;
 
-    -- ── Result set 5: WIP por día de entrega ─────────────────────────────
+    -- ── Result set 5: pendiente a despachar por día de entrega ─────────────────────────────
     -- Hoy + próximos 10 días hábiles, una fila por fecha de entrega (incluye
     -- no hábiles con pendiente dentro del tramo). El resto va en 'POSTERIOR'.
     DECLARE @WIP_HASTA DATE;

@@ -98,6 +98,16 @@ class LogisticaDB extends LogisticaDBBase
         ];
     }
 
+    // ── Área 5b: WIP de picking (tareas abiertas, situación actual) ──────
+    public function getWipPicking(?string $usuario): array
+    {
+        $sets = $this->execSP('EXEC dbo.RO_SP_WIP_PICKING ?', [$usuario]);
+        return [
+            'kpis'   => $sets[0][0] ?? [],
+            'tareas' => $sets[1] ?? [],
+        ];
+    }
+
     // ── Área 6: Demanda y despacho ───────────────────────────────────────
     // ── Área 6a: Planificación de despacho ───────────────────────────────
     public function getPlanificacion(?string $canal): array
@@ -159,11 +169,12 @@ class LogisticaDB extends LogisticaDBBase
         $pedidos = array_map(function ($r) {
             $r['NRO_PEDIDO'] = str_pad(trim((string)$r['NRO_PEDIDO']), 13, '0', STR_PAD_LEFT);
             return $r;
-        }, $sets[3] ?? []);
+        }, $sets[4] ?? []);
         return [
             'kpis'     => $sets[0][0] ?? [],
-            'tramos'   => $sets[1] ?? [],
-            'clientes' => $sets[2] ?? [],
+            'cobertura' => $sets[1] ?? [],   // cobertura de stock del saldo
+            'meses'    => $sets[2] ?? [],   // ¿desde cuándo se acumula?
+            'clientes' => $sets[3] ?? [],
             'pedidos'  => $pedidos,
         ];
     }
@@ -182,8 +193,13 @@ class LogisticaDB extends LogisticaDBBase
             'kpis'     => $sets[0][0] ?? [],
             'apertura' => $sets[1] ?? [],
             'detalle'  => $detalle,
-            'ingreso'       => $sets[3][0] ?? [],   // pedidos cargados el día anterior
-            'ingreso_canal' => $sets[4] ?? [],
+            'ingreso'        => $sets[3][0] ?? [],   // pedidos cargados el día anterior
+            'ingreso_canal'  => $sets[4] ?? [],
+            'ingreso_plazos' => $sets[5] ?? [],      // ¿cuándo hay que entregarlo?
+            'ingreso_riesgo' => array_map(function ($r) {   // pedidos a atender primero
+                $r['NRO_PEDIDO'] = str_pad(trim((string)$r['NRO_PEDIDO']), 13, '0', STR_PAD_LEFT);
+                return $r;
+            }, $sets[6] ?? []),
         ];
     }
 

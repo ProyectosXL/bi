@@ -153,13 +153,24 @@ BEGIN
     LEFT JOIN #PED p ON p.NRO_PEDIDO = rp.NRO_PEDIDO AND p.TALON_PED = rp.TALON_PED
     ORDER BY rp.N_COMP, rp.NRO_PEDIDO;
 
-    -- ── Ingreso del día anterior: pedidos cargados en D−1 y su cumplimiento ─
-    -- Día calendario anterior (también hay carga los fines de semana).
+    -- ── Pedidos cargados el día anterior (D−1): vista de supply chain ─────
+    -- Responde: ¿cuánto entró vs lo normal?, ¿cuándo hay que entregarlo?,
+    -- ¿se está cumpliendo en plazo? y ¿qué está en riesgo?
+    -- "A tiempo" = fecha del último remito del pedido <= fecha de entrega
+    -- comprometida (BI_T_DESPACHO_PEDIDOS). Los completos sin remito
+    -- vinculable (Ecommerce, Dist. Inicial de franquicias) no se pueden
+    -- medir y se cuentan aparte.
     DECLARE @ING_FECHA DATE = DATEADD(DAY, -1, @FECHA);
+    DECLARE @HOY       DATE = CAST(GETDATE() AS DATE);
+    DECLARE @PROX_HABIL DATE = (SELECT TOP 1 FECHA FROM dbo.RO_T_CALENDARIO
+                                WHERE FECHA > @HOY AND DIA_LABORAL = 1 ORDER BY FECHA);
 
-    SELECT e.TALON_PED, e.NRO_PEDIDO, MAX(e.CANAL) AS CANAL,
-           SUM(ISNULL(e.CANT_PEDID, 0)) AS UNID_PEDIDAS,
-           SUM(ISNULL(e.CANT_PEND, 0))  AS UNID_PENDIENTES
+    SELECT e.TALON_PED, e.NRO_PEDIDO,
+           MAX(e.CANAL)                     AS CANAL,
+           MAX(LTRIM(RTRIM(e.CLIENTE)))     AS CLIENTE,
+           SUM(ISNULL(e.CANT_PEDID, 0))     AS UNID_PEDIDAS,
+           SUM(ISNULL(e.CANT_PEND, 0))      AS UNID_PENDIENTES,
+           SUM(ISNULL(e.IMPORTE_PEDIDO, 0)) AS IMPORTE
     INTO #ING
     FROM dbo.BI_EFICIENCIA_LOGISTICA e
     WHERE e.FECHA_PEDI = @ING_FECHA
@@ -168,44 +179,138 @@ BEGIN
       AND (@TIPO  IS NULL OR e.TIPO_FACTURACION = @TIPO)
     GROUP BY e.TALON_PED, e.NRO_PEDIDO;
 
-    -- Unidades de esos pedidos que salieron en los remitos del día D
-    SELECT i.TALON_PED, i.NRO_PEDIDO, SUM(rp.UNID_REMITO) AS UNID_EN_D
-    INTO #INGD
+    -- Fecha de entrega comprometida y fecha del último remito de cada pedido
+    ALTER TABLE #ING ADD FECHA_ENTREGA DATE, ULT_REMITO DATE, SITUACION VARCHAR(20), PLAZO VARCHAR(30), PLAZO_ORD TINYINT;
+
+    UPDATE i SET FECHA_ENTREGA = f.FE
     FROM #ING i
-    JOIN #RP rp ON rp.NRO_PEDIDO = i.NRO_PEDIDO AND rp.TALON_PED = i.TALON_PED
-    GROUP BY i.TALON_PED, i.NRO_PEDIDO;
+    JOIN (SELECT CAST(TALON_PED AS SMALLINT) AS TALON_PED, NRO_PEDIDO, MIN(FECHA_ENTREGA) AS FE
+          FROM dbo.BI_T_DESPACHO_PEDIDOS
+          WHERE NRO_PEDIDO IN (SELECT NRO_PEDIDO FROM #ING)
+          GROUP BY CAST(TALON_PED AS SMALLINT), NRO_PEDIDO) f
+      ON f.NRO_PEDIDO = i.NRO_PEDIDO AND f.TALON_PED = i.TALON_PED;
+
+    UPDATE i SET ULT_REMITO = u.UR
+    FROM #ING i
+    JOIN (SELECT TALON_PED, NRO_PEDIDO, MAX(TRY_CAST(FECHA_COMP AS DATE)) AS UR
+          FROM dbo.BI_KPI_LOG_FACTURACION
+          WHERE NRO_PEDIDO IN (SELECT NRO_PEDIDO FROM #ING) AND ISNULL(N_COMP, '') <> ''
+          GROUP BY TALON_PED, NRO_PEDIDO) u
+      ON u.NRO_PEDIDO = i.NRO_PEDIDO AND u.TALON_PED = i.TALON_PED;
+
+    -- Fechas dummy (1900-01-01) se tratan como "sin fecha"
+    UPDATE #ING SET FECHA_ENTREGA = NULL WHERE FECHA_ENTREGA < '2000-01-01';
+
+    UPDATE #ING SET
+        SITUACION = CASE
+            WHEN FECHA_ENTREGA IS NULL                                THEN 'SIN FECHA'
+            WHEN UNID_PENDIENTES <= 0 AND ULT_REMITO IS NULL          THEN 'COMPLETO SIN DATO'
+            WHEN UNID_PENDIENTES <= 0 AND ULT_REMITO <= FECHA_ENTREGA THEN 'A TIEMPO'
+            WHEN UNID_PENDIENTES <= 0                                 THEN 'TARDE'
+            WHEN FECHA_ENTREGA < @HOY                                 THEN 'VENCIDO'
+            WHEN FECHA_ENTREGA <= @PROX_HABIL                         THEN 'EN RIESGO'
+            ELSE 'EN PLAZO' END,
+        PLAZO = CASE
+            WHEN FECHA_ENTREGA IS NULL                                THEN 'Sin fecha de entrega'
+            WHEN FECHA_ENTREGA < @ING_FECHA                           THEN 'Fecha anterior a la carga'
+            WHEN DATEDIFF(DAY, @ING_FECHA, FECHA_ENTREGA) <= 1        THEN '0 a 1 día'
+            WHEN DATEDIFF(DAY, @ING_FECHA, FECHA_ENTREGA) <= 3        THEN '2 a 3 días'
+            WHEN DATEDIFF(DAY, @ING_FECHA, FECHA_ENTREGA) <= 7        THEN '4 a 7 días'
+            ELSE '8 días o más' END,
+        PLAZO_ORD = CASE
+            WHEN FECHA_ENTREGA IS NULL                                THEN 6
+            WHEN FECHA_ENTREGA < @ING_FECHA                           THEN 5
+            WHEN DATEDIFF(DAY, @ING_FECHA, FECHA_ENTREGA) <= 1        THEN 1
+            WHEN DATEDIFF(DAY, @ING_FECHA, FECHA_ENTREGA) <= 3        THEN 2
+            WHEN DATEDIFF(DAY, @ING_FECHA, FECHA_ENTREGA) <= 7        THEN 3
+            ELSE 4 END;
+
+    -- Referencia "normal": mismo día de la semana, 4 semanas previas (mismos filtros)
+    SELECT e.FECHA_PEDI,
+           COUNT(DISTINCT CONCAT(e.TALON_PED, '|', e.NRO_PEDIDO)) AS PEDIDOS,
+           SUM(ISNULL(e.CANT_PEDID, 0))                            AS UNIDADES,
+           SUM(ISNULL(e.IMPORTE_PEDIDO, 0))                        AS IMPORTE
+    INTO #REF
+    FROM dbo.BI_EFICIENCIA_LOGISTICA e
+    WHERE e.FECHA_PEDI IN (DATEADD(DAY, -7, @ING_FECHA), DATEADD(DAY, -14, @ING_FECHA),
+                           DATEADD(DAY, -21, @ING_FECHA), DATEADD(DAY, -28, @ING_FECHA))
+      AND ISNULL(e.ESTADO_TANGO, '') <> 'CANCELADO'
+      AND (@CANAL IS NULL OR e.CANAL = @CANAL)
+      AND (@TIPO  IS NULL OR e.TIPO_FACTURACION = @TIPO)
+    GROUP BY e.FECHA_PEDI;
 
     -- ── Result set 4: KPIs del ingreso ────────────────────────────────────
     SELECT
-        @ING_FECHA                                                         AS ING_FECHA,
-        COUNT(*)                                                           AS ING_PEDIDOS,
-        CAST(ISNULL(SUM(i.UNID_PEDIDAS), 0) AS DECIMAL(18,0))              AS ING_UNID_PEDIDAS,
-        CAST(ISNULL(SUM(i.UNID_PEDIDAS - i.UNID_PENDIENTES), 0) AS DECIMAL(18,0)) AS ING_UNID_REMITIDAS_ACUM,
-        CAST(ISNULL(SUM(i.UNID_PENDIENTES), 0) AS DECIMAL(18,0))           AS ING_UNID_PENDIENTES,
-        CAST(CASE WHEN SUM(i.UNID_PEDIDAS) > 0
-                  THEN 1.0 - SUM(i.UNID_PENDIENTES) / SUM(i.UNID_PEDIDAS) END AS DECIMAL(10,4)) AS ING_CUMPL,
-        SUM(CASE WHEN i.UNID_PENDIENTES <= 0 THEN 1 ELSE 0 END)            AS ING_COMPLETOS,
-        CAST(ISNULL((SELECT SUM(UNID_EN_D) FROM #INGD), 0) AS DECIMAL(18,0)) AS ING_REMITIDAS_EN_D,
-        (SELECT COUNT(*) FROM #INGD)                                       AS ING_PED_CON_REMITO_EN_D,
-        CAST(0.95 AS DECIMAL(5,2))                                         AS META
-    FROM #ING i;
+        @ING_FECHA                                                            AS ING_FECHA,
+        @HOY                                                                  AS HOY,
+        @PROX_HABIL                                                           AS PROX_HABIL,
+        -- 1. ¿Cuánto entró vs lo normal?
+        COUNT(*)                                                              AS ING_PEDIDOS,
+        CAST(ISNULL(SUM(UNID_PEDIDAS), 0) AS DECIMAL(18,0))                   AS ING_UNIDADES,
+        CAST(ISNULL(SUM(IMPORTE), 0) AS DECIMAL(18,0))                        AS ING_IMPORTE,
+        (SELECT CAST(AVG(CAST(PEDIDOS AS FLOAT)) AS DECIMAL(18,1)) FROM #REF) AS REF_PEDIDOS,
+        (SELECT CAST(AVG(UNIDADES) AS DECIMAL(18,0)) FROM #REF)               AS REF_UNIDADES,
+        (SELECT CAST(AVG(IMPORTE)  AS DECIMAL(18,0)) FROM #REF)               AS REF_IMPORTE,
+        (SELECT COUNT(*) FROM #REF)                                           AS REF_SEMANAS,
+        -- 3. ¿Se está cumpliendo en plazo? (pedidos)
+        SUM(CASE WHEN SITUACION = 'A TIEMPO'  THEN 1 ELSE 0 END)              AS PED_A_TIEMPO,
+        SUM(CASE WHEN SITUACION = 'TARDE'     THEN 1 ELSE 0 END)              AS PED_TARDE,
+        SUM(CASE WHEN SITUACION = 'VENCIDO'   THEN 1 ELSE 0 END)              AS PED_VENCIDOS,
+        SUM(CASE WHEN SITUACION = 'EN RIESGO' THEN 1 ELSE 0 END)              AS PED_EN_RIESGO,
+        SUM(CASE WHEN SITUACION = 'EN PLAZO'  THEN 1 ELSE 0 END)              AS PED_EN_PLAZO,
+        SUM(CASE WHEN SITUACION = 'COMPLETO SIN DATO' THEN 1 ELSE 0 END)      AS PED_COMPLETO_SIN_DATO,
+        CAST(CASE WHEN SUM(CASE WHEN SITUACION IN ('A TIEMPO','TARDE','VENCIDO') THEN 1 ELSE 0 END) > 0
+                  THEN SUM(CASE WHEN SITUACION = 'A TIEMPO' THEN 1.0 ELSE 0 END)
+                     / SUM(CASE WHEN SITUACION IN ('A TIEMPO','TARDE','VENCIDO') THEN 1 ELSE 0 END) END
+             AS DECIMAL(10,4))                                                AS PCT_A_TIEMPO,
+        -- 4. ¿Qué está en riesgo? (unidades pendientes)
+        CAST(ISNULL(SUM(CASE WHEN SITUACION = 'VENCIDO'   THEN UNID_PENDIENTES END), 0) AS DECIMAL(18,0)) AS UNID_VENCIDAS,
+        CAST(ISNULL(SUM(CASE WHEN SITUACION = 'EN RIESGO' THEN UNID_PENDIENTES END), 0) AS DECIMAL(18,0)) AS UNID_EN_RIESGO,
+        CAST(ISNULL(SUM(CASE WHEN SITUACION = 'EN PLAZO'  THEN UNID_PENDIENTES END), 0) AS DECIMAL(18,0)) AS UNID_EN_PLAZO,
+        -- 6. Calidad de datos
+        SUM(CASE WHEN PLAZO_ORD = 6 THEN 1 ELSE 0 END)                        AS PED_SIN_FECHA,
+        SUM(CASE WHEN PLAZO_ORD = 5 THEN 1 ELSE 0 END)                        AS PED_FECHA_ANTERIOR,
+        CAST(0.95 AS DECIMAL(5,2))                                            AS META
+    FROM #ING;
 
-    -- ── Result set 5: ingreso por canal ───────────────────────────────────
+    -- ── Result set 5: por canal ───────────────────────────────────────────
     SELECT
-        i.CANAL,
-        COUNT(*)                                                           AS PEDIDOS,
-        CAST(SUM(i.UNID_PEDIDAS) AS DECIMAL(18,0))                         AS UNID_PEDIDAS,
-        CAST(SUM(i.UNID_PEDIDAS - i.UNID_PENDIENTES) AS DECIMAL(18,0))     AS UNID_REMITIDAS_ACUM,
-        CAST(SUM(i.UNID_PENDIENTES) AS DECIMAL(18,0))                      AS UNID_PENDIENTES,
-        CAST(CASE WHEN SUM(i.UNID_PEDIDAS) > 0
-                  THEN 1.0 - SUM(i.UNID_PENDIENTES) / SUM(i.UNID_PEDIDAS) END AS DECIMAL(10,4)) AS CUMPL,
-        SUM(CASE WHEN i.UNID_PENDIENTES <= 0 THEN 1 ELSE 0 END)            AS COMPLETOS,
-        CAST(ISNULL(SUM(d.UNID_EN_D), 0) AS DECIMAL(18,0))                 AS REMITIDAS_EN_D
-    FROM #ING i
-    LEFT JOIN #INGD d ON d.NRO_PEDIDO = i.NRO_PEDIDO AND d.TALON_PED = i.TALON_PED
-    GROUP BY i.CANAL
+        CANAL,
+        COUNT(*)                                                              AS PEDIDOS,
+        CAST(SUM(UNID_PEDIDAS) AS DECIMAL(18,0))                              AS UNID_PEDIDAS,
+        CAST(SUM(UNID_PENDIENTES) AS DECIMAL(18,0))                           AS UNID_PENDIENTES,
+        SUM(CASE WHEN SITUACION = 'A TIEMPO' THEN 1 ELSE 0 END)               AS PED_A_TIEMPO,
+        SUM(CASE WHEN SITUACION IN ('A TIEMPO','TARDE','VENCIDO') THEN 1 ELSE 0 END) AS PED_MEDIBLES,
+        CAST(CASE WHEN SUM(CASE WHEN SITUACION IN ('A TIEMPO','TARDE','VENCIDO') THEN 1 ELSE 0 END) > 0
+                  THEN SUM(CASE WHEN SITUACION = 'A TIEMPO' THEN 1.0 ELSE 0 END)
+                     / SUM(CASE WHEN SITUACION IN ('A TIEMPO','TARDE','VENCIDO') THEN 1 ELSE 0 END) END
+             AS DECIMAL(10,4))                                                AS PCT_A_TIEMPO,
+        SUM(CASE WHEN SITUACION IN ('VENCIDO','EN RIESGO') THEN 1 ELSE 0 END) AS PED_A_ATENDER
+    FROM #ING
+    GROUP BY CANAL
     ORDER BY UNID_PEDIDAS DESC;
 
-    DROP TABLE #R; DROP TABLE #M; DROP TABLE #RP; DROP TABLE #PED; DROP TABLE #ING; DROP TABLE #INGD;
+    -- ── Result set 6: ¿cuándo hay que entregarlo? (plazo desde la carga) ──
+    SELECT
+        PLAZO, PLAZO_ORD,
+        COUNT(*)                                        AS PEDIDOS,
+        CAST(SUM(UNID_PEDIDAS)    AS DECIMAL(18,0))     AS UNID_PEDIDAS,
+        CAST(SUM(UNID_PENDIENTES) AS DECIMAL(18,0))     AS UNID_PENDIENTES
+    FROM #ING
+    GROUP BY PLAZO, PLAZO_ORD
+    ORDER BY PLAZO_ORD;
+
+    -- ── Result set 7: pedidos a atender primero (vencidos y en riesgo) ────
+    SELECT
+        LTRIM(RTRIM(NRO_PEDIDO))                        AS NRO_PEDIDO,
+        TALON_PED, CLIENTE, CANAL, FECHA_ENTREGA,
+        CAST(UNID_PEDIDAS    AS DECIMAL(18,0))          AS UNID_PEDIDAS,
+        CAST(UNID_PENDIENTES AS DECIMAL(18,0))          AS UNID_PENDIENTES,
+        SITUACION
+    FROM #ING
+    WHERE SITUACION IN ('VENCIDO', 'EN RIESGO')
+    ORDER BY FECHA_ENTREGA, UNID_PENDIENTES DESC;
+
+    DROP TABLE #R; DROP TABLE #M; DROP TABLE #RP; DROP TABLE #PED; DROP TABLE #ING; DROP TABLE #REF;
 END;
 GO

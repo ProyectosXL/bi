@@ -431,6 +431,41 @@
             </div>
         </div>
 
+        <!-- WIP: picking en curso ahora (tareas iniciadas y no terminadas) -->
+        <div class="analisis-card">
+            <div class="analisis-section-header" id="hdr-wip-picking">
+                <i class="bi bi-activity"></i> WIP · picking en curso
+                <span class="header-sub" id="wip-hora">Situación actual · no depende del rango de fechas</span>
+                <button type="button" class="fr-ultimo" id="wip-actualizar" title="Actualizar el WIP" aria-label="Actualizar el WIP"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+            </div>
+            <div class="fr-ing-kpis">
+                <div class="fr-ing-kpi"><span>Tareas en curso</span><b id="kv-wip-tareas">—</b></div>
+                <div class="fr-ing-kpi"><span>Pickers activos</span><b id="kv-wip-pickers">—</b></div>
+                <div class="fr-ing-kpi"><span>Unid. asignadas</span><b id="kv-wip-asig">—</b></div>
+                <div class="fr-ing-kpi"><span>Unid. pickeadas</span><b id="kv-wip-pick">—</b></div>
+                <div class="fr-ing-kpi"><span>Unid. faltantes</span><b id="kv-wip-falt">—</b></div>
+                <div class="fr-ing-kpi"><span>% Avance</span><b id="kv-wip-avance">—</b></div>
+                <div class="fr-ing-kpi"><span>Demoradas (+2 h)</span><b id="kv-wip-dem">—</b></div>
+            </div>
+            <div class="table-wrap" style="max-height:300px;overflow-y:auto">
+                <table id="tabla-wip-picking">
+                    <thead>
+                        <tr>
+                            <th>Picker</th>
+                            <th>Inicio</th>
+                            <th class="col-num">Abierta</th>
+                            <th class="col-num">Asignadas</th>
+                            <th class="col-num">Pickeadas</th>
+                            <th class="col-num">Faltantes</th>
+                            <th class="col-num">% Avance</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-wip-picking"></tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="analisis-card">
             <div class="analisis-section-header">
                 <i class="bi bi-bar-chart"></i> Unidades pickeadas por día
@@ -487,7 +522,7 @@
             <span class="plan-ventanas-title"><i class="bi bi-calendar-week"></i> Ventanas de entrega</span>
             <span class="plan-wip-badge" id="pl-wip-badge">
                 <i class="bi bi-stack"></i>
-                WIP: <strong id="kv-pl-wip">—</strong> unid. en <strong id="kv-pl-wip-ped">—</strong> pedidos
+                Pendiente a despachar: <strong id="kv-pl-wip">—</strong> unid. en <strong id="kv-pl-wip-ped">—</strong> pedidos
                 <span class="plan-wip-venc" id="kv-pl-venc"></span>
             </span>
             <span class="plan-prom-badge">
@@ -542,10 +577,10 @@
             <?php endforeach; ?>
         </div>
 
-        <!-- WIP: unidades pendientes por día de entrega, de hoy en adelante -->
+        <!-- Pendiente a despachar: unidades pendientes por día de entrega, de hoy en adelante (el WIP real está en Prod. Picking) -->
         <div class="analisis-card">
             <div class="analisis-section-header" id="hdr-plan-wip">
-                <i class="bi bi-stack"></i> WIP por día de entrega
+                <i class="bi bi-stack"></i> Pendiente a despachar por día de entrega
                 <span class="header-sub">Unidades pendientes de hoy en adelante · próximos 10 días hábiles</span>
             </div>
             <div class="chart-wrap">
@@ -999,21 +1034,24 @@
 
 
 <!-- ─────────────────── TAB 9: PEDIDOS ESTANCADOS ─────────────────────── -->
+<!-- Vista de supply chain: cuánto hay trabado, por qué (¿hay stock?),     -->
+<!-- desde cuándo se acumula y qué acción corresponde con cada pedido.     -->
 <div class="tab-pane" id="tab-estancados">
     <div class="dash-content">
 
         <!-- Umbral de antigüedad -->
         <div class="plan-ventanas-header">
-            <span class="plan-ventanas-title"><i class="bi bi-hourglass-bottom"></i> Pedidos con saldo pendiente, sin cancelar</span>
+            <span class="plan-ventanas-title"><i class="bi bi-hourglass-bottom"></i> Pedidos del año con unidades pendientes, sin cancelar</span>
             <div class="filter-pills" id="est-umbral" role="group" aria-label="Antigüedad mínima">
+                <button type="button" class="pill" data-d="30">+30 días</button>
                 <button type="button" class="pill" data-d="60">+60 días</button>
                 <button type="button" class="pill active" data-d="90">+90 días</button>
                 <button type="button" class="pill" data-d="180">+180 días</button>
-                <button type="button" class="pill" data-d="365">+365 días</button>
             </div>
-            <span class="header-sub">Situación actual · no depende del rango de fechas</span>
+            <span class="header-sub" id="est-rango">Situación actual · no depende del rango de fechas</span>
         </div>
 
+        <!-- 1. ¿Cuánto hay trabado? -->
         <div class="kpi-grid" id="kpis-estancados">
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-hourglass-bottom"></i></div>
@@ -1049,30 +1087,52 @@
             </div>
         </div>
 
+        <!-- 2. ¿Hay stock para lo pendiente? (análisis, sin acciones sugeridas) -->
+        <div class="analisis-card">
+            <div class="analisis-section-header" id="hdr-est-cobertura">
+                <i class="bi bi-box-seam"></i> ¿Hay stock para lo pendiente?
+                <span class="header-sub">Stock Tango del depósito 01 · clic en un grupo para filtrar el listado</span>
+            </div>
+            <div class="est-stock" id="est-stock">
+                <div class="est-stock-txt" id="est-stock-txt">—</div>
+                <div class="est-stock-bar" aria-hidden="true">
+                    <div class="est-stock-con" id="est-stock-con" style="width:0%"></div>
+                </div>
+                <div class="est-stock-ley">
+                    <span><i class="est-dot con"></i> Unidades pendientes con stock disponible</span>
+                    <span><i class="est-dot sin"></i> Unidades pendientes sin stock</span>
+                </div>
+            </div>
+            <div class="est-acciones" id="est-cobertura"></div>
+        </div>
+
         <div class="resumen-row">
+            <!-- 4. ¿Desde cuándo se acumula? -->
             <div class="analisis-card">
                 <div class="analisis-section-header">
-                    <i class="bi bi-bar-chart-steps"></i> Por antigüedad
+                    <i class="bi bi-calendar3"></i> ¿Desde cuándo se acumula?
+                    <span class="header-sub">Por mes de carga del pedido</span>
                 </div>
                 <div class="table-wrap">
-                    <table id="tabla-est-tramos">
+                    <table id="tabla-est-meses">
                         <thead>
                             <tr>
-                                <th>Antigüedad (días)</th>
+                                <th>Mes de carga</th>
                                 <th class="col-num">Pedidos</th>
-                                <th class="col-num">Sin remitir</th>
-                                <th class="col-num">Unid. pend.</th>
-                                <th class="col-num">Importe pend.</th>
+                                <th class="col-num">Unidades pendientes</th>
+                                <th class="col-num">Importe pendiente</th>
+                                <th class="fr-bar-th">Peso en importe</th>
                             </tr>
                         </thead>
-                        <tbody id="tbody-est-tramos"></tbody>
+                        <tbody id="tbody-est-meses"></tbody>
                     </table>
                 </div>
             </div>
+            <!-- 5. ¿Por dónde empezar? -->
             <div class="analisis-card">
                 <div class="analisis-section-header">
-                    <i class="bi bi-people"></i> Concentración por cliente
-                    <span class="header-sub">Top 30 por importe · clic para filtrar el listado</span>
+                    <i class="bi bi-people"></i> ¿Por dónde empezar?
+                    <span class="header-sub">Top 30 clientes por importe · clic para filtrar el listado</span>
                 </div>
                 <div class="table-wrap" style="max-height:360px;overflow-y:auto">
                     <table id="tabla-est-clientes">
@@ -1081,9 +1141,9 @@
                                 <th>Cliente</th>
                                 <th>Canal</th>
                                 <th class="col-num">Pedidos</th>
-                                <th class="col-num">Unid. pend.</th>
-                                <th class="col-num">Importe pend.</th>
-                                <th class="col-num">Máx. días</th>
+                                <th class="col-num">Unidades pendientes</th>
+                                <th class="col-num">Importe pendiente</th>
+                                <th class="col-num">Pedidos con stock</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-est-clientes"></tbody>
@@ -1092,14 +1152,16 @@
             </div>
         </div>
 
+        <!-- Listado de pedidos estancados -->
         <div class="analisis-card">
             <div class="analisis-section-header" id="hdr-est-pedidos">
                 <i class="bi bi-list-ul"></i> Pedidos estancados
                 <span class="header-sub" id="est-count">Clic en un pedido para ver el detalle</span>
-                <div class="filter-pills" id="est-situacion" role="group" aria-label="Filtrar por situación">
-                    <button type="button" class="pill active" data-s="ALL">Todos</button>
-                    <button type="button" class="pill" data-s="SIN REMITIR">Sin remitir</button>
-                    <button type="button" class="pill" data-s="PARCIAL">Parcial</button>
+                <div class="filter-pills" id="est-cob-filtro" role="group" aria-label="Filtrar por cobertura de stock">
+                    <button type="button" class="pill active" data-a="ALL">Todos</button>
+                    <button type="button" class="pill" data-a="CON STOCK">Con stock</button>
+                    <button type="button" class="pill" data-a="STOCK PARCIAL">Stock parcial</button>
+                    <button type="button" class="pill" data-a="SIN STOCK">Sin stock</button>
                 </div>
                 <input type="search" class="est-busca" id="est-busca" placeholder="Buscar pedido o cliente…" aria-label="Buscar pedido o cliente">
             </div>
@@ -1113,12 +1175,13 @@
                             <th class="col-num">Días</th>
                             <th>Canal</th>
                             <th>Cliente</th>
-                            <th>Tipo</th>
                             <th>Estado Tango</th>
                             <th>Situación</th>
-                            <th class="col-num">Unid. ped.</th>
-                            <th class="col-num">Unid. pend.</th>
-                            <th class="col-num">Importe pend.</th>
+                            <th class="col-num">Unidades pedidas</th>
+                            <th class="col-num">Unidades pendientes</th>
+                            <th class="col-num">Pendientes con stock</th>
+                            <th class="col-num">Importe pendiente</th>
+                            <th>Stock para el saldo</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-est-pedidos"></tbody>
@@ -1137,7 +1200,7 @@
 
         <!-- Selector de día + tipo -->
         <div class="plan-ventanas-header fr-header">
-            <span class="plan-ventanas-title"><i class="bi bi-calendar-day"></i> Remitos del día</span>
+            <span class="plan-ventanas-title"><i class="bi bi-calendar-day"></i> Remitos emitidos en el día</span>
             <div class="fr-dia" role="group" aria-label="Día de remitos">
                 <button type="button" class="fr-nav" id="fr-prev" title="Día anterior" aria-label="Día anterior"><i class="bi bi-chevron-left"></i></button>
                 <input type="date" id="fr-fecha" class="fr-fecha" aria-label="Fecha de remitos">
@@ -1149,14 +1212,14 @@
                 <button type="button" class="pill" data-t="REPOSICION">Reposición</button>
                 <button type="button" class="pill" data-t="DIST. INICIAL">Dist. Inicial</button>
             </div>
-            <span class="header-sub" id="fr-carga">Vista por remito · para pedido vs cumplido ver Eficiencia</span>
+            <span class="header-sub" id="fr-carga">Qué se remitió en el día y cómo quedaron esos pedidos</span>
         </div>
 
         <div class="kpi-grid" id="kpis-fill-rate">
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-box-seam"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Unidades remitidas</div>
+                    <div class="kpi-label">Unidades remitidas en el día</div>
                     <div class="kpi-value" id="kv-fr-unid">—</div>
                     <div class="kpi-var neu" id="kvar-fr-unid"></div>
                 </div>
@@ -1164,7 +1227,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(0,168,120,.08);color:var(--accent)"><i class="bi bi-receipt"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Remitos</div>
+                    <div class="kpi-label">Remitos emitidos</div>
                     <div class="kpi-value" id="kv-fr-remitos">—</div>
                     <div class="kpi-var neu" id="kvar-fr-remitos"></div>
                 </div>
@@ -1172,14 +1235,14 @@
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(124,58,237,.08);color:#7c3aed"><i class="bi bi-card-list"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Pedidos atendidos</div>
+                    <div class="kpi-label">Pedidos con remito en el día</div>
                     <div class="kpi-value" id="kv-fr-pedidos">—</div>
                 </div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(22,163,74,.1);color:var(--pos)"><i class="bi bi-speedometer2"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Fill rate pedidos atendidos</div>
+                    <div class="kpi-label">Fill rate (% de unidades cumplidas)</div>
                     <div class="kpi-value" id="kv-fr-rate">—</div>
                     <div class="kpi-var semaforo" id="kvar-fr-rate"></div>
                 </div>
@@ -1187,50 +1250,106 @@
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(245,158,11,.1);color:var(--accent3)"><i class="bi bi-check2-all"></i></div>
                 <div class="kpi-body">
-                    <div class="kpi-label">Pedidos completos</div>
+                    <div class="kpi-label">Pedidos completos (sin pendientes)</div>
                     <div class="kpi-value" id="kv-fr-completos">—</div>
                     <div class="kpi-var neu" id="kvar-fr-completos"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Ingreso del día anterior: pedidos cargados en D−1 y su cumplimiento -->
+        <!-- Pedidos cargados el día anterior (D−1): vista de supply chain.
+             Cuatro preguntas: cuánto entró vs lo normal, cuándo hay que entregarlo,
+             si se está cumpliendo en plazo y qué está en riesgo. -->
         <div class="analisis-card">
             <div class="analisis-section-header" id="hdr-fr-ingreso">
-                <i class="bi bi-inbox"></i> Ingreso del día anterior
-                <span class="header-sub" id="fr-ing-fecha">Pedidos cargados el día anterior al elegido</span>
+                <i class="bi bi-inbox"></i> Pedidos cargados el día anterior
+                <span class="header-sub" id="fr-ing-fecha">Qué entró, cuándo hay que entregarlo y qué está en riesgo</span>
             </div>
-            <div class="fr-ing-kpis">
-                <div class="fr-ing-kpi"><span>Pedidos cargados</span><b id="kv-fr-ing-ped">—</b></div>
-                <div class="fr-ing-kpi"><span>Unid. pedidas</span><b id="kv-fr-ing-unid">—</b></div>
-                <div class="fr-ing-kpi"><span>Remitidas (acum.)</span><b id="kv-fr-ing-rem">—</b></div>
-                <div class="fr-ing-kpi"><span>Pendientes</span><b id="kv-fr-ing-pend">—</b></div>
-                <div class="fr-ing-kpi"><span>% Cumplimiento</span><b id="kv-fr-ing-cumpl">—</b></div>
-                <div class="fr-ing-kpi"><span>Completos</span><b id="kv-fr-ing-comp">—</b></div>
-                <div class="fr-ing-kpi"><span>Remitido el día elegido</span><b id="kv-fr-ing-end">—</b></div>
+
+            <div class="fr-ing-bloque">
+                <div class="fr-ing-pregunta">1. ¿Cuánto entró comparado con un día normal?</div>
+                <div class="fr-ing-kpis">
+                    <div class="fr-ing-kpi"><span>Pedidos cargados</span><b id="kv-fr-ing-ped">—</b><small id="kvar-fr-ing-ped"></small></div>
+                    <div class="fr-ing-kpi"><span>Unidades pedidas</span><b id="kv-fr-ing-unid">—</b><small id="kvar-fr-ing-unid"></small></div>
+                    <div class="fr-ing-kpi"><span>Importe pedido</span><b id="kv-fr-ing-imp">—</b><small id="kvar-fr-ing-imp"></small></div>
+                </div>
             </div>
-            <div class="table-wrap">
-                <table id="tabla-fr-ingreso">
-                    <thead>
-                        <tr>
-                            <th>Canal</th>
-                            <th class="col-num">Pedidos</th>
-                            <th class="col-num">Unid. pedidas</th>
-                            <th class="col-num">Remitidas acum.</th>
-                            <th class="col-num">Pendientes</th>
-                            <th class="col-num">% Cumpl.</th>
-                            <th class="col-num">Completos</th>
-                            <th class="col-num">Remitido el día</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-fr-ingreso"></tbody>
-                </table>
+
+            <div class="fr-ing-bloque">
+                <div class="fr-ing-pregunta">2. ¿Se está cumpliendo en plazo? <em>(pedidos)</em></div>
+                <div class="fr-ing-kpis">
+                    <div class="fr-ing-kpi"><span>% de pedidos remitidos a tiempo</span><b id="kv-fr-ing-pct">—</b><small id="kvar-fr-ing-pct"></small></div>
+                    <div class="fr-ing-kpi"><span>Remitidos a tiempo</span><b id="kv-fr-ing-atiempo">—</b><small>pedidos</small></div>
+                    <div class="fr-ing-kpi"><span>Remitidos tarde</span><b id="kv-fr-ing-tarde">—</b><small>pedidos</small></div>
+                    <div class="fr-ing-kpi fr-ing-alerta"><span>Vencidos sin completar</span><b id="kv-fr-ing-venc">—</b><small id="kvar-fr-ing-venc"></small></div>
+                    <div class="fr-ing-kpi fr-ing-aviso"><span>En riesgo (vencen hoy o el próximo día hábil)</span><b id="kv-fr-ing-riesgo">—</b><small id="kvar-fr-ing-riesgo"></small></div>
+                    <div class="fr-ing-kpi"><span>En plazo (todavía no vencen)</span><b id="kv-fr-ing-plazo">—</b><small id="kvar-fr-ing-plazo"></small></div>
+                </div>
+                <div class="fr-ing-nota" id="fr-ing-nota"></div>
+            </div>
+
+            <div class="resumen-row fr-ing-tablas">
+                <div>
+                    <div class="fr-ing-pregunta">3. ¿Cuándo hay que entregarlo? <em>(días desde la carga hasta la entrega comprometida)</em></div>
+                    <div class="table-wrap">
+                        <table id="tabla-fr-plazos">
+                            <thead>
+                                <tr>
+                                    <th>Plazo de entrega</th>
+                                    <th class="col-num">Pedidos</th>
+                                    <th class="col-num">Unidades pedidas</th>
+                                    <th class="col-num">Unidades pendientes</th>
+                                    <th class="fr-bar-th">Peso en unidades</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-fr-plazos"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <div class="fr-ing-pregunta">Por canal</div>
+                    <div class="table-wrap">
+                        <table id="tabla-fr-ingreso">
+                            <thead>
+                                <tr>
+                                    <th>Canal</th>
+                                    <th class="col-num">Pedidos</th>
+                                    <th class="col-num">Unidades pedidas</th>
+                                    <th class="col-num">Unidades pendientes</th>
+                                    <th class="col-num">% pedidos a tiempo</th>
+                                    <th class="col-num">Pedidos a atender</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-fr-ingreso"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fr-ing-bloque">
+                <div class="fr-ing-pregunta">4. ¿Qué hay que atender primero? <em>(pedidos vencidos o que vencen hoy / el próximo día hábil, con unidades pendientes)</em></div>
+                <div class="table-wrap" style="max-height:320px;overflow-y:auto">
+                    <table id="tabla-fr-riesgo">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Canal</th>
+                                <th>Entrega comprometida</th>
+                                <th class="col-num">Unidades pedidas</th>
+                                <th class="col-num">Unidades pendientes</th>
+                                <th>Situación</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-fr-riesgo"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
         <div class="analisis-card">
             <div class="analisis-section-header">
-                <i class="bi bi-diagram-3"></i> Apertura por canal y tipo
+                <i class="bi bi-diagram-3"></i> Remitos del día por canal y tipo
             </div>
             <div class="table-wrap">
                 <table id="tabla-fr-apertura">
@@ -1238,11 +1357,11 @@
                         <tr>
                             <th>Canal</th>
                             <th>Tipo</th>
-                            <th class="col-num">Unid. remitidas</th>
-                            <th class="col-num">Remitos</th>
+                            <th class="col-num">Unidades remitidas</th>
+                            <th class="col-num">Remitos emitidos</th>
                             <th class="col-num">Pedidos</th>
-                            <th class="col-num">Completos</th>
-                            <th class="col-num">Fill rate</th>
+                            <th class="col-num">Pedidos completos</th>
+                            <th class="col-num">Fill rate (% unidades)</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-fr-apertura"></tbody>
@@ -1252,13 +1371,13 @@
 
         <div class="analisis-card">
             <div class="analisis-section-header" id="hdr-fr-detalle">
-                <i class="bi bi-list-ul"></i> Remito → pedido
+                <i class="bi bi-list-ul"></i> Detalle: cada remito y su pedido
                 <span class="header-sub" id="fr-count">Clic en un pedido para ver el detalle</span>
                 <div class="filter-pills" id="fr-filtro" role="group" aria-label="Filtrar por estado del pedido">
                     <button type="button" class="pill active" data-f="ALL">Todos</button>
-                    <button type="button" class="pill" data-f="COMPLETO">Completos</button>
-                    <button type="button" class="pill" data-f="PARCIAL">Parciales</button>
-                    <button type="button" class="pill" data-f="SIN PEDIDO">Sin pedido</button>
+                    <button type="button" class="pill" data-f="COMPLETO">Pedidos completos</button>
+                    <button type="button" class="pill" data-f="PARCIAL">Pedidos parciales</button>
+                    <button type="button" class="pill" data-f="SIN PEDIDO">Remitos sin pedido</button>
                 </div>
                 <input type="search" class="est-busca" id="fr-busca" placeholder="Buscar remito, pedido o cliente…" aria-label="Buscar remito, pedido o cliente">
             </div>
@@ -1272,12 +1391,12 @@
                             <th>Cliente</th>
                             <th>Canal</th>
                             <th>Tipo</th>
-                            <th class="col-num">Unid. remito</th>
-                            <th class="col-num">Unid. pedidas</th>
-                            <th class="col-num">Remitidas acum.</th>
-                            <th class="col-num">Pendientes</th>
-                            <th class="col-num">% Cumpl.</th>
-                            <th>Estado</th>
+                            <th class="col-num">Unidades en este remito</th>
+                            <th class="col-num">Unidades pedidas</th>
+                            <th class="col-num">Unidades remitidas (a hoy)</th>
+                            <th class="col-num">Unidades pendientes</th>
+                            <th class="col-num">% Unidades cumplidas</th>
+                            <th>Estado del pedido</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-fr-detalle"></tbody>

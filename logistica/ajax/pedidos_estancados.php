@@ -10,7 +10,7 @@ require_once __DIR__ . '/../class/LogisticaDB.php';
 
 try {
     $dias  = (int)($_GET['dias'] ?? 90);
-    if (!in_array($dias, [60, 90, 180, 365], true)) $dias = 90;
+    if (!in_array($dias, [30, 60, 90, 180], true)) $dias = 90;
     $canal = isset($_GET['canal']) && $_GET['canal'] !== '' ? $_GET['canal'] : null;
 
     $db   = new LogisticaDB();

@@ -1089,3 +1089,82 @@ body.modal-open { overflow: hidden; }
 .fr-ing-kpi span { font-size: .72rem; color: var(--text-2); }
 .fr-ing-kpi b    { font-size: 1.05rem; color: var(--text-1); font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) { .plan-wip-badge { margin-left: 0; flex-wrap: wrap; } }
+
+/* ── WIP de picking ───────────────────────────────────────────────────── */
+#hdr-wip-picking .fr-ultimo { margin-left: auto; }
+.badge-en-curso { background: rgba(37,99,235,.12);  color: #1d4ed8; }
+.badge-colgada  { background: rgba(100,116,139,.15); color: var(--text-2); }
+tr.wip-colgada > td { color: var(--text-3); }
+
+/* Etiquetas KPI largas (Fill Rate / Despacho): en dos líneas en vez de cortarse con "…" */
+#kpis-fill-rate .kpi-label,
+#kpis-despacho  .kpi-label { overflow: visible; align-items: flex-start; }
+#kpis-fill-rate .kpi-label .kpi-label-txt,
+#kpis-despacho  .kpi-label .kpi-label-txt { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
+
+/* ── Fill Rate: pedidos cargados el día anterior (vista supply chain) ─── */
+.fr-ing-bloque  { padding: 4px 0 8px; }
+.fr-ing-pregunta {
+    padding    : 10px 20px 0;
+    font-size  : .8rem;
+    font-weight: 700;
+    color      : var(--text-1);
+}
+.fr-ing-pregunta em { font-style: normal; font-weight: 400; color: var(--text-2); }
+.fr-ing-kpi small   { font-size: .7rem; color: var(--text-3); }
+.fr-ing-kpi small.pos { color: var(--pos); font-weight: 600; }
+.fr-ing-kpi small.neg { color: var(--neg); font-weight: 600; }
+.fr-ing-kpi.fr-ing-alerta { border-color: rgba(220,38,38,.35); background: rgba(220,38,38,.05); }
+.fr-ing-kpi.fr-ing-alerta b { color: var(--neg); }
+.fr-ing-kpi.fr-ing-aviso  { border-color: rgba(245,158,11,.4); background: rgba(245,158,11,.06); }
+.fr-ing-kpi.fr-ing-aviso b  { color: #b45309; }
+.fr-ing-nota { padding: 6px 20px 0; font-size: .74rem; color: var(--text-2); }
+.fr-ing-tablas { padding: 0 0 6px; gap: 0; }
+.fr-ing-tablas .table-wrap { padding-top: 6px; }
+.fr-bar-th { width: 26%; }
+.fr-bar { height: 8px; border-radius: 4px; background: rgba(37,99,235,.6); min-width: 2px; }
+.fr-bar.gris { background: rgba(100,116,139,.45); }
+
+/* ── Estancados: stock y acción sugerida ──────────────────────────────── */
+.est-stock { padding: 12px 20px 4px; }
+.est-stock-txt { font-size: .82rem; color: var(--text-1); margin-bottom: 6px; }
+.est-stock-txt b { font-variant-numeric: tabular-nums; }
+.est-stock-bar {
+    height: 10px; border-radius: 5px; overflow: hidden;
+    background: rgba(220,38,38,.35);
+}
+.est-stock-con { height: 100%; background: var(--pos); }
+.est-stock-ley { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; font-size: .72rem; color: var(--text-2); }
+.est-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+.est-dot.con { background: var(--pos); }
+.est-dot.sin { background: rgba(220,38,38,.55); }
+.est-acciones {
+    display              : grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap                  : 10px;
+    padding              : 12px 20px 16px;
+}
+.est-accion {
+    text-align   : left;
+    border       : 1px solid var(--border);
+    border-left  : 4px solid var(--border);
+    border-radius: var(--radius-sm, 6px);
+    background   : var(--bg-card);
+    padding      : 10px 12px;
+    cursor       : pointer;
+    color        : var(--text-1);
+    font         : inherit;
+}
+.est-accion:hover, .est-accion.activo { background: var(--bg-card2); }
+.est-accion.activo { box-shadow: 0 0 0 2px var(--accent) inset; }
+.est-accion h4 { margin: 0 0 2px; font-size: .86rem; }
+.est-accion .est-accion-num { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.est-accion p { margin: 4px 0 0; font-size: .74rem; color: var(--text-2); line-height: 1.35; }
+.est-accion.remitir { border-left-color: var(--pos); }
+.est-accion.revisar { border-left-color: var(--accent3); }
+.est-accion.cerrar  { border-left-color: var(--neg); }
+.est-accion.tango   { border-left-color: #7c3aed; }
+.badge-acc-remitir { background: rgba(22,163,74,.12);  color: #15803d; }
+.badge-acc-revisar { background: rgba(245,158,11,.15); color: #b45309; }
+.badge-acc-cerrar  { background: rgba(220,38,38,.1);   color: var(--neg); }
+.badge-acc-tango   { background: rgba(124,58,237,.12); color: #7c3aed; }
