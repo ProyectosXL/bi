@@ -253,24 +253,42 @@ class PremiosEcommerceDB
      * El arreglo de fondo es que el SP que carga la tabla mensual emita dos filas en vez de
      * una, como ya hace la diaria. El día que pase, los tres importes salen de ahí y cierran.
      *
-     * @return array{TOTAL:float,VTEX:float,ML:float}
+     * MES SIN CIERRE MENSUAL: la tabla mensual se carga recién cuando cierra el mes (el mes en
+     * curso no tiene fila). Para esos meses el TOTAL toma VTEX + ML de la diaria — que es un
+     * dato real, no estimado — en vez de quedar en 0. Los meses tomados así se informan en
+     * `meses_total_diaria` para que el front lo avise.
+     *
+     * @return array{TOTAL:float,VTEX:float,ML:float,meses_total_diaria:string[]}
      */
     public function realesFacturacion(): array
     {
         if ($this->realesCache !== null) return $this->realesCache;
 
-        $porCanal = $this->facturacionDiariaPorCanal();
+        $diaria  = $this->facturacionDiariaPorCanal();
+        $mensual = $this->facturacionMensualEcommerce();
+
+        $total = 0.0;
+        $mesesDiaria = [];
+        foreach ($this->mesesActual as $mes) {
+            if (array_key_exists($mes, $mensual)) {
+                $total += $mensual[$mes];
+            } else {
+                $total += ($diaria['porMes'][$mes]['VTEX'] ?? 0.0) + ($diaria['porMes'][$mes]['ML'] ?? 0.0);
+                $mesesDiaria[] = $mes;
+            }
+        }
 
         return $this->realesCache = [
-            'TOTAL' => $this->facturacionMensualEcommerce(),
-            'VTEX'  => $porCanal['VTEX'],
-            'ML'    => $porCanal['ML'],
+            'TOTAL' => $total,
+            'VTEX'  => $diaria['VTEX'],
+            'ML'    => $diaria['ML'],
+            'meses_total_diaria' => $mesesDiaria,
         ];
     }
 
     /**
-     * Facturación C/IVA del canal ecommerce, sumada sobre los meses del período, desde la
-     * tabla mensual del ETL de premios.
+     * Facturación C/IVA del canal ecommerce por mes del período, desde la tabla mensual del
+     * ETL de premios. Un mes que todavía no cerró no figura en el resultado.
      *
      * Se usa `IMP_FACT` (C/IVA) y no `IMP_FACT_S_IVA`: esa columna viene en CERO para la fila
      * ECOMMERCE (el ETL no la puebla ahí), verificado en junio, julio y agosto 2026.
@@ -278,15 +296,17 @@ class PremiosEcommerceDB
      * Dedup con ROW_NUMBER por el mismo motivo que `PremiosDB::datosPropios()`: la tabla
      * origen tiene filas repetidas — de hecho CENTRAL aparece cuadruplicada por supervisora.
      * Hoy la fila ECOMMERCE viene una sola vez por mes, así que es defensivo.
+     *
+     * @return array<string,float> Fin de mes (Y-m-d) => facturación.
      */
-    private function facturacionMensualEcommerce(): float
+    private function facturacionMensualEcommerce(): array
     {
-        if (!$this->mesesActual) return 0.0;
+        if (!$this->mesesActual) return [];
 
         $placeholders = implode(',', array_fill(0, count($this->mesesActual), '?'));
-        $sql = "SELECT SUM(d.IMP_FACT) AS IMP_FACT
+        $sql = "SELECT d.FECHA, d.IMP_FACT
                 FROM (
-                    SELECT IMP_FACT,
+                    SELECT FECHA, IMP_FACT,
                            ROW_NUMBER() OVER (PARTITION BY NRO_SUCURS, FECHA ORDER BY (SELECT NULL)) AS RN
                     FROM dbo.BI_T_ESTADISTICAS_VENTAS_PROPIOS WITH (NOLOCK)
                     WHERE FECHA IN ($placeholders) AND NRO_SUCURS = ?
@@ -298,12 +318,13 @@ class PremiosEcommerceDB
         if ($stmt === false) {
             throw new RuntimeException('Error consultando BI_T_ESTADISTICAS_VENTAS_PROPIOS: ' . print_r(sqlsrv_errors(), true));
         }
-        $total = 0.0;
-        if ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-            $total = (float) ($row['IMP_FACT'] ?? 0) / self::DIVISOR_IVA;
+        $porMes = [];
+        while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            $mes = $r['FECHA'] instanceof DateTimeInterface ? $r['FECHA']->format('Y-m-d') : (string) $r['FECHA'];
+            $porMes[$mes] = (float) ($r['IMP_FACT'] ?? 0) / self::DIVISOR_IVA;
         }
         sqlsrv_free_stmt($stmt);
-        return $total;
+        return $porMes;
     }
 
     /**
@@ -312,19 +333,20 @@ class PremiosEcommerceDB
      *
      * Es diaria, así que se filtra por el rango real (no por fines de mes), con el mismo
      * patrón de límite superior que el resto del repo (`FECHA < DATEADD(day,1,hasta)`), así
-     * un `hasta` con hora igual entra completo.
+     * un `hasta` con hora igual entra completo. También se devuelve abierta por mes, para
+     * cubrir el TOTAL de los meses que la mensual todavía no tiene (ver realesFacturacion()).
      *
-     * @return array{VTEX:float,ML:float}
+     * @return array{VTEX:float,ML:float,porMes:array<string,array{VTEX?:float,ML?:float}>}
      */
     private function facturacionDiariaPorCanal(): array
     {
-        $porCanal = ['VTEX' => 0.0, 'ML' => 0.0];
+        $out = ['VTEX' => 0.0, 'ML' => 0.0, 'porMes' => []];
 
-        $sql = "SELECT s.NRO_SUCURS, SUM(s.IMPORTE) AS IMP
+        $sql = "SELECT EOMONTH(s.FECHA) AS MES, s.NRO_SUCURS, SUM(s.IMPORTE) AS IMP
                 FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
                 WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
                   AND s.NRO_SUCURS IN (?, ?)
-                GROUP BY s.NRO_SUCURS";
+                GROUP BY EOMONTH(s.FECHA), s.NRO_SUCURS";
 
         $stmt = sqlsrv_query($this->connPower, $sql, [
             $this->desde, $this->hasta, self::NRO_SUCURS_VTEX, self::NRO_SUCURS_ML,
@@ -334,10 +356,13 @@ class PremiosEcommerceDB
         }
         while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
             $canal = ((int) $r['NRO_SUCURS'] === self::NRO_SUCURS_VTEX) ? 'VTEX' : 'ML';
-            $porCanal[$canal] = (float) $r['IMP'] / self::DIVISOR_IVA;
+            $mes   = $r['MES'] instanceof DateTimeInterface ? $r['MES']->format('Y-m-d') : (string) $r['MES'];
+            $imp   = (float) $r['IMP'] / self::DIVISOR_IVA;
+            $out[$canal] += $imp;
+            $out['porMes'][$mes][$canal] = $imp;
         }
         sqlsrv_free_stmt($stmt);
-        return $porCanal;
+        return $out;
     }
 
     /* ─────────────────────────────────────────────────────────

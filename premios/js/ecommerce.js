@@ -17,6 +17,7 @@ const PremiosEcommerce = (() => {
     let _lastPersonas = [];
     let _lastTotal    = 0;
     let _lastSesiones = {};
+    let _lastOrdenes  = {};
 
     const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -54,6 +55,13 @@ const PremiosEcommerce = (() => {
                 `<strong>Avance parcial del mes.</strong> El objetivo de facturación es del mes
                  COMPLETO, así que el % de cumplimiento todavía no es comparable — para liquidar,
                  elegí un período que cubra meses cerrados.`]);
+        }
+        const mesesDiaria = data.reales?.meses_total_diaria ?? [];
+        if (mesesDiaria.length) {
+            avisos.push(['aviso', 'bi-info-circle',
+                `<strong>Mes sin cierre mensual.</strong> La facturación combinada (VTEX + ML) de
+                 ${mesesDiaria.map(nombreMes).join(', ')} sale de la tabla diaria, porque la
+                 mensual todavía no está cargada. Cuando cierre el mes se toma de la mensual.`]);
         }
         if (data.kpis_faltantes?.length) {
             const detalle = data.kpis_faltantes
@@ -151,14 +159,18 @@ const PremiosEcommerce = (() => {
     }
 
     /**
-     * Las sesiones son el denominador de la tasa (órdenes de Tango ÷ sesiones), así que no
-     * llevan columna propia: se muestran junto a la tasa para que se vea de dónde sale.
+     * La tasa sale de órdenes de Tango ÷ sesiones: esos dos números van en el tooltip de la
+     * celda (no en la columna, para que quede limpia) así se ve de dónde sale.
      */
-    function sufijoSesiones(c) {
-        if (c.metrica !== 'TASA_CONVERSION' || !c.canal) return '';
+    function celdaRealHTML(c) {
+        const valor = fmtMetrica(c.metrica, c.real);
+        if (c.metrica !== 'TASA_CONVERSION' || !c.canal) return valor;
+        const o = _lastOrdenes[c.canal];
         const s = _lastSesiones[c.canal];
-        if (!s) return '';
-        return ` <span class="ecom-sesiones" title="Sesiones cargadas para el período en ${c.canal}. La tasa es órdenes de Tango ÷ estas sesiones.">· ${fmt.num(s)} sesiones</span>`;
+        const ayuda = `Órdenes (Tango): ${o === null || o === undefined ? '—' : fmt.num(o)}\n`
+                    + `Sesiones: ${s ? fmt.num(s) : 'sin cargar'}\n`
+                    + 'Tasa = órdenes ÷ sesiones';
+        return `<span class="ecom-objetivo-escala" title="${ayuda}">${valor}</span>`;
     }
 
     function filaConceptoHTML(c) {
@@ -170,7 +182,7 @@ const PremiosEcommerce = (() => {
             <td class="td-sucursal">${c.concepto}</td>
             <td>${c.canal ?? 'VTEX + ML'}</td>
             <td class="td-num">${celdaObjetivoHTML(c)}</td>
-            <td class="td-num">${fmtMetrica(c.metrica, c.real)}${sufijoSesiones(c)}</td>
+            <td class="td-num">${celdaRealHTML(c)}</td>
             ${badgeCellHTML(c.pct_cumplimiento, 1, fmt.pct(c.pct_cumplimiento), {
                 inclusive     : true,
                 titulo        : 'Alcanza el 100 % del objetivo',
@@ -575,6 +587,7 @@ const PremiosEcommerce = (() => {
         _lastPersonas = data.personas ?? [];
         _lastTotal    = data.total_general ?? 0;
         _lastSesiones = data.sesiones ?? {};
+        _lastOrdenes  = data.ordenes ?? {};
 
         renderBanners(data);
         renderHero(_lastPersonas, _lastTotal);

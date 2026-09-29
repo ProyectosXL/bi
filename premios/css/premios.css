@@ -703,12 +703,9 @@
     border-top : 2px solid #c7d2fe;
 }
 
-/* Sesiones al lado de la tasa de conversión: su denominador, a la vista. */
-.premios-table .ecom-sesiones { font-size: .72rem; color: var(--text-3); cursor: help; }
-
-/* Columna Objetivo de los conceptos de umbral absoluto (tasa de conversión): no es un
-   objetivo cargado sino el escalón de la escala que se alcanzó, así que lleva cursor de
-   ayuda para que se note que hay una explicación detrás. */
+/* Celdas de la tasa de conversión con explicación en tooltip: el Objetivo (no es un
+   objetivo cargado sino el escalón alcanzado) y el Real (órdenes y sesiones de las que
+   sale). Cursor de ayuda para que se note que hay algo detrás. */
 .premios-table .ecom-objetivo-escala { cursor: help; }
 
 /* Órdenes de Tango y tasa calculada: se muestran, no se cargan. Mismo alto que un input

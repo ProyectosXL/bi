@@ -49,6 +49,7 @@ try {
         'total_general'   => $res['total_general'],
         'objetivos'       => $res['objetivos'],
         'reales'          => $res['reales'],
+        'ordenes'         => $res['ordenes'],
         'sesiones'        => $res['sesiones'],
         'kpis_faltantes'  => $db->kpisFaltantes(),
         'carga_manual'    => $db->ultimaCargaManual(),
