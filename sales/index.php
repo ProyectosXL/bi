@@ -85,7 +85,7 @@ try {
 <header class="topbar">
     <div class="logo-box">XL</div>
     <div class="topbar-info">
-        <div class="topbar-title">DASHBOARD SALES GERENCIA $ NETO</div>
+        <div class="topbar-title">DASHBOARD SALES GERENCIA (S/IVA)</div>
         <div class="topbar-sub">
             <span id="periodo-label">—</span>
         </div>
@@ -185,7 +185,7 @@ try {
     </button>
 
     <label class="comp-radio-label" style="margin-left:8px;white-space:nowrap" id="wrap-solo-activas">
-        <input type="checkbox" id="chk-solo-activas" checked>
+        <input type="checkbox" id="chk-solo-activas">
         Solo activas
     </label>
 

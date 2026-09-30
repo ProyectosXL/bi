@@ -19,8 +19,7 @@ URL de acceso: `/bi/premios/`
 │   ├── propios.php                   Vista 2: facturación vs objetivos, locales propios
 │   ├── franquicias.php               Vista 3: facturación vs objetivos, franquicias
 │   ├── ecommerce.php                 Vista 4: premios por persona y concepto
-│   ├── ecommerce_kpis.php            Vista 4: carga manual de órdenes / sesiones / conversión
-│   └── ecommerce_escalas.php         Vista 4: escalas de premio (las "PAUTAS")
+│   └── ecommerce_kpis.php            Vista 4: carga manual de órdenes / sesiones / conversión
 ├── components/
 │   └── ExcelExporter.js              Exportación a Excel (copia de global/components/)
 ├── css/
@@ -60,7 +59,6 @@ restricción por `tipo`; los de gestión (marcados abajo, más `marcar_controlad
 | `franquicias.php`   | periodo, ..., supervisora                                              | periodo, kpis, sucursales[] (orden alfabético), total |
 | `ecommerce.php`     | periodo (ignora supervisora)                                           | periodo, periodo_parcial, personas[] (conceptos con premio), total_general, kpis_faltantes[], puede_gestionar |
 | `ecommerce_kpis.php` | GET `mes`; POST `{mes, canales[]}`                                    | GET: mes, meses_disponibles[], canales[]. POST: ok. **403 si no `isGlobalMode()`** |
-| `ecommerce_escalas.php` | GET —; POST `{conceptos:[{id, escalas[]}]}`                        | GET: personas[] con conceptos y tramos. POST: ok. **403 si no `isGlobalMode()`** |
 
 El período usa `class/PeriodHelper.php::fromRequest($_GET)` — mismo contrato que el resto
 de los tableros (`mes_actual|mes_pasado|año_actual|año_pasado|custom`, con `comp_mode=year_ago|custom`).
@@ -248,9 +246,11 @@ Dos personas con esquemas fijos, en `BI_T_PREMIOS_ECOM_PERSONAS` / `..._CONCEPTO
 | Vanesa Di Feo | TASA CONVERSION | VTEX | valor absoluto |
 | Vanesa Di Feo | FACTURACION ML | ML | % de cumplimiento |
 
-Dar de alta a alguien es un `INSERT` en esas dos tablas (documentado en el `.sql`); no hay
-CRUD de personas en el dashboard, a propósito — cambian muy de vez en cuando. Lo que **sí**
-se edita desde el tablero son las escalas y los KPIs manuales.
+El dashboard **solo lee** personas, puestos y escalas. Se gestionan (alta con puesto, mail,
+baja/reactivación y tramos de cada concepto) en
+`/comercial/supervision/premios/gestionarPremios.php`, sub-pestañas «Ecommerce · Personas» y
+«Ecommerce · Escalas» (`Class/PremioEcommerce.php` de ese módulo, contra las mismas tablas de
+POWER_BI_CONTROL). Lo único que se carga desde el tablero son los KPIs manuales.
 
 ### Regla de pago: ESCALÓN FIJO
 
@@ -423,8 +423,8 @@ las sesiones.
   cuentan ~9,6 % menos que VTEX. La escala de conversión es de valores **absolutos**
   (0,90 / 0,80 / 0,70), no un % contra objetivo: julio 2026 da 0,75 calculada contra 0,83
   del panel, y eso le cuesta a Vanesa un tramo ($240.000 → $220.000) sin que haya cambiado
-  su desempeño. Si hay que compensarlo, se bajan los umbrales de la escala ("Escalas de
-  premios"), no se toca el cálculo.
+  su desempeño. Si hay que compensarlo, se bajan los umbrales de la escala (en
+  gestionarPremios.php → «Ecommerce · Escalas»), no se toca el cálculo.
 - La columna `TASA_CONVERSION` de `BI_T_PREMIOS_ECOM_KPIS` quedó con lo tipeado antes de ese
   cambio: ya no se lee ni se escribe, se conserva como histórico.
 - Si falta un dato que algún concepto necesita, ese concepto queda en **`sin_dato`**: premio

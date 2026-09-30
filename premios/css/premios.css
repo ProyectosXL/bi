@@ -361,12 +361,6 @@
 .btn-accion-fila:disabled { opacity: .45; cursor: not-allowed; }
 /* Premios Ecommerce: el botón de mail va en la cabecera de cada persona, a la derecha. */
 .premios-table tr.row-supervisora .btn-enviar-mail-ecom { float: right; font-weight: 400; }
-/* Modal "Configuración de personas" de Ecommerce: filas sin drag (el cursor grab es del modal de supervisoras). */
-.ecom-personas-lista { display: flex; flex-direction: column; gap: 6px; }
-.ecom-personas-lista .modal-config-fila { cursor: default; }
-.ecom-personas-lista .modal-config-fila .btn-accion-fila { margin-left: 0; }
-.ecom-personas-lista .modal-config-fila .ecom-kpi-input { flex: 1; }
-.ecom-alta-grid { grid-template-columns: 90px 1fr; }
 .btn-controlado.is-controlado {
     background: #f0fdf4;
     color     : #16a34a;
@@ -726,38 +720,6 @@
     text-align : right;
 }
 .ecom-kpi-meta { font-size: .72rem; color: var(--text-3); margin-top: 4px; font-style: italic; }
-
-/* Escalas de premio */
-.ecom-escala-persona {
-    font-family   : var(--font-display);
-    font-weight   : 700;
-    font-size     : .9rem;
-    color         : var(--text-1);
-    border-bottom : 1px solid var(--border);
-    padding-bottom: 4px;
-    margin-top    : 6px;
-}
-.ecom-escala-concepto {
-    border       : 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding      : 8px 10px;
-    background   : var(--bg-card2);
-}
-.ecom-escala-titulo { font-size: .8rem; font-weight: 600; color: var(--text-1); margin-bottom: 6px; }
-.ecom-escala-tramos { display: flex; flex-direction: column; gap: 5px; margin-bottom: 6px; }
-.ecom-escala-fila { display: flex; align-items: center; gap: 6px; }
-.ecom-escala-umbral, .ecom-escala-importe {
-    padding      : 4px 7px;
-    border       : 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size    : .8rem;
-    font-family  : inherit;
-    text-align   : right;
-}
-.ecom-escala-umbral  { width: 84px; }
-.ecom-escala-importe { width: 110px; }
-.ecom-escala-unidad  { font-size: .74rem; color: var(--text-3); min-width: 48px; }
-.ecom-escala-quitar  { margin-left: auto; }
 
 /* ── RESPONSIVE ──────────────────────────────────────────── */
 @media (max-width: 768px) {

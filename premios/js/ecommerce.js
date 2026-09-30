@@ -3,9 +3,11 @@
  * Vista "Premios Ecommerce": premios del personal del área, concepto por concepto,
  * según el cumplimiento de sus objetivos (escalón fijo — ver PremiosEcommerceDB).
  *
- * Incluye los dos modales de gestión (solo para GERENCIA/SUPERVISION):
+ * Incluye un modal de carga (solo para GERENCIA/SUPERVISION):
  *   - "Cargar órdenes y conversión": los KPIs que no existen en ninguna tabla del BI.
- *   - "Escalas de premios": los importes de cada tramo (las "PAUTAS").
+ *
+ * Las personas, sus puestos y las escalas de premio (las "PAUTAS") NO se editan acá: se
+ * gestionan en /comercial/supervision/premios/gestionarPremios.php. Esta pestaña las lee.
  */
 const PremiosEcommerce = (() => {
 
@@ -177,7 +179,7 @@ const PremiosEcommerce = (() => {
             const alcanzado = fmtUmbral(c.tipo_umbral, c.tramo_umbral);
             const ayuda = c.tramo_umbral === null || c.tramo_umbral === undefined
                 ? 'No alcanzó ningún escalón de la escala de este concepto.'
-                : 'Escalón de la escala que alcanzó. Este concepto no se mide contra un objetivo cargado: su escala son valores absolutos de tasa, editables en «Escalas de premios».';
+                : 'Escalón de la escala que alcanzó. Este concepto no se mide contra un objetivo cargado: su escala son valores absolutos de tasa, que se gestionan en Comercial → Supervisión → Gestión de Premios.';
             return `<span class="ecom-objetivo-escala" title="${ayuda}">${alcanzado}</span>`;
         }
         return fmtMetrica(c.metrica, c.objetivo);
@@ -417,278 +419,10 @@ const PremiosEcommerce = (() => {
         }
     }
 
-    /* ═══════════════════════════════════════════════════════════════════════
-       Modal: escalas de premio (las "PAUTAS")
-       ═══════════════════════════════════════════════════════════════════════ */
-
-    /* Los umbrales se guardan como ratio (1.0 = 100 %) pero se EDITAN en la unidad en la
-       que están escritas las pautas: en % para los conceptos de cumplimiento (100, 90,
-       111) y en puntos de tasa para los de valor absoluto (0,80). Estas dos funciones son
-       la única conversión — cambiar una sin la otra desalinea las escalas guardadas. */
-    function umbralAInput(tipoUmbral, umbral) {
-        return tipoUmbral === 'PCT_CUMPLIMIENTO' ? Math.round(umbral * 10000) / 100 : umbral;
-    }
-    function umbralDesdeInput(tipoUmbral, valor) {
-        return tipoUmbral === 'PCT_CUMPLIMIENTO' ? valor / 100 : valor;
-    }
-
-    function filaTramoHTML(tipoUmbral, tramo) {
-        const u = tramo ? umbralAInput(tipoUmbral, tramo.umbral) : '';
-        const i = tramo ? tramo.importe : '';
-        return `<div class="ecom-escala-fila">
-            <input type="number" class="ecom-escala-umbral" step="0.01" min="0" value="${u}">
-            <span class="ecom-escala-unidad">${tipoUmbral === 'PCT_CUMPLIMIENTO' ? '% cumpl.' : '% tasa'}</span>
-            <input type="number" class="ecom-escala-importe" step="1000" min="0" value="${i}">
-            <span class="ecom-escala-unidad">$</span>
-            <button type="button" class="btn-accion-fila ecom-escala-quitar" title="Quitar tramo">
-                <i class="bi bi-trash"></i>
-            </button>
-        </div>`;
-    }
-
-    function bloqueConceptoHTML(c) {
-        return `<div class="ecom-escala-concepto" data-concepto="${c.id}" data-tipo-umbral="${c.tipo_umbral}">
-            <div class="ecom-escala-titulo">
-                ${c.etiqueta} <span class="ecom-kpi-hint">${c.canal ?? 'VTEX + ML'}</span>
-            </div>
-            <div class="ecom-escala-tramos">
-                ${c.escalas.map(t => filaTramoHTML(c.tipo_umbral, t)).join('')}
-            </div>
-            <button type="button" class="btn-accion-fila ecom-escala-agregar">
-                <i class="bi bi-plus-lg"></i> Agregar tramo
-            </button>
-        </div>`;
-    }
-
-    function attachEscalaHandlers(body) {
-        body.querySelectorAll('.ecom-escala-concepto').forEach(bloque => {
-            const tipoUmbral = bloque.dataset.tipoUmbral;
-            const tramos = bloque.querySelector('.ecom-escala-tramos');
-            bloque.querySelector('.ecom-escala-agregar').onclick = () => {
-                tramos.insertAdjacentHTML('beforeend', filaTramoHTML(tipoUmbral, null));
-                attachQuitarHandlers(tramos);
-            };
-            attachQuitarHandlers(tramos);
-        });
-    }
-    function attachQuitarHandlers(tramos) {
-        tramos.querySelectorAll('.ecom-escala-quitar').forEach(btn => {
-            btn.onclick = () => btn.closest('.ecom-escala-fila').remove();
-        });
-    }
-
-    async function guardarEscalas(modal, body, btn) {
-        const conceptos = [];
-        for (const bloque of body.querySelectorAll('.ecom-escala-concepto')) {
-            const tipoUmbral = bloque.dataset.tipoUmbral;
-            const escalas = [];
-            for (const fila of bloque.querySelectorAll('.ecom-escala-fila')) {
-                const u = fila.querySelector('.ecom-escala-umbral').value;
-                const i = fila.querySelector('.ecom-escala-importe').value;
-                if (u === '' || i === '') {
-                    await alertModal('Hay tramos con el umbral o el importe vacíos. Completalos o quitalos.', { tono: 'error' });
-                    return;
-                }
-                escalas.push({ umbral: umbralDesdeInput(tipoUmbral, Number(u)), importe: Number(i) });
-            }
-            if (!escalas.length) {
-                await alertModal(`El concepto "${bloque.querySelector('.ecom-escala-titulo').textContent.trim()}" quedó sin tramos. Un concepto sin escala nunca paga premio.`, { tono: 'error' });
-                return;
-            }
-            conceptos.push({ id: Number(bloque.dataset.concepto), escalas });
-        }
-
-        btn.disabled = true;
-        const original = btn.innerHTML;
-        btn.innerHTML = 'Guardando…';
-        try {
-            await apiPost('ecommerce_escalas.php', { conceptos });
-            modal.classList.remove('visible');
-            await load();
-            await alertModal('Escalas guardadas con éxito.', { tono: 'exito' });
-        } catch (err) {
-            await alertModal(`No se pudo guardar: ${err.message}`, { tono: 'error' });
-        } finally {
-            btn.innerHTML = original;
-            btn.disabled = false;
-        }
-    }
-
-    async function abrirModalEscalas() {
-        const modal = abrirModalVacio('modal-ecom-escalas', 'Escalas de premios', 'modal-ecom-escalas-body');
-        const body = modal.querySelector('#modal-ecom-escalas-body');
-        try {
-            const res = await fetch('api/ecommerce_escalas.php');
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.ok) throw new Error(data.error || `Error ${res.status}`);
-
-            body.innerHTML = `
-                <p class="modal-config-hint">Se paga el importe completo del <strong>tramo más alto
-                   alcanzado</strong>, sin prorratear. Los tramos de cumplimiento van en % del
-                   objetivo (100, 90, 111…); los de tasa de conversión, en puntos de tasa (0,80).</p>
-                ${data.personas.map(p => `
-                    <div class="ecom-escala-persona">${p.nombre}</div>
-                    ${p.conceptos.map(bloqueConceptoHTML).join('')}
-                `).join('')}
-                <div class="modal-config-actions">
-                    <button class="premios-alert-btn premios-alert-btn-ok" id="modal-ecom-escalas-guardar">Guardar</button>
-                </div>`;
-
-            attachEscalaHandlers(body);
-            body.querySelector('#modal-ecom-escalas-guardar').onclick = (e) =>
-                guardarEscalas(modal, body, e.currentTarget);
-        } catch (err) {
-            await alertModal(`No se pudieron cargar las escalas: ${err.message}`, { tono: 'error' });
-        }
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       Modal: configuración de personas (alta con puesto, mail, edición, baja)
-       ═══════════════════════════════════════════════════════════════════════ */
-
-    /** Los nombres y mails ahora los tipea el usuario: se escapan antes de meterlos en el HTML. */
+    /** Los nombres de las personas los tipea el usuario (en gestionarPremios.php): se escapan antes de meterlos en el HTML. */
     function esc(s) {
         return String(s ?? '').replace(/[&<>"']/g, ch =>
             ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-    }
-
-    function filaPersonaConfigHTML(p) {
-        const mail = p.email
-            ? `<span class="modal-config-mail">${esc(p.email)}</span>`
-            : `<span class="modal-config-mail sin-mail">sin mail</span>`;
-        const btnEstado = p.activo
-            ? `<button class="btn-accion-fila" data-accion="baja" title="Dar de baja (deja de liquidarse; no se borra nada)"><i class="bi bi-person-dash"></i></button>`
-            : `<button class="btn-accion-fila" data-accion="reactivar" title="Reactivar con sus conceptos y tramos"><i class="bi bi-arrow-counterclockwise"></i></button>`;
-        return `<div class="modal-config-fila ecom-persona-fila ${p.activo ? '' : 'oculta'}" data-id="${p.id}">
-            <span class="modal-emails-nombre">${esc(p.nombre)}
-                <span class="ecom-kpi-hint">${p.puesto ? esc(p.puesto) : 'sin puesto'}${p.activo ? '' : ' · dada de baja'}</span>
-            </span>
-            ${mail}
-            <button class="btn-accion-fila" data-accion="editar" title="Editar nombre y mail"><i class="bi bi-pencil"></i></button>
-            ${btnEstado}
-        </div>`;
-    }
-
-    function filaPersonaEdicionHTML(p) {
-        return `<div class="modal-config-fila ecom-persona-fila" data-id="${p.id}">
-            <input class="ecom-kpi-input" data-campo="nombre" value="${esc(p.nombre)}" placeholder="Nombre">
-            <input class="ecom-kpi-input" data-campo="email" type="email" value="${esc(p.email ?? '')}" placeholder="mail@xl.com.ar">
-            <button class="btn-accion-fila" data-accion="guardar" title="Guardar"><i class="bi bi-check2"></i></button>
-            <button class="btn-accion-fila" data-accion="cancelar" title="Cancelar"><i class="bi bi-x-lg"></i></button>
-        </div>`;
-    }
-
-    function conceptosPuestoHTML(puesto) {
-        return puesto && puesto.conceptos.length
-            ? `Cobra por: ${puesto.conceptos.map(esc).join(' · ')}`
-            : 'Este puesto no tiene conceptos cargados.';
-    }
-
-    /** Corre una acción del modal y, si sale bien, repinta el modal y la pestaña. */
-    async function accionPersona(modal, btn, payload) {
-        btn.disabled = true;
-        try {
-            await apiPost('ecommerce_personas.php', payload);
-            await pintarCuerpoConfig(modal);
-            await load();
-        } catch (err) {
-            btn.disabled = false;
-            await alertModal(`No se pudo guardar: ${err.message}`, { tono: 'error' });
-        }
-    }
-
-    async function pintarCuerpoConfig(modal) {
-        const body = modal.querySelector('#modal-ecom-config-body');
-        const res = await fetch('api/ecommerce_personas.php');
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok) throw new Error(data.error || `Error ${res.status}`);
-
-        const { personas, puestos } = data;
-        body.innerHTML = `
-            <p class="modal-config-hint">Cada persona hereda del <strong>puesto</strong> los conceptos
-               por los que cobra y sus tramos ($), que después se ajustan en «Escalas de premios».
-               El puesto no se cambia después del alta: para eso, dala de baja y volvé a darla de alta.
-               El mail es al que sale el botón <i class="bi bi-envelope"></i> de la tabla.</p>
-            <div class="ecom-kpi-canal">
-                <div class="ecom-kpi-canal-titulo">Personas</div>
-                <div class="ecom-personas-lista">
-                    ${personas.length ? personas.map(filaPersonaConfigHTML).join('') : '<div class="modal-config-hint">No hay personas cargadas.</div>'}
-                </div>
-            </div>
-            <div class="ecom-kpi-canal">
-                <div class="ecom-kpi-canal-titulo">Agregar persona</div>
-                <div class="ecom-kpi-grid ecom-alta-grid">
-                    <label for="ecom-alta-nombre">Nombre</label>
-                    <input class="ecom-kpi-input" id="ecom-alta-nombre" maxlength="100">
-                    <label for="ecom-alta-email">Mail</label>
-                    <input class="ecom-kpi-input" id="ecom-alta-email" type="email" maxlength="150" placeholder="mail@xl.com.ar">
-                    <label for="ecom-alta-puesto">Puesto</label>
-                    <select class="ecom-kpi-input" id="ecom-alta-puesto">
-                        ${puestos.map(pu => `<option value="${pu.id}">${esc(pu.nombre)}</option>`).join('')}
-                    </select>
-                </div>
-                <p class="modal-config-hint" id="ecom-alta-conceptos" style="margin-top:6px;">${conceptosPuestoHTML(puestos[0])}</p>
-                <div class="modal-config-actions">
-                    <button class="premios-alert-btn premios-alert-btn-ok" id="ecom-alta-guardar" ${puestos.length ? '' : 'disabled'}>Agregar</button>
-                </div>
-            </div>`;
-
-        const selPuesto = body.querySelector('#ecom-alta-puesto');
-        selPuesto.onchange = () => {
-            body.querySelector('#ecom-alta-conceptos').innerHTML =
-                conceptosPuestoHTML(puestos.find(pu => pu.id === Number(selPuesto.value)));
-        };
-
-        body.querySelector('#ecom-alta-guardar').onclick = (e) => accionPersona(modal, e.currentTarget, {
-            accion   : 'crear',
-            nombre   : body.querySelector('#ecom-alta-nombre').value,
-            email    : body.querySelector('#ecom-alta-email').value,
-            id_puesto: Number(selPuesto.value),
-        });
-
-        // Un solo listener delegado para los botones de todas las filas (incluidas las que
-        // se reemplazan al pasar a modo edición).
-        body.querySelector('.ecom-personas-lista').onclick = async (e) => {
-            const btn = e.target.closest('button[data-accion]');
-            if (!btn) return;
-            const fila = btn.closest('.ecom-persona-fila');
-            const p = personas.find(x => x.id === Number(fila.dataset.id));
-            switch (btn.dataset.accion) {
-                case 'editar':
-                    fila.outerHTML = filaPersonaEdicionHTML(p);
-                    break;
-                case 'cancelar':
-                    fila.outerHTML = filaPersonaConfigHTML(p);
-                    break;
-                case 'guardar':
-                    await accionPersona(modal, btn, {
-                        accion: 'editar', id: p.id,
-                        nombre: fila.querySelector('[data-campo="nombre"]').value,
-                        email : fila.querySelector('[data-campo="email"]').value,
-                    });
-                    break;
-                case 'baja': {
-                    const ok = await Premios.confirmModal(
-                        `¿Dar de baja a <strong>${esc(p.nombre)}</strong>? Deja de aparecer en la pestaña y de
-                         liquidarse. No se borra nada: se puede reactivar con los mismos tramos.`,
-                        { titulo: 'Dar de baja' });
-                    if (ok) await accionPersona(modal, btn, { accion: 'baja', id: p.id });
-                    break;
-                }
-                case 'reactivar':
-                    await accionPersona(modal, btn, { accion: 'reactivar', id: p.id });
-                    break;
-            }
-        };
-    }
-
-    async function abrirModalConfig() {
-        const modal = abrirModalVacio('modal-ecom-config', 'Configuración de personas', 'modal-ecom-config-body');
-        try {
-            await pintarCuerpoConfig(modal);
-        } catch (err) {
-            await alertModal(`No se pudo cargar la configuración: ${err.message}`, { tono: 'error' });
-        }
     }
 
     /* ── Shell de modal compartido (mismas clases que el resto del módulo) ── */
@@ -776,15 +510,13 @@ const PremiosEcommerce = (() => {
         const btnExport = $('btn-export-ecommerce');
         if (btnExport) btnExport.onclick = exportar;
 
-        // Los botones de gestión solo existen para GERENCIA/SUPERVISION — el mismo criterio
+        // El botón de carga solo existe para GERENCIA/SUPERVISION — el mismo criterio
         // (y el mismo flag del endpoint) que la columna "Acciones" de Premios Supervisoras.
         const btnKpis = $('btn-ecom-cargar-kpis');
-        const btnEsc  = $('btn-ecom-escalas');
-        const btnConf = $('btn-ecom-config');
-        [btnKpis, btnEsc, btnConf].forEach(b => { if (b) b.style.display = data.puede_gestionar ? 'flex' : 'none'; });
-        if (btnKpis) btnKpis.onclick = abrirModalKpis;
-        if (btnEsc)  btnEsc.onclick  = abrirModalEscalas;
-        if (btnConf) btnConf.onclick = abrirModalConfig;
+        if (btnKpis) {
+            btnKpis.style.display = data.puede_gestionar ? 'flex' : 'none';
+            btnKpis.onclick = abrirModalKpis;
+        }
     }
 
     return { load };

@@ -41,7 +41,7 @@ BEGIN
     ALTER TABLE BI_T_PREMIOS_ECOM_PERSONAS ADD EMAIL VARCHAR(150) NULL;
 END
 GO
--- Se carga desde el modal "Configuración" de la pestaña (api/ecommerce_personas.php).
+-- Se carga desde comercial/supervision/premios/gestionarPremios.php («Ecommerce · Personas»).
 
 -- ── 2) Conceptos asignados a cada persona ──────────────────────────────
 -- ORIGEN_REAL / ORIGEN_OBJETIVO son códigos de un conjunto CERRADO, resuelto por
@@ -144,9 +144,9 @@ GO
 -- SEED — las dos personas del área y sus PAUTAS, tal como están en el Excel
 -- que este tablero reemplaza. Todo con WHERE NOT EXISTS para poder re-correr.
 --
--- Las personas nuevas se dan de alta desde el modal "Configuración" del dashboard,
--- eligiendo su PUESTO (ver la sección PUESTOS al final). Los tramos se editan desde
--- el modal "Escalas de premios".
+-- Las personas nuevas se dan de alta desde comercial/supervision/premios/gestionarPremios.php,
+-- eligiendo su PUESTO (ver la sección PUESTOS al final). Los tramos se editan en
+-- «Ecommerce · Escalas» de esa misma página. El dashboard solo los lee.
 -- ═══════════════════════════════════════════════════════════════════════
 
 INSERT INTO BI_T_PREMIOS_ECOM_PERSONAS (NOMBRE, ORDEN)
@@ -287,11 +287,11 @@ GO
 -- ═══════════════════════════════════════════════════════════════════════
 -- PUESTOS — plantilla de "qué se le mide" a cada persona según su puesto.
 -- Agustina (Analista) y Vanesa (Jefatura) cobran conceptos distintos por el puesto
--- que ocupan: al dar de alta a alguien desde el modal "Configuración" del dashboard
--- (api/ecommerce_personas.php) se elige el puesto y se le COPIAN sus conceptos y
+-- que ocupan: al dar de alta a alguien desde
+-- comercial/supervision/premios/gestionarPremios.php se elige el puesto y se le COPIAN sus conceptos y
 -- tramos a CONCEPTOS/ESCALAS. La liquidación sigue leyendo los conceptos propios de
 -- cada persona: el puesto es solo el molde del alta — editar la plantilla no toca a
--- las personas ya dadas de alta (sus tramos se ajustan en "Escalas de premios").
+-- las personas ya dadas de alta (sus tramos se ajustan en «Ecommerce · Escalas»).
 -- ═══════════════════════════════════════════════════════════════════════
 IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'BI_T_PREMIOS_ECOM_PUESTOS')
 BEGIN
