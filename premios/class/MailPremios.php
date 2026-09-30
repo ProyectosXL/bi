@@ -262,6 +262,88 @@ class MailPremios
     }
 
     /* ─────────────────────────────────────────────────────────
+     * Render — mail individual de una persona de Ecommerce
+     * ───────────────────────────────────────────────────────── */
+
+    /** Mismo criterio que fmtMetrica() de js/ecommerce.js: la tasa va en puntos de %, no como ratio. */
+    private static function metricaEcom(string $metrica, ?float $v): string
+    {
+        if ($v === null) return '—';
+        if ($metrica === 'FACTURACION') return self::money($v);
+        if ($metrica === 'ORDENES')     return number_format($v, 0, ',', '.');
+        return number_format($v, 2, ',', '.') . ' %';
+    }
+
+    /** Mismo criterio que fmtUmbral() de js/ecommerce.js. */
+    private static function umbralEcom(string $tipoUmbral, ?float $v): string
+    {
+        if ($v === null) return '—';
+        return $tipoUmbral === 'PCT_CUMPLIMIENTO' ? self::pct($v) : number_format($v, 2, ',', '.') . ' %';
+    }
+
+    /**
+     * Mismas columnas que la tabla de la pestaña Premios Ecommerce, para UNA persona.
+     *
+     * @param array $persona Un elemento de PremiosEcommerceDB::calcular()['personas']
+     * @param bool  $periodoParcial PremiosEcommerceDB::periodoParcial() — si el período no cubre
+     *              meses completos se avisa en el mail, porque el objetivo es del mes completo.
+     */
+    public static function renderDetalleEcommerce(array $persona, bool $periodoParcial, string $desde, string $hasta): string
+    {
+        $periodoTxt = date('d/m/Y', strtotime($desde)) . ' al ' . date('d/m/Y', strtotime($hasta));
+
+        $filas = '';
+        foreach ($persona['conceptos'] as $c) {
+            // Los de umbral absoluto (tasa) no tienen objetivo cargado: se muestra el escalón
+            // alcanzado, igual que celdaObjetivoHTML() de la pantalla.
+            $objetivo = $c['tipo_umbral'] === 'VALOR_ABSOLUTO'
+                ? self::umbralEcom($c['tipo_umbral'], $c['tramo_umbral'])
+                : self::metricaEcom($c['metrica'], $c['objetivo']);
+            $cumpl = $c['pct_cumplimiento'];
+            $colorCumpl = $cumpl === null ? '' : ($cumpl + 1e-6 >= 1 ? 'color:#16a34a;font-weight:600;' : 'color:#dc2626;');
+            $estiloFila = $c['sin_dato'] ? 'color:#9ca3af;font-style:italic;' : '';
+
+            $filas .= '<tr>'
+                . '<td style="' . self::estiloTd(false) . $estiloFila . '">' . self::esc($c['concepto'])
+                . ($c['sin_dato'] ? ' <span style="font-size:11px;">(falta carga)</span>' : '') . '</td>'
+                . '<td style="' . self::estiloTd(false) . $estiloFila . '">' . self::esc($c['canal'] ?? 'VTEX + ML') . '</td>'
+                . '<td style="' . self::estiloTd() . $estiloFila . '">' . $objetivo . '</td>'
+                . '<td style="' . self::estiloTd() . $estiloFila . '">' . self::metricaEcom($c['metrica'], $c['real']) . '</td>'
+                . '<td style="' . self::estiloTd() . $estiloFila . $colorCumpl . '">' . self::pct($cumpl) . '</td>'
+                . '<td style="' . self::estiloTd() . $estiloFila . '">' . self::umbralEcom($c['tipo_umbral'], $c['tramo_umbral']) . '</td>'
+                . '<td style="' . self::estiloTd() . $estiloFila . 'font-weight:700;">' . self::money((float) $c['premio']) . '</td>'
+                . '</tr>';
+        }
+
+        $aviso = $periodoParcial
+            ? '<p style="background:#fef9c3;border:1px solid #fde68a;color:#854d0e;padding:8px 12px;'
+              . 'border-radius:4px;font-size:12px;margin:0 0 14px;">⚠️ Este período no cubre meses '
+              . 'completos: el objetivo de facturación es del mes completo, así que es un AVANCE '
+              . 'PARCIAL y no el premio a liquidar.</p>'
+            : '';
+
+        return '<html><body style="' . self::estiloBase() . '">'
+            . '<h2 style="font-size:17px;margin:0 0 4px;">Detalle de Premios Ecommerce — ' . self::esc($persona['nombre']) . '</h2>'
+            . '<p style="color:#6b7280;margin:0 0 16px;">Período: ' . $periodoTxt . '</p>'
+            . $aviso
+            . '<table style="' . self::estiloTabla() . '">'
+            . '<tr>'
+            . '<th style="' . self::estiloTh() . 'text-align:left;">Concepto</th>'
+            . '<th style="' . self::estiloTh() . 'text-align:left;">Canal</th>'
+            . '<th style="' . self::estiloTh() . '">Objetivo</th>'
+            . '<th style="' . self::estiloTh() . '">Real</th>'
+            . '<th style="' . self::estiloTh() . '">% Cumpl.</th>'
+            . '<th style="' . self::estiloTh() . '">Tramo</th>'
+            . '<th style="' . self::estiloTh() . '">Premio</th>'
+            . '</tr>'
+            . $filas
+            . '</table>'
+            . '<p style="font-size:15px;font-weight:700;margin:16px 0 0;">Total del Premio: '
+            . '<span style="color:#92400e;">' . self::money((float) $persona['total_premio']) . '</span></p>'
+            . '</body></html>';
+    }
+
+    /* ─────────────────────────────────────────────────────────
      * Render — resumen mensual (todas las supervisoras)
      * ───────────────────────────────────────────────────────── */
 

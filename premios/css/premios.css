@@ -359,6 +359,14 @@
 }
 .btn-accion-fila:hover  { color: var(--accent2); border-color: var(--accent2); }
 .btn-accion-fila:disabled { opacity: .45; cursor: not-allowed; }
+/* Premios Ecommerce: el botón de mail va en la cabecera de cada persona, a la derecha. */
+.premios-table tr.row-supervisora .btn-enviar-mail-ecom { float: right; font-weight: 400; }
+/* Modal "Configuración de personas" de Ecommerce: filas sin drag (el cursor grab es del modal de supervisoras). */
+.ecom-personas-lista { display: flex; flex-direction: column; gap: 6px; }
+.ecom-personas-lista .modal-config-fila { cursor: default; }
+.ecom-personas-lista .modal-config-fila .btn-accion-fila { margin-left: 0; }
+.ecom-personas-lista .modal-config-fila .ecom-kpi-input { flex: 1; }
+.ecom-alta-grid { grid-template-columns: 90px 1fr; }
 .btn-controlado.is-controlado {
     background: #f0fdf4;
     color     : #16a34a;

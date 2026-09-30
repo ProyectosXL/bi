@@ -828,6 +828,7 @@ class PremiosEcommerceDB
 
             $totalGeneral += $totalPersona;
             $personas[] = [
+                'id'           => $p['id'],
                 'nombre'       => $p['nombre'],
                 'total_premio' => $totalPersona,
                 'conceptos'    => $conceptos,
@@ -844,6 +845,24 @@ class PremiosEcommerceDB
             // vea de dónde sale.
             'sesiones'      => array_map(fn(array $k) => $k['sesiones'], $kpis),
         ];
+    }
+
+    /**
+     * Mail de una persona (BI_T_PREMIOS_ECOM_PERSONAS.EMAIL), para api/enviar_mail_ecommerce.php.
+     * Consulta aparte y no dentro de catalogo(): si todavía no se corrió el ALTER que agrega
+     * la columna, falla solo el envío del mail y no toda la pestaña.
+     */
+    public function getEmailPersona(int $idPersona): ?string
+    {
+        $stmt = sqlsrv_query($this->connPower,
+            "SELECT EMAIL FROM BI_T_PREMIOS_ECOM_PERSONAS WHERE ID = ? AND ACTIVO = 1", [$idPersona]);
+        if ($stmt === false) {
+            throw new RuntimeException('Error consultando el mail de la persona (¿falta correr el ALTER de EMAIL de premios/sql/setup_premios_ecommerce.sql?): ' . print_r(sqlsrv_errors(), true));
+        }
+        $r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
+        sqlsrv_free_stmt($stmt);
+        $email = $r ? trim((string) ($r['EMAIL'] ?? '')) : '';
+        return $email !== '' ? $email : null;
     }
 
     /* ─────────────────────────────────────────────────────────
@@ -947,6 +966,181 @@ class PremiosEcommerceDB
             foreach ($p['conceptos'] as $c) $ids[] = $c['id'];
         }
         return $ids;
+    }
+
+    /* ─────────────────────────────────────────────────────────
+     * Personas y puestos (modal "Configuración" — api/ecommerce_personas.php)
+     *
+     * El PUESTO es la plantilla de qué se le mide a una persona: al darla de alta se le
+     * COPIAN los conceptos y tramos del puesto (BI_T_PREMIOS_ECOM_PUESTO_*). De ahí en
+     * más la persona tiene los suyos propios, que son los que liquida calcular() y los que
+     * edita "Escalas de premios". Por eso el puesto no se cambia después del alta: habría
+     * que rehacer sus conceptos y perder los tramos ajustados.
+     * ───────────────────────────────────────────────────────── */
+
+    /** sqlsrv_query que tira excepción con contexto, para no repetir el chequeo en cada paso. */
+    private function ejecutar(string $sql, array $params, string $contexto)
+    {
+        $stmt = sqlsrv_query($this->connPower, $sql, $params);
+        if ($stmt === false) {
+            throw new RuntimeException("Error $contexto: " . print_r(sqlsrv_errors(), true));
+        }
+        return $stmt;
+    }
+
+    /** @return array<int,array{id:int,nombre:string,conceptos:string[]}> Puestos activos con las etiquetas de su plantilla. */
+    public function puestos(): array
+    {
+        $stmt = $this->ejecutar(
+            "SELECT pu.ID, pu.NOMBRE, pc.ETIQUETA, pc.CANAL
+             FROM BI_T_PREMIOS_ECOM_PUESTOS pu
+             LEFT JOIN BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS pc ON pc.ID_PUESTO = pu.ID
+             WHERE pu.ACTIVO = 1
+             ORDER BY pu.ORDEN, pu.NOMBRE, pc.ORDEN",
+            [], 'consultando los puestos (¿falta correr la sección PUESTOS de premios/sql/setup_premios_ecommerce.sql?)');
+
+        $puestos = [];
+        while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            $id = (int) $r['ID'];
+            $puestos[$id] = $puestos[$id] ?? ['id' => $id, 'nombre' => (string) $r['NOMBRE'], 'conceptos' => []];
+            if ($r['ETIQUETA'] !== null) {
+                $puestos[$id]['conceptos'][] = $r['ETIQUETA'] . ' (' . ($r['CANAL'] ?? 'VTEX + ML') . ')';
+            }
+        }
+        sqlsrv_free_stmt($stmt);
+        return array_values($puestos);
+    }
+
+    /** @return array<int,array> Todas las personas, activas e inactivas, con mail y puesto. */
+    public function personasConfig(): array
+    {
+        $stmt = $this->ejecutar(
+            "SELECT p.ID, p.NOMBRE, p.EMAIL, p.ACTIVO, pu.NOMBRE AS PUESTO
+             FROM BI_T_PREMIOS_ECOM_PERSONAS p
+             LEFT JOIN BI_T_PREMIOS_ECOM_PUESTOS pu ON pu.ID = p.ID_PUESTO
+             ORDER BY p.ACTIVO DESC, p.ORDEN, p.NOMBRE",
+            [], 'consultando las personas');
+
+        $personas = [];
+        while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            $personas[] = [
+                'id'     => (int) $r['ID'],
+                'nombre' => (string) $r['NOMBRE'],
+                'email'  => $r['EMAIL'] !== null ? (string) $r['EMAIL'] : null,
+                'activo' => (bool) $r['ACTIVO'],
+                'puesto' => $r['PUESTO'] !== null ? (string) $r['PUESTO'] : null,
+            ];
+        }
+        sqlsrv_free_stmt($stmt);
+        return $personas;
+    }
+
+    /**
+     * El UNIQUE (NOMBRE) de PERSONAS ya lo impide, pero así el error se entiende en el modal.
+     * @throws InvalidArgumentException si $nombre ya lo usa otra persona (activa o no).
+     */
+    private function validarNombreLibre(string $nombre, ?int $exceptoId = null): void
+    {
+        $stmt = $this->ejecutar(
+            "SELECT ID, ACTIVO FROM BI_T_PREMIOS_ECOM_PERSONAS WHERE NOMBRE = ?",
+            [$nombre], 'validando el nombre');
+        $r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
+        sqlsrv_free_stmt($stmt);
+        if ($r && (int) $r['ID'] !== $exceptoId) {
+            throw new InvalidArgumentException($r['ACTIVO']
+                ? "Ya existe una persona llamada \"$nombre\"."
+                : "Ya existe una persona llamada \"$nombre\", dada de baja. Reactivala desde la lista en vez de darla de alta de nuevo.");
+        }
+    }
+
+    /**
+     * Alta: inserta la persona y le copia la plantilla de conceptos + tramos de su puesto,
+     * todo en una transacción (no puede quedar una persona sin conceptos o sin tramos).
+     */
+    public function crearPersona(string $nombre, ?string $email, int $idPuesto, string $usuario): int
+    {
+        $this->validarNombreLibre($nombre);
+
+        $stmt = $this->ejecutar(
+            "SELECT COUNT(*) AS N FROM BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS pc
+             INNER JOIN BI_T_PREMIOS_ECOM_PUESTOS pu ON pu.ID = pc.ID_PUESTO AND pu.ACTIVO = 1
+             WHERE pc.ID_PUESTO = ?",
+            [$idPuesto], 'validando el puesto');
+        $n = (int) (sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)['N'] ?? 0);
+        sqlsrv_free_stmt($stmt);
+        if ($n === 0) {
+            throw new InvalidArgumentException('El puesto elegido no existe o no tiene conceptos cargados.');
+        }
+
+        if (!sqlsrv_begin_transaction($this->connPower)) {
+            throw new RuntimeException('No se pudo iniciar la transacción: ' . print_r(sqlsrv_errors(), true));
+        }
+        try {
+            $stmt = $this->ejecutar(
+                "INSERT INTO BI_T_PREMIOS_ECOM_PERSONAS
+                     (NOMBRE, EMAIL, ID_PUESTO, ORDEN, ACTIVO, ACTUALIZADO_POR, FECHA_ACTUALIZACION)
+                 OUTPUT INSERTED.ID
+                 SELECT ?, ?, ?, ISNULL(MAX(ORDEN), 0) + 1, 1, ?, GETDATE()
+                 FROM BI_T_PREMIOS_ECOM_PERSONAS",
+                [$nombre, $email, $idPuesto, $usuario], 'dando de alta la persona');
+            $idPersona = (int) sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)['ID'];
+            sqlsrv_free_stmt($stmt);
+
+            $this->ejecutar(
+                "INSERT INTO BI_T_PREMIOS_ECOM_CONCEPTOS
+                     (ID_PERSONA, CANAL, ETIQUETA, METRICA, TIPO_UMBRAL, ORIGEN_REAL, ORIGEN_OBJETIVO, ORDEN)
+                 SELECT ?, CANAL, ETIQUETA, METRICA, TIPO_UMBRAL, ORIGEN_REAL, ORIGEN_OBJETIVO, ORDEN
+                 FROM BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS WHERE ID_PUESTO = ?",
+                [$idPersona, $idPuesto], 'copiando los conceptos del puesto');
+
+            // El concepto de la persona se empareja con el de la plantilla por ETIQUETA
+            // (única por persona y por puesto).
+            $this->ejecutar(
+                "INSERT INTO BI_T_PREMIOS_ECOM_ESCALAS
+                     (ID_CONCEPTO, UMBRAL, IMPORTE, ACTUALIZADO_POR, FECHA_ACTUALIZACION)
+                 SELECT c.ID, pe.UMBRAL, pe.IMPORTE, ?, GETDATE()
+                 FROM BI_T_PREMIOS_ECOM_CONCEPTOS c
+                 INNER JOIN BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS pc
+                         ON pc.ID_PUESTO = ? AND pc.ETIQUETA = c.ETIQUETA
+                 INNER JOIN BI_T_PREMIOS_ECOM_PUESTO_ESCALAS pe ON pe.ID_PUESTO_CONCEPTO = pc.ID
+                 WHERE c.ID_PERSONA = ?",
+                [$usuario, $idPuesto, $idPersona], 'copiando los tramos del puesto');
+
+            sqlsrv_commit($this->connPower);
+        } catch (Throwable $e) {
+            sqlsrv_rollback($this->connPower);
+            throw $e;
+        }
+        $this->catalogoCache = null;
+        return $idPersona;
+    }
+
+    public function editarPersona(int $id, string $nombre, ?string $email, string $usuario): void
+    {
+        $this->validarNombreLibre($nombre, $id);
+        $stmt = $this->ejecutar(
+            "UPDATE BI_T_PREMIOS_ECOM_PERSONAS
+             SET NOMBRE = ?, EMAIL = ?, ACTUALIZADO_POR = ?, FECHA_ACTUALIZACION = GETDATE()
+             WHERE ID = ?",
+            [$nombre, $email, $usuario, $id], 'editando la persona');
+        if (sqlsrv_rows_affected($stmt) === 0) {
+            throw new InvalidArgumentException('La persona no existe.');
+        }
+        $this->catalogoCache = null;
+    }
+
+    /** Baja/reactivación lógica: los conceptos y tramos quedan, así vuelve igual que estaba. */
+    public function cambiarActivoPersona(int $id, bool $activo, string $usuario): void
+    {
+        $stmt = $this->ejecutar(
+            "UPDATE BI_T_PREMIOS_ECOM_PERSONAS
+             SET ACTIVO = ?, ACTUALIZADO_POR = ?, FECHA_ACTUALIZACION = GETDATE()
+             WHERE ID = ?",
+            [$activo ? 1 : 0, $usuario, $id], 'cambiando el estado de la persona');
+        if (sqlsrv_rows_affected($stmt) === 0) {
+            throw new InvalidArgumentException('La persona no existe.');
+        }
+        $this->catalogoCache = null;
     }
 
     /* ─────────────────────────────────────────────────────────

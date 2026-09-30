@@ -33,6 +33,16 @@ BEGIN
 END
 GO
 
+-- Mail de cada persona, para el botón "Enviar mail" de la pestaña (api/enviar_mail_ecommerce.php).
+-- Se agregó después de crear la tabla: por eso va como ALTER y no dentro del CREATE.
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+               WHERE TABLE_NAME = 'BI_T_PREMIOS_ECOM_PERSONAS' AND COLUMN_NAME = 'EMAIL')
+BEGIN
+    ALTER TABLE BI_T_PREMIOS_ECOM_PERSONAS ADD EMAIL VARCHAR(150) NULL;
+END
+GO
+-- Se carga desde el modal "Configuración" de la pestaña (api/ecommerce_personas.php).
+
 -- ── 2) Conceptos asignados a cada persona ──────────────────────────────
 -- ORIGEN_REAL / ORIGEN_OBJETIVO son códigos de un conjunto CERRADO, resuelto por
 -- PremiosEcommerceDB::MAPA_ORIGEN. Viven en la tabla (y no en el código) solo para
@@ -134,9 +144,9 @@ GO
 -- SEED — las dos personas del área y sus PAUTAS, tal como están en el Excel
 -- que este tablero reemplaza. Todo con WHERE NOT EXISTS para poder re-correr.
 --
--- Para dar de alta una persona nueva: INSERT en PERSONAS, después sus filas en
--- CONCEPTOS (con los códigos de ORIGEN de MAPA_ORIGEN) y sus tramos en ESCALAS.
--- Los tramos también se editan desde el modal "Escalas de premios" del dashboard.
+-- Las personas nuevas se dan de alta desde el modal "Configuración" del dashboard,
+-- eligiendo su PUESTO (ver la sección PUESTOS al final). Los tramos se editan desde
+-- el modal "Escalas de premios".
 -- ═══════════════════════════════════════════════════════════════════════
 
 INSERT INTO BI_T_PREMIOS_ECOM_PERSONAS (NOMBRE, ORDEN)
@@ -272,4 +282,125 @@ WHEN MATCHED AND t.OBJETIVO_ORDENES IS NULL THEN
 WHEN NOT MATCHED THEN
     INSERT (MES, CANAL, OBJETIVO_ORDENES, ACTUALIZADO_POR, FECHA_ACTUALIZACION)
     VALUES (s.MES, s.CANAL, s.OBJETIVO_ORDENES, 'seed-objetivos-2026', GETDATE());
+GO
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- PUESTOS — plantilla de "qué se le mide" a cada persona según su puesto.
+-- Agustina (Analista) y Vanesa (Jefatura) cobran conceptos distintos por el puesto
+-- que ocupan: al dar de alta a alguien desde el modal "Configuración" del dashboard
+-- (api/ecommerce_personas.php) se elige el puesto y se le COPIAN sus conceptos y
+-- tramos a CONCEPTOS/ESCALAS. La liquidación sigue leyendo los conceptos propios de
+-- cada persona: el puesto es solo el molde del alta — editar la plantilla no toca a
+-- las personas ya dadas de alta (sus tramos se ajustan en "Escalas de premios").
+-- ═══════════════════════════════════════════════════════════════════════
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'BI_T_PREMIOS_ECOM_PUESTOS')
+BEGIN
+    CREATE TABLE BI_T_PREMIOS_ECOM_PUESTOS (
+        ID     INT IDENTITY(1,1) NOT NULL,
+        NOMBRE VARCHAR(100) NOT NULL,
+        ORDEN  INT          NOT NULL DEFAULT 1,
+        ACTIVO BIT          NOT NULL DEFAULT 1,
+        CONSTRAINT PK_BI_T_PREMIOS_ECOM_PUESTOS PRIMARY KEY (ID),
+        CONSTRAINT UQ_BI_T_PREMIOS_ECOM_PUESTOS UNIQUE (NOMBRE)
+    );
+END
+GO
+
+-- Mismas columnas (y mismos CHECK) que BI_T_PREMIOS_ECOM_CONCEPTOS.
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS')
+BEGIN
+    CREATE TABLE BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS (
+        ID              INT IDENTITY(1,1) NOT NULL,
+        ID_PUESTO       INT          NOT NULL,
+        CANAL           VARCHAR(10)  NULL,
+        ETIQUETA        VARCHAR(80)  NOT NULL,
+        METRICA         VARCHAR(30)  NOT NULL,
+        TIPO_UMBRAL     VARCHAR(20)  NOT NULL,
+        ORIGEN_REAL     VARCHAR(30)  NOT NULL,
+        ORIGEN_OBJETIVO VARCHAR(30)  NOT NULL,
+        ORDEN           INT          NOT NULL DEFAULT 1,
+        CONSTRAINT PK_BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS PRIMARY KEY (ID),
+        CONSTRAINT FK_ECOM_PUESTO_CONCEPTOS_PUESTO FOREIGN KEY (ID_PUESTO)
+            REFERENCES BI_T_PREMIOS_ECOM_PUESTOS (ID),
+        CONSTRAINT UQ_BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS UNIQUE (ID_PUESTO, ETIQUETA),
+        CONSTRAINT CK_ECOM_PUESTO_CONCEPTOS_TIPO_UMBRAL CHECK (TIPO_UMBRAL IN ('PCT_CUMPLIMIENTO', 'VALOR_ABSOLUTO')),
+        CONSTRAINT CK_ECOM_PUESTO_CONCEPTOS_METRICA CHECK (METRICA IN ('FACTURACION', 'ORDENES', 'TASA_CONVERSION'))
+    );
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'BI_T_PREMIOS_ECOM_PUESTO_ESCALAS')
+BEGIN
+    CREATE TABLE BI_T_PREMIOS_ECOM_PUESTO_ESCALAS (
+        ID                  INT IDENTITY(1,1) NOT NULL,
+        ID_PUESTO_CONCEPTO  INT           NOT NULL,
+        UMBRAL              DECIMAL(9,4)  NOT NULL,
+        IMPORTE             DECIMAL(18,2) NOT NULL,
+        CONSTRAINT PK_BI_T_PREMIOS_ECOM_PUESTO_ESCALAS PRIMARY KEY (ID),
+        CONSTRAINT FK_ECOM_PUESTO_ESCALAS_CONCEPTO FOREIGN KEY (ID_PUESTO_CONCEPTO)
+            REFERENCES BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS (ID) ON DELETE CASCADE,
+        CONSTRAINT UQ_BI_T_PREMIOS_ECOM_PUESTO_ESCALAS UNIQUE (ID_PUESTO_CONCEPTO, UMBRAL)
+    );
+END
+GO
+
+-- Puesto de cada persona. NULL = persona cargada antes de que existieran los puestos.
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+               WHERE TABLE_NAME = 'BI_T_PREMIOS_ECOM_PERSONAS' AND COLUMN_NAME = 'ID_PUESTO')
+BEGIN
+    ALTER TABLE BI_T_PREMIOS_ECOM_PERSONAS ADD ID_PUESTO INT NULL
+        CONSTRAINT FK_ECOM_PERSONAS_PUESTO REFERENCES BI_T_PREMIOS_ECOM_PUESTOS (ID);
+END
+GO
+
+-- Seed de puestos: la plantilla se COPIA de los conceptos y tramos vigentes de la
+-- persona que hoy ocupa cada puesto, para que las pautas queden idénticas a lo que
+-- ya se liquida y no haya que mantenerlas dos veces en este script.
+INSERT INTO BI_T_PREMIOS_ECOM_PUESTOS (NOMBRE, ORDEN)
+SELECT v.NOMBRE, v.ORDEN
+FROM (VALUES ('Analista Ecommerce', 1), ('Jefatura Ecommerce', 2)) AS v(NOMBRE, ORDEN)
+WHERE NOT EXISTS (SELECT 1 FROM BI_T_PREMIOS_ECOM_PUESTOS p WHERE p.NOMBRE = v.NOMBRE);
+GO
+
+;WITH MOLDE (PUESTO, PERSONA) AS (
+    SELECT 'Analista Ecommerce', 'Agustina' UNION ALL
+    SELECT 'Jefatura Ecommerce', 'Vanesa Di Feo'
+)
+INSERT INTO BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS
+    (ID_PUESTO, CANAL, ETIQUETA, METRICA, TIPO_UMBRAL, ORIGEN_REAL, ORIGEN_OBJETIVO, ORDEN)
+SELECT pu.ID, c.CANAL, c.ETIQUETA, c.METRICA, c.TIPO_UMBRAL, c.ORIGEN_REAL, c.ORIGEN_OBJETIVO, c.ORDEN
+FROM MOLDE m
+INNER JOIN BI_T_PREMIOS_ECOM_PUESTOS pu ON pu.NOMBRE = m.PUESTO
+INNER JOIN BI_T_PREMIOS_ECOM_PERSONAS pe ON pe.NOMBRE = m.PERSONA
+INNER JOIN BI_T_PREMIOS_ECOM_CONCEPTOS c ON c.ID_PERSONA = pe.ID AND c.ACTIVO = 1
+WHERE NOT EXISTS (
+    SELECT 1 FROM BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS x
+    WHERE x.ID_PUESTO = pu.ID AND x.ETIQUETA = c.ETIQUETA
+);
+GO
+
+;WITH MOLDE (PUESTO, PERSONA) AS (
+    SELECT 'Analista Ecommerce', 'Agustina' UNION ALL
+    SELECT 'Jefatura Ecommerce', 'Vanesa Di Feo'
+)
+INSERT INTO BI_T_PREMIOS_ECOM_PUESTO_ESCALAS (ID_PUESTO_CONCEPTO, UMBRAL, IMPORTE)
+SELECT pc.ID, e.UMBRAL, e.IMPORTE
+FROM MOLDE m
+INNER JOIN BI_T_PREMIOS_ECOM_PUESTOS pu ON pu.NOMBRE = m.PUESTO
+INNER JOIN BI_T_PREMIOS_ECOM_PUESTO_CONCEPTOS pc ON pc.ID_PUESTO = pu.ID
+INNER JOIN BI_T_PREMIOS_ECOM_PERSONAS pe ON pe.NOMBRE = m.PERSONA
+INNER JOIN BI_T_PREMIOS_ECOM_CONCEPTOS c ON c.ID_PERSONA = pe.ID AND c.ETIQUETA = pc.ETIQUETA
+INNER JOIN BI_T_PREMIOS_ECOM_ESCALAS e ON e.ID_CONCEPTO = c.ID
+WHERE NOT EXISTS (
+    SELECT 1 FROM BI_T_PREMIOS_ECOM_PUESTO_ESCALAS x
+    WHERE x.ID_PUESTO_CONCEPTO = pc.ID AND x.UMBRAL = e.UMBRAL
+);
+GO
+
+UPDATE pe SET ID_PUESTO = pu.ID
+FROM BI_T_PREMIOS_ECOM_PERSONAS pe
+INNER JOIN (VALUES ('Agustina', 'Analista Ecommerce'), ('Vanesa Di Feo', 'Jefatura Ecommerce')) AS v(PERSONA, PUESTO)
+        ON v.PERSONA = pe.NOMBRE
+INNER JOIN BI_T_PREMIOS_ECOM_PUESTOS pu ON pu.NOMBRE = v.PUESTO
+WHERE pe.ID_PUESTO IS NULL;
 GO

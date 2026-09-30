@@ -232,6 +232,9 @@ try {
                     <button class="btn-export-excel" id="btn-ecom-escalas" style="display:none;">
                         <i class="bi bi-sliders"></i> Escalas de premios
                     </button>
+                    <button class="btn-export-excel" id="btn-ecom-config" style="display:none;">
+                        <i class="bi bi-gear"></i> Configuración
+                    </button>
                     <button class="btn-export-excel" id="btn-export-ecommerce">
                         <i class="bi bi-file-earmark-excel"></i> Excel
                     </button>
@@ -432,6 +435,16 @@ const Spinner = (() => {
                     incluyen el envío y el precio bruto, y la BI contabiliza como venta solo el
                     producto neto de descuentos. Por eso los premios pueden dar distinto que en la
                     planilla vieja.</li>
+                <li>Las personas de <strong>Premios Ecommerce</strong>, su mail y su
+                    <strong>puesto</strong> (que define por qué conceptos cobran) se cargan desde el
+                    botón <strong>"Configuración"</strong> de esa pestaña.</li>
+                <li>Si el período de <strong>Premios Ecommerce</strong> incluye el <strong>mes en
+                    curso</strong>, es un avance parcial: el objetivo de facturación es del mes
+                    completo, así que el % de cumplimiento todavía no es comparable. Para liquidar,
+                    elegí un período que cubra meses cerrados.</li>
+                <li>Mientras un mes no tiene cierre mensual cargado, su facturación combinada
+                    (VTEX + ML) sale de la <strong>tabla diaria</strong>; cuando cierra el mes se
+                    toma de la mensual.</li>
             </ul>`,
             { tono: 'info', titulo: '¿Cuándo se actualizan los datos?' }
         );

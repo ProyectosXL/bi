@@ -18,6 +18,8 @@ const PremiosEcommerce = (() => {
     let _lastTotal    = 0;
     let _lastSesiones = {};
     let _lastOrdenes  = {};
+    let _lastPeriodoParcial = false;
+    let _puedeGestionar = false;
 
     const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -44,25 +46,14 @@ const PremiosEcommerce = (() => {
         return tipoUmbral === 'PCT_CUMPLIMIENTO' ? fmt.pct(v) : fmt.num(v, 2) + ' %';
     }
 
-    /* ── Avisos arriba de la pestaña ───────────────────────────────────────── */
+    /* ── Avisos arriba de la pestaña ───────────────────────────────────────────
+       Solo lo accionable (KPIs manuales sin cargar). Lo del mes en curso (avance parcial,
+       facturación desde la tabla diaria) se explica en el botón de ayuda (ⓘ) del toolbar. */
     function renderBanners(data) {
         const wrap = $('ecom-banners-wrap');
         if (!wrap) return;
 
         const avisos = [];
-        if (data.periodo_parcial) {
-            avisos.push(['aviso', 'bi-hourglass-split',
-                `<strong>Avance parcial del mes.</strong> El objetivo de facturación es del mes
-                 COMPLETO, así que el % de cumplimiento todavía no es comparable — para liquidar,
-                 elegí un período que cubra meses cerrados.`]);
-        }
-        const mesesDiaria = data.reales?.meses_total_diaria ?? [];
-        if (mesesDiaria.length) {
-            avisos.push(['aviso', 'bi-info-circle',
-                `<strong>Mes sin cierre mensual.</strong> La facturación combinada (VTEX + ML) de
-                 ${mesesDiaria.map(nombreMes).join(', ')} sale de la tabla diaria, porque la
-                 mensual todavía no está cargada. Cuando cierre el mes se toma de la mensual.`]);
-        }
         if (data.kpis_faltantes?.length) {
             const detalle = data.kpis_faltantes
                 .map(k => `${nombreMes(k.mes)} (${k.canal}: ${k.campos.join(', ')})`)
@@ -115,7 +106,41 @@ const PremiosEcommerce = (() => {
      * confundir cuál era el total de la persona.
      */
     function filaCabeceraPersonaHTML(p) {
-        return `<tr class="row-supervisora"><td colspan="7">${p.nombre}</td></tr>`;
+        // Mismo botón de mail que la columna "Acciones" de Premios Supervisoras.
+        const btnMail = _puedeGestionar
+            ? `<button class="btn-accion-fila btn-enviar-mail-ecom" data-id="${p.id}" data-nombre="${esc(p.nombre)}"
+                       title="Enviar mail con el detalle de premios a ${esc(p.nombre)}">
+                   <i class="bi bi-envelope"></i>
+               </button>`
+            : '';
+        return `<tr class="row-supervisora"><td colspan="7">${p.nombre}${btnMail}</td></tr>`;
+    }
+
+    async function enviarMailPersona(btn) {
+        const nombre = btn.dataset.nombre;
+        const avisoParcial = _lastPeriodoParcial
+            ? `<br><br>El período elegido no cubre meses completos: el mail va a salir como
+               <strong>avance parcial</strong>, no como el premio a liquidar.`
+            : '';
+        const confirma = await Premios.confirmModal(
+            `¿Confirmás el envío del mail de premios a <strong>${nombre}</strong>?${avisoParcial}`,
+            { titulo: 'Enviar mail' }
+        );
+        if (!confirma) return;
+
+        btn.disabled = true;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+        try {
+            const res = await apiPost('enviar_mail_ecommerce.php', { id_persona: Number(btn.dataset.id) });
+            btn.innerHTML = '<i class="bi bi-check2"></i>';
+            setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 1500);
+            await alertModal(`Mail enviado con éxito a <strong>${nombre}</strong> (${res.email}).`, { tono: 'exito' });
+        } catch (err) {
+            btn.innerHTML = original;
+            btn.disabled = false;
+            await alertModal(`No se pudo enviar el mail de ${nombre}: ${err.message}`, { tono: 'error' });
+        }
     }
 
     /**
@@ -234,6 +259,10 @@ const PremiosEcommerce = (() => {
                     </tr>
                 </tfoot>
             </table>`;
+
+        wrap.querySelectorAll('.btn-enviar-mail-ecom').forEach(btn => {
+            btn.addEventListener('click', () => enviarMailPersona(btn));
+        });
     }
 
     /* ── Export a Excel ────────────────────────────────────────────────────── */
@@ -513,7 +542,156 @@ const PremiosEcommerce = (() => {
         }
     }
 
-    /* ── Shell de modal compartido por los dos (mismas clases que el resto del módulo) ── */
+    /* ═══════════════════════════════════════════════════════════════════════
+       Modal: configuración de personas (alta con puesto, mail, edición, baja)
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    /** Los nombres y mails ahora los tipea el usuario: se escapan antes de meterlos en el HTML. */
+    function esc(s) {
+        return String(s ?? '').replace(/[&<>"']/g, ch =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+    }
+
+    function filaPersonaConfigHTML(p) {
+        const mail = p.email
+            ? `<span class="modal-config-mail">${esc(p.email)}</span>`
+            : `<span class="modal-config-mail sin-mail">sin mail</span>`;
+        const btnEstado = p.activo
+            ? `<button class="btn-accion-fila" data-accion="baja" title="Dar de baja (deja de liquidarse; no se borra nada)"><i class="bi bi-person-dash"></i></button>`
+            : `<button class="btn-accion-fila" data-accion="reactivar" title="Reactivar con sus conceptos y tramos"><i class="bi bi-arrow-counterclockwise"></i></button>`;
+        return `<div class="modal-config-fila ecom-persona-fila ${p.activo ? '' : 'oculta'}" data-id="${p.id}">
+            <span class="modal-emails-nombre">${esc(p.nombre)}
+                <span class="ecom-kpi-hint">${p.puesto ? esc(p.puesto) : 'sin puesto'}${p.activo ? '' : ' · dada de baja'}</span>
+            </span>
+            ${mail}
+            <button class="btn-accion-fila" data-accion="editar" title="Editar nombre y mail"><i class="bi bi-pencil"></i></button>
+            ${btnEstado}
+        </div>`;
+    }
+
+    function filaPersonaEdicionHTML(p) {
+        return `<div class="modal-config-fila ecom-persona-fila" data-id="${p.id}">
+            <input class="ecom-kpi-input" data-campo="nombre" value="${esc(p.nombre)}" placeholder="Nombre">
+            <input class="ecom-kpi-input" data-campo="email" type="email" value="${esc(p.email ?? '')}" placeholder="mail@xl.com.ar">
+            <button class="btn-accion-fila" data-accion="guardar" title="Guardar"><i class="bi bi-check2"></i></button>
+            <button class="btn-accion-fila" data-accion="cancelar" title="Cancelar"><i class="bi bi-x-lg"></i></button>
+        </div>`;
+    }
+
+    function conceptosPuestoHTML(puesto) {
+        return puesto && puesto.conceptos.length
+            ? `Cobra por: ${puesto.conceptos.map(esc).join(' · ')}`
+            : 'Este puesto no tiene conceptos cargados.';
+    }
+
+    /** Corre una acción del modal y, si sale bien, repinta el modal y la pestaña. */
+    async function accionPersona(modal, btn, payload) {
+        btn.disabled = true;
+        try {
+            await apiPost('ecommerce_personas.php', payload);
+            await pintarCuerpoConfig(modal);
+            await load();
+        } catch (err) {
+            btn.disabled = false;
+            await alertModal(`No se pudo guardar: ${err.message}`, { tono: 'error' });
+        }
+    }
+
+    async function pintarCuerpoConfig(modal) {
+        const body = modal.querySelector('#modal-ecom-config-body');
+        const res = await fetch('api/ecommerce_personas.php');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || `Error ${res.status}`);
+
+        const { personas, puestos } = data;
+        body.innerHTML = `
+            <p class="modal-config-hint">Cada persona hereda del <strong>puesto</strong> los conceptos
+               por los que cobra y sus tramos ($), que después se ajustan en «Escalas de premios».
+               El puesto no se cambia después del alta: para eso, dala de baja y volvé a darla de alta.
+               El mail es al que sale el botón <i class="bi bi-envelope"></i> de la tabla.</p>
+            <div class="ecom-kpi-canal">
+                <div class="ecom-kpi-canal-titulo">Personas</div>
+                <div class="ecom-personas-lista">
+                    ${personas.length ? personas.map(filaPersonaConfigHTML).join('') : '<div class="modal-config-hint">No hay personas cargadas.</div>'}
+                </div>
+            </div>
+            <div class="ecom-kpi-canal">
+                <div class="ecom-kpi-canal-titulo">Agregar persona</div>
+                <div class="ecom-kpi-grid ecom-alta-grid">
+                    <label for="ecom-alta-nombre">Nombre</label>
+                    <input class="ecom-kpi-input" id="ecom-alta-nombre" maxlength="100">
+                    <label for="ecom-alta-email">Mail</label>
+                    <input class="ecom-kpi-input" id="ecom-alta-email" type="email" maxlength="150" placeholder="mail@xl.com.ar">
+                    <label for="ecom-alta-puesto">Puesto</label>
+                    <select class="ecom-kpi-input" id="ecom-alta-puesto">
+                        ${puestos.map(pu => `<option value="${pu.id}">${esc(pu.nombre)}</option>`).join('')}
+                    </select>
+                </div>
+                <p class="modal-config-hint" id="ecom-alta-conceptos" style="margin-top:6px;">${conceptosPuestoHTML(puestos[0])}</p>
+                <div class="modal-config-actions">
+                    <button class="premios-alert-btn premios-alert-btn-ok" id="ecom-alta-guardar" ${puestos.length ? '' : 'disabled'}>Agregar</button>
+                </div>
+            </div>`;
+
+        const selPuesto = body.querySelector('#ecom-alta-puesto');
+        selPuesto.onchange = () => {
+            body.querySelector('#ecom-alta-conceptos').innerHTML =
+                conceptosPuestoHTML(puestos.find(pu => pu.id === Number(selPuesto.value)));
+        };
+
+        body.querySelector('#ecom-alta-guardar').onclick = (e) => accionPersona(modal, e.currentTarget, {
+            accion   : 'crear',
+            nombre   : body.querySelector('#ecom-alta-nombre').value,
+            email    : body.querySelector('#ecom-alta-email').value,
+            id_puesto: Number(selPuesto.value),
+        });
+
+        // Un solo listener delegado para los botones de todas las filas (incluidas las que
+        // se reemplazan al pasar a modo edición).
+        body.querySelector('.ecom-personas-lista').onclick = async (e) => {
+            const btn = e.target.closest('button[data-accion]');
+            if (!btn) return;
+            const fila = btn.closest('.ecom-persona-fila');
+            const p = personas.find(x => x.id === Number(fila.dataset.id));
+            switch (btn.dataset.accion) {
+                case 'editar':
+                    fila.outerHTML = filaPersonaEdicionHTML(p);
+                    break;
+                case 'cancelar':
+                    fila.outerHTML = filaPersonaConfigHTML(p);
+                    break;
+                case 'guardar':
+                    await accionPersona(modal, btn, {
+                        accion: 'editar', id: p.id,
+                        nombre: fila.querySelector('[data-campo="nombre"]').value,
+                        email : fila.querySelector('[data-campo="email"]').value,
+                    });
+                    break;
+                case 'baja': {
+                    const ok = await Premios.confirmModal(
+                        `¿Dar de baja a <strong>${esc(p.nombre)}</strong>? Deja de aparecer en la pestaña y de
+                         liquidarse. No se borra nada: se puede reactivar con los mismos tramos.`,
+                        { titulo: 'Dar de baja' });
+                    if (ok) await accionPersona(modal, btn, { accion: 'baja', id: p.id });
+                    break;
+                }
+                case 'reactivar':
+                    await accionPersona(modal, btn, { accion: 'reactivar', id: p.id });
+                    break;
+            }
+        };
+    }
+
+    async function abrirModalConfig() {
+        const modal = abrirModalVacio('modal-ecom-config', 'Configuración de personas', 'modal-ecom-config-body');
+        try {
+            await pintarCuerpoConfig(modal);
+        } catch (err) {
+            await alertModal(`No se pudo cargar la configuración: ${err.message}`, { tono: 'error' });
+        }
+    }
+
+    /* ── Shell de modal compartido (mismas clases que el resto del módulo) ── */
     function abrirModalVacio(id, titulo, bodyId) {
         let modal = $(id);
         if (!modal) {
@@ -588,6 +766,8 @@ const PremiosEcommerce = (() => {
         _lastTotal    = data.total_general ?? 0;
         _lastSesiones = data.sesiones ?? {};
         _lastOrdenes  = data.ordenes ?? {};
+        _lastPeriodoParcial = !!data.periodo_parcial;
+        _puedeGestionar = !!data.puede_gestionar; // antes de renderTabla: decide si va el botón de mail
 
         renderBanners(data);
         renderHero(_lastPersonas, _lastTotal);
@@ -600,9 +780,11 @@ const PremiosEcommerce = (() => {
         // (y el mismo flag del endpoint) que la columna "Acciones" de Premios Supervisoras.
         const btnKpis = $('btn-ecom-cargar-kpis');
         const btnEsc  = $('btn-ecom-escalas');
-        [btnKpis, btnEsc].forEach(b => { if (b) b.style.display = data.puede_gestionar ? 'flex' : 'none'; });
+        const btnConf = $('btn-ecom-config');
+        [btnKpis, btnEsc, btnConf].forEach(b => { if (b) b.style.display = data.puede_gestionar ? 'flex' : 'none'; });
         if (btnKpis) btnKpis.onclick = abrirModalKpis;
         if (btnEsc)  btnEsc.onclick  = abrirModalEscalas;
+        if (btnConf) btnConf.onclick = abrirModalConfig;
     }
 
     return { load };
