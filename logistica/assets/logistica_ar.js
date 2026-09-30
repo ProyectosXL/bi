@@ -2301,6 +2301,7 @@
 
     // ── Área 10: Fill Rate por remito ─────────────────────────────────────
     let frExportInit = false;
+    const frAbiertos = new Set();   // pedidos desplegados en el detalle (sobreviven a filtros)
 
     function frAddDays(ymd, n) {   // aritmética en UTC para no correr el día por huso horario
         const d = new Date(ymd + 'T00:00:00Z');
@@ -2342,6 +2343,7 @@
         renderIngreso(data);
 
         State.frDetalle = data.detalle || [];
+        frAbiertos.clear();
         renderFillRate();
 
         if (!frExportInit) {
@@ -2457,30 +2459,84 @@
         });
     }
 
+    // Agrupa las filas remito × pedido por pedido (talón + número); los remitos
+    // sin pedido quedan como un grupo propio cada uno, sin desplegable.
+    function agruparFillRate(rows) {
+        const map = new Map();
+        rows.forEach(r => {
+            const key = r.NRO_PEDIDO ? `P|${r.TALON_PED ?? ''}|${r.NRO_PEDIDO}` : `R|${r.N_COMP}`;
+            let g = map.get(key);
+            if (!g) { g = { key, head: r, unid: 0, remitos: [] }; map.set(key, g); }
+            g.unid += parseFloat(r.UNID_REMITO) || 0;
+            g.remitos.push(r);
+        });
+        return [...map.values()];
+    }
+
     function renderFillRate() {
-        const rows = filtrarFillRate();
-        $('#fr-count').text(`${fmt.num(rows.length)} filas (una por remito y pedido) · clic en una fila para ver el detalle del pedido`);
+        const rows   = filtrarFillRate();
+        const grupos = agruparFillRate(rows);
+        const nPed   = grupos.filter(g => g.head.NRO_PEDIDO).length;
+        $('#fr-count').text(`${fmt.num(nPed)} pedidos · ${fmt.num(new Set(rows.map(r => r.N_COMP)).size)} remitos · clic en un pedido para ver sus remitos`);
+
+        const $tb = $('#tbody-fr-detalle').empty();
+        if (!grupos.length) {
+            $tb.html('<tr><td colspan="12"><div class="empty-state"><i class="bi bi-inbox"></i>Sin datos</div></td></tr>');
+            return;
+        }
         const BADGE = {
             'COMPLETO'  : ['badge-facturado',  'Completo'],
             'PARCIAL'   : ['badge-parcial',    'Parcial'],
             'SIN PEDIDO': ['badge-sin-pedido', 'Remito sin pedido'],
             'SIN DATOS' : ['badge-sin-pedido', 'Sin datos'],
         };
-        renderTablaSimple('#tbody-fr-detalle', rows,
-            r => {
-                const [bCls, bTxt] = BADGE[r.ESTADO] || ['badge-sin-pedido', r.ESTADO || '—'];
-                const cumpl = r.CUMPL == null ? null : parseFloat(r.CUMPL);
-                return `<td>${escapeHtml(r.N_COMP)}</td><td>${escapeHtml(r.NRO_PEDIDO || '—')}</td>` +
-                    `<td>${fmt.date(r.FECHA_PEDI)}</td>` +
-                    `<td title="${escapeHtml(r.CLIENTE || '')}">${escapeHtml(r.CLIENTE || '—')}</td>` +
-                    `<td>${escapeHtml(r.CANAL || '—')}</td><td>${escapeHtml(r.TIPO_FACTURACION || '—')}</td>` +
-                    `<td class="col-num">${fmt.num(r.UNID_REMITO)}</td><td class="col-num">${fmt.num(r.UNID_PEDIDAS)}</td>` +
-                    `<td class="col-num">${fmt.num(r.UNID_REMITIDAS_ACUM)}</td><td class="col-num">${fmt.num(r.UNID_PENDIENTES)}</td>` +
-                    `<td class="col-num" style="color:${efiColor(cumpl)};font-weight:600">${cumpl == null ? '—' : fmt.pct(cumpl)}</td>` +
-                    `<td><span class="badge-estado ${bCls}">${bTxt}</span></td>`;
-            },
-            r => r.NRO_PEDIDO || null
-        );
+        const abrirTodo = State.frBusca.trim() !== '';   // con búsqueda, mostrar el remito que coincide
+
+        $tb.html(grupos.map(g => {
+            const r = g.head;
+            const [bCls, bTxt] = BADGE[r.ESTADO] || ['badge-sin-pedido', r.ESTADO || '—'];
+            const cumpl  = r.CUMPL == null ? null : parseFloat(r.CUMPL);
+            const expand = !!r.NRO_PEDIDO;
+            const open   = expand && (abrirTodo || frAbiertos.has(g.key));
+            const nRem   = g.remitos.length;
+            const pedTd  = expand
+                ? `<td><i class="bi bi-chevron-right caret"></i> ${escapeHtml(r.NRO_PEDIDO)}` +
+                  ` <button type="button" class="fr-ver-ped" data-pedido="${escapeHtml(String(r.NRO_PEDIDO).trim())}" title="Ver detalle del pedido"><i class="bi bi-box-arrow-up-right"></i></button></td>`
+                : '<td>—</td>';
+            const remTd  = nRem === 1 ? escapeHtml(r.N_COMP) : `<span class="badge-arts">${nRem}</span> remitos`;
+            const cls    = expand ? ` class="rubro-row expandible fr-ped-row${open ? ' abierto' : ''}" data-key="${escapeHtml(g.key)}"` : '';
+
+            let html = `<tr${cls}>${pedTd}<td>${remTd}</td>` +
+                `<td>${fmt.date(r.FECHA_PEDI)}</td>` +
+                `<td title="${escapeHtml(r.CLIENTE || '')}">${escapeHtml(r.CLIENTE || '—')}</td>` +
+                `<td>${escapeHtml(r.CANAL || '—')}</td><td>${escapeHtml(r.TIPO_FACTURACION || '—')}</td>` +
+                `<td class="col-num">${fmt.num(g.unid)}</td><td class="col-num">${fmt.num(r.UNID_PEDIDAS)}</td>` +
+                `<td class="col-num">${fmt.num(r.UNID_REMITIDAS_ACUM)}</td><td class="col-num">${fmt.num(r.UNID_PENDIENTES)}</td>` +
+                `<td class="col-num" style="color:${efiColor(cumpl)};font-weight:600">${cumpl == null ? '—' : fmt.pct(cumpl)}</td>` +
+                `<td><span class="badge-estado ${bCls}">${bTxt}</span></td></tr>`;
+            if (expand) html += frRemitoRows(g, open);
+            return html;
+        }).join(''));
+    }
+
+    // Filas hijas: un remito por fila (clic → modal con el detalle del pedido)
+    function frRemitoRows(g, open) {
+        return g.remitos.map(r =>
+            `<tr class="pedido-row fr-remito-row" data-grupo="${escapeHtml(g.key)}" data-pedido="${escapeHtml(String(r.NRO_PEDIDO).trim())}"${open ? '' : ' hidden'}>` +
+            `<td></td><td><i class="bi bi-arrow-return-right"></i> ${escapeHtml(r.N_COMP)}</td>` +
+            `<td></td><td></td>` +
+            `<td>${escapeHtml(r.CANAL || '—')}</td><td>${escapeHtml(r.TIPO_FACTURACION || '—')}</td>` +
+            `<td class="col-num">${fmt.num(r.UNID_REMITO)}</td>` +
+            `<td colspan="5"></td></tr>`
+        ).join('');
+    }
+
+    function toggleFrPedido($row) {
+        const key  = String($row.attr('data-key'));
+        const open = !$row.hasClass('abierto');
+        $row.toggleClass('abierto', open);
+        $row.nextAll('tr.fr-remito-row').filter((_, tr) => tr.getAttribute('data-grupo') === key).prop('hidden', !open);
+        if (open) frAbiertos.add(key); else frAbiertos.delete(key);
     }
 
     function exportFillRate() {
@@ -2722,6 +2778,13 @@
         // Drill de % Eficiencia por cliente (delegado: el tbody se re-renderiza)
         $('#tbody-efi-pedidos').on('click', 'tr.efi-cli-row.expandible', function () {
             toggleEfiPedidos($(this));
+        });
+
+        // Fill rate: pedido → remitos (el botón abre el detalle del pedido)
+        $('#tbody-fr-detalle').on('click', 'tr.fr-ped-row', function (e) {
+            const $btn = $(e.target).closest('.fr-ver-ped');
+            if ($btn.length) { openPedidoDetalle($btn.attr('data-pedido')); return; }
+            toggleFrPedido($(this));
         });
 
         // Card de pérdida: flip (frente KPI ⇄ dorso mini-gráfico) + ampliar.

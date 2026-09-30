@@ -1371,8 +1371,8 @@
 
         <div class="analisis-card">
             <div class="analisis-section-header" id="hdr-fr-detalle">
-                <i class="bi bi-list-ul"></i> Detalle: cada remito y su pedido
-                <span class="header-sub" id="fr-count">Clic en un pedido para ver el detalle</span>
+                <i class="bi bi-list-ul"></i> Detalle: cada pedido y sus remitos
+                <span class="header-sub" id="fr-count">Clic en un pedido para ver sus remitos</span>
                 <div class="filter-pills" id="fr-filtro" role="group" aria-label="Filtrar por estado del pedido">
                     <button type="button" class="pill active" data-f="ALL">Todos</button>
                     <button type="button" class="pill" data-f="COMPLETO">Pedidos completos</button>
@@ -1382,16 +1382,16 @@
                 <input type="search" class="est-busca" id="fr-busca" placeholder="Buscar remito, pedido o cliente…" aria-label="Buscar remito, pedido o cliente">
             </div>
             <div class="table-wrap" style="max-height:520px;overflow-y:auto">
-                <table id="tabla-fr-detalle">
+                <table id="tabla-fr-detalle" class="tabla-drill">
                     <thead>
                         <tr>
-                            <th>Remito</th>
                             <th>Pedido</th>
+                            <th>Remito</th>
                             <th>Fecha pedido</th>
                             <th>Cliente</th>
                             <th>Canal</th>
                             <th>Tipo</th>
-                            <th class="col-num">Unidades en este remito</th>
+                            <th class="col-num">Unidades remitidas en el día</th>
                             <th class="col-num">Unidades pedidas</th>
                             <th class="col-num">Unidades remitidas (a hoy)</th>
                             <th class="col-num">Unidades pendientes</th>

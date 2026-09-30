@@ -1125,6 +1125,15 @@ tr.wip-colgada > td { color: var(--text-3); }
 .fr-bar { height: 8px; border-radius: 4px; background: rgba(37,99,235,.6); min-width: 2px; }
 .fr-bar.gris { background: rgba(100,116,139,.45); }
 
+/* Detalle fill rate: pedido desplegable → remitos */
+#tabla-fr-detalle tr.fr-remito-row > td { background: var(--bg-card2); font-size: .8rem; color: var(--text-2); }
+#tabla-fr-detalle tr.fr-remito-row .bi-arrow-return-right { color: var(--text-3); margin-right: 2px; }
+.fr-ver-ped {
+    border: 0; background: none; padding: 0 2px; margin-left: 2px;
+    color: var(--text-3); cursor: pointer; font-size: .75rem; line-height: 1;
+}
+.fr-ver-ped:hover { color: var(--accent); }
+
 /* ── Estancados: stock y acción sugerida ──────────────────────────────── */
 .est-stock { padding: 12px 20px 4px; }
 .est-stock-txt { font-size: .82rem; color: var(--text-1); margin-bottom: 6px; }
