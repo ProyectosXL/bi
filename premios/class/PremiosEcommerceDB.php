@@ -5,8 +5,9 @@
  * de /bi/premios/). Reemplaza el Excel manual donde se liquidaban a mano.
  *
  * Fuentes reales (sqlsrv, ver `class/Conexion.php`, conexión 'power'):
- *   - POWER_BI_CONTROL.dbo.BI_SALES_SUCURSALES          facturación real por canal (DIARIA)
- *   - POWER_BI_CONTROL.dbo.BI_EFICIENCIA_ECOMMERCE      órdenes reales (la tabla del dashboard del área)
+ *   - POWER_BI_CONTROL.dbo.BI_T_ESTADISTICAS_VENTAS_PROPIOS  facturación TOTAL ecommerce (MENSUAL)
+ *   - POWER_BI_CONTROL.dbo.BI_EFICIENCIA_ECOMMERCE      facturación VTEX/ML y órdenes reales
+ *                                                        (la tabla del dashboard del área)
  *   - sistemas.dbo.FP_ObjetivosFinales                  objetivo de facturación (MENSUAL, cross-db)
  *   - POWER_BI_CONTROL.dbo.BI_T_PREMIOS_ECOM_PERSONAS   \
  *     POWER_BI_CONTROL.dbo.BI_T_PREMIOS_ECOM_CONCEPTOS   | quién cobra qué y con qué escala
@@ -38,31 +39,24 @@ class PremiosEcommerceDB
     private const IDPOS_ML   = 'C457D171-5EA2-43ED-96FC-FF233C406214';
 
     /**
-     * ⚠ `NRO_SUCURS` SIGNIFICA COSAS DISTINTAS EN LAS DOS TABLAS QUE USA ESTA CLASE.
-     * Es la confusión más fácil de cometer acá; verificado contra la base (2026-09-10/11):
-     *
-     *   BI_SALES_SUCURSALES (DIARIA) — la columna SUCURSAL trae el nombre literal:
-     *       9 = 'ECOMMERCE VTEX'      1 = 'ECOMMERCE ML'
-     *     (es la convención de class/Filters.php y global/class/CadenaDB.php, que definen
-     *      `canal ECOMMERCE == NRO_SUCURS IN (1,9)`)
-     *
-     *   BI_T_ESTADISTICAS_VENTAS_PROPIOS (MENSUAL, el ETL de premios):
+     * En BI_T_ESTADISTICAS_VENTAS_PROPIOS (MENSUAL, el ETL de premios), verificado contra la
+     * base (2026-09-10/11):
      *       9 = 'ECOMMERCE' — una sola fila CONSOLIDADA (VTEX + ML), SUPERVISORA='TODAS'
      *       1 = 'CENTRAL'   — fila administrativa, todo en cero, NO es Mercado Libre
+     * (⚠ en BI_SALES_SUCURSALES, la diaria, 9 = VTEX y 1 = ML: no confundir.)
      *
      * Que el 9 mensual sea el consolidado está probado por su IMP_OBJ: coincide al peso con
      * la SUMA de los objetivos de los dos idPOS en FP_ObjetivosFinales, en los tres meses
      * verificados (junio, julio y agosto 2026).
      */
-    private const NRO_SUCURS_VTEX = 9;   // solo en BI_SALES_SUCURSALES
-    private const NRO_SUCURS_ML   = 1;   // solo en BI_SALES_SUCURSALES
-    private const NRO_SUCURS_ECOMMERCE_MENSUAL = 9;  // solo en BI_T_ESTADISTICAS_VENTAS_PROPIOS
+    private const NRO_SUCURS_ECOMMERCE_MENSUAL = 9;
 
     /** Canales de ecommerce, en el orden en que se muestran. */
     public const CANALES = ['VTEX', 'ML'];
 
     /**
-     * Valores de la columna CANAL de BI_EFICIENCIA_ECOMMERCE, de donde salen las órdenes,
+     * Valores de la columna CANAL de BI_EFICIENCIA_ECOMMERCE, de donde salen las órdenes y la
+     * facturación por canal,
      * mapeados al canal del tablero. 'VTEX' está verificado contra la base (2026-10-01); el de
      * Mercado Libre no, por eso se aceptan las dos grafías. Un valor que no esté acá (ej. ICBC)
      * no se cuenta.
@@ -125,7 +119,7 @@ class PremiosEcommerceDB
         }
 
         // Los fines de mes se usan para las tablas MENSUALES (objetivos, KPIs manuales).
-        // La facturación real, que es diaria, usa $desde/$hasta tal cual.
+        // La facturación por canal y las órdenes, que son por pedido, usan $desde/$hasta tal cual.
         $this->mesesActual = PremiosDB::finesDeMes($desde, $hasta);
     }
 
@@ -230,21 +224,19 @@ class PremiosEcommerceDB
      *   TOTAL del canal  → BI_T_ESTADISTICAS_VENTAS_PROPIOS (mensual), fila ECOMMERCE.
      *                      Es la fuente contra la que liquidan las otras tres pestañas y la
      *                      que ya alimenta la fila ECOMMERCE de "Locales Propios".
-     *   VTEX y ML        → BI_SALES_SUCURSALES (diaria), que es la ÚNICA que los separa.
+     *   VTEX y ML        → BI_EFICIENCIA_ECOMMERCE, la tabla del dashboard del área (desde
+     *                      2026-10-01; antes BI_SALES_SUCURSALES). Ver facturacionPorCanal().
      *
-     * ⚠ CONSECUENCIA CONOCIDA Y ACEPTADA: las partes no suman el total. Julio 2026 muestra
-     * $389,3M en el concepto combinado de Agustina y $224,1M + $125,0M = $349,1M en los dos
-     * de Vanesa — un 11,5 % de diferencia entre dos tablas del mismo BI, todavía sin
-     * explicar (¿ICBC? ¿envío? ¿otro conjunto de rubros?). Eso es un problema de las fuentes,
+     * ⚠ CONSECUENCIA CONOCIDA Y ACEPTADA: las partes no suman el total, porque salen de
+     * tablas distintas. Con la fuente anterior, julio 2026 mostraba $389,3M en el concepto
+     * combinado de Agustina y $224,1M + $125,0M = $349,1M en los dos de Vanesa — un 11,5 %
+     * de diferencia, sin explicar. Eso es un problema de las fuentes,
      * no de este cálculo, y se prefiere mostrarlo antes que taparlo: la alternativa que se
      * descartó (2026-09-11) era prorratear el total mensual con la proporción de la diaria,
      * que daba una tabla que cerraba pero liquidaba premios sobre importes estimados.
      *
-     * El arreglo de fondo es que el SP que carga la tabla mensual emita dos filas en vez de
-     * una, como ya hace la diaria. El día que pase, los tres importes salen de ahí y cierran.
-     *
      * MES SIN CIERRE MENSUAL: la tabla mensual se carga recién cuando cierra el mes (el mes en
-     * curso no tiene fila). Para esos meses el TOTAL toma VTEX + ML de la diaria — que es un
+     * curso no tiene fila). Para esos meses el TOTAL toma VTEX + ML por canal — que es un
      * dato real, no estimado — en vez de quedar en 0. Los meses tomados así se informan en
      * `meses_total_diaria` para que el front lo avise.
      *
@@ -254,7 +246,7 @@ class PremiosEcommerceDB
     {
         if ($this->realesCache !== null) return $this->realesCache;
 
-        $diaria  = $this->facturacionDiariaPorCanal();
+        $diaria  = $this->facturacionPorCanal();
         $mensual = $this->facturacionMensualEcommerce();
 
         $total = 0.0;
@@ -318,38 +310,50 @@ class PremiosEcommerceDB
     }
 
     /**
-     * Facturación por canal desde la tabla DIARIA, la única que separa VTEX de ML
-     * (`NRO_SUCURS` 9 y 1, con el nombre literal en su columna SUCURSAL).
+     * Facturación por canal desde `BI_EFICIENCIA_ECOMMERCE`, la tabla del dashboard del
+     * sector Ecommerce — la misma de la que salen las órdenes (ver ordenesReales()), así VTEX
+     * y ML salen de una sola fuente (decidido 2026-10-01).
      *
-     * Es diaria, así que se filtra por el rango real (no por fines de mes), con el mismo
-     * patrón de límite superior que el resto del repo (`FECHA < DATEADD(day,1,hasta)`), así
-     * un `hasta` con hora igual entra completo. También se devuelve abierta por mes, para
-     * cubrir el TOTAL de los meses que la mensual todavía no tiene (ver realesFacturacion()).
+     * Criterios, los mismos que las órdenes salvo el envío:
+     *   - **Sin envío**: se excluyen las líneas `***COSTO ENVIO` (COD_ARTICU). El envío es un
+     *     servicio, no venta de producto, y el objetivo está fijado sobre venta.
+     *   - **ESTADO_TANGO <> 'CANCELADO'**: entran COMPLETO y PENDIENTE (todo pedido de
+     *     ecommerce se factura).
+     *   - **FECHA_PEDIDO**, no FECHA_FACT: en esta tabla FECHA_FACT está poblada en una parte
+     *     chica de las filas (septiembre 2026, VTEX: $82,2M por FECHA_FACT contra $253,4M por
+     *     FECHA_PEDIDO), así que no sirve para cortar el mes.
+     *
+     * Septiembre 2026, VTEX: $253.370.635 acá contra $232.807.253 de BI_SALES_SUCURSALES, la
+     * fuente anterior. La diferencia (~9 %) no es el envío, que ya está excluido; sin explicar.
+     *
+     * También se devuelve abierta por mes, para cubrir el TOTAL de los meses que la mensual
+     * todavía no tiene (ver realesFacturacion()).
      *
      * @return array{VTEX:float,ML:float,porMes:array<string,array{VTEX?:float,ML?:float}>}
      */
-    private function facturacionDiariaPorCanal(): array
+    private function facturacionPorCanal(): array
     {
         $out = ['VTEX' => 0.0, 'ML' => 0.0, 'porMes' => []];
 
-        $sql = "SELECT EOMONTH(s.FECHA) AS MES, s.NRO_SUCURS, SUM(s.IMPORTE) AS IMP
-                FROM dbo.BI_SALES_SUCURSALES s WITH (NOLOCK)
-                WHERE s.FECHA >= ? AND s.FECHA < DATEADD(day, 1, CAST(? AS DATE))
-                  AND s.NRO_SUCURS IN (?, ?)
-                GROUP BY EOMONTH(s.FECHA), s.NRO_SUCURS";
+        $sql = "SELECT EOMONTH(e.FECHA_PEDIDO) AS MES, UPPER(LTRIM(RTRIM(e.CANAL))) AS CANAL,
+                       SUM(e.IMPORTE) AS IMP
+                FROM dbo.BI_EFICIENCIA_ECOMMERCE e WITH (NOLOCK)
+                WHERE e.FECHA_PEDIDO >= ? AND e.FECHA_PEDIDO < DATEADD(day, 1, CAST(? AS DATE))
+                  AND e.ESTADO_TANGO <> 'CANCELADO'
+                  AND LTRIM(e.COD_ARTICU) NOT LIKE '***COSTO ENVIO%'
+                GROUP BY EOMONTH(e.FECHA_PEDIDO), UPPER(LTRIM(RTRIM(e.CANAL)))";
 
-        $stmt = sqlsrv_query($this->connPower, $sql, [
-            $this->desde, $this->hasta, self::NRO_SUCURS_VTEX, self::NRO_SUCURS_ML,
-        ]);
+        $stmt = sqlsrv_query($this->connPower, $sql, [$this->desde, $this->hasta]);
         if ($stmt === false) {
-            throw new RuntimeException('Error consultando BI_SALES_SUCURSALES: ' . print_r(sqlsrv_errors(), true));
+            throw new RuntimeException('Error consultando la facturación de BI_EFICIENCIA_ECOMMERCE: ' . print_r(sqlsrv_errors(), true));
         }
         while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-            $canal = ((int) $r['NRO_SUCURS'] === self::NRO_SUCURS_VTEX) ? 'VTEX' : 'ML';
-            $mes   = $r['MES'] instanceof DateTimeInterface ? $r['MES']->format('Y-m-d') : (string) $r['MES'];
-            $imp   = (float) $r['IMP'] / self::DIVISOR_IVA;
+            $canal = self::CANAL_EFICIENCIA[(string) $r['CANAL']] ?? null;
+            if ($canal === null) continue;
+            $mes = $r['MES'] instanceof DateTimeInterface ? $r['MES']->format('Y-m-d') : (string) $r['MES'];
+            $imp = (float) $r['IMP'] / self::DIVISOR_IVA;
             $out[$canal] += $imp;
-            $out['porMes'][$mes][$canal] = $imp;
+            $out['porMes'][$mes][$canal] = ($out['porMes'][$mes][$canal] ?? 0.0) + $imp;
         }
         sqlsrv_free_stmt($stmt);
         return $out;
@@ -799,6 +803,9 @@ class PremiosEcommerceDB
                     'tramo_umbral'     => $tramo['umbral'],
                     'premio'           => $tramo['importe'],
                     'sin_dato'         => $sinDato,
+                    // Escala completa (de mayor a menor umbral), para el modal de solo
+                    // lectura "Ver escalas" del tablero.
+                    'escalas'          => $c['escalas'],
                 ];
             }
 

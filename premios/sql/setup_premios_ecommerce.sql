@@ -13,8 +13,8 @@
 --               tabla del BI (órdenes VTEX, sesiones, tasa de conversión) más
 --               el objetivo de órdenes del mes.
 --
--- La facturación (real y objetivo) NO se carga acá: sale de BI_SALES_SUCURSALES
--- y de sistemas.dbo.FP_ObjetivosFinales — ver PremiosEcommerceDB.php.
+-- La facturación (real y objetivo) NO se carga acá: sale de BI_EFICIENCIA_ECOMMERCE,
+-- BI_T_ESTADISTICAS_VENTAS_PROPIOS y sistemas.dbo.FP_ObjetivosFinales — ver PremiosEcommerceDB.php.
 -- ═══════════════════════════════════════════════════════════════════════
 
 -- ── 1) Personas ────────────────────────────────────────────────────────

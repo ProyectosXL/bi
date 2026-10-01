@@ -226,6 +226,9 @@ try {
             <div class="premios-card">
                 <div class="premios-section-header">
                     <i class="bi bi-table"></i>&nbsp; Premios por Concepto
+                    <button class="btn-export-excel" id="btn-ecom-escalas" title="Ver los tramos de premio de cada concepto">
+                        <i class="bi bi-bar-chart-steps"></i> Ver escalas
+                    </button>
                     <button class="btn-export-excel" id="btn-ecom-cargar-kpis" style="display:none;">
                         <i class="bi bi-pencil-square"></i> Cargar órdenes y conversión
                     </button>
@@ -420,16 +423,14 @@ const Spinner = (() => {
                     dashboard de Ecommerce (pedidos no cancelados) y se actualizan a diario. Lo único
                     de <strong>carga manual</strong> son las sesiones (con las que se calcula la tasa
                     de conversión) y el objetivo de órdenes — si falta cargar un mes, la pestaña lo avisa arriba.</li>
-                <li>En esa pestaña, el total del canal y los importes de VTEX y ML por separado
-                    salen de <strong>dos tablas distintas</strong> (la mensual no separa los
-                    canales), y esas tablas hoy <strong>no coinciden entre sí</strong>: las partes
-                    no suman el total. Es una diferencia de las fuentes, no del cálculo — todos
-                    los importes son medidos, ninguno estimado.</li>
-                <li>La facturación de <strong>Premios Ecommerce</strong> es la de la BI, que
-                    <strong>no coincide con los paneles de VTEX y Mercado Libre</strong>: esos
-                    incluyen el envío y el precio bruto, y la BI contabiliza como venta solo el
-                    producto neto de descuentos. Por eso los premios pueden dar distinto que en la
-                    planilla vieja.</li>
+                <li>En esa pestaña, la facturación de VTEX y de ML por separado es la misma que
+                    muestra el <strong>dashboard de Ecommerce</strong> (pedidos no cancelados,
+                    <strong>sin el costo de envío</strong>). El total del canal sale de la tabla
+                    mensual de las otras pestañas, así que las partes <strong>no tienen por qué
+                    sumar el total</strong>: es una diferencia de las fuentes, no del cálculo —
+                    todos los importes son medidos, ninguno estimado.</li>
+                <li>Por eso los premios pueden dar distinto que en la planilla vieja, que tomaba
+                    la facturación de los paneles de VTEX y Mercado Libre, con envío.</li>
                 <li>Las personas de <strong>Premios Ecommerce</strong>, su mail, su
                     <strong>puesto</strong> (que define por qué conceptos cobran) y las
                     <strong>escalas de premio</strong> se gestionan en <strong>Comercial → Supervisión →
@@ -440,7 +441,7 @@ const Spinner = (() => {
                     completo, así que el % de cumplimiento todavía no es comparable. Para liquidar,
                     elegí un período que cubra meses cerrados.</li>
                 <li>Mientras un mes no tiene cierre mensual cargado, su facturación combinada
-                    (VTEX + ML) sale de la <strong>tabla diaria</strong>; cuando cierra el mes se
+                    (VTEX + ML) es la suma de los dos canales; cuando cierra el mes se
                     toma de la mensual.</li>
             </ul>`,
             { tono: 'info', titulo: '¿Cuándo se actualizan los datos?' }

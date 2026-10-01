@@ -727,6 +727,26 @@
 }
 .ecom-kpi-meta { font-size: .72rem; color: var(--text-3); margin-top: 4px; font-style: italic; }
 
+/* Modal "Ver escalas" (solo lectura): una tabla de tramos por concepto, agrupadas por
+   persona con el mismo recuadro que la carga de KPIs. */
+#modal-ecom-escalas-body { max-height: 70vh; overflow-y: auto; }
+#modal-ecom-escalas-body .ecom-kpi-canal + .ecom-kpi-canal { margin-top: 10px; }
+.ecom-escala + .ecom-escala { margin-top: 12px; }
+.ecom-escala-titulo { font-size: .82rem; font-weight: 600; color: var(--text-1); }
+.ecom-escala-tabla { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: .8rem; }
+.ecom-escala-tabla th {
+    text-align   : left;
+    font-weight  : 600;
+    font-size    : .72rem;
+    color        : var(--text-3);
+    padding      : 3px 6px;
+    border-bottom: 1px solid var(--border);
+}
+.ecom-escala-tabla td { padding: 4px 6px; color: var(--text-2); border-bottom: 1px solid var(--border); }
+.ecom-escala-tabla .td-num { text-align: right; }
+.ecom-escala-tabla tr.ecom-escala-alcanzado td { background: #ecfdf5; color: #065f46; font-weight: 600; }
+.ecom-escala-marca { width: 92px; white-space: nowrap; font-size: .74rem; }
+
 /* ── RESPONSIVE ──────────────────────────────────────────── */
 @media (max-width: 768px) {
     .premio-hero-grid { grid-template-columns: repeat(2, 1fr); }

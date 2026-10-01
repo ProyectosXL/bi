@@ -286,11 +286,11 @@ FP_ObjetivosFinales (idPOS, mes, anio, importeObjetivo, fecha_finalizacion)
 -- Facturación real, TOTAL del canal — POWER_BI_CONTROL (conexión 'power')
 BI_T_ESTADISTICAS_VENTAS_PROPIOS, NRO_SUCURS 9 ('ECOMMERCE', consolidado VTEX+ML), IMP_FACT
 
--- Facturación real, VTEX y ML por separado — POWER_BI_CONTROL (conexión 'power')
-BI_SALES_SUCURSALES, NRO_SUCURS 9 (VTEX) / 1 (ML)
-
--- Órdenes reales — POWER_BI_CONTROL (conexión 'power'), la tabla del dashboard del área
-BI_EFICIENCIA_ECOMMERCE, CANAL 'VTEX' / ML, COUNT(DISTINCT NRO_PEDIDO), ESTADO_TANGO <> 'CANCELADO'
+-- Facturación real VTEX y ML, y órdenes reales — POWER_BI_CONTROL (conexión 'power'),
+-- la tabla del dashboard del área. Sin cancelados, por FECHA_PEDIDO.
+BI_EFICIENCIA_ECOMMERCE, CANAL 'VTEX' / ML
+  facturación: SUM(IMPORTE) sin las líneas '***COSTO ENVIO'
+  órdenes:     COUNT(DISTINCT NRO_PEDIDO)
 
 -- Tasa de conversión y objetivo de órdenes — CARGA MANUAL
 BI_T_PREMIOS_ECOM_KPIS (MES, CANAL, SESIONES, TASA_CONVERSION, OBJETIVO_ORDENES)
@@ -301,7 +301,8 @@ La clase usa una sola conexión, `power`. Hasta 2026-10-01 abría también `cent
 
 ### ⚠ `NRO_SUCURS` significa cosas distintas en las dos tablas
 
-Es la confusión más fácil de cometer en esta vista. Verificado contra la base (2026-09-10/11):
+Es la confusión más fácil de cometer con estas tablas (la diaria ya no la usa esta vista desde
+2026-10-01, pero sí otras del repo). Verificado contra la base (2026-09-10/11):
 
 | | `NRO_SUCURS = 9` | `NRO_SUCURS = 1` |
 |---|---|---|
@@ -323,9 +324,21 @@ persona, así que tienen que ser medidos.
 | Concepto | Fuente | Por qué |
 |---|---|---|
 | FACT E COMM (Agustina) | `BI_T_ESTADISTICAS_VENTAS_PROPIOS`, fila ECOMMERCE | Es el total del canal, y es la fuente contra la que liquidan las otras tres pestañas. Su fila ECOMMERCE ya se muestra en "Locales Propios", así que el número coincide. |
-| FACTURACION VTEX / ML (Vanesa) | `BI_SALES_SUCURSALES`, `NRO_SUCURS` 9 y 1 | Es la **única** tabla que separa los dos canales. La mensual los trae consolidados en una sola fila. |
+| FACTURACION VTEX / ML (Vanesa) | `BI_EFICIENCIA_ECOMMERCE`, sin envío, sin cancelados, por `FECHA_PEDIDO` | Es la tabla del dashboard del sector Ecommerce y separa los canales (desde 2026-10-01; antes `BI_SALES_SUCURSALES`). |
 
-**⚠ Consecuencia conocida y aceptada: las partes no suman el total.** Julio 2026 muestra
+Criterios de la facturación por canal:
+
+- **Sin envío**: se excluyen las líneas `***COSTO ENVIO`. El envío es un servicio, no venta de
+  producto.
+- **Sin cancelados**: entran COMPLETO y PENDIENTE, igual que las órdenes.
+- **Por `FECHA_PEDIDO`**: `FECHA_FACT` está poblada en pocas filas (septiembre 2026, VTEX:
+  $82,2M por `FECHA_FACT` contra $253,4M por `FECHA_PEDIDO`), así que no sirve para cortar el mes.
+
+Septiembre 2026, VTEX: **$253.370.635** (92,9 % del objetivo) contra $232.807.253 (85,3 %) con
+la fuente anterior. La diferencia (~9 %) no es el envío, que ya está excluido, y no está
+explicada: puede que `IMPORTE` sea antes de descuentos o incluya algo que la BI no cuenta.
+
+**⚠ Consecuencia conocida y aceptada: las partes no suman el total.** Con la fuente anterior, julio 2026 mostraba
 $389.311.751 en el concepto de Agustina y $224.083.924 + $125.015.550 = $349.099.474 en los
 dos de Vanesa — un **11,5 %** de diferencia entre dos tablas del mismo BI para el mismo canal
 y mes. No es deriva por notas de crédito: en agosto la diaria marcaba $361,7M, todavía 7,7 %
@@ -338,9 +351,8 @@ Se prefiere mostrar esa inconsistencia antes que taparla. La alternativa que se 
 una tabla que cerraba perfecto, pero liquidaba los premios de Vanesa sobre importes estimados.
 Un premio no se paga sobre una estimación.
 
-**El arreglo de fondo es que el SP que carga la tabla mensual emita dos filas en vez de una**,
-como ya hace la diaria. Eso está fuera de este repo. El día que pase, los tres importes salen
-de la misma fuente y cierran solos.
+Desde 2026-10-01 las partes salen de `BI_EFICIENCIA_ECOMMERCE` y el total de la mensual, así
+que siguen sin tener por qué sumar igual.
 
 **Deduplicación del objetivo**: `FP_ObjetivosFinales` admite recargas del mismo `idPOS+mes+
 anio` (por eso tiene `fecha_finalizacion`). Se deduplica con

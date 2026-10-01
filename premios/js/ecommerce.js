@@ -3,8 +3,10 @@
  * Vista "Premios Ecommerce": premios del personal del área, concepto por concepto,
  * según el cumplimiento de sus objetivos (escalón fijo — ver PremiosEcommerceDB).
  *
- * Incluye un modal de carga (solo para GERENCIA/SUPERVISION):
- *   - "Cargar órdenes y conversión": los KPIs que no existen en ninguna tabla del BI.
+ * Incluye dos modales:
+ *   - "Ver escalas" (todos): los tramos de premio de cada concepto, solo lectura.
+ *   - "Cargar órdenes y conversión" (solo GERENCIA/SUPERVISION): los KPIs que no existen
+ *     en ninguna tabla del BI.
  *
  * Las personas, sus puestos y las escalas de premio (las "PAUTAS") NO se editan acá: se
  * gestionan en /comercial/supervision/premios/gestionarPremios.php. Esta pestaña las lee.
@@ -50,7 +52,7 @@ const PremiosEcommerce = (() => {
 
     /* ── Avisos arriba de la pestaña ───────────────────────────────────────────
        Solo lo accionable (KPIs manuales sin cargar). Lo del mes en curso (avance parcial,
-       facturación desde la tabla diaria) se explica en el botón de ayuda (ⓘ) del toolbar. */
+       total como suma de los canales) se explica en el botón de ayuda (ⓘ) del toolbar. */
     function renderBanners(data) {
         const wrap = $('ecom-banners-wrap');
         if (!wrap) return;
@@ -299,6 +301,65 @@ const PremiosEcommerce = (() => {
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
+       Modal: escalas de premio (solo lectura)
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    /**
+     * Una tabla de tramos por concepto, de menor a mayor umbral, con el tramo alcanzado en
+     * el período marcado. Sale de los mismos datos de la tabla principal (_lastPersonas), así
+     * que muestra exactamente las escalas con las que se calculó lo que se ve en pantalla.
+     */
+    function bloqueEscalaHTML(c) {
+        const tramos = [...(c.escalas ?? [])].sort((a, b) => a.umbral - b.umbral);
+        const valor = c.tipo_umbral === 'PCT_CUMPLIMIENTO'
+            ? `${fmtMetrica(c.metrica, c.real)} · ${fmt.pct(c.pct_cumplimiento)} del objetivo`
+            : fmtMetrica(c.metrica, c.real);
+        const resultado = c.sin_dato ? 'Falta cargar el dato del período' : `En el período: ${valor}`;
+        const filas = tramos.length
+            ? tramos.map(t => {
+                const alcanzado = !c.sin_dato && c.tramo_umbral !== null && t.umbral === c.tramo_umbral;
+                return `<tr class="${alcanzado ? 'ecom-escala-alcanzado' : ''}">
+                    <td>Desde ${fmtUmbral(c.tipo_umbral, t.umbral)}</td>
+                    <td class="td-num">${fmt.money(t.importe)}</td>
+                    <td class="ecom-escala-marca">${alcanzado ? '<i class="bi bi-check-circle-fill"></i> Alcanzado' : ''}</td>
+                </tr>`;
+            }).join('')
+            : '<tr><td colspan="3">Sin tramos cargados.</td></tr>';
+
+        return `<div class="ecom-escala">
+            <div class="ecom-escala-titulo">${esc(c.concepto)} <span class="ecom-kpi-hint">· ${c.canal ?? 'VTEX + ML'}</span></div>
+            <div class="ecom-kpi-meta">${resultado}</div>
+            <table class="ecom-escala-tabla">
+                <thead><tr>
+                    <th>${c.tipo_umbral === 'PCT_CUMPLIMIENTO' ? 'Cumplimiento' : 'Valor'}</th>
+                    <th class="td-num">Premio</th>
+                    <th></th>
+                </tr></thead>
+                <tbody>${filas}</tbody>
+            </table>
+        </div>`;
+    }
+
+    function abrirModalEscalas() {
+        const modal = abrirModalVacio('modal-ecom-escalas', 'Escalas de premio', 'modal-ecom-escalas-body');
+        const body = modal.querySelector('#modal-ecom-escalas-body');
+        if (!_lastPersonas.length) {
+            body.innerHTML = '<div class="premios-loading">No hay personas configuradas.</div>';
+            return;
+        }
+        body.innerHTML = `
+            <p class="modal-config-hint">Se paga el importe <strong>completo</strong> del tramo más
+               alto alcanzado, sin prorratear y sin tolerancia (99,6 % no llega al tramo de 100 %).
+               Si no se llega al primer tramo, el premio es $0. Las escalas se gestionan en
+               Comercial → Supervisión → Gestión de Premios.</p>
+            ${_lastPersonas.map(p => `
+                <div class="ecom-kpi-canal">
+                    <div class="ecom-kpi-canal-titulo">${esc(p.nombre)}</div>
+                    ${p.conceptos.map(bloqueEscalaHTML).join('')}
+                </div>`).join('')}`;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
        Modal: carga manual de órdenes / sesiones / tasa de conversión
        ═══════════════════════════════════════════════════════════════════════ */
 
@@ -509,6 +570,9 @@ const PremiosEcommerce = (() => {
 
         const btnExport = $('btn-export-ecommerce');
         if (btnExport) btnExport.onclick = exportar;
+
+        const btnEscalas = $('btn-ecom-escalas');
+        if (btnEscalas) btnEscalas.onclick = abrirModalEscalas;
 
         // El botón de carga solo existe para GERENCIA/SUPERVISION — el mismo criterio
         // (y el mismo flag del endpoint) que la columna "Acciones" de Premios Supervisoras.
