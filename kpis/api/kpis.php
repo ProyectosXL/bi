@@ -53,6 +53,10 @@ try {
             }
             break;
 
+        case 'tickets-usuarios-3m':
+            obtenerTicketsUsuariosUltimos3Meses($cidApps, $fechaHastaExclusivo);
+            break;
+
         case 'importar-tickets':
             $body = json_decode(file_get_contents('php://input'), true);
             if (!is_array($body)) {
@@ -252,6 +256,62 @@ function obtenerKPIDetalleTickets($cidApps, $desde, $hastaExclusivo) {
         'tickets' => $tickets,
         'total'   => count($tickets),
         'cumplen' => $cumplen
+    ));
+}
+
+/**
+ * Tickets resueltos por usuario en los 3 meses que terminan en el mes "hasta"
+ * del filtro (inclusive). Mismo universo que el KPI 3: CERRADO=1 con
+ * FECHA_CIERRE cargada, agrupado por el mes de FECHA_TAREA, para que el mes
+ * coincida con lo que muestra la pestaña Detalle.
+ */
+function obtenerTicketsUsuariosUltimos3Meses($cidApps, $hastaExclusivo) {
+    $desde = date('Y-m-d', strtotime($hastaExclusivo . ' -3 months'));
+
+    $meses = array();
+    for ($i = 0; $i < 3; $i++) {
+        $meses[] = date('Y-m', strtotime($desde . " +$i month"));
+    }
+
+    $sql = "SELECT
+                ISNULL(NULLIF(LTRIM(RTRIM(USUARIO_ASIGNADO)), ''), 'Sin asignar') AS Usuario,
+                CONVERT(varchar(7), FECHA_TAREA, 120) AS Periodo,
+                COUNT(*) AS Resueltos
+            FROM dbo.RO_T_TICKETS_PROYECTOS
+            WHERE CERRADO = 1 AND FECHA_CIERRE IS NOT NULL
+              AND FECHA_TAREA >= ? AND FECHA_TAREA < ?
+            GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(USUARIO_ASIGNADO)), ''), 'Sin asignar'),
+                     CONVERT(varchar(7), FECHA_TAREA, 120)";
+    $params = array($desde, $hastaExclusivo);
+
+    $stmt = sqlsrv_query($cidApps, $sql, $params);
+    if ($stmt === false) throw new Exception('Error tickets por usuario: ' . print_r(sqlsrv_errors(), true));
+
+    $porUsuario = array();
+    while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+        $usuario = $row['Usuario'];
+        if (!isset($porUsuario[$usuario])) {
+            $porUsuario[$usuario] = array_fill_keys($meses, 0);
+        }
+        $porUsuario[$usuario][$row['Periodo']] = intval($row['Resueltos']);
+    }
+
+    $usuarios = array();
+    foreach ($porUsuario as $usuario => $porMes) {
+        $total = array_sum($porMes);
+        $usuarios[] = array(
+            'usuario'  => $usuario,
+            'meses'    => array_values($porMes),
+            'total'    => $total,
+            'promedio' => round($total / 3, 1)
+        );
+    }
+    usort($usuarios, function($a, $b) { return $b['total'] - $a['total']; });
+
+    echo json_encode(array(
+        'success'  => true,
+        'meses'    => $meses,
+        'usuarios' => $usuarios
     ));
 }
 

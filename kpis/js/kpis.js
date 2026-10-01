@@ -459,10 +459,19 @@ const KpisManager = {
         document.getElementById('ticketsDetalleNota').textContent =
             `Tickets cerrados (CERRADO=1) cuya Fecha Tarea cae en ${periodo}. SLA: 48 horas hábiles entre Fecha Tarea y Fecha Cierre (no cuentan fines de semana ni feriados).`;
         document.getElementById('ticketsDetalleResumen').textContent = '';
+        const spinner = '<i class="fas fa-spinner fa-spin me-2"></i>Cargando...';
         document.getElementById('ticketsDetalleTabla').innerHTML =
-            '<tr><td colspan="8" class="text-center text-muted py-3">' +
-            '<i class="fas fa-spinner fa-spin me-2"></i>Cargando...</td></tr>';
+            '<tr><td colspan="8" class="text-center text-muted py-3">' + spinner + '</td></tr>';
+        document.getElementById('ticketsUsuariosPeriodo').textContent = '· ' + periodo;
+        document.getElementById('ticketsUsuariosIndicadores').innerHTML =
+            '<div class="col-12 text-center text-muted py-3">' + spinner + '</div>';
+        document.getElementById('tickets3mPeriodo').textContent = '';
+        document.getElementById('tickets3mHead').innerHTML = '<th class="ps-3">Usuario</th>';
+        document.getElementById('tickets3mTabla').innerHTML =
+            '<tr><td class="text-center text-muted py-3">' + spinner + '</td></tr>';
+        document.getElementById('tickets3mPie').innerHTML = '';
 
+        bootstrap.Tab.getOrCreateInstance(document.getElementById('tabTicketsDetalle')).show();
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalTicketsDetalle')).show();
 
         const params = new URLSearchParams({ action: 'kpi-detalle', tipo: 'tickets-sla', fecha_desde: rango.desde, fecha_hasta: rango.hasta });
@@ -471,8 +480,121 @@ const KpisManager = {
             .then(data => {
                 if (!data.success) { this.mostrarError('Error al cargar detalle: ' + (data.error || '')); return; }
                 this.pintarTablaTicketsDetalle(data);
+                this.pintarIndicadoresTicketsUsuarios(data.tickets || []);
             })
             .catch(() => this.mostrarError('Error al cargar detalle de tickets'));
+
+        const params3m = new URLSearchParams({ action: 'tickets-usuarios-3m', fecha_hasta: rango.hasta });
+        fetch('api/kpis.php?' + params3m)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) { this.mostrarError('Error al cargar tickets por usuario: ' + (data.error || '')); return; }
+                this.pintarTablaTickets3Meses(data);
+            })
+            .catch(() => this.mostrarError('Error al cargar tickets por usuario (3 meses)'));
+    },
+
+    // Indicadores por usuario sobre los mismos tickets de la pestaña Detalle:
+    // resueltos, proporción sobre el total del período y fuera de SLA.
+    pintarIndicadoresTicketsUsuarios: function(tickets) {
+        const cont = document.getElementById('ticketsUsuariosIndicadores');
+        if (!tickets.length) {
+            cont.innerHTML =
+                '<div class="col-12 text-center py-4">' +
+                '<i class="fas fa-inbox fa-2x text-muted d-block mb-2"></i>' +
+                '<span class="text-muted">No hay tickets para el período seleccionado.</span>' +
+                '</div>';
+            return;
+        }
+
+        const porUsuario = {};
+        tickets.forEach(t => {
+            const usuario = (t.usuario_asignado || '').trim() || 'Sin asignar';
+            if (!porUsuario[usuario]) porUsuario[usuario] = { usuario, resueltos: 0, fueraSla: 0 };
+            porUsuario[usuario].resueltos++;
+            if (!t.cumple_sla) porUsuario[usuario].fueraSla++;
+        });
+        const total = tickets.length;
+        const usuarios = Object.values(porUsuario).sort((a, b) => b.resueltos - a.resueltos);
+
+        cont.innerHTML = usuarios.map(u => {
+            const proporcion = u.resueltos / total * 100;
+            const pctFuera   = u.fueraSla / u.resueltos * 100;
+            // Mismo umbral que el KPI 3 (objetivo 90% dentro de SLA => hasta 10% fuera)
+            const fueraClass = u.fueraSla === 0 ? 'bg-success'
+                : pctFuera <= 10 ? 'bg-warning text-dark' : 'bg-danger';
+            const chip = colorChipDesarrollador(u.usuario === 'Sin asignar' ? null : u.usuario);
+            return '<div class="col-12 col-md-6 col-xl-4">' +
+                '<div class="kpi-usuario-card">' +
+                    '<div class="mb-2"><span style="background:' + chip.bg + ';color:' + chip.color +
+                        ';font-size:0.8rem;padding:0.2em 0.7em;border-radius:999px;font-weight:600">' +
+                        escapeHtml(u.usuario) + '</span></div>' +
+                    '<div class="d-flex justify-content-between align-items-end gap-3">' +
+                        '<div>' +
+                            '<div class="kpi-usuario-stat-label">Resueltos</div>' +
+                            '<div class="kpi-usuario-num">' + u.resueltos + '</div>' +
+                        '</div>' +
+                        '<div class="text-end">' +
+                            '<div class="kpi-usuario-stat-label">Fuera de SLA</div>' +
+                            '<span class="badge rounded-pill ' + fueraClass + '">' + u.fueraSla +
+                                ' · ' + pctFuera.toFixed(1) + '%</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="d-flex justify-content-between small text-muted mt-2 mb-1">' +
+                        '<span>Proporción del total</span><span class="fw-semibold text-body">' + proporcion.toFixed(1) + '%</span>' +
+                    '</div>' +
+                    '<div class="progress" style="height:5px">' +
+                        '<div class="progress-bar bg-primary" style="width:' + proporcion + '%"></div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    },
+
+    pintarTablaTickets3Meses: function(data) {
+        const nombresMes = data.meses.map(m => {
+            const [ano, mes] = m.split('-');
+            return MESES_FULL[parseInt(mes) - 1] + ' ' + ano;
+        });
+        document.getElementById('tickets3mPeriodo').textContent =
+            '· ' + nombresMes[0] + ' a ' + nombresMes[nombresMes.length - 1];
+        document.getElementById('tickets3mHead').innerHTML =
+            '<th class="ps-3">Usuario</th>' +
+            nombresMes.map(n => '<th class="text-end">' + n + '</th>').join('') +
+            '<th class="text-end">Total</th>' +
+            '<th class="text-end pe-3">Promedio mensual</th>';
+
+        const tbody = document.getElementById('tickets3mTabla');
+        const tfoot = document.getElementById('tickets3mPie');
+        const colspan = data.meses.length + 3;
+        if (!data.usuarios || !data.usuarios.length) {
+            tbody.innerHTML =
+                '<tr><td colspan="' + colspan + '" class="text-center py-4">' +
+                '<i class="fas fa-inbox fa-2x text-muted d-block mb-2"></i>' +
+                '<span class="text-muted">No hay tickets resueltos en los últimos 3 meses.</span>' +
+                '</td></tr>';
+            tfoot.innerHTML = '';
+            return;
+        }
+
+        tbody.innerHTML = data.usuarios.map(u =>
+            '<tr>' +
+                '<td class="ps-3">' + escapeHtml(u.usuario) + '</td>' +
+                u.meses.map(n => '<td class="text-end">' + n + '</td>').join('') +
+                '<td class="text-end">' + u.total + '</td>' +
+                '<td class="text-end pe-3 kpi-promedio-col">' + u.promedio.toFixed(1) + '</td>' +
+            '</tr>'
+        ).join('');
+
+        const totalesMes = data.meses.map((_, i) => data.usuarios.reduce((s, u) => s + u.meses[i], 0));
+        const totalGeneral = totalesMes.reduce((s, n) => s + n, 0);
+        tfoot.innerHTML =
+            '<tr class="fw-semibold table-light">' +
+                '<td class="ps-3">Total área</td>' +
+                totalesMes.map(n => '<td class="text-end">' + n + '</td>').join('') +
+                '<td class="text-end">' + totalGeneral + '</td>' +
+                '<td class="text-end pe-3 kpi-promedio-col">' + (totalGeneral / data.meses.length).toFixed(1) + '</td>' +
+            '</tr>';
     },
 
     pintarTablaTicketsDetalle: function(data) {

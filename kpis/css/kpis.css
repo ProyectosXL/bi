@@ -79,6 +79,54 @@ body {
     letter-spacing: 0.01em;
 }
 
+/* Pestañas del modal de tickets */
+.kpi-tabs {
+    margin-bottom: -0.75rem;
+    border-bottom: none;
+}
+.kpi-tabs .nav-link {
+    font-size: 0.85rem;
+    color: #475569;
+    padding: 0.4rem 0.9rem;
+}
+.kpi-tabs .nav-link.active {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.kpi-seccion-titulo {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 0.75rem;
+}
+
+/* Indicadores por usuario (tickets) */
+.kpi-usuario-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 0.75rem 0.9rem;
+    background: #fff;
+    height: 100%;
+}
+.kpi-usuario-num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.1;
+}
+.kpi-usuario-stat-label {
+    font-size: 0.72rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.kpi-promedio-col {
+    background: #f1f5f9;
+    font-weight: 600;
+}
+
 .badge-clasificacion {
     min-width: 96px;
     display: inline-block;

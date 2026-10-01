@@ -383,25 +383,62 @@
                 <div class="kpi-detalle-header">
                     <p id="ticketsDetalleNota" class="text-muted small mb-2"></p>
                     <div id="ticketsDetalleResumen"></div>
+                    <ul class="nav nav-tabs kpi-tabs mt-3" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="tabTicketsDetalle" data-bs-toggle="tab" data-bs-target="#paneTicketsDetalle" type="button" role="tab" aria-controls="paneTicketsDetalle" aria-selected="true">
+                                <i class="fas fa-list me-1"></i>Detalle
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tabTicketsUsuarios" data-bs-toggle="tab" data-bs-target="#paneTicketsUsuarios" type="button" role="tab" aria-controls="paneTicketsUsuarios" aria-selected="false">
+                                <i class="fas fa-users me-1"></i>Por usuario
+                            </button>
+                        </li>
+                    </ul>
                 </div>
                 <div class="modal-body p-0">
-                    <table class="table table-hover align-middle mb-0 kpi-detalle-table">
-                        <thead class="table-dark kpi-thead-sticky">
-                            <tr>
-                                <th class="ps-3">Ticket</th>
-                                <th>Fecha Tarea</th>
-                                <th>Fecha Cierre</th>
-                                <th>Horas</th>
-                                <th>Área</th>
-                                <th>Usuario Asignado</th>
-                                <th>Tipo</th>
-                                <th>SLA</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ticketsDetalleTabla">
-                            <tr><td colspan="8" class="text-center text-muted py-3">Cargando...</td></tr>
-                        </tbody>
-                    </table>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="paneTicketsDetalle" role="tabpanel" aria-labelledby="tabTicketsDetalle">
+                            <table class="table table-hover align-middle mb-0 kpi-detalle-table">
+                                <thead class="table-dark kpi-thead-sticky">
+                                    <tr>
+                                        <th class="ps-3">Ticket</th>
+                                        <th>Fecha Tarea</th>
+                                        <th>Fecha Cierre</th>
+                                        <th>Horas</th>
+                                        <th>Área</th>
+                                        <th>Usuario Asignado</th>
+                                        <th>Tipo</th>
+                                        <th>SLA</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ticketsDetalleTabla">
+                                    <tr><td colspan="8" class="text-center text-muted py-3">Cargando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="tab-pane fade p-3" id="paneTicketsUsuarios" role="tabpanel" aria-labelledby="tabTicketsUsuarios">
+                            <h6 class="kpi-seccion-titulo"><i class="fas fa-user-check me-2"></i>Resueltos y fuera de SLA por usuario <span class="text-muted fw-normal" id="ticketsUsuariosPeriodo"></span></h6>
+                            <div class="row g-3 mb-4" id="ticketsUsuariosIndicadores">
+                                <div class="col-12 text-center text-muted py-3">Cargando...</div>
+                            </div>
+
+                            <h6 class="kpi-seccion-titulo"><i class="fas fa-calendar-days me-2"></i>Resueltos en los últimos 3 meses <span class="text-muted fw-normal" id="tickets3mPeriodo"></span></h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0 kpi-detalle-table">
+                                    <thead class="table-dark">
+                                        <tr id="tickets3mHead">
+                                            <th class="ps-3">Usuario</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tickets3mTabla">
+                                        <tr><td class="text-center text-muted py-3">Cargando...</td></tr>
+                                    </tbody>
+                                    <tfoot id="tickets3mPie"></tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer py-2">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
