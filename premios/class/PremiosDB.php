@@ -399,8 +399,8 @@ class PremiosDB
      * @return array<int,array> Filas agregadas por sucursal para el período actual.
      *   - $supervisora = null   → TODAS las filas, incluida la fila sintética "TODAS"
      *                             (ECOMMERCE). Necesario así: los benchmarks de "Marca"
-     *                             (ticketPromedioMarca, facturacionVarMarca, etc.) SÍ
-     *                             incluyen el canal ecommerce (confirmado: sin él, el
+     *                             (ticketPromedioMarca) SÍ incluyen el canal ecommerce
+     *                             — facturacionVarMarca ya no, ver allí — (confirmado: sin él, el
      *                             benchmark de ticket promedio da $328.000 en vez de los
      *                             $281.900 reales), y el conteo empresa-wide de Venta solo
      *                             excluye NRO_SUCURS=1 "CENTRAL", no el 9 "ECOMMERCE".
@@ -872,12 +872,18 @@ class PremiosDB
         return ceil(($fact / $tickets) / 100) * 100;
     }
 
-    /** Variación de facturación de marca (sin filtro de sucursal/supervisora), sin el +10 del benchmark. */
+    /**
+     * Variación de facturación de marca (sin filtro de sucursal/supervisora), sin el +10 del
+     * benchmark. Excluye la fila sintética "TODAS"/ECOMMERCE a pedido del cliente
+     * (2026-10-01): la tabla de Locales Propios ya no la muestra, y el benchmark de
+     * crecimiento debe medirse solo sobre los locales. DIVERGE del DAX original del .pbix,
+     * que sí la incluía. No afecta a Franquicias (sus filas tienen supervisora = null).
+     */
     public function facturacionVarMarca(array $filasSinFiltrar): float
     {
         $fact = 0.0; $factAnt = 0.0;
         foreach ($filasSinFiltrar as $f) {
-            if ($f['sin_datos']) continue;
+            if ($f['sin_datos'] || $f['supervisora'] === 'Todas') continue;
             $fact    += $f['imp_fact'];
             $factAnt += $f['imp_fact_ant'];
         }
@@ -921,8 +927,8 @@ class PremiosDB
     }
 
     /**
-     * % ticket 2do/3er producto de marca. A diferencia de ticketPromedioMarca/
-     * facturacionVarMarca (que sí incluyen ECOMMERCE y CENTRAL — ver datosPropios()), acá se
+     * % ticket 2do/3er producto de marca. A diferencia de ticketPromedioMarca (que sí incluye
+     * ECOMMERCE y CENTRAL — ver datosPropios()), acá se
      * excluyen: ECOMMERCE no tiene venta cruzada de 2do/3er producto (tickets sin ese
      * atributo), y CENTRAL no tiene tickets propios — ambos solo arrastrarían el promedio
      * hacia abajo sin representar ventas reales de ningún local.
@@ -969,8 +975,9 @@ class PremiosDB
      *
      * @param string $supervisora       Nombre de la supervisora (con mayúscula inicial)
      * @param array  $filasSupervisora  Sus propias sucursales (ya filtradas)
-     * @param array  $todosLosPropios   Todas las sucursales propias con supervisora real
-     *                                  (sin la fila "TODAS"), para el cálculo empresa-wide
+     * @param array  $todosLosPropios   datosPropios(null): todas las sucursales propias,
+     *                                  INCLUIDA la fila "TODAS"/ECOMMERCE, para el cálculo
+     *                                  empresa-wide (ECOMMERCE cuenta como un local más)
      * @param array  $filasTodas        Filas con SUPERVISORA='TODAS' del período (datosPropios('TODAS'))
      * @param float  $benchmarkVarMarca Benchmark de marca (+10pp) para crecimiento
      */

@@ -4,7 +4,7 @@
  * Carga manual de los dos KPIs de ecommerce que no existen en ningún sistema propio:
  * las sesiones (se toman del panel de VTEX) y el objetivo de órdenes del mes.
  *
- * Las ÓRDENES REALES no se cargan: salen de Tango (ver PremiosEcommerceDB::ordenesReales),
+ * Las ÓRDENES REALES no se cargan: salen de BI_EFICIENCIA_ECOMMERCE (ver PremiosEcommerceDB::ordenesReales),
  * y la TASA DE CONVERSIÓN tampoco: se calcula como órdenes ÷ sesiones. El GET devuelve las
  * órdenes por mes/canal, de solo lectura, para que el modal muestre la tasa resultante
  * mientras se tipean las sesiones.
@@ -141,17 +141,17 @@ try {
     foreach ($db->kpisGuardados() as $f) {
         $guardado[strtoupper($f['canal'])] = $f;
     }
-    // Solo de lectura: cuántas órdenes contó Tango ese mes. Es el numerador de la tasa de
+    // Solo de lectura: cuántas órdenes hubo ese mes. Es el numerador de la tasa de
     // conversión, que el modal recalcula en vivo con las sesiones que se tipean.
-    $ordenesTango = $db->ordenesReales();
+    $ordenes = $db->ordenesReales();
 
     // Una entrada por canal, siempre — así el modal puede pintar el form completo aunque
     // todavía no haya nada cargado para ese mes.
-    $canales = array_map(function (string $canal) use ($guardado, $ordenesTango) {
+    $canales = array_map(function (string $canal) use ($guardado, $ordenes) {
         $f = $guardado[$canal] ?? null;
         return [
             'canal'               => $canal,
-            'ordenes_tango'       => $ordenesTango[$canal] ?? 0,
+            'ordenes'             => $ordenes[$canal] ?? 0,
             'sesiones'            => $f['sesiones'] ?? null,
             'objetivo_ordenes'    => $f['objetivo_ordenes'] ?? null,
             'actualizado_por'     => $f['actualizado_por'] ?? null,

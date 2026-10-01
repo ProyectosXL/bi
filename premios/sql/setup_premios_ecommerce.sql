@@ -104,13 +104,13 @@ GO
 --   TASA_CONVERSION  → se toma del panel de VTEX. En PUNTOS DE PORCENTAJE:
 --                      0.8300 = 0,83 %.
 --   OBJETIVO_ORDENES → no está en FP_ObjetivosFinales, que solo tiene importes.
---                      Debe fijarse sobre el conteo de TANGO (ver nota abajo).
+--                      Debe fijarse sobre la misma base que el real (ver nota abajo).
 --
--- Las ÓRDENES REALES no se cargan acá: salen de RO_T_ESTADO_PEDIDOS_ECOMMERCE
--- (base 'central'), filtrando TALON_PED = 99 para VTEX / 98 para ML.
--- IMPORTANTE: Tango cuenta ~9,6 % menos órdenes que el panel de VTEX (julio 2026:
--- 2.504 contra 2.894), así que el OBJETIVO_ORDENES tiene que estar fijado sobre
--- la misma base para que el % de cumplimiento signifique algo.
+-- Las ÓRDENES REALES no se cargan acá: salen de BI_EFICIENCIA_ECOMMERCE, la misma
+-- tabla del dashboard del sector Ecommerce (pedidos distintos no cancelados, por
+-- FECHA_PEDIDO). Hasta 2026-10-01 salían de RO_T_ESTADO_PEDIDOS_ECOMMERCE (Tango),
+-- que contaba menos. El OBJETIVO_ORDENES tiene que estar fijado sobre la misma
+-- base que el real para que el % de cumplimiento signifique algo.
 --
 -- SESIONES es opcional: sirve para ponderar la tasa cuando el período abarca
 -- varios meses (promedio ponderado por tráfico en vez de promedio simple).
@@ -130,7 +130,7 @@ END
 GO
 
 -- Migración: la primera versión de este script tenía una columna ORDENES de carga
--- manual. Las órdenes ahora salen de Tango, así que esa columna quedó sin uso. Si
+-- manual. Las órdenes ahora salen solas (BI_EFICIENCIA_ECOMMERCE), así que esa columna quedó sin uso. Si
 -- se corrió esa versión, se elimina; en una instalación nueva este bloque no hace
 -- nada (la tabla ya se creó sin la columna).
 IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
@@ -225,8 +225,8 @@ GO
 -- ML no lleva fila: no se le mide ni conversión ni objetivo de órdenes.
 --
 -- OJO con el 3491: es el objetivo tal como estaba en la planilla, fijado contra el
--- conteo de VTEX. Sobre el conteo de Tango (que da ~9,6 % menos) quedaría exigente
--- de más — está pendiente que el área lo recalibre.
+-- conteo del panel de VTEX, no contra los pedidos de BI_EFICIENCIA_ECOMMERCE que
+-- usa el tablero — está pendiente que el área confirme que vale para esa base.
 INSERT INTO BI_T_PREMIOS_ECOM_KPIS
     (MES, CANAL, SESIONES, TASA_CONVERSION, OBJETIVO_ORDENES, ACTUALIZADO_POR, FECHA_ACTUALIZACION)
 SELECT '2026-07-31', 'VTEX', NULL, 0.8300, 3491, 'seed', GETDATE()
@@ -248,9 +248,8 @@ GO
 -- dividido por los días del mes (verificado en los 24 casos), así que es derivable.
 --
 -- ⚠ Estos objetivos están fijados contra el conteo de órdenes del PANEL DE VTEX.
--- El tablero mide el real con TANGO, que cuenta menos (julio 2026: 2.504 contra
--- las 2.894 de la planilla). Hasta que el área los recalibre, el % de cumplimiento
--- de este concepto va a salir sistemáticamente bajo. Ver README.
+-- El tablero mide el real con los pedidos de BI_EFICIENCIA_ECOMMERCE (la tabla del
+-- dashboard del área), no con el panel. Ver README.
 --
 -- Idempotente y NO destructivo: si una fila ya tiene OBJETIVO_ORDENES cargado
 -- (porque alguien lo editó desde el modal), no se pisa.

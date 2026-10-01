@@ -30,6 +30,7 @@ function filaVista(PremiosDB $db, array $f, float $benchmarkVarMarca): array
         'sin_datos'            => $f['sin_datos'],
         'facturacion_s_iva'    => $f['imp_fact_s_iva'],
         'facturacion_c_iva'    => $f['imp_fact'],
+        'facturacion_ant'      => $f['imp_fact_ant'],
         'objetivo_total'       => $f['imp_obj'],
         'objetivo_crecimiento' => $f['imp_fact_ant'] * (1 + $benchmarkVarMarca),
         'cumplimiento_obj'     => $cumpl,
@@ -49,8 +50,12 @@ try {
     $todos = $db->datosPropios(null);
 
     $kpis = [
+        // Variación de facturación "cruda" (sin el +10pp) de los locales, sin Ecommerce (ver
+        // PremiosDB::facturacionVarMarca). El KPI de al lado, "Facturación Var % Marca", es
+        // exactamente este valor + BENCHMARK_PLUS.
+        'facturacion_var_promedio' => $db->facturacionVarMarca($todos),
         // El KPI "Facturación Var % Marca" muestra el BENCHMARK (agregado +10pp), no el
-        // agregado crudo — confirmado contra el KPI real (302,07 % = 292,07 % + 10pp).
+        // agregado crudo.
         'facturacion_var_marca' => $db->benchmarkVarMarca($todos),
         'ticket_promedio_marca' => $db->ticketPromedioMarca($todos),
         'pct_ticket_2do_marca'  => $db->pctTicketProductoMarca($todos, 'tickets_2do_prod'),
@@ -69,9 +74,9 @@ try {
     // real POR CADA supervisora que la recibe (Elina, Natalia), y $todos (sin filtro) las
     // agrupa por NRO_SUCURS perdiendo la de alguna — datosPropios($sup) filtra antes del dedup.
     // Totales acumulados a partir de las mismas filas que se muestran agrupadas por
-    // supervisora (NO de datosPropios(null), que ahora incluye la fila sintética "TODAS"/
-    // ECOMMERCE — necesaria para los benchmarks de arriba, pero que no es una sucursal de
-    // ninguna supervisora y no debe sumarse a la fila "Total" de esta tabla).
+    // supervisora (NO de datosPropios(null), que incluye la fila sintética "TODAS"/
+    // ECOMMERCE — necesaria para los benchmarks de arriba, pero que no se muestra en esta
+    // tabla y no debe sumarse a su fila "Total").
     $totFactSIva = 0.0; $totFactCIva = 0.0; $totObj = 0.0; $totFactAnt = 0.0; $totTickets = 0;
     // Filas crudas acumuladas para el % tickets 2do/3er producto del Total — se recalcula con
     // pctTicketProductoMarca() (misma exclusión de CENTRAL/ECOMMERCE que el benchmark de marca,
@@ -105,6 +110,7 @@ try {
             'subtotal'    => [
                 'facturacion_s_iva'       => $sumFactSIva,
                 'facturacion_c_iva'       => $sumFactCIva,
+                'facturacion_ant'         => $sumFactAnt,
                 'objetivo_total'          => $sumObj,
                 'objetivo_crecimiento'    => $sumFactAnt * (1 + $kpis['facturacion_var_marca']),
                 'cumplimiento_obj'        => $db->cumplimientoObjVenta($sumFactCIva, $sumObj),
@@ -117,29 +123,14 @@ try {
         ];
     }
 
-    // La fila "ECOMMERCE" (SUPERVISORA='TODAS' en la BD) no pertenece a ninguna supervisora
-    // real. Se muestra como su propio grupo: una fila "Todas" (resaltada igual que una
-    // supervisora, ya que agrupa a "todas" — en este caso, un solo elemento) con "Ecommerce"
-    // como su única fila hija, igual que una sucursal bajo su supervisora. Como el grupo
-    // tiene un solo miembro, el subtotal "Todas" es numéricamente igual a la fila "Ecommerce".
-    // Igual que los demás grupos, SÍ suma al total general de la tabla.
-    $todasRow = null;
-    if (!$supervisoraFiltro) {
-        $filasTodas = $db->datosPropios('TODAS');
-        if ($filasTodas) {
-            $todasRow = filaVista($db, $filasTodas[0], $kpis['facturacion_var_marca']);
-            $totFactSIva += $filasTodas[0]['imp_fact_s_iva'];
-            $totFactCIva += $filasTodas[0]['imp_fact'];
-            $totObj      += $filasTodas[0]['imp_obj'];
-            $totFactAnt  += $filasTodas[0]['imp_fact_ant'];
-            $totTickets  += $filasTodas[0]['tickets'];
-            $filasParaTotal[] = $filasTodas[0];
-        }
-    }
+    // La fila "ECOMMERCE" (SUPERVISORA='TODAS' en la BD) ya no se muestra en esta tabla ni
+    // suma a su Total, a pedido del cliente (2026-10-01). Sigue entrando en los KPIs de marca
+    // de arriba ($todos), que son los benchmarks contra los que se mide cada sucursal.
 
     $total = [
         'facturacion_s_iva'       => $totFactSIva,
         'facturacion_c_iva'       => $totFactCIva,
+        'facturacion_ant'         => $totFactAnt,
         'objetivo_total'          => $totObj,
         'objetivo_crecimiento'    => $totFactAnt * (1 + $kpis['facturacion_var_marca']),
         'cumplimiento_obj'        => $db->cumplimientoObjVenta($totFactCIva, $totObj),
@@ -165,7 +156,6 @@ try {
         'periodo' => ['desde' => $da, 'hasta' => $ha, 'desde_prev' => $dp, 'hasta_prev' => $hp],
         'kpis'    => $kpis,
         'grupos'  => $grupos,
-        'todas'   => $todasRow,
         'total'   => $total,
         'ultima_actualizacion' => $ultimaActFormatted,
         'is_outdated' => $isOutdated,

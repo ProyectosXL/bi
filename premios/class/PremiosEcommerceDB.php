@@ -6,6 +6,7 @@
  *
  * Fuentes reales (sqlsrv, ver `class/Conexion.php`, conexión 'power'):
  *   - POWER_BI_CONTROL.dbo.BI_SALES_SUCURSALES          facturación real por canal (DIARIA)
+ *   - POWER_BI_CONTROL.dbo.BI_EFICIENCIA_ECOMMERCE      órdenes reales (la tabla del dashboard del área)
  *   - sistemas.dbo.FP_ObjetivosFinales                  objetivo de facturación (MENSUAL, cross-db)
  *   - POWER_BI_CONTROL.dbo.BI_T_PREMIOS_ECOM_PERSONAS   \
  *     POWER_BI_CONTROL.dbo.BI_T_PREMIOS_ECOM_CONCEPTOS   | quién cobra qué y con qué escala
@@ -61,15 +62,12 @@ class PremiosEcommerceDB
     public const CANALES = ['VTEX', 'ML'];
 
     /**
-     * TALON_PED de cada canal en RO_T_ESTADO_PEDIDOS_ECOMMERCE (base `central`), de donde
-     * salen las órdenes. Confirmado en v:\ecommerce\Class\Control.php, que hace este mismo
-     * mapeo en varias consultas: 99=VTEX, 98=MERCADO LIBRE, 80=ICBC. Coincide con la columna
-     * `numero` de sistemas.dbo.PuntosDeVenta. ICBC no se mide, así que no está acá.
-     *
-     * OJO: TALON_PED es NUMÉRICO en la base (un CASE que lo devuelva junto a literales de
-     * texto falla con "Conversion failed ... to data type int"), por eso se bindea como int.
+     * Valores de la columna CANAL de BI_EFICIENCIA_ECOMMERCE, de donde salen las órdenes,
+     * mapeados al canal del tablero. 'VTEX' está verificado contra la base (2026-10-01); el de
+     * Mercado Libre no, por eso se aceptan las dos grafías. Un valor que no esté acá (ej. ICBC)
+     * no se cuenta.
      */
-    private const TALON_PED = ['VTEX' => 99, 'ML' => 98];
+    private const CANAL_EFICIENCIA = ['VTEX' => 'VTEX', 'ML' => 'ML', 'MERCADO LIBRE' => 'ML'];
 
     /**
      * Divisor de IVA aplicado a la facturación real. 1.0 = se toma tal cual sale de la base,
@@ -92,14 +90,6 @@ class PremiosEcommerceDB
 
     /** @var resource Conexión a XL-APPS/POWER_BI_CONTROL (+ cross-db a `sistemas`). */
     private $connPower;
-
-    /**
-     * @var resource|null Conexión a XL-TANGO/LAKER_SA ('central'), donde vive la tabla de
-     * órdenes. Es OTRO servidor, así que no alcanza con un cross-database. Se abre en forma
-     * perezosa (ver central()): los endpoints de configuración instancian esta clase sin
-     * llegar a consultar órdenes, y no tiene sentido pagarles una conexión de más.
-     */
-    private $connCentral = null;
 
     /** @var string[] Fines de mes (Y-m-d) cubiertos por el período actual. */
     private array $mesesActual;
@@ -366,38 +356,28 @@ class PremiosEcommerceDB
     }
 
     /* ─────────────────────────────────────────────────────────
-     * Datos: órdenes (Tango)
+     * Datos: órdenes (BI_EFICIENCIA_ECOMMERCE)
      * ───────────────────────────────────────────────────────── */
 
-    /** Abre (una sola vez) la conexión a 'central', donde vive la tabla de órdenes. */
-    private function central()
-    {
-        if ($this->connCentral === null) {
-            $this->connCentral = (new Conexion())->conectar('central');
-            if (!$this->connCentral) {
-                throw new RuntimeException('No se pudo conectar a XL-TANGO/LAKER_SA para leer las órdenes de ecommerce');
-            }
-        }
-        return $this->connCentral;
-    }
-
     /**
-     * Cantidad de órdenes por canal en el período, desde
-     * `RO_T_ESTADO_PEDIDOS_ECOMMERCE` (base 'central').
+     * Cantidad de órdenes por canal en el período, desde `BI_EFICIENCIA_ECOMMERCE`: la misma
+     * tabla y el mismo criterio que el dashboard del sector Ecommerce, así el número que
+     * liquida el premio es el que el área ve (decidido 2026-10-01).
      *
-     * Criterios, decididos el 2026-09-11 (cambiarlos es cambiar solo esta consulta):
-     *   - **FECHA_PEDI** (fecha del pedido), no FECHA_SINCRONIZADO ni FECHA_FACTURADO: el
-     *     premio mide actividad comercial del mes, y es la misma base temporal que usa una
-     *     tasa de conversión (pedidos generados sobre visitas del período).
-     *   - **COUNT(DISTINCT ORDER_ID)**: la tabla tiene más de una fila por orden (julio 2026:
-     *     2.634 filas para 2.602 órdenes), así que un COUNT(*) la sobrecontaría.
-     *   - **CANCELADO IS NULL**: una orden cancelada no es una venta. Es el mismo criterio con
-     *     el que se toma la facturación (solo ventas reales) y evita premiar cancelaciones.
+     * Criterios (cambiarlos es cambiar solo esta consulta):
+     *   - **COUNT(DISTINCT NRO_PEDIDO)**: la tabla trae una fila por ARTÍCULO (incluida la
+     *     línea de costo de envío), así que un COUNT(*) sobrecontaría. Se cuentan pedidos de
+     *     Tango, no ORDER_ID: una compra puede abrirse en más de un pedido, y así lo cuenta el
+     *     dashboard del área. Septiembre 2026, VTEX: 2.866 pedidos / ~2.734 ORDER_ID con
+     *     sufijo / ~2.634 compras sin sufijo.
+     *   - **ESTADO_TANGO <> 'CANCELADO'**: entran COMPLETO y PENDIENTE. Todo pedido de
+     *     ecommerce se factura, así que PENDIENTE es "todavía no facturado", no una venta
+     *     dudosa. Consecuencia: el número de un mes recién cerrado puede moverse unos días.
+     *   - **FECHA_PEDIDO**: el premio mide actividad comercial del mes, y es la misma base
+     *     temporal que la tasa de conversión (pedidos sobre sesiones del período).
      *
-     * Tener presente: Tango cuenta ~9,6 % menos órdenes que el panel de VTEX (julio 2026:
-     * 2.504 acá contra 2.894 en la planilla), la misma brecha que ya se midió en pesos. El
-     * OBJETIVO de órdenes se carga a mano, así que debe fijarse sobre esta misma base para
-     * que el % de cumplimiento sea comparable — ver README.
+     * Antes (hasta 2026-10-01) se contaban ORDER_ID de RO_T_ESTADO_PEDIDOS_ECOMMERCE en Tango:
+     * daba 2.532 para el mismo septiembre, porque esa tabla tiene ~320 pedidos menos.
      *
      * @return array<string,int> Canal => cantidad de órdenes (0 si no hubo).
      */
@@ -407,23 +387,19 @@ class PremiosEcommerceDB
 
         $out = array_fill_keys(self::CANALES, 0);
 
-        $sql = "SELECT p.TALON_PED, COUNT(DISTINCT p.ORDER_ID) AS ORDENES
-                FROM RO_T_ESTADO_PEDIDOS_ECOMMERCE p WITH (NOLOCK)
-                WHERE p.TALON_PED IN (?, ?)
-                  AND p.CANCELADO IS NULL
-                  AND p.FECHA_PEDI >= ? AND p.FECHA_PEDI < DATEADD(day, 1, CAST(? AS DATE))
-                GROUP BY p.TALON_PED";
+        $sql = "SELECT UPPER(LTRIM(RTRIM(e.CANAL))) AS CANAL, COUNT(DISTINCT e.NRO_PEDIDO) AS ORDENES
+                FROM dbo.BI_EFICIENCIA_ECOMMERCE e WITH (NOLOCK)
+                WHERE e.FECHA_PEDIDO >= ? AND e.FECHA_PEDIDO < DATEADD(day, 1, CAST(? AS DATE))
+                  AND e.ESTADO_TANGO <> 'CANCELADO'
+                GROUP BY UPPER(LTRIM(RTRIM(e.CANAL)))";
 
-        $stmt = sqlsrv_query($this->central(), $sql, [
-            self::TALON_PED['VTEX'], self::TALON_PED['ML'], $this->desde, $this->hasta,
-        ]);
+        $stmt = sqlsrv_query($this->connPower, $sql, [$this->desde, $this->hasta]);
         if ($stmt === false) {
-            throw new RuntimeException('Error consultando RO_T_ESTADO_PEDIDOS_ECOMMERCE: ' . print_r(sqlsrv_errors(), true));
+            throw new RuntimeException('Error consultando BI_EFICIENCIA_ECOMMERCE: ' . print_r(sqlsrv_errors(), true));
         }
-        $porTalon = array_flip(self::TALON_PED); // 99 => 'VTEX', 98 => 'ML'
         while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-            $canal = $porTalon[(int) $r['TALON_PED']] ?? null;
-            if ($canal !== null) $out[$canal] = (int) $r['ORDENES'];
+            $canal = self::CANAL_EFICIENCIA[(string) $r['CANAL']] ?? null;
+            if ($canal !== null) $out[$canal] += (int) $r['ORDENES'];
         }
         sqlsrv_free_stmt($stmt);
         return $this->ordenesCache = $out;
@@ -467,7 +443,7 @@ class PremiosEcommerceDB
      *
      * Quedan dos datos de carga manual: las SESIONES (solo existen en VTEX Analytics, no hay
      * integración) y el OBJETIVO de órdenes (no está en FP_ObjetivosFinales). Las órdenes
-     * reales salen de Tango (ver ordenesReales()) y la tasa de conversión se CALCULA con
+     * reales salen de BI_EFICIENCIA_ECOMMERCE (ver ordenesReales()) y la tasa de conversión se CALCULA con
      * las dos, ver tasasConversion().
      *
      * Ambos datos SUMAN los meses del rango. Los flags `*_completo` dicen si el dato está
@@ -508,16 +484,16 @@ class PremiosEcommerceDB
 
     /**
      * Tasa de conversión del período por canal, en PUNTOS DE PORCENTAJE (0,83 = 0,83 %):
-     * órdenes de Tango ÷ sesiones cargadas × 100.
+     * órdenes (ver ordenesReales()) ÷ sesiones cargadas × 100.
      *
      * Con varios meses se divide el total de órdenes por el total de sesiones, que ya es la
      * tasa ponderada por tráfico — no hace falta promediar tasas mensuales.
      *
-     * ⚠ Decisión del usuario (2026-09-23), tomada sabiendo el costo: las órdenes son de
-     * Tango, que cuenta ~9,6 % menos que VTEX, así que esta tasa da más baja que la del
-     * panel (julio 2026: 0,75 % contra 0,83 %). La escala de conversión es de valores
-     * ABSOLUTOS, así que esa diferencia puede costar un tramo — si hace falta compensarla,
-     * se ajustan los umbrales de la escala, no este cálculo.
+     * ⚠ La escala de conversión es de valores ABSOLUTOS, así que la fuente de las órdenes
+     * mueve la tasa y puede cambiar el tramo. Con la fuente anterior (Tango, ~13,5 % menos
+     * que el panel de VTEX) julio 2026 daba 0,75 % contra 0,83 %; desde 2026-10-01 las
+     * órdenes son pedidos de BI_EFICIENCIA_ECOMMERCE, que cuenta más. Si hace falta
+     * compensar, se ajustan los umbrales de la escala, no este cálculo.
      *
      * @return array<string,?float> Canal => tasa, null si no hay sesiones cargadas.
      */
@@ -546,7 +522,7 @@ class PremiosEcommerceDB
         // canal sale del CÓDIGO de origen (que es canal-específico) y no de la columna CANAL
         // del concepto: es lo que efectivamente lee origenes(), así que un CANAL mal cargado
         // no puede hacer que se reclame la carga de un mes/canal que nadie usa.
-        // ORD_VTEX no figura acá: las órdenes salen de Tango, no se cargan.
+        // ORD_VTEX no figura acá: las órdenes salen de BI_EFICIENCIA_ECOMMERCE, no se cargan.
         $campoPorOrigen = [
             'CONV_VTEX'    => ['VTEX', 'sesiones'],   // la tasa se calcula con las sesiones
             'OBJ_ORD_VTEX' => ['VTEX', 'objetivo_ordenes'],

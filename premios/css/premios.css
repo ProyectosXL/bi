@@ -153,6 +153,13 @@
     padding      : 12px 16px;
 }
 
+/* Locales Propios tiene 5 KPIs (Var % Promedio + Var % Marca + 3 de tickets) */
+.kpi-grid-5 { grid-template-columns: repeat(5, 1fr); }
+
+/* Ícono de ayuda: el tooltip (title) está en toda la .kpi-card */
+.kpi-card[title] { cursor: help; }
+.kpi-info { font-size: .8rem; color: var(--text-3); }
+
 .kpi-card-header {
     display        : flex;
     justify-content: space-between;
@@ -185,16 +192,15 @@
 .premios-table td.td-sucursal { padding-left: 26px; color: var(--text-2); }
 .premios-table tr.row-supervisora td { font-weight: 700; background: #eef2ff; }
 .premios-table tr.row-sin-datos td { color: var(--text-3); font-style: italic; }
-.premios-table tr.row-todas-separador td { border-top: 2px solid var(--border); }
 .premios-table td.td-num { text-align: right; }
 
-/* ── Locales Propios: marco fino alrededor de Fact. C/IVA, Objetivo Total $ y Objetivo de
-   Crecimiento $ — las separa tanto de Supervisora/Sucursal (izquierda) como de los
-   indicadores a la derecha ── */
+/* ── Locales Propios: marco fino alrededor de Fact. C/IVA, Fact. Ant., Objetivo Total $ y
+   Objetivo de Crecimiento $ — las separa tanto de Supervisora/Sucursal (izquierda) como de
+   los indicadores a la derecha ── */
 #tabla-propios-wrap .premios-table th:nth-child(1),
 #tabla-propios-wrap .premios-table td:nth-child(1),
-#tabla-propios-wrap .premios-table th:nth-child(4),
-#tabla-propios-wrap .premios-table td:nth-child(4) {
+#tabla-propios-wrap .premios-table th:nth-child(5),
+#tabla-propios-wrap .premios-table td:nth-child(5) {
     border-right: 2px solid var(--bg-header);
 }
 

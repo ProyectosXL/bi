@@ -107,20 +107,21 @@ endpoints (`resumen.php`, `propios.php`) piden las filas de cada supervisora con
 `datosPropios($sup)` en vez de filtrar el array ya traído sin filtro — es más consultas
 pero evita este problema.
 
-**La fila sintética `SUPERVISORA='TODAS'` (NRO_SUCURS=9, "ECOMMERCE") SÍ se incluye en los
-benchmarks de marca y en el conteo empresa-wide de Venta.** `datosPropios(null)` trae TODAS
+**La fila sintética `SUPERVISORA='TODAS'` (NRO_SUCURS=9, "ECOMMERCE") SÍ se incluye en el
+benchmark de Ticket Promedio Marca y en el conteo empresa-wide de Venta — pero NO en el de
+variación de facturación** (`facturacionVarMarca()`, a pedido del cliente 2026-10-01, diverge
+del DAX original). `datosPropios(null)` trae TODAS
 las filas del período (incluida "TODAS"/ECOMMERCE) — se confirmó empíricamente que excluirla
 rompe el benchmark `Ticket Promedio Marca` (daba $328.000 calculado vs $281.900 real; con
 ECOMMERCE incluida en la suma, da $281.900 exacto). El conteo `Premio Obj. Venta Cant. Suc.`
 del DAX real solo excluye `NRO_SUCURS=1` ("CENTRAL"), no el 9, así que ECOMMERCE debe contar
 igual que cualquier sucursal para ese propósito.
 
-**En la tabla de Locales Propios (`api/propios.php`), la fila "TODAS" se muestra suelta**,
-sin agrupar bajo ninguna supervisora (justo antes de la fila "Total", igual que en el
-tablero real) — no se pierde ni se oculta. Sí suma al total general de la tabla (el "Total"
-real del tablero la incluye: $6.142.648.265 de facturación C/IVA, no $5.794.109.258 que daría
-sin ella). Los subtotales por supervisora (`grupos[].subtotal`) siguen calculándose con
-`datosPropios($sup)` sin incluirla, ya que no pertenece a ninguna.
+**En la tabla de Locales Propios (`api/propios.php`), la fila "TODAS" ya no se muestra ni
+suma al Total** (a pedido del cliente, 2026-10-01). Antes se mostraba suelta como grupo
+"Todas" y sumaba al Total, igual que el tablero real ($6.142.648.265 de facturación C/IVA con
+ella, $5.794.109.258 sin ella). El Total del mail individual de supervisora
+(`totalGeneralPropios()`) todavía la incluye.
 
 **Comparación año anterior**: se usa directamente la columna `IMP_FACT_ANT` de cada fila
 (ya viene calculada por el ETL como "mismo mes, año anterior"), en vez de consultar el
@@ -180,7 +181,9 @@ fecha de última actualización es anterior a ese límite.
 - **Facturación Var %** = `IMP_FACT / IMP_FACT_ANT - 1`.
 - **Benchmark de marca — Locales Propios** (sin filtro de sucursal/supervisora) = variación
   de marca **+ 10 puntos ADITIVO** (`benchmarkVarMarca()`). Confirmado por DAX:
-  `Facturación Var % All = CALCULATE([Facturación Var %], ALL(...)) + 0.1`.
+  `Facturación Var % All = CALCULATE([Facturación Var %], ALL(...)) + 0.1`. Desde 2026-10-01
+  la variación de marca excluye ECOMMERCE (el DAX la incluía) — ver `facturacionVarMarca()`.
+  Afecta el KPI, el Obj. Crec. $, el badge de Fact. Var % y el conteo del Premio Crecimiento.
 - **Benchmark de marca — Franquicias** (`benchmarkVarMarcaFranquicias()`): a pedido del
   cliente (2026-09-02), ahora usa el MISMO criterio ADITIVO (+10pp) que Locales Propios —
   delega directo en `benchmarkVarMarca()`. Antes usaba un ajuste MULTIPLICATIVO
@@ -286,16 +289,15 @@ BI_T_ESTADISTICAS_VENTAS_PROPIOS, NRO_SUCURS 9 ('ECOMMERCE', consolidado VTEX+ML
 -- Facturación real, VTEX y ML por separado — POWER_BI_CONTROL (conexión 'power')
 BI_SALES_SUCURSALES, NRO_SUCURS 9 (VTEX) / 1 (ML)
 
--- Órdenes reales — LAKER_SA (conexión 'central', OTRO servidor: XL-TANGO)
-RO_T_ESTADO_PEDIDOS_ECOMMERCE, TALON_PED 99 (VTEX) / 98 (ML) / 80 (ICBC, no se mide)
+-- Órdenes reales — POWER_BI_CONTROL (conexión 'power'), la tabla del dashboard del área
+BI_EFICIENCIA_ECOMMERCE, CANAL 'VTEX' / ML, COUNT(DISTINCT NRO_PEDIDO), ESTADO_TANGO <> 'CANCELADO'
 
 -- Tasa de conversión y objetivo de órdenes — CARGA MANUAL
 BI_T_PREMIOS_ECOM_KPIS (MES, CANAL, SESIONES, TASA_CONVERSION, OBJETIVO_ORDENES)
 ```
 
-La clase abre **dos conexiones**: `power` para facturación, objetivos y configuración, y
-`central` para las órdenes (es otro servidor, no alcanza un cross-database). La de `central`
-se abre en forma perezosa, así los endpoints de configuración no la pagan al pedo.
+La clase usa una sola conexión, `power`. Hasta 2026-10-01 abría también `central`
+(XL-TANGO) para las órdenes; ya no hace falta.
 
 ### ⚠ `NRO_SUCURS` significa cosas distintas en las dos tablas
 
@@ -354,26 +356,35 @@ mensual solo trae el consolidado — pero como se verificó que dan lo mismo, so
 dos puntas están en la misma base. Ojo: **`IMP_FACT_S_IVA` viene en CERO** para la fila
 ECOMMERCE (el ETL no la puebla ahí), verificado en los tres meses — no sirve como alternativa.
 
-### Órdenes: automáticas desde Tango
+### Órdenes: automáticas desde `BI_EFICIENCIA_ECOMMERCE`
 
-`RO_T_ESTADO_PEDIDOS_ECOMMERCE` (base `central`) tiene el canal en `TALON_PED` — 99=VTEX,
-98=Mercado Libre, 80=ICBC — el mismo mapeo que hace `v:\ecommerce\Class\Control.php` en
-varias consultas, y que coincide con `PuntosDeVenta.numero`. `TALON_PED` es **numérico**: un
-`CASE` que lo devuelva junto a literales de texto falla con "Conversion failed … to data
-type int".
+Desde 2026-10-01 las órdenes salen de **`BI_EFICIENCIA_ECOMMERCE`**, la tabla de la que lee el
+dashboard del sector Ecommerce, con su mismo criterio: así el número que liquida el premio es
+el que el área ve. La tabla trae **una fila por artículo** (incluida una línea `***COSTO
+ENVIO`), con `NRO_PEDIDO`, `ORDER_ID`, `ESTADO_TANGO`, `CANAL` y `FECHA_PEDIDO`.
 
-Criterios de conteo (decididos el 2026-09-11, se cambian solo en `ordenesReales()`):
+Criterios de conteo (se cambian solo en `ordenesReales()`):
 
 | Criterio | Por qué |
 |---|---|
-| `FECHA_PEDI` | Es la fecha del pedido: mide actividad comercial del mes, y es la misma base temporal que usa una tasa de conversión. Las otras candidatas eran `FECHA_SINCRONIZADO` y `FECHA_FACTURADO`. |
-| `COUNT(DISTINCT ORDER_ID)` | La tabla tiene más de una fila por orden — julio 2026: 2.634 filas para 2.602 órdenes. Un `COUNT(*)` sobrecontaría. |
-| `CANCELADO IS NULL` | Una orden cancelada no es una venta. Mismo criterio con el que se toma la facturación, y evita premiar cancelaciones. |
+| `FECHA_PEDIDO` | Fecha del pedido: mide actividad comercial del mes, y es la misma base temporal que la tasa de conversión. |
+| `COUNT(DISTINCT NRO_PEDIDO)` | Una fila por artículo, así que `COUNT(*)` sobrecontaría. Se cuentan pedidos de Tango, como el dashboard del área: una compra puede abrirse en más de un pedido. |
+| `ESTADO_TANGO <> 'CANCELADO'` | Entran COMPLETO y PENDIENTE. Todo pedido de ecommerce se factura, así que PENDIENTE es "todavía no facturado": el número de un mes recién cerrado puede moverse unos días. |
 
-**Tango cuenta ~13,5 % menos órdenes que el panel de VTEX** (julio 2026: 2.504 contra las
-2.894 de la planilla), en la misma línea que la brecha ya medida en pesos. Los objetivos
-cargados vienen de la planilla anual del área y están expresados en órdenes de VTEX, así que
-sobre el conteo de Tango quedan exigentes de más.
+Septiembre 2026, VTEX, según qué se cuente en esta tabla:
+
+| Qué se cuenta (sin cancelados) | Cantidad |
+|---|---|
+| Pedidos de Tango (`NRO_PEDIDO`) — **lo que usa el tablero y el dashboard del área** | 2.866 |
+| `ORDER_ID` con sufijo (`-01`, `-02` por separado) | ≈ 2.734 |
+| Compras del cliente (`ORDER_ID` sin sufijo) | ≈ 2.634 |
+| Fuente anterior: `ORDER_ID` de `RO_T_ESTADO_PEDIDOS_ECOMMERCE` (Tango) | 2.532 |
+
+`RO_T_ESTADO_PEDIDOS_ECOMMERCE` tiene ~320 pedidos menos que esta tabla para el mismo mes
+(2.561 contra 2.882 con cancelados), sin explicar. Los objetivos cargados vienen de la planilla
+anual del área, expresados en órdenes del panel de VTEX.
+
+El análisis de abajo es **con la fuente anterior** (Tango), y queda como histórico.
 
 **Pero medido sobre 2026, recalibrarlos casi no cambia nada** (análisis del 2026-09-11,
 enero a agosto, objetivo de VTEX contra órdenes reales de Tango):
@@ -405,7 +416,7 @@ mide ningún concepto de órdenes— pero sugiere que o los objetivos de ese can
 Tango cuenta las órdenes de ML con otro criterio que el panel (¿una orden con varios packs
 abierta en varios pedidos?). Sin investigar.
 
-### Tasa de conversión: calculada, órdenes de Tango ÷ sesiones cargadas
+### Tasa de conversión: calculada, órdenes ÷ sesiones cargadas
 
 El dato de **sesiones** (el denominador) no vive en ningún sistema propio ni hay integración
 con VTEX API / Google Analytics — verificado sobre todo el repo y sobre `v:\ecommerce`: solo
@@ -425,6 +436,8 @@ las sesiones.
   del panel, y eso le cuesta a Vanesa un tramo ($240.000 → $220.000) sin que haya cambiado
   su desempeño. Si hay que compensarlo, se bajan los umbrales de la escala (en
   gestionarPremios.php → «Ecommerce · Escalas»), no se toca el cálculo.
+- Desde 2026-10-01 el numerador son los pedidos de `BI_EFICIENCIA_ECOMMERCE` (ver «Órdenes»),
+  que cuentan más que Tango: la tasa sube en la misma proporción (septiembre VTEX: ×1,13).
 - La columna `TASA_CONVERSION` de `BI_T_PREMIOS_ECOM_KPIS` quedó con lo tipeado antes de ese
   cambio: ya no se lee ni se escribe, se conserva como histórico.
 - Si falta un dato que algún concepto necesita, ese concepto queda en **`sin_dato`**: premio
@@ -575,9 +588,11 @@ No usa Chart.js (el tablero original no tiene gráficos, solo cards y tablas).
 - **KPI "Facturación Var % Marca" (Vistas Locales Propios y Franquicias)**: muestra el
   BENCHMARK (con el ajuste +10pp ya aplicado en ambos canales, ver "Benchmark de marca —
   Franquicias" arriba), no el agregado crudo — confirmado contra el KPI real de Locales
-  Propios (302,07 % = 292,07 % + 10pp). `api/propios.php` y `api/franquicias.php` usan
-  `benchmarkVarMarca()`/`benchmarkVarMarcaFranquicias()` para ese KPI puntual, no
-  `facturacionVarMarca()`.
+  Propios (302,07 % = 292,07 % + 10pp, con ECOMMERCE incluida — desde 2026-10-01 ya no
+  coincide con el tablero real, ver "Benchmark de marca — Locales Propios"). `api/propios.php`
+  y `api/franquicias.php` usan `benchmarkVarMarca()`/`benchmarkVarMarcaFranquicias()` para ese
+  KPI puntual; Locales Propios muestra además `facturacionVarMarca()` como "Facturación Var %
+  Promedio".
 - **Tabla "Facturación vs. Objetivos por Sucursales" (Locales Propios) — validada 100%
   exacta contra el tablero real**, incluida la fila "TODAS"/ECOMMERCE y el Total general
   ($6.142.648.265 de facturación C/IVA, $2.005.791.046 de objetivo, todos los % y el ticket

@@ -167,7 +167,7 @@ try {
     <div id="tab-propios" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-propios">
         <main class="dash-content">
 
-            <div class="kpi-grid" id="kpi-propios-wrap">
+            <div class="kpi-grid kpi-grid-5" id="kpi-propios-wrap">
                 <div class="premios-loading">Cargando…</div>
             </div>
 
@@ -416,9 +416,10 @@ const Spinner = (() => {
                     días del mes en curso — no es el cierre del mes ni un premio calculado.</li>
                 <li>En <strong>Premios Ecommerce</strong>, la facturación sale de la misma tabla
                     mensual que las otras pestañas (por eso el total coincide con la fila ECOMMERCE
-                    de Locales Propios). Las <strong>órdenes</strong> salen de Tango y se actualizan
-                    a diario. Lo único de <strong>carga manual</strong> es la tasa de conversión y
-                    el objetivo de órdenes — si falta cargar un mes, la pestaña lo avisa arriba.</li>
+                    de Locales Propios). Las <strong>órdenes</strong> son las mismas que muestra el
+                    dashboard de Ecommerce (pedidos no cancelados) y se actualizan a diario. Lo único
+                    de <strong>carga manual</strong> son las sesiones (con las que se calcula la tasa
+                    de conversión) y el objetivo de órdenes — si falta cargar un mes, la pestaña lo avisa arriba.</li>
                 <li>En esa pestaña, el total del canal y los importes de VTEX y ML por separado
                     salen de <strong>dos tablas distintas</strong> (la mensual no separa los
                     canales), y esas tablas hoy <strong>no coinciden entre sí</strong>: las partes

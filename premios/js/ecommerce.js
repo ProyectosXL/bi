@@ -186,7 +186,7 @@ const PremiosEcommerce = (() => {
     }
 
     /**
-     * La tasa sale de órdenes de Tango ÷ sesiones: esos dos números van en el tooltip de la
+     * La tasa sale de órdenes ÷ sesiones: esos dos números van en el tooltip de la
      * celda (no en la columna, para que quede limpia) así se ve de dónde sale.
      */
     function celdaRealHTML(c) {
@@ -194,7 +194,7 @@ const PremiosEcommerce = (() => {
         if (c.metrica !== 'TASA_CONVERSION' || !c.canal) return valor;
         const o = _lastOrdenes[c.canal];
         const s = _lastSesiones[c.canal];
-        const ayuda = `Órdenes (Tango): ${o === null || o === undefined ? '—' : fmt.num(o)}\n`
+        const ayuda = `Órdenes: ${o === null || o === undefined ? '—' : fmt.num(o)}\n`
                     + `Sesiones: ${s ? fmt.num(s) : 'sin cargar'}\n`
                     + 'Tasa = órdenes ÷ sesiones';
         return `<span class="ecom-objetivo-escala" title="${ayuda}">${valor}</span>`;
@@ -310,26 +310,26 @@ const PremiosEcommerce = (() => {
     }
 
     /**
-     * Tasa de conversión calculada (órdenes de Tango ÷ sesiones × 100), recalculada en vivo
+     * Tasa de conversión calculada (órdenes ÷ sesiones × 100), recalculada en vivo
      * mientras se tipean las sesiones: es la misma cuenta que hace el backend para liquidar
      * (PremiosEcommerceDB::tasasConversion), así se ve el resultado antes de guardar.
      */
-    function actualizarTasaCalculada(box, canal, ordenesTango) {
+    function actualizarTasaCalculada(box, canal, ordenes) {
         const el = box.querySelector(`.ecom-kpi-tasa[data-canal="${canal}"]`);
         if (!el) return;
         const inp = box.querySelector(`.ecom-kpi-input[data-canal="${canal}"][data-campo="sesiones"]`);
         const sesiones = inp && inp.value !== '' ? Number(inp.value) : null;
-        el.textContent = sesiones > 0 ? `${fmt.num(ordenesTango / sesiones * 100, 2)} %` : '—';
+        el.textContent = sesiones > 0 ? `${fmt.num(ordenes / sesiones * 100, 2)} %` : '—';
     }
 
     function bloqueCanalHTML(c) {
         // A ML no se le mide hoy ni conversión ni objetivo de órdenes, pero el form es el
         // mismo para los dos canales: si mañana se le miden, ya se puede cargar sin tocar nada.
-        return `<div class="ecom-kpi-canal" data-canal="${c.canal}" data-ordenes-tango="${c.ordenes_tango}">
+        return `<div class="ecom-kpi-canal" data-canal="${c.canal}" data-ordenes="${c.ordenes}">
             <div class="ecom-kpi-canal-titulo">${c.canal}</div>
             <div class="ecom-kpi-grid">
-                <label>Órdenes <span class="ecom-kpi-hint">(de Tango, no se carga)</span></label>
-                <div class="ecom-kpi-readonly">${fmt.num(c.ordenes_tango)}</div>
+                <label>Órdenes <span class="ecom-kpi-hint">(automáticas, no se cargan)</span></label>
+                <div class="ecom-kpi-readonly">${fmt.num(c.ordenes)}</div>
                 <label>Objetivo de órdenes</label>    ${inputNum(c.canal, 'objetivo_ordenes', c.objetivo_ordenes, '1')}
                 <label>Sesiones <span class="ecom-kpi-hint">(del panel de VTEX)</span></label>
                                                       ${inputNum(c.canal, 'sesiones', c.sesiones, '1')}
@@ -355,7 +355,7 @@ const PremiosEcommerce = (() => {
 
         body.innerHTML = `
             <p class="modal-config-hint">Las sesiones se toman del <strong>panel de VTEX</strong>.
-               Las órdenes salen de Tango y la <strong>tasa de conversión se calcula sola</strong>
+               Las órdenes salen solas (las mismas del dashboard de Ecommerce) y la <strong>tasa de conversión se calcula sola</strong>
                (órdenes ÷ sesiones). Dejá un campo vacío para borrar el dato.</p>
             <div class="ecom-kpi-mes">
                 <label for="modal-ecom-mes">Mes</label>
@@ -377,9 +377,9 @@ const PremiosEcommerce = (() => {
         };
         body.querySelectorAll('.ecom-kpi-input').forEach(inp => {
             const c = data.canales.find(x => x.canal === inp.dataset.canal);
-            inp.addEventListener('input', () => actualizarTasaCalculada(body, inp.dataset.canal, c?.ordenes_tango ?? 0));
+            inp.addEventListener('input', () => actualizarTasaCalculada(body, inp.dataset.canal, c?.ordenes ?? 0));
         });
-        data.canales.forEach(c => actualizarTasaCalculada(body, c.canal, c.ordenes_tango));
+        data.canales.forEach(c => actualizarTasaCalculada(body, c.canal, c.ordenes));
 
         body.querySelector('#modal-ecom-kpis-guardar').onclick = (e) =>
             guardarKpis(modal, body, e.currentTarget);
