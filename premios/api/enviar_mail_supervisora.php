@@ -46,7 +46,6 @@ try {
 
     // Misma construcción que usa api/resumen.php + api/propios.php, para UNA supervisora.
     $propiosTodos     = $db->datosPropios(null);
-    $filasTodas       = $db->datosPropios('TODAS');
     $franquiciasTodos = $db->datosFranquicias();
     $benchmarks = [
         'var_marca'    => $db->benchmarkVarMarca($propiosTodos),
@@ -58,7 +57,7 @@ try {
     $importesFranquiciaPorSup = $db->importesFranquiciaPorSupervisora();
 
     $filasSup    = $db->datosPropios($supervisora);
-    $propios     = $db->premiosPropiosSupervisora($supervisora, $filasSup, $propiosTodos, $filasTodas, $benchmarks);
+    $propios     = $db->premiosPropiosSupervisora($supervisora, $filasSup, $propiosTodos, $benchmarks);
     $franquicias = $db->premiosFranquiciasSupervisora($supervisora, $conteosFranquiciaEmpresa, $importesFranquiciaPorSup[$supervisora] ?? []);
     $totalPremios = $propios['total'] + $franquicias['total'];
 

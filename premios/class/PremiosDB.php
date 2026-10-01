@@ -722,7 +722,6 @@ class PremiosDB
     public function resumenPorSupervisora(array $supervisoras): array
     {
         $propiosTodos     = $this->datosPropios(null);
-        $filasTodas       = $this->datosPropios('TODAS');
         $franquiciasTodos = $this->datosFranquicias();
 
         $benchmarks = [
@@ -741,7 +740,7 @@ class PremiosDB
             $filasPropias = $this->datosPropios($sup);
             $filasPropiasTodasLasSup = array_merge($filasPropiasTodasLasSup, $filasPropias);
 
-            $propios     = $this->premiosPropiosSupervisora($sup, $filasPropias, $propiosTodos, $filasTodas, $benchmarks);
+            $propios     = $this->premiosPropiosSupervisora($sup, $filasPropias, $propiosTodos, $benchmarks);
             $franquicias = $this->premiosFranquiciasSupervisora($sup, $conteosFranquiciaEmpresa, $importesFranquiciaPorSup[$sup] ?? []);
 
             $out[] = [
@@ -959,14 +958,17 @@ class PremiosDB
      * cada supervisora. Venta además excluye NRO_SUCURS=1 ("CENTRAL"); Crecimiento no la
      * excluye explícitamente, pero es inofensivo porque CENTRAL siempre tiene FACT=0.
      *
+     * Ninguno de los conteos incluye la fila sintética "TODAS"/ECOMMERCE, a pedido del cliente
+     * (2026-10-01): solo cuentan locales físicos. DIVERGE del DAX original, donde ECOMMERCE
+     * contaba como un local más en Venta/Crecimiento empresa-wide y sumaba +1 a Carolina.
+     *
      * Carolina Commendatore usa medidas separadas (`...Caro`):
      *   - Venta: a pedido del cliente (2026-09-01, se detectó que el agregado todo-o-nada
      *     original del .pbix no reflejaba cuántos locales realmente cumplían), se cuenta
      *     por unidad: sus propias sucursales que individualmente cumplen objetivo de venta
      *     (mismo criterio sin tolerancia que el badge verde de la tabla Locales Propios,
-     *     excluyendo NRO_SUCURS=1 "CENTRAL" y filas sin datos, igual que contarVentaEmpresa())
-     *     más 1 si la fila sintética "TODAS" (Ecommerce) cumple su propio objetivo. Ver
-     *     cantVentaCarolina(). ESTO DIVERGE A PROPÓSITO del DAX original del .pbix, que
+     *     excluyendo NRO_SUCURS=1 "CENTRAL" y filas sin datos, igual que contarVentaEmpresa()).
+     *     Ver cantVentaCarolina(). ESTO DIVERGE A PROPÓSITO del DAX original del .pbix, que
      *     usaba el agregado (fact de sus sucursales + "TODAS" vs. objetivo agrupado, sin
      *     tolerancia) y daba crédito a TODAS sus sucursales si ese agregado cruzaba el
      *     objetivo, sin mirar cada una individualmente.
@@ -975,27 +977,26 @@ class PremiosDB
      *
      * @param string $supervisora       Nombre de la supervisora (con mayúscula inicial)
      * @param array  $filasSupervisora  Sus propias sucursales (ya filtradas)
-     * @param array  $todosLosPropios   datosPropios(null): todas las sucursales propias,
-     *                                  INCLUIDA la fila "TODAS"/ECOMMERCE, para el cálculo
-     *                                  empresa-wide (ECOMMERCE cuenta como un local más)
-     * @param array  $filasTodas        Filas con SUPERVISORA='TODAS' del período (datosPropios('TODAS'))
+     * @param array  $todosLosPropios   datosPropios(null): todas las sucursales propias, para
+     *                                  el cálculo empresa-wide. Puede traer la fila
+     *                                  "TODAS"/ECOMMERCE: se descarta acá.
      * @param float  $benchmarkVarMarca Benchmark de marca (+10pp) para crecimiento
      */
     public function premiosVentaCrecimiento(
         string $supervisora,
         array $filasSupervisora,
         array $todosLosPropios,
-        array $filasTodas,
         float $benchmarkVarMarca
     ): array {
         $esCarolina = strcasecmp($supervisora, 'Carolina Commendatore') === 0;
+        $todosLosPropios = array_filter($todosLosPropios, fn($f) => $f['supervisora'] !== 'Todas');
 
         // Importe: siempre el propio de la supervisora (ver importeDeFilas()).
         $importeVenta = $this->importeDeFilas($filasSupervisora, 'p_obj_venta');
         $importeCrec  = $this->importeDeFilas($filasSupervisora, 'p_obj_crec_vta');
 
         if ($esCarolina) {
-            $cantVenta = $this->cantVentaCarolina($filasSupervisora, $filasTodas);
+            $cantVenta = $this->cantVentaCarolina($filasSupervisora);
             $cantCrec  = $this->contarCrecimiento($filasSupervisora, $benchmarkVarMarca);
         } else {
             $cantVenta = $this->contarVentaEmpresa($todosLosPropios);
@@ -1035,12 +1036,12 @@ class PremiosDB
     /**
      * Caso especial Carolina Commendatore: cantidad de sucursales propias que
      * individualmente cumplen objetivo de venta (sin tolerancia, mismo criterio que el
-     * badge verde de la tabla Locales Propios) + 1 si "TODAS"/Ecommerce cumple el suyo.
+     * badge verde de la tabla Locales Propios). Ya no suma Ecommerce (2026-10-01).
      */
-    private function cantVentaCarolina(array $filasCarolina, array $filasTodas): int
+    private function cantVentaCarolina(array $filasCarolina): int
     {
         $cant = 0;
-        foreach (array_merge($filasCarolina, $filasTodas) as $f) {
+        foreach ($filasCarolina as $f) {
             if ($f['sin_datos'] || $f['casa_central']) continue;
             if ($this->cumplimientoObjVenta($f['imp_fact'], $f['imp_obj']) >= 0) $cant++;
         }
@@ -1089,16 +1090,15 @@ class PremiosDB
     /**
      * Arma los 5 premios de Locales Propios para una supervisora + el total.
      * $benchmarks = ['var_marca'=>float, 'ticket_marca'=>float, 'pct2_marca'=>float, 'pct3_marca'=>float]
-     * $todosLosPropios / $filasTodas: ver premiosVentaCrecimiento().
+     * $todosLosPropios: ver premiosVentaCrecimiento().
      */
     public function premiosPropiosSupervisora(
         string $supervisora,
         array $filasSupervisora,
         array $todosLosPropios,
-        array $filasTodas,
         array $benchmarks
     ): array {
-        $ventaCrec = $this->premiosVentaCrecimiento($supervisora, $filasSupervisora, $todosLosPropios, $filasTodas, $benchmarks['var_marca']);
+        $ventaCrec = $this->premiosVentaCrecimiento($supervisora, $filasSupervisora, $todosLosPropios, $benchmarks['var_marca']);
         $ticket    = $this->premioTicketPromedio($filasSupervisora, $benchmarks['ticket_marca']);
         $t2        = $this->premioTicketProducto($filasSupervisora, 'tickets_2do_prod', $benchmarks['pct2_marca'], 'p_ticket_2prod');
         $t3        = $this->premioTicketProducto($filasSupervisora, 'tickets_3er_prod', $benchmarks['pct3_marca'], 'p_ticket_3prod');

@@ -108,9 +108,10 @@ endpoints (`resumen.php`, `propios.php`) piden las filas de cada supervisora con
 pero evita este problema.
 
 **La fila sintética `SUPERVISORA='TODAS'` (NRO_SUCURS=9, "ECOMMERCE") SÍ se incluye en el
-benchmark de Ticket Promedio Marca y en el conteo empresa-wide de Venta — pero NO en el de
-variación de facturación** (`facturacionVarMarca()`, a pedido del cliente 2026-10-01, diverge
-del DAX original). `datosPropios(null)` trae TODAS
+benchmark de Ticket Promedio Marca — pero NO en el de variación de facturación
+(`facturacionVarMarca()`) ni en ningún conteo de premio (Venta/Crecimiento empresa-wide y
+Venta de Carolina, ver `premiosVentaCrecimiento()`)**: a pedido del cliente 2026-10-01, diverge
+del DAX original. Lo que sigue describe el criterio anterior. `datosPropios(null)` trae TODAS
 las filas del período (incluida "TODAS"/ECOMMERCE) — se confirmó empíricamente que excluirla
 rompe el benchmark `Ticket Promedio Marca` (daba $328.000 calculado vs $281.900 real; con
 ECOMMERCE incluida en la suma, da $281.900 exacto). El conteo `Premio Obj. Venta Cant. Suc.`
@@ -206,7 +207,10 @@ fecha de última actualización es anterior a ese límite.
   total agrupado, sin tolerancia (umbral en 0); si la comparación agregada da positiva, cuentan
   TODAS sus sucursales, si no, ninguna. Crecimiento para Carolina SÍ se evalúa solo sobre sus
   propias sucursales (sin el atajo empresa-wide que reciben las demás). Ver
-  `PremiosDB::premiosVentaCrecimiento()`.
+  `PremiosDB::premiosVentaCrecimiento()`. **Desde 2026-10-01** (a pedido del cliente) ningún
+  conteo incluye ECOMMERCE: ni el empresa-wide de Venta/Crecimiento, ni Carolina (que antes
+  sumaba +1 si ECOMMERCE cumplía su objetivo). Además, Carolina ya cuenta sucursal por
+  sucursal desde 2026-09-01, ver el docblock de ese método.
 - **Premio Ticket Promedio / 2do y 3er Producto**: sucursales que superan el benchmark de marca
   respectivo (`CEILING(FACT/TICKETS,100)` para ticket promedio; ratio simple para 2do/3er
   producto) — sin el atajo empresa-wide, se evalúa por supervisora para todas por igual
