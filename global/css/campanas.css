@@ -1,0 +1,312 @@
+/* ============================================================
+   /bi/global/css/campanas.css
+   Estilos específicos para la solapa "Campañas De Ventas"
+   Compatible con base.css, components.css y global.css
+   ============================================================ */
+
+.campanas-header-bar {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    box-shadow: var(--shadow);
+}
+
+.campanas-filters-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.campanas-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.campanas-field label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-3);
+}
+
+.campanas-field select {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    min-width: 140px;
+}
+
+.campanas-field select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.campanas-tag-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    color: var(--accent2);
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+/* Banner de títulos de sección estilo PowerBI */
+.campanas-banner-title {
+    background: linear-gradient(90deg, #fce8cc 0%, #fef4e8 100%);
+    border: 1px solid #f2cf9d;
+    color: #4a341b;
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    text-align: center;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+/* Grid de Gráficos (4 cuadrantes) */
+.campanas-charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 1100px) {
+    .campanas-charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.campanas-chart-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    min-height: 380px;
+}
+
+.campanas-chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.campanas-chart-title {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--accent2);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.campanas-chart-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.78rem;
+    color: var(--text-2);
+}
+
+.campanas-chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    display: inline-block;
+}
+
+.legend-dot.campana { background: #f59e0b; }
+.legend-dot.regular { background: #93c5fd; }
+
+.campanas-chart-body {
+    flex: 1;
+    position: relative;
+    min-height: 290px;
+}
+
+/* Tablas con jerarquía colapsable / expandible */
+.campanas-table-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+}
+
+.campanas-table-wrap {
+    overflow-x: auto;
+    max-height: 520px;
+}
+
+.campanas-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.82rem;
+}
+
+.campanas-table thead th {
+    background: #1a2340;
+    color: #ffffff;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.4px;
+    padding: 8px 10px;
+    text-transform: uppercase;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 2px solid #243060;
+    white-space: nowrap;
+}
+
+.campanas-table thead th.sticky-col {
+    left: 0;
+    z-index: 15;
+    background: #1a2340;
+}
+
+.campanas-table tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #edf1f7;
+    white-space: nowrap;
+}
+
+.campanas-table tbody tr:hover td {
+    background: #f8fafc;
+}
+
+.campanas-table tbody td.sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    background: #ffffff;
+    font-weight: 600;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.03);
+}
+
+.campanas-table tbody tr.row-sucursal td.sticky-col {
+    font-weight: 700;
+    color: #1a2340;
+}
+
+.campanas-table tbody tr.row-rubro td.sticky-col {
+    padding-left: 26px;
+    color: #4b5674;
+    font-weight: 500;
+}
+
+.campanas-table tfoot td {
+    background: #243060;
+    color: #ffffff;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 8px 10px;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    white-space: nowrap;
+}
+
+.campanas-table tfoot td.sticky-col {
+    left: 0;
+    z-index: 15;
+    background: #243060;
+}
+
+/* Indicadores de variación */
+.campanas-var-pos {
+    color: var(--pos);
+    font-weight: 600;
+}
+.campanas-var-neg {
+    color: var(--neg);
+    font-weight: 600;
+}
+
+/* Botón expandir/colapsar */
+.btn-toggle-suc {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--accent2);
+    margin-right: 6px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+}
+.btn-toggle-suc:hover {
+    background: rgba(37, 99, 235, 0.1);
+}
+
+/* Matriz diaria */
+.cell-day-campana {
+    background: rgba(245, 158, 11, 0.08) !important;
+}
+.header-day-campana {
+    background: #d97706 !important;
+}
+
+/* Matriz diaria multisuccursal */
+.row-matriz-suc td {
+    background: #eef2f9 !important;
+    border-top: 2px solid #cbd5e1 !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+}
+.row-matriz-suc td.sticky-col {
+    color: #1e293b !important;
+    font-weight: 700 !important;
+    font-size: 0.88rem;
+}
+.row-matriz-metric td.sticky-col {
+    padding-left: 24px;
+    font-weight: 500;
+    color: #475569;
+}
+.row-matriz-metric:hover td {
+    background: #f8fafc;
+}
+
+

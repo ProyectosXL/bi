@@ -79,6 +79,7 @@ try {
     <link rel="stylesheet" href="/bi/global/css/producto.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/producto.css') ?>">
     <link rel="stylesheet" href="/bi/global/css/ranking.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/ranking.css') ?>">
     <link rel="stylesheet" href="/bi/global/css/circulacion.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/circulacion.css') ?>">
+    <link rel="stylesheet" href="/bi/global/css/campanas.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'].'/bi/global/css/campanas.css') ?>">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Chart.js 4.x + DataLabels Plugin -->
@@ -289,6 +290,9 @@ try {
         </button>
         <button class="tab-btn" id="tab-btn-franquicias-resumen" role="tab" aria-controls="tab-franquicias-resumen" aria-selected="false">
             <i class="bi bi-grid-3x3-gap"></i>&nbsp; Resumen Anual Anterior
+        </button>
+        <button class="tab-btn" id="tab-btn-campanas" role="tab" aria-controls="tab-campanas" aria-selected="false">
+            <i class="bi bi-megaphone-fill"></i>&nbsp; Campañas De Ventas
         </button>
         <button class="tab-reload-btn" id="btn-reload-tab" title="Recargar pestaña">
             <i class="bi bi-arrow-clockwise"></i>
@@ -1412,6 +1416,165 @@ try {
         </main>
     </div>
 
+    <!-- ══ PESTAÑA: CAMPAÑAS DE VENTAS ═════════════════════════════════ -->
+    <div id="tab-campanas" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-campanas">
+        <main class="dash-content">
+
+            <!-- Barra superior de filtros específicos de Campaña -->
+            <div class="campanas-header-bar">
+                <div class="campanas-filters-group">
+                    <div class="campanas-field">
+                        <label for="sel-campana-tipo">Campaña</label>
+                        <select id="sel-campana-tipo">
+                            <option value="madre" selected>Semana del Día de la Madre</option>
+                            <option value="navidad">Semana de Navidad</option>
+                        </select>
+                    </div>
+
+                    <div class="campanas-field">
+                        <label for="sel-campana-evento">Evento Especial</label>
+                        <select id="sel-campana-evento">
+                            <option value="todos" selected>Todos los días</option>
+                            <option value="campana">Semana Especial Campaña</option>
+                            <option value="regular">Día Regular</option>
+                        </select>
+                    </div>
+
+                    <div class="campanas-field">
+                        <label for="sel-campana-anio">Año Análisis</label>
+                        <select id="sel-campana-anio">
+                            <option value="2026" selected>2026</option>
+                            <option value="2025">2025</option>
+                            <option value="2024">2024</option>
+                        </select>
+                    </div>
+
+                    <div class="campanas-field">
+                        <label for="sel-campana-sucursal">Sucursal</label>
+                        <select id="sel-campana-sucursal">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+
+                    <div class="campanas-field">
+                        <label for="sel-campana-rubro">Rubro</label>
+                        <select id="sel-campana-rubro">
+                            <option value="%">Todos</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="campanas-tag-info" id="campanas-info-rango">
+                    <i class="bi bi-calendar-event"></i> Rango Especial: <strong>12 al 18 de octubre</strong> (Semana del Día de la Madre)
+                </div>
+            </div>
+
+            <!-- SECCIÓN 1 (PRIMERO): OBJETIVO VS FACTURACIÓN POR DÍA / MES / AÑO (NETA) -->
+            <div class="campanas-banner-title">
+                OBJETIVO VS FACTURACIÓN POR DÍA / MES / AÑO (NETA)
+            </div>
+
+            <div class="campanas-table-card">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:10px">
+                    <span style="font-family:var(--font-display); font-weight:700; color:var(--text-1); font-size:1rem; text-transform:uppercase">
+                        APERTURA POR SUCURSAL (DÍA A DÍA)
+                    </span>
+                    <span id="campanas-matriz-suc-label" style="font-size:0.85rem; font-weight:600; color:var(--accent2)"></span>
+                </div>
+                <div class="campanas-table-wrap" id="campanas-matriz-wrap">
+                    <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> Cargando matriz diaria...</div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN 2 (SEGUNDO): TICKETS POR SUCURSAL (NETO) -->
+            <div class="campanas-table-card">
+                <div class="campanas-banner-title" style="margin-top:0">
+                    TICKETS POR SUCURSAL (NETO)
+                </div>
+                <div class="campanas-table-wrap" id="campanas-tabla-tickets-wrap">
+                    <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> Cargando tickets por sucursal...</div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN 3: APERTURA DE OBJETIVOS POR FACTURACIÓN Y POR UNIDADES -->
+            <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+                <div class="campanas-table-card">
+                    <div class="campanas-banner-title" style="margin-top:0">
+                        APERTURA DE OBJETIVOS POR FACTURACIÓN (BRUTA) — SUCURSALES Y RUBROS
+                    </div>
+                    <div class="campanas-table-wrap" id="campanas-tabla-fact-wrap">
+                        <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> Cargando tabla de facturación...</div>
+                    </div>
+                </div>
+
+                <div class="campanas-table-card">
+                    <div class="campanas-banner-title" style="margin-top:0">
+                        APERTURA DE OBJETIVOS POR UNIDADES — SUCURSALES Y RUBROS (CON STOCK ACTUAL)
+                    </div>
+                    <div class="campanas-table-wrap" id="campanas-tabla-unid-wrap">
+                        <div class="analisis-loading"><i class="bi bi-arrow-repeat"></i> Cargando tabla de unidades...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN 4 (ABAJO DE TODO): DETALLE DE LA VENTA — ÚLTIMO AÑO VS ESTE AÑO (UNIDADES) -->
+            <div class="campanas-banner-title">
+                DETALLE DE LA VENTA — ÚLTIMO AÑO VS ESTE AÑO (UNIDADES)
+            </div>
+
+            <div class="campanas-charts-grid">
+                <!-- 1. Torta Año Previo -->
+                <div class="campanas-chart-card">
+                    <div class="campanas-chart-header">
+                        <span class="campanas-chart-title" id="chart-title-pie-prev">VTA - OCTUBRE COMPLETO - 2025</span>
+                    </div>
+                    <div class="campanas-chart-body">
+                        <canvas id="chart-pie-prev"></canvas>
+                    </div>
+                </div>
+
+                <!-- 2. Barras Diarias Año Previo -->
+                <div class="campanas-chart-card">
+                    <div class="campanas-chart-header">
+                        <span class="campanas-chart-title" id="chart-title-bar-prev">VTA - OCTUBRE COMPLETO - 2025</span>
+                        <div class="campanas-chart-legend">
+                            <div class="campanas-chart-legend-item"><span class="legend-dot campana"></span> Semana Campaña</div>
+                            <div class="campanas-chart-legend-item"><span class="legend-dot regular"></span> Día Regular</div>
+                        </div>
+                    </div>
+                    <div class="campanas-chart-body">
+                        <canvas id="chart-bar-prev"></canvas>
+                    </div>
+                </div>
+
+                <!-- 3. Torta Año Actual -->
+                <div class="campanas-chart-card">
+                    <div class="campanas-chart-header">
+                        <span class="campanas-chart-title" id="chart-title-pie-act">VTA - OCTUBRE COMPLETO - 2026</span>
+                    </div>
+                    <div class="campanas-chart-body">
+                        <canvas id="chart-pie-act"></canvas>
+                    </div>
+                </div>
+
+                <!-- 4. Barras Diarias Año Actual -->
+                <div class="campanas-chart-card">
+                    <div class="campanas-chart-header">
+                        <span class="campanas-chart-title" id="chart-title-bar-act">VTA - OCTUBRE COMPLETO - 2026</span>
+                        <div class="campanas-chart-legend">
+                            <div class="campanas-chart-legend-item"><span class="legend-dot campana"></span> Semana Campaña</div>
+                            <div class="campanas-chart-legend-item"><span class="legend-dot regular"></span> Día Regular</div>
+                        </div>
+                    </div>
+                    <div class="campanas-chart-body">
+                        <canvas id="chart-bar-act"></canvas>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
     <!-- ══ MODAL EVOLUCIÓN MENSUAL ══════════════════════════════════════ -->
     <div id="evolucion-modal-overlay" style="display:none" class="spark-modal-overlay">
         <div class="spark-modal" style="width:min(900px,96vw);max-height:92vh">
@@ -1471,6 +1634,7 @@ $jsFiles = [
     '/bi/global/js/franquicias_detalle.js',
     '/bi/global/js/franquicias_resumen.js',
     '/bi/global/js/liquidacion.js',
+    '/bi/global/js/campanas.js',
 ];
 foreach ($jsFiles as $f):
     $v = @filemtime($_SERVER['DOCUMENT_ROOT'] . $f) ?: 1;
@@ -1506,9 +1670,10 @@ window.BI_CONFIG = {
         { btn: 'tab-btn-liquidacion',    pane: 'tab-liquidacion',    name: 'liquidacion'   },
         { btn: 'tab-btn-franquicias-detalle', pane: 'tab-franquicias-detalle', name: 'franquiciasDetalle' },
         { btn: 'tab-btn-franquicias-resumen', pane: 'tab-franquicias-resumen', name: 'franquiciasResumen' },
+        { btn: 'tab-btn-campanas',       pane: 'tab-campanas',       name: 'campanas'      },
     ].filter(t => document.getElementById(t.btn) && document.getElementById(t.pane));
 
-    const loaded = { kpis: false, analisis: false, circulacion: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false, liquidacion: false, franquiciasDetalle: false, franquiciasResumen: false };
+    const loaded = { kpis: false, analisis: false, circulacion: false, producto: false, cadena: false, participacion: false, vendedoras: false, ranking: false, liquidacion: false, franquiciasDetalle: false, franquiciasResumen: false, campanas: false };
 
     const loaders = {
         kpis         : () => Dashboard.loadAll(),
@@ -1522,6 +1687,7 @@ window.BI_CONFIG = {
         liquidacion  : () => Liquidacion.loadAll(),
         franquiciasDetalle: () => FranquiciasDetalle.loadAll(),
         franquiciasResumen: () => FranquiciasResumen.loadAll(),
+        campanas     : () => Campanas.loadAll(),
     };
 
     function loadTab(name) {
@@ -1541,6 +1707,15 @@ window.BI_CONFIG = {
             document.getElementById(t.pane).classList.toggle('active', active);
             document.getElementById(t.btn).setAttribute('aria-selected', active ? 'true' : 'false');
         });
+
+        // En la solapa de Campañas De Ventas los filtros están integrados directamente dentro de la pestaña.
+        // Ocultamos la barra .toolbar completa para que quede totalmente limpia y no confunda.
+        const isCampanas = paneId === 'tab-campanas';
+        const toolbarEl = document.querySelector('.toolbar');
+        if (toolbarEl) {
+            toolbarEl.style.display = isCampanas ? 'none' : '';
+        }
+
         const tab = TABS.find(t => t.pane === paneId);
         if (tab) loadTab(tab.name);
     }
@@ -1568,6 +1743,15 @@ window.BI_CONFIG = {
         if (elDet) elDet.textContent = `Venta Día por Día — ${origenLabel}`;
         const elRes = document.getElementById('title-franquicias-resumen');
         if (elRes) elRes.textContent = `Resumen Anual Anterior — ${origenLabel}`;
+
+        // Campañas De Ventas: solo para Argentina
+        const btnCampanas = document.getElementById('tab-btn-campanas');
+        if (btnCampanas) {
+            btnCampanas.style.display = isAr ? '' : 'none';
+            if (!isAr && btnCampanas.classList.contains('active')) {
+                activateTab('tab-kpis');
+            }
+        }
 
         // Tab Circulación: solo visible para los orígenes habilitados (ORIGENES_CON_CIRCULACION)
         const btnCirculacion = document.getElementById('tab-btn-circulacion');
@@ -1609,6 +1793,17 @@ window.BI_CONFIG = {
         r.addEventListener('change', () => {
             customComp.classList.toggle('visible', compCustom.checked);
         });
+    });
+
+    // Listeners específicos para los filtros internos de la solapa Campañas De Ventas
+    ['sel-campana-tipo', 'sel-campana-evento', 'sel-campana-anio', 'sel-campana-sucursal', 'sel-campana-rubro'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', () => {
+                loaded['campanas'] = false;
+                Campanas.loadAll();
+            });
+        }
     });
 
     // Aplicar
