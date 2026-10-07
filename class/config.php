@@ -17,19 +17,20 @@ function getConfig(): array
         session_start();
     }
 
-    $tipo = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
+    $tipo = strtoupper(trim($_SESSION['tipo'] ?? 'LOCAL_PROPIO'));
+
+    if (strpos($tipo, 'FRANQUICIA') !== false || $tipo === 'GRUPO') {
+        return [
+            'db'              => 'power_franquicias',
+            'campo_vendedor'  => 'DESC_VENDEDOR',
+            'tabla_objetivos' => 'dbo.BI_OBJETIVOS_FRANQUICIAS',
+            // stock: BI_STOCK_FRANQUICIAS tiene NRO_SUCURSAL, ARTICULO y PRECIO,
+            // así que permite aislar por local y valorizar.
+            'features'        => ['grupos' => false, 'stock' => true],
+        ];
+    }
 
     switch ($tipo) {
-        case 'FRANQUICIA':
-        case 'GRUPO':
-            return [
-                'db'              => 'power_franquicias',
-                'campo_vendedor'  => 'DESC_VENDEDOR',
-                'tabla_objetivos' => 'dbo.BI_OBJETIVOS_FRANQUICIAS',
-                // stock: BI_STOCK_FRANQUICIAS tiene NRO_SUCURSAL, ARTICULO y PRECIO,
-                // así que permite aislar por local y valorizar.
-                'features'        => ['grupos' => false, 'stock' => true],
-            ];
 
         case 'LOCAL_PROPIO_UY':
             return [

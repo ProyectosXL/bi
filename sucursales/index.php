@@ -302,11 +302,11 @@ $descLocal  = $_SESSION['descLocal'];
 
             <!-- ── KPI GRID ───────────────────────────────────────── -->
             <?php
-                $tipoLocal = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
-                $benchDesc = match($tipoLocal) {
-                    'FRANQUICIA'      => 'El benchmark refleja el promedio de toda la red de franquicias para el mismo período seleccionado',
-                    'LOCAL_PROPIO_UY' => 'El benchmark refleja el promedio de todos los locales propios de Uruguay para el mismo período seleccionado',
-                    default           => 'El benchmark refleja el promedio de todos los locales propios de Argentina para el mismo período seleccionado',
+                $tipoLocal = strtoupper(trim($_SESSION['tipo'] ?? 'LOCAL_PROPIO'));
+                $benchDesc = match(true) {
+                    strpos($tipoLocal, 'FRANQUICIA') !== false || $tipoLocal === 'GRUPO' => 'El benchmark refleja el promedio de toda la red de franquicias para el mismo período seleccionado',
+                    $tipoLocal === 'LOCAL_PROPIO_UY' => 'El benchmark refleja el promedio de todos los locales propios de Uruguay para el mismo período seleccionado',
+                    default => 'El benchmark refleja el promedio de todos los locales propios de Argentina para el mismo período seleccionado',
                 };
             ?>
             <div class="kpi-grid-header">

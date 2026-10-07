@@ -80,8 +80,8 @@ class AnalisisDB
 
     private function fromVentasSucursales(): string
     {
-        $tipo = $_SESSION['tipo'] ?? 'LOCAL_PROPIO';
-        if ($this->origen !== 'franquicias' && $tipo !== 'FRANQUICIA' && $tipo !== 'GRUPO') {
+        $tipo = strtoupper(trim($_SESSION['tipo'] ?? 'LOCAL_PROPIO'));
+        if ($this->origen !== 'franquicias' && strpos($tipo, 'FRANQUICIA') === false && $tipo !== 'GRUPO') {
             return '(SELECT * FROM BI_SALES_SUCURSALES WITH (NOLOCK))';
         }
         return "(
