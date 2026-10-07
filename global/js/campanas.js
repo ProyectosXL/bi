@@ -353,51 +353,64 @@ const Campanas = (() => {
         // Acumuladores globales para el pie de tabla (TOTAL GENERAL)
         const totalPorDiaObj = {};
         const totalPorDiaFact = {};
+        const totalPorDiaFactPrev = {};
         for (const d of diasToRender) {
             totalPorDiaObj[d] = 0;
             totalPorDiaFact[d] = 0;
+            totalPorDiaFactPrev[d] = 0;
         }
 
         let tbodyHtml = '';
+        const anioPrev = anioAct - 1;
 
         sucsToRender.forEach(s => {
             const sMatriz = matrizTotal[s.nro] || {};
 
-            let sTotObj = 0, sTotFact = 0;
-            let rowObj   = `<tr class="row-matriz-metric"><td class="sticky-col">Importe Objetivo</td>`;
-            let rowFact  = `<tr class="row-matriz-metric"><td class="sticky-col">Importe Facturación</td>`;
-            let rowCumpl = `<tr class="row-matriz-metric"><td class="sticky-col">Facturación vs Objetivo</td>`;
-            let rowFalta = `<tr class="row-matriz-metric"><td class="sticky-col">Falta Para Objetivo</td>`;
+            let sTotObj = 0, sTotFact = 0, sTotFactPrev = 0;
+            let rowObj      = `<tr class="row-matriz-metric"><td class="sticky-col">Importe Objetivo (${anioAct})</td>`;
+            let rowFact     = `<tr class="row-matriz-metric"><td class="sticky-col">Importe Facturación (${anioAct})</td>`;
+            let rowCumpl    = `<tr class="row-matriz-metric"><td class="sticky-col">Facturación vs Objetivo</td>`;
+            let rowFalta    = `<tr class="row-matriz-metric"><td class="sticky-col">Falta Para Objetivo</td>`;
+            let rowFactPrev = `<tr class="row-matriz-metric" style="background:#f8fafc"><td class="sticky-col" style="color:var(--text-2)">Facturación Año Anterior (${anioPrev})</td>`;
+            let rowVarPrev  = `<tr class="row-matriz-metric" style="background:#f8fafc"><td class="sticky-col" style="color:var(--text-2)">Vs Año Anterior (${anioAct} vs ${anioPrev})</td>`;
 
             for (const d of diasToRender) {
-                const val = sMatriz[d] || { fact: 0, obj: 0 };
+                const val = sMatriz[d] || { fact: 0, obj: 0, fact_prev: 0 };
                 const isCamp = (d >= cfg.dia_inicio && d <= cfg.dia_fin);
                 const tdCls = isCamp ? 'class="cell-day-campana"' : '';
 
                 const obj = val.obj || 0;
                 const fact = val.fact || 0;
+                const factPrev = val.fact_prev || 0;
+
                 sTotObj += obj;
                 sTotFact += fact;
+                sTotFactPrev += factPrev;
 
                 totalPorDiaObj[d] += obj;
                 totalPorDiaFact[d] += fact;
+                totalPorDiaFactPrev[d] += factPrev;
 
                 const cumpl = obj > 0 ? (fact / obj) : (fact > 0 ? 1 : 0);
                 const falta = Math.max(0, obj - fact);
 
-                rowObj   += `<td style="text-align:right" ${tdCls}>${fmtMoney(obj)}</td>`;
-                rowFact  += `<td style="text-align:right; font-weight:600" ${tdCls}>${fmtMoney(fact)}</td>`;
-                rowCumpl += `<td style="text-align:right; font-weight:600; color:${cumpl >= 1 ? 'var(--pos)' : 'var(--neg)'}" ${tdCls}>${fmtPct(cumpl)}</td>`;
-                rowFalta += `<td style="text-align:right" ${tdCls}>${fmtMoney(falta)}</td>`;
+                rowObj      += `<td style="text-align:right" ${tdCls}>${fmtMoney(obj)}</td>`;
+                rowFact     += `<td style="text-align:right; font-weight:600" ${tdCls}>${fmtMoney(fact)}</td>`;
+                rowCumpl    += `<td style="text-align:right; font-weight:600; color:${cumpl >= 1 ? 'var(--pos)' : 'var(--neg)'}" ${tdCls}>${fmtPct(cumpl)}</td>`;
+                rowFalta    += `<td style="text-align:right" ${tdCls}>${fmtMoney(falta)}</td>`;
+                rowFactPrev += `<td style="text-align:right; color:var(--text-2)" ${tdCls}>${fmtMoney(factPrev)}</td>`;
+                rowVarPrev  += `<td style="text-align:right; font-weight:600" ${tdCls}>${fmtVar(fact, factPrev)}</td>`;
             }
 
             const sTotCumpl = sTotObj > 0 ? (sTotFact / sTotObj) : (sTotFact > 0 ? 1 : 0);
             const sTotFalta = Math.max(0, sTotObj - sTotFact);
 
-            rowObj   += `<td style="text-align:right; font-weight:700">${fmtMoney(sTotObj)}</td></tr>`;
-            rowFact  += `<td style="text-align:right; font-weight:700">${fmtMoney(sTotFact)}</td></tr>`;
-            rowCumpl += `<td style="text-align:right; font-weight:700; color:${sTotCumpl >= 1 ? 'var(--pos)' : 'var(--neg)'}">${fmtPct(sTotCumpl)}</td></tr>`;
-            rowFalta += `<td style="text-align:right; font-weight:700">${fmtMoney(sTotFalta)}</td></tr>`;
+            rowObj      += `<td style="text-align:right; font-weight:700">${fmtMoney(sTotObj)}</td></tr>`;
+            rowFact     += `<td style="text-align:right; font-weight:700">${fmtMoney(sTotFact)}</td></tr>`;
+            rowCumpl    += `<td style="text-align:right; font-weight:700; color:${sTotCumpl >= 1 ? 'var(--pos)' : 'var(--neg)'}">${fmtPct(sTotCumpl)}</td></tr>`;
+            rowFalta    += `<td style="text-align:right; font-weight:700">${fmtMoney(sTotFalta)}</td></tr>`;
+            rowFactPrev += `<td style="text-align:right; font-weight:700; color:var(--text-2)">${fmtMoney(sTotFactPrev)}</td></tr>`;
+            rowVarPrev  += `<td style="text-align:right; font-weight:700">${fmtVar(sTotFact, sTotFactPrev)}</td></tr>`;
 
             // Fila de encabezado de la sucursal
             tbodyHtml += `
@@ -411,38 +424,49 @@ const Campanas = (() => {
                 ${rowFact}
                 ${rowCumpl}
                 ${rowFalta}
+                ${rowFactPrev}
+                ${rowVarPrev}
             `;
         });
 
         // Fila de TOTAL GENERAL (Pie de tabla)
-        let tfootObj = `<tr><td class="sticky-col">TOTAL OBJETIVO</td>`;
-        let tfootFact = `<tr><td class="sticky-col">TOTAL FACTURACIÓN</td>`;
-        let tfootCumpl = `<tr><td class="sticky-col">TOTAL CUMPLIMIENTO</td>`;
-        let tfootFalta = `<tr><td class="sticky-col">TOTAL FALTA OBJETIVO</td>`;
+        let tfootObj      = `<tr><td class="sticky-col">TOTAL OBJETIVO (${anioAct})</td>`;
+        let tfootFact     = `<tr><td class="sticky-col">TOTAL FACTURACIÓN (${anioAct})</td>`;
+        let tfootCumpl    = `<tr><td class="sticky-col">TOTAL CUMPLIMIENTO</td>`;
+        let tfootFalta    = `<tr><td class="sticky-col">TOTAL FALTA OBJETIVO</td>`;
+        let tfootFactPrev = `<tr><td class="sticky-col" style="color:rgba(255,255,255,0.85)">TOTAL FACTURACIÓN (${anioPrev})</td>`;
+        let tfootVarPrev  = `<tr><td class="sticky-col" style="color:rgba(255,255,255,0.85)">TOTAL VS AÑO ANTERIOR</td>`;
 
-        let gTotObj = 0, gTotFact = 0;
+        let gTotObj = 0, gTotFact = 0, gTotFactPrev = 0;
         for (const d of diasToRender) {
             const dObj = totalPorDiaObj[d] || 0;
             const dFact = totalPorDiaFact[d] || 0;
+            const dFactPrev = totalPorDiaFactPrev[d] || 0;
+
             gTotObj += dObj;
             gTotFact += dFact;
+            gTotFactPrev += dFactPrev;
 
             const dCumpl = dObj > 0 ? (dFact / dObj) : (dFact > 0 ? 1 : 0);
             const dFalta = Math.max(0, dObj - dFact);
 
-            tfootObj   += `<td style="text-align:right">${fmtMoney(dObj)}</td>`;
-            tfootFact  += `<td style="text-align:right">${fmtMoney(dFact)}</td>`;
-            tfootCumpl += `<td style="text-align:right; color:${dCumpl >= 1 ? '#86efac' : '#fca5a5'}">${fmtPct(dCumpl)}</td>`;
-            tfootFalta += `<td style="text-align:right">${fmtMoney(dFalta)}</td>`;
+            tfootObj      += `<td style="text-align:right">${fmtMoney(dObj)}</td>`;
+            tfootFact     += `<td style="text-align:right">${fmtMoney(dFact)}</td>`;
+            tfootCumpl    += `<td style="text-align:right; color:${dCumpl >= 1 ? '#86efac' : '#fca5a5'}">${fmtPct(dCumpl)}</td>`;
+            tfootFalta    += `<td style="text-align:right">${fmtMoney(dFalta)}</td>`;
+            tfootFactPrev += `<td style="text-align:right">${fmtMoney(dFactPrev)}</td>`;
+            tfootVarPrev  += `<td style="text-align:right">${fmtVar(dFact, dFactPrev)}</td>`;
         }
 
         const gTotCumpl = gTotObj > 0 ? (gTotFact / gTotObj) : (gTotFact > 0 ? 1 : 0);
         const gTotFalta = Math.max(0, gTotObj - gTotFact);
 
-        tfootObj   += `<td style="text-align:right">${fmtMoney(gTotObj)}</td></tr>`;
-        tfootFact  += `<td style="text-align:right">${fmtMoney(gTotFact)}</td></tr>`;
-        tfootCumpl += `<td style="text-align:right; color:${gTotCumpl >= 1 ? '#86efac' : '#fca5a5'}">${fmtPct(gTotCumpl)}</td></tr>`;
-        tfootFalta += `<td style="text-align:right">${fmtMoney(gTotFalta)}</td></tr>`;
+        tfootObj      += `<td style="text-align:right">${fmtMoney(gTotObj)}</td></tr>`;
+        tfootFact     += `<td style="text-align:right">${fmtMoney(gTotFact)}</td></tr>`;
+        tfootCumpl    += `<td style="text-align:right; color:${gTotCumpl >= 1 ? '#86efac' : '#fca5a5'}">${fmtPct(gTotCumpl)}</td></tr>`;
+        tfootFalta    += `<td style="text-align:right">${fmtMoney(gTotFalta)}</td></tr>`;
+        tfootFactPrev += `<td style="text-align:right">${fmtMoney(gTotFactPrev)}</td></tr>`;
+        tfootVarPrev  += `<td style="text-align:right">${fmtVar(gTotFact, gTotFactPrev)}</td></tr>`;
 
         wrap.innerHTML = `
             <table class="campanas-table">
@@ -455,6 +479,8 @@ const Campanas = (() => {
                     ${tfootFact}
                     ${tfootCumpl}
                     ${tfootFalta}
+                    ${tfootFactPrev}
+                    ${tfootVarPrev}
                 </tfoot>
             </table>
         `;

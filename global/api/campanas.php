@@ -334,6 +334,9 @@ try {
     ";
     $rowsFactDia = $query($sqlFactDiaSuc, array_merge([$mes, $anioSel], $sucursalParams, $rubroParams));
 
+    // Facturación día a día para el año anterior en el mes
+    $rowsFactDiaPrev = $query($sqlFactDiaSuc, array_merge([$mes, $anioPrevio], $sucursalParams, $rubroParams));
+
     // Objetivos día a día para el año actual en el mes
     $objSucClause = "";
     $paramsObjDia = [$mes, $anioSel];
@@ -367,15 +370,23 @@ try {
         if (isset($uyNros[$nro]) || !isset($sucMap[$nro])) continue;
         $dia = (int)$r['dia'];
         if (!isset($matrizDiaSuc[$nro])) $matrizDiaSuc[$nro] = [];
-        if (!isset($matrizDiaSuc[$nro][$dia])) $matrizDiaSuc[$nro][$dia] = ['fact' => 0, 'obj' => 0];
+        if (!isset($matrizDiaSuc[$nro][$dia])) $matrizDiaSuc[$nro][$dia] = ['fact' => 0, 'obj' => 0, 'fact_prev' => 0];
         $matrizDiaSuc[$nro][$dia]['fact'] = (float)$r['facturacion'];
+    }
+    foreach ($rowsFactDiaPrev as $r) {
+        $nro = (int)$r['nro'];
+        if (isset($uyNros[$nro]) || !isset($sucMap[$nro])) continue;
+        $dia = (int)$r['dia'];
+        if (!isset($matrizDiaSuc[$nro])) $matrizDiaSuc[$nro] = [];
+        if (!isset($matrizDiaSuc[$nro][$dia])) $matrizDiaSuc[$nro][$dia] = ['fact' => 0, 'obj' => 0, 'fact_prev' => 0];
+        $matrizDiaSuc[$nro][$dia]['fact_prev'] = (float)$r['facturacion'];
     }
     foreach ($rowsObjDia as $r) {
         $nro = (int)$r['nro'];
         if (isset($uyNros[$nro]) || !isset($sucMap[$nro])) continue;
         $dia = (int)$r['dia'];
         if (!isset($matrizDiaSuc[$nro])) $matrizDiaSuc[$nro] = [];
-        if (!isset($matrizDiaSuc[$nro][$dia])) $matrizDiaSuc[$nro][$dia] = ['fact' => 0, 'obj' => 0];
+        if (!isset($matrizDiaSuc[$nro][$dia])) $matrizDiaSuc[$nro][$dia] = ['fact' => 0, 'obj' => 0, 'fact_prev' => 0];
         $matrizDiaSuc[$nro][$dia]['obj'] = (float)$r['objetivo'];
     }
 
