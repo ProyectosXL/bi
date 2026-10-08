@@ -151,6 +151,8 @@
 }
 
 .legend-dot.campana { background: #f59e0b; }
+.legend-dot.feriado-2026 { background: #6366f1; }
+.legend-dot.feriado-2025 { background: #0d9488; }
 .legend-dot.regular { background: #93c5fd; }
 
 .campanas-chart-body {
@@ -164,21 +166,51 @@
     background: #ffffff;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 16px;
+    padding: 14px;
     box-shadow: var(--shadow);
     margin-bottom: 20px;
+    -webkit-text-size-adjust: 100%;
 }
 
 .campanas-table-wrap {
     overflow-x: auto;
-    max-height: 520px;
+    max-height: 540px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.campanas-table-wrap::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.campanas-table-wrap::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+.campanas-table-wrap::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+.campanas-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
 .campanas-table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 0.82rem;
+    font-size: 0.79rem;
+    font-variant-numeric: tabular-nums lining-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.campanas-table th,
+.campanas-table td {
+    box-sizing: border-box;
 }
 
 .campanas-table thead th {
@@ -186,9 +218,9 @@
     color: #ffffff;
     font-family: var(--font-display);
     font-weight: 600;
-    font-size: 0.85rem;
-    letter-spacing: 0.4px;
-    padding: 8px 10px;
+    font-size: 0.80rem;
+    letter-spacing: 0.3px;
+    padding: 6px 8px;
     text-transform: uppercase;
     position: sticky;
     top: 0;
@@ -204,9 +236,11 @@
 }
 
 .campanas-table tbody td {
-    padding: 6px 10px;
+    padding: 4px 7px;
     border-bottom: 1px solid #edf1f7;
     white-space: nowrap;
+    font-size: 0.78rem;
+    line-height: 1.35;
 }
 
 .campanas-table tbody tr:hover td {
@@ -228,31 +262,87 @@
 }
 
 .campanas-table tbody tr.row-rubro td.sticky-col {
-    padding-left: 26px;
+    padding-left: 22px;
     color: #4b5674;
     font-weight: 500;
 }
 
 .campanas-table tfoot td {
-    background: #243060;
-    color: #ffffff;
+    background: #172554 !important;
+    color: #ffffff !important;
     font-family: var(--font-display);
     font-weight: 700;
-    font-size: 0.88rem;
-    padding: 8px 10px;
+    font-size: 0.82rem;
+    padding: 7px 8px;
     position: sticky;
     bottom: 0;
     z-index: 10;
     white-space: nowrap;
+    line-height: 1.35;
+    border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.campanas-table tfoot tr:first-child td {
+    border-top: 2px solid #3b82f6 !important;
 }
 
 .campanas-table tfoot td.sticky-col {
     left: 0;
     z-index: 15;
-    background: #243060;
+    background: #172554 !important;
+    color: #ffffff !important;
 }
 
-/* Indicadores de variación */
+/* Indicadores de variación y cumplimiento en tfoot */
+.campanas-table tfoot .campanas-var-pos,
+.campanas-table tfoot .tfoot-var-pos {
+    color: #4ade80 !important;
+    font-weight: 700;
+}
+.campanas-table tfoot .campanas-var-neg,
+.campanas-table tfoot .tfoot-var-neg {
+    color: #fca5a5 !important;
+    font-weight: 700;
+}
+.campanas-table tfoot .tfoot-var-neutral {
+    color: #94a3b8 !important;
+    font-weight: 500;
+}
+
+/* Clases específicas para columnas */
+.campanas-table .col-sticky {
+    min-width: 175px;
+    max-width: 220px;
+    width: 185px;
+}
+
+.campanas-table .col-day {
+    min-width: 68px;
+    width: 68px;
+    text-align: right;
+}
+
+.campanas-table .col-total {
+    min-width: 95px;
+    width: 95px;
+    text-align: right;
+}
+
+/* Tabla de matriz diaria: ancho basado en contenido exacto para que no se ensanche al filtrar por semana */
+.campanas-table-matriz {
+    width: max-content !important;
+    min-width: 0 !important;
+}
+
+.campanas-table-matriz th.col-day,
+.campanas-table-matriz td.col-day {
+    width: 70px;
+    min-width: 70px;
+    max-width: 76px;
+    text-align: right;
+}
+
+/* Indicadores de variación generales en tbody */
 .campanas-var-pos {
     color: var(--pos);
     font-weight: 600;
@@ -269,39 +359,129 @@
     cursor: pointer;
     font-size: 0.75rem;
     color: var(--accent2);
-    margin-right: 6px;
-    width: 16px;
-    height: 16px;
+    margin-right: 5px;
+    width: 15px;
+    height: 15px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: 2px;
+    vertical-align: middle;
 }
 .btn-toggle-suc:hover {
     background: rgba(37, 99, 235, 0.1);
 }
 
-/* Matriz diaria */
-.cell-day-campana {
+/* Matriz diaria - Celdas en TBODY únicamente para no pisar el TFOOT */
+.campanas-table tbody td.cell-day-campana {
     background: rgba(245, 158, 11, 0.08) !important;
 }
 .header-day-campana {
     background: #d97706 !important;
+    color: #ffffff !important;
+}
+
+/* Feriado 2026 (Lunes 12/10) */
+.header-day-feriado-2026 {
+    background: #6366f1 !important;
+    color: #ffffff !important;
+}
+.campanas-table tbody td.cell-day-feriado-2026 {
+    background: rgba(99, 102, 241, 0.09) !important;
+    border-left: 1px dashed rgba(99, 102, 241, 0.35) !important;
+    border-right: 1px dashed rgba(99, 102, 241, 0.35) !important;
+}
+
+/* Feriado 2025 (Homólogo 9/10/26 - 10/10/25) */
+.header-day-feriado-2025 {
+    background: #0d9488 !important;
+    color: #ffffff !important;
+}
+.campanas-table tbody td.cell-day-feriado-2025 {
+    background: rgba(13, 148, 136, 0.09) !important;
+    border-left: 1px dashed rgba(13, 148, 136, 0.35) !important;
+    border-right: 1px dashed rgba(13, 148, 136, 0.35) !important;
+}
+
+/* Contenedor del encabezado de día y badges */
+.day-header-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 2px 0;
+}
+.day-header-container .day-num {
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.badge-feriado {
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+.badge-feriado.feriado-2026 {
+    background: #312e81;
+    color: #e0e7ff;
+    border: 1px solid rgba(255,255,255,0.4);
+}
+.badge-feriado.feriado-2025 {
+    background: #134e4a;
+    color: #ccfbf1;
+    border: 1px solid rgba(255,255,255,0.4);
+}
+
+/* Leyenda superior de la matriz */
+.campanas-matriz-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.legend-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.74rem;
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.legend-pill.pill-campana {
+    background: #d97706;
+}
+.legend-pill.pill-feriado-2026 {
+    background: #6366f1;
+}
+.legend-pill.pill-feriado-2025 {
+    background: #0d9488;
 }
 
 /* Matriz diaria multisuccursal */
 .row-matriz-suc td {
     background: #eef2f9 !important;
-    border-top: 2px solid #cbd5e1 !important;
+    border-top: 1px solid #cbd5e1 !important;
     border-bottom: 1px solid #cbd5e1 !important;
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
 }
 .row-matriz-suc td.sticky-col {
     color: #1e293b !important;
     font-weight: 700 !important;
-    font-size: 0.88rem;
+    font-size: 0.83rem;
 }
 .row-matriz-metric td.sticky-col {
-    padding-left: 24px;
+    padding-left: 20px;
     font-weight: 500;
     color: #475569;
 }

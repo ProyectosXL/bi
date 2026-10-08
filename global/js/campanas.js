@@ -28,7 +28,10 @@ const Campanas = (() => {
     }
 
     function fmtVar(curr, prev) {
-        if (!prev || prev === 0) return '<span style="color:var(--text-3)">Infinito</span>';
+        if (!prev || prev === 0) {
+            if (!curr || curr === 0) return '<span style="color:var(--text-3)">—</span>';
+            return '<span class="campanas-var-pos">+100,0\u00A0%</span>';
+        }
         const diff = (curr - prev) / Math.abs(prev);
         const sign = diff >= 0 ? '+' : '';
         const cls  = diff >= 0 ? 'campanas-var-pos' : 'campanas-var-neg';
@@ -233,8 +236,14 @@ const Campanas = (() => {
 
         const labels = serie.map(s => String(s.dia));
         const dataValues = serie.map(s => s[valueKey] || 0);
-        // Colores según sea día especial de campaña o día regular
-        const barColors = serie.map(s => s.es_campana ? '#f59e0b' : '#93c5fd');
+        const isOctubre = (_data?.config?.mes === 10);
+        // Colores según sea feriado 2026, feriado 2025, campaña o regular
+        const barColors = serie.map(s => {
+            const d = s.dia;
+            if (isOctubre && d === 12) return '#6366f1'; // Feriado 2026
+            if (isOctubre && d === 9) return '#0d9488';  // Feriado 2025
+            return s.es_campana ? '#f59e0b' : '#93c5fd';
+        });
 
         _charts[canvasId] = new Chart(canvas.getContext('2d'), {
             type: 'bar',
@@ -327,6 +336,26 @@ const Campanas = (() => {
         const anioAct = _data.anio_seleccionado;
         const selEventoFilter = $('sel-campana-evento')?.value || 'todos';
 
+        const isOctubre = (cfg.mes === 10);
+        const isFeriado2026 = (d) => isOctubre && d === 12;
+        const isFeriado2025 = (d) => isOctubre && d === 9;
+
+        // Renderizar leyenda interactiva / explicativa
+        const legendContainer = $('campanas-matriz-legend');
+        if (legendContainer) {
+            if (isOctubre) {
+                legendContainer.innerHTML = `
+                    <span class="legend-pill pill-campana" title="Semana de Campaña del Día de la Madre (${cfg.dia_inicio} al ${cfg.dia_fin})"><i class="bi bi-star-fill"></i> Campaña</span>
+                    <span class="legend-pill pill-feriado-2026" title="Feriado Nacional 2026: Lunes 12/10"><i class="bi bi-calendar2-check-fill"></i> Feriado 2026</span>
+                    <span class="legend-pill pill-feriado-2025" title="Feriado Nacional 2025: Viernes 10/10/25 (Homólogo 2026: Viernes 9/10)"><i class="bi bi-calendar-event-fill"></i> Feriado 2025</span>
+                `;
+            } else {
+                legendContainer.innerHTML = `
+                    <span class="legend-pill pill-campana"><i class="bi bi-star-fill"></i> Semana Especial</span>
+                `;
+            }
+        }
+
         // Determinar qué días mostrar según el filtro de Evento Especial
         const diasToRender = [];
         for (let d = 1; d <= diasTot; d++) {
@@ -338,17 +367,29 @@ const Campanas = (() => {
 
         let theadHtml = `
             <tr>
-                <th class="sticky-col" style="min-width:200px">AÑO: ${anioAct}</th>
+                <th class="sticky-col col-sticky">AÑO: ${anioAct}</th>
                 <th colspan="${diasToRender.length + 1}" style="text-align:left; background: #243060; color:#fff">MES: ${cfg.mes_nombre.toUpperCase()} — APERTURA POR SUCURSAL (DÍA A DÍA)</th>
             </tr>
             <tr>
-                <th class="sticky-col" style="min-width:200px">SUCURSAL / MÉTRICA</th>`;
+                <th class="sticky-col col-sticky">SUCURSAL / MÉTRICA</th>`;
         for (const d of diasToRender) {
             const isCamp = (d >= cfg.dia_inicio && d <= cfg.dia_fin);
-            const cls = isCamp ? 'header-day-campana' : '';
-            theadHtml += `<th style="text-align:right; min-width:85px" class="${cls}">${d}</th>`;
+            let cls = 'col-day';
+            let badgeHtml = `<div class="day-header-container"><span class="day-num">${d}</span></div>`;
+
+            if (isFeriado2026(d)) {
+                cls += ' header-day-feriado-2026';
+                badgeHtml = `<div class="day-header-container"><span class="day-num">${d}</span><span class="badge-feriado feriado-2026">FERIADO '26</span></div>`;
+            } else if (isFeriado2025(d)) {
+                cls += ' header-day-feriado-2025';
+                badgeHtml = `<div class="day-header-container"><span class="day-num">${d}</span><span class="badge-feriado feriado-2025">FERIADO '25</span></div>`;
+            } else if (isCamp) {
+                cls += ' header-day-campana';
+            }
+
+            theadHtml += `<th class="${cls}">${badgeHtml}</th>`;
         }
-        theadHtml += `<th style="text-align:right; min-width:110px">TOTAL</th></tr>`;
+        theadHtml += `<th class="col-total">TOTAL</th></tr>`;
 
         // Acumuladores globales para el pie de tabla (TOTAL GENERAL)
         const totalPorDiaObj = {};
@@ -377,7 +418,16 @@ const Campanas = (() => {
             for (const d of diasToRender) {
                 const val = sMatriz[d] || { fact: 0, obj: 0, fact_prev: 0 };
                 const isCamp = (d >= cfg.dia_inicio && d <= cfg.dia_fin);
-                const tdCls = isCamp ? 'class="cell-day-campana"' : '';
+                let tdCls = 'class="col-day';
+                if (isFeriado2026(d)) {
+                    tdCls += ' cell-day-feriado-2026"';
+                } else if (isFeriado2025(d)) {
+                    tdCls += ' cell-day-feriado-2025"';
+                } else if (isCamp) {
+                    tdCls += ' cell-day-campana"';
+                } else {
+                    tdCls += '"';
+                }
 
                 const obj = val.obj || 0;
                 const fact = val.fact || 0;
@@ -405,17 +455,17 @@ const Campanas = (() => {
             const sTotCumpl = sTotObj > 0 ? (sTotFact / sTotObj) : (sTotFact > 0 ? 1 : 0);
             const sTotFalta = Math.max(0, sTotObj - sTotFact);
 
-            rowObj      += `<td style="text-align:right; font-weight:700">${fmtMoney(sTotObj)}</td></tr>`;
-            rowFact     += `<td style="text-align:right; font-weight:700">${fmtMoney(sTotFact)}</td></tr>`;
-            rowCumpl    += `<td style="text-align:right; font-weight:700; color:${sTotCumpl >= 1 ? 'var(--pos)' : 'var(--neg)'}">${fmtPct(sTotCumpl)}</td></tr>`;
-            rowFalta    += `<td style="text-align:right; font-weight:700">${fmtMoney(sTotFalta)}</td></tr>`;
-            rowFactPrev += `<td style="text-align:right; font-weight:700; color:var(--text-2)">${fmtMoney(sTotFactPrev)}</td></tr>`;
-            rowVarPrev  += `<td style="text-align:right; font-weight:700">${fmtVar(sTotFact, sTotFactPrev)}</td></tr>`;
+            rowObj      += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(sTotObj)}</td></tr>`;
+            rowFact     += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(sTotFact)}</td></tr>`;
+            rowCumpl    += `<td style="text-align:right; font-weight:700; color:${sTotCumpl >= 1 ? 'var(--pos)' : 'var(--neg)'}" class="col-total">${fmtPct(sTotCumpl)}</td></tr>`;
+            rowFalta    += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(sTotFalta)}</td></tr>`;
+            rowFactPrev += `<td style="text-align:right; font-weight:700; color:var(--text-2)" class="col-total">${fmtMoney(sTotFactPrev)}</td></tr>`;
+            rowVarPrev  += `<td style="text-align:right; font-weight:700" class="col-total">${fmtVar(sTotFact, sTotFactPrev)}</td></tr>`;
 
             // Fila de encabezado de la sucursal
             tbodyHtml += `
                 <tr class="row-matriz-suc">
-                    <td class="sticky-col" style="background:#eef2f9; font-weight:700; color:#1e293b; padding-left:10px">
+                    <td class="sticky-col col-sticky" style="background:#eef2f9; font-weight:700; color:#1e293b; padding-left:10px">
                         <i class="bi bi-shop" style="margin-right:6px; color:var(--accent2)"></i>${s.nombre}
                     </td>
                     <td colspan="${diasToRender.length + 1}" style="background:#eef2f9"></td>
@@ -430,12 +480,12 @@ const Campanas = (() => {
         });
 
         // Fila de TOTAL GENERAL (Pie de tabla)
-        let tfootObj      = `<tr><td class="sticky-col">TOTAL OBJETIVO (${anioAct})</td>`;
-        let tfootFact     = `<tr><td class="sticky-col">TOTAL FACTURACIÓN (${anioAct})</td>`;
-        let tfootCumpl    = `<tr><td class="sticky-col">TOTAL CUMPLIMIENTO</td>`;
-        let tfootFalta    = `<tr><td class="sticky-col">TOTAL FALTA OBJETIVO</td>`;
-        let tfootFactPrev = `<tr><td class="sticky-col" style="color:rgba(255,255,255,0.85)">TOTAL FACTURACIÓN (${anioPrev})</td>`;
-        let tfootVarPrev  = `<tr><td class="sticky-col" style="color:rgba(255,255,255,0.85)">TOTAL VS AÑO ANTERIOR</td>`;
+        let tfootObj      = `<tr><td class="sticky-col col-sticky">TOTAL OBJETIVO (${anioAct})</td>`;
+        let tfootFact     = `<tr><td class="sticky-col col-sticky">TOTAL FACTURACIÓN (${anioAct})</td>`;
+        let tfootCumpl    = `<tr><td class="sticky-col col-sticky">TOTAL CUMPLIMIENTO</td>`;
+        let tfootFalta    = `<tr><td class="sticky-col col-sticky">TOTAL FALTA OBJETIVO</td>`;
+        let tfootFactPrev = `<tr><td class="sticky-col col-sticky" style="color:#cbd5e1">TOTAL FACTURACIÓN (${anioPrev})</td>`;
+        let tfootVarPrev  = `<tr><td class="sticky-col col-sticky" style="color:#cbd5e1">TOTAL VS AÑO ANTERIOR</td>`;
 
         let gTotObj = 0, gTotFact = 0, gTotFactPrev = 0;
         for (const d of diasToRender) {
@@ -450,26 +500,49 @@ const Campanas = (() => {
             const dCumpl = dObj > 0 ? (dFact / dObj) : (dFact > 0 ? 1 : 0);
             const dFalta = Math.max(0, dObj - dFact);
 
-            tfootObj      += `<td style="text-align:right">${fmtMoney(dObj)}</td>`;
-            tfootFact     += `<td style="text-align:right">${fmtMoney(dFact)}</td>`;
-            tfootCumpl    += `<td style="text-align:right; color:${dCumpl >= 1 ? '#86efac' : '#fca5a5'}">${fmtPct(dCumpl)}</td>`;
-            tfootFalta    += `<td style="text-align:right">${fmtMoney(dFalta)}</td>`;
-            tfootFactPrev += `<td style="text-align:right">${fmtMoney(dFactPrev)}</td>`;
-            tfootVarPrev  += `<td style="text-align:right">${fmtVar(dFact, dFactPrev)}</td>`;
+            let varHtml = '—';
+            if (dFactPrev > 0) {
+                if (dFact === 0) {
+                    varHtml = '<span class="tfoot-var-neutral">—</span>';
+                } else {
+                    const diff = (dFact - dFactPrev) / dFactPrev;
+                    const sign = diff >= 0 ? '+' : '';
+                    const cls = diff >= 0 ? 'tfoot-var-pos' : 'tfoot-var-neg';
+                    varHtml = `<span class="${cls}">${sign}${(diff * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u00A0%</span>`;
+                }
+            } else if (dFact > 0) {
+                varHtml = '<span class="tfoot-var-pos">+100,0\u00A0%</span>';
+            }
+
+            const cumplColor = dFact === 0 ? '#94a3b8' : (dCumpl >= 1 ? '#4ade80' : '#fca5a5');
+
+            tfootObj      += `<td style="text-align:right" class="col-day">${fmtMoney(dObj)}</td>`;
+            tfootFact     += `<td style="text-align:right; font-weight:700" class="col-day">${fmtMoney(dFact)}</td>`;
+            tfootCumpl    += `<td style="text-align:right; font-weight:700; color:${cumplColor}" class="col-day">${dFact === 0 ? '0,0\u00A0%' : fmtPct(dCumpl)}</td>`;
+            tfootFalta    += `<td style="text-align:right" class="col-day">${fmtMoney(dFalta)}</td>`;
+            tfootFactPrev += `<td style="text-align:right; color:#cbd5e1" class="col-day">${fmtMoney(dFactPrev)}</td>`;
+            tfootVarPrev  += `<td style="text-align:right; font-weight:700" class="col-day">${varHtml}</td>`;
         }
 
         const gTotCumpl = gTotObj > 0 ? (gTotFact / gTotObj) : (gTotFact > 0 ? 1 : 0);
         const gTotFalta = Math.max(0, gTotObj - gTotFact);
+        let gVarHtml = '—';
+        if (gTotFactPrev > 0) {
+            const gDiff = (gTotFact - gTotFactPrev) / gTotFactPrev;
+            const gSign = gDiff >= 0 ? '+' : '';
+            const gCls = gDiff >= 0 ? 'tfoot-var-pos' : 'tfoot-var-neg';
+            gVarHtml = `<span class="${gCls}">${gSign}${(gDiff * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u00A0%</span>`;
+        }
 
-        tfootObj      += `<td style="text-align:right">${fmtMoney(gTotObj)}</td></tr>`;
-        tfootFact     += `<td style="text-align:right">${fmtMoney(gTotFact)}</td></tr>`;
-        tfootCumpl    += `<td style="text-align:right; color:${gTotCumpl >= 1 ? '#86efac' : '#fca5a5'}">${fmtPct(gTotCumpl)}</td></tr>`;
-        tfootFalta    += `<td style="text-align:right">${fmtMoney(gTotFalta)}</td></tr>`;
-        tfootFactPrev += `<td style="text-align:right">${fmtMoney(gTotFactPrev)}</td></tr>`;
-        tfootVarPrev  += `<td style="text-align:right">${fmtVar(gTotFact, gTotFactPrev)}</td></tr>`;
+        tfootObj      += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(gTotObj)}</td></tr>`;
+        tfootFact     += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(gTotFact)}</td></tr>`;
+        tfootCumpl    += `<td style="text-align:right; font-weight:700; color:${gTotCumpl >= 1 ? '#4ade80' : '#fca5a5'}" class="col-total">${fmtPct(gTotCumpl)}</td></tr>`;
+        tfootFalta    += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(gTotFalta)}</td></tr>`;
+        tfootFactPrev += `<td style="text-align:right; font-weight:700; color:#cbd5e1" class="col-total">${fmtMoney(gTotFactPrev)}</td></tr>`;
+        tfootVarPrev  += `<td style="text-align:right; font-weight:700" class="col-total">${gVarHtml}</td></tr>`;
 
         wrap.innerHTML = `
-            <table class="campanas-table">
+            <table class="campanas-table campanas-table-matriz">
                 <thead>${theadHtml}</thead>
                 <tbody>
                     ${tbodyHtml}
@@ -507,12 +580,12 @@ const Campanas = (() => {
             <table class="campanas-table" id="tabla-campana-fact">
                 <thead>
                     <tr>
-                        <th class="sticky-col" style="min-width:220px">Sucursal / Rubro</th>
-                        <th style="text-align:right; min-width:110px">Objetivo ($)</th>
-                        <th style="text-align:right; min-width:130px">Vta Sem. ${a0}</th>
-                        <th style="text-align:right; min-width:130px">Vta Sem. ${a1}</th>
-                        <th style="text-align:right; min-width:110px">Tendencia ${a1} vs ${a0}</th>
-                        <th style="text-align:right; min-width:130px">Vta Sem. ${a2}</th>
+                        <th class="sticky-col col-sticky">Sucursal / Rubro</th>
+                        <th style="text-align:right; min-width:90px">Objetivo ($)</th>
+                        <th style="text-align:right; min-width:95px">Vta Sem. ${a0}</th>
+                        <th style="text-align:right; min-width:95px">Vta Sem. ${a1}</th>
+                        <th style="text-align:right; min-width:95px">Tendencia ${a1} vs ${a0}</th>
+                        <th style="text-align:right; min-width:95px">Vta Sem. ${a2}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -600,12 +673,12 @@ const Campanas = (() => {
             <table class="campanas-table" id="tabla-campana-unid">
                 <thead>
                     <tr>
-                        <th class="sticky-col" style="min-width:220px">Sucursal / Rubro</th>
-                        <th style="text-align:right; min-width:110px">Unid. Sem. ${a0}</th>
-                        <th style="text-align:right; min-width:110px">Unid. Sem. ${a1}</th>
-                        <th style="text-align:right; min-width:110px">Tendencia ${a1} vs ${a0}</th>
-                        <th style="text-align:right; min-width:110px">Unid. Sem. ${a2}</th>
-                        <th style="text-align:right; min-width:110px">Stock Actual</th>
+                        <th class="sticky-col col-sticky">Sucursal / Rubro</th>
+                        <th style="text-align:right; min-width:85px">Unid. Sem. ${a0}</th>
+                        <th style="text-align:right; min-width:85px">Unid. Sem. ${a1}</th>
+                        <th style="text-align:right; min-width:85px">Tendencia ${a1} vs ${a0}</th>
+                        <th style="text-align:right; min-width:85px">Unid. Sem. ${a2}</th>
+                        <th style="text-align:right; min-width:85px">Stock Actual</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -698,14 +771,14 @@ const Campanas = (() => {
             <table class="campanas-table" id="tabla-campana-tickets">
                 <thead>
                     <tr>
-                        <th class="sticky-col" style="min-width:220px">Sucursal</th>
-                        <th style="text-align:right; min-width:110px">Cantidad Tickets ${a0}</th>
-                        <th style="text-align:right; min-width:110px">Cantidad Tickets ${a1}</th>
-                        <th style="text-align:right; min-width:110px">Dif Cant ${a1} vs ${a0}</th>
-                        <th style="text-align:right; min-width:110px">Dif % ${a1} vs ${a0}</th>
-                        <th style="text-align:right; min-width:110px">Cantidad Tickets ${a2}</th>
-                        <th style="text-align:right; min-width:110px">Dif Cant ${a2} vs ${a1}</th>
-                        <th style="text-align:right; min-width:110px">Dif % ${a2} vs ${a1}</th>
+                        <th class="sticky-col col-sticky">Sucursal</th>
+                        <th style="text-align:right; min-width:85px">Cantidad Tickets ${a0}</th>
+                        <th style="text-align:right; min-width:85px">Cantidad Tickets ${a1}</th>
+                        <th style="text-align:right; min-width:85px">Dif Cant ${a1} vs ${a0}</th>
+                        <th style="text-align:right; min-width:85px">Dif % ${a1} vs ${a0}</th>
+                        <th style="text-align:right; min-width:85px">Cantidad Tickets ${a2}</th>
+                        <th style="text-align:right; min-width:85px">Dif Cant ${a2} vs ${a1}</th>
+                        <th style="text-align:right; min-width:85px">Dif % ${a2} vs ${a1}</th>
                     </tr>
                 </thead>
                 <tbody>

@@ -1479,6 +1479,7 @@ try {
                     <span style="font-family:var(--font-display); font-weight:700; color:var(--text-1); font-size:1rem; text-transform:uppercase">
                         APERTURA POR SUCURSAL (DÍA A DÍA)
                     </span>
+                    <div class="campanas-matriz-legend" id="campanas-matriz-legend"></div>
                     <span id="campanas-matriz-suc-label" style="font-size:0.85rem; font-weight:600; color:var(--accent2)"></span>
                 </div>
                 <div class="campanas-table-wrap" id="campanas-matriz-wrap">
@@ -1539,6 +1540,7 @@ try {
                         <span class="campanas-chart-title" id="chart-title-bar-prev">VTA - OCTUBRE COMPLETO - 2025</span>
                         <div class="campanas-chart-legend">
                             <div class="campanas-chart-legend-item"><span class="legend-dot campana"></span> Semana Campaña</div>
+                            <div class="campanas-chart-legend-item"><span class="legend-dot feriado-2025"></span> Feriado</div>
                             <div class="campanas-chart-legend-item"><span class="legend-dot regular"></span> Día Regular</div>
                         </div>
                     </div>
@@ -1563,6 +1565,7 @@ try {
                         <span class="campanas-chart-title" id="chart-title-bar-act">VTA - OCTUBRE COMPLETO - 2026</span>
                         <div class="campanas-chart-legend">
                             <div class="campanas-chart-legend-item"><span class="legend-dot campana"></span> Semana Campaña</div>
+                            <div class="campanas-chart-legend-item"><span class="legend-dot feriado-2026"></span> Feriado</div>
                             <div class="campanas-chart-legend-item"><span class="legend-dot regular"></span> Día Regular</div>
                         </div>
                     </div>

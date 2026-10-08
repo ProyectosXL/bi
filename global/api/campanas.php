@@ -62,6 +62,7 @@ try {
     // Configuración de campañas: mes y rango del día especial
     // Semana del Día de la Madre: 12 al 18 de octubre (mes 10)
     // Semana de Navidad: 21 al 27 de diciembre (mes 12)
+    // Configuración de campañas: mes y rango del día especial
     $campanaConfigs = [
         'madre' => [
             'nombre'     => 'Semana del Día de la Madre',
@@ -85,6 +86,172 @@ try {
     $mes = $cfg['mes'];
     $diaInicio = $cfg['dia_inicio'];
     $diaFin = $cfg['dia_fin'];
+
+    if ($campana === 'madre' || $mes === 10) {
+        // En Argentina: El Día de la Madre es el 3er domingo de Octubre
+        $get3erDom = function($y) {
+            $dt = new DateTime("$y-10-01");
+            $doms = 0;
+            while ((int)$dt->format('m') === 10) {
+                if ((int)$dt->format('N') === 7) {
+                    $doms++;
+                    if ($doms === 3) return (int)$dt->format('j');
+                }
+                $dt->modify('+1 day');
+            }
+            return 18;
+        };
+        $domMadre = $get3erDom($anioSel);
+        $diaInicio = $domMadre - 6;
+        $diaFin = $domMadre;
+        $cfg['dia_inicio'] = $diaInicio;
+        $cfg['dia_fin'] = $diaFin;
+    }
+
+    // Función para mapear días homólogos entre año seleccionado y año previo
+    $getMapaHomologo = function($mes, $anio) {
+        $mes = (int)$mes;
+        $anio = (int)$anio;
+        $anioAnt = $anio - 1;
+        $diasMes = cal_days_in_month(CAL_GREGORIAN, $mes, $anio);
+        $diasMesAnt = cal_days_in_month(CAL_GREGORIAN, $mes, $anioAnt);
+        $map = [];
+
+        if ($mes === 10) {
+            $get3erDom = function($y) {
+                $dt = new DateTime("$y-10-01");
+                $doms = 0;
+                while ((int)$dt->format('m') === 10) {
+                    if ((int)$dt->format('N') === 7) {
+                        $doms++;
+                        if ($doms === 3) return (int)$dt->format('j');
+                    }
+                    $dt->modify('+1 day');
+                }
+                return 18;
+            };
+            $domAct = $get3erDom($anio);
+            $domAnt = $get3erDom($anioAnt);
+
+            // 1. Semana de Campaña (D-6 a D-0)
+            for ($offset = -6; $offset <= 0; $offset++) {
+                $dAct = $domAct + $offset;
+                $dAnt = $domAnt + $offset;
+                if ($dAct >= 1 && $dAct <= $diasMes && $dAnt >= 1 && $dAnt <= $diasMesAnt) {
+                    $map[$dAct] = $dAnt;
+                }
+            }
+
+            // 2. Días pre-campaña
+            for ($d = 1; $d < ($domAct - 6); $d++) {
+                $dtAct = new DateTime("$anio-10-$d");
+                $dwAct = (int)$dtAct->format('N');
+                $bestD = null;
+                $minDiff = 999;
+                for ($dp = 1; $dp < ($domAnt - 6); $dp++) {
+                    $dtAnt = new DateTime("$anioAnt-10-$dp");
+                    if ((int)$dtAnt->format('N') === $dwAct) {
+                        $diff = abs($dp - $d);
+                        if ($diff < $minDiff) {
+                            $minDiff = $diff;
+                            $bestD = $dp;
+                        }
+                    }
+                }
+                $map[$d] = $bestD ?: $d;
+            }
+
+            // 3. Días post-campaña
+            for ($d = ($domAct + 1); $d <= $diasMes; $d++) {
+                $dtAct = new DateTime("$anio-10-$d");
+                $dwAct = (int)$dtAct->format('N');
+                $bestD = null;
+                $minDiff = 999;
+                for ($dp = ($domAnt + 1); $dp <= $diasMesAnt; $dp++) {
+                    $dtAnt = new DateTime("$anioAnt-10-$dp");
+                    if ((int)$dtAnt->format('N') === $dwAct) {
+                        $diff = abs($dp - $d);
+                        if ($diff < $minDiff) {
+                            $minDiff = $diff;
+                            $bestD = $dp;
+                        }
+                    }
+                }
+                if (!$bestD) {
+                    for ($dp = 1; $dp < ($domAnt - 6); $dp++) {
+                        $dtAnt = new DateTime("$anioAnt-10-$dp");
+                        if ((int)$dtAnt->format('N') === $dwAct) {
+                            $bestD = $dp;
+                            break;
+                        }
+                    }
+                }
+                $map[$d] = $bestD ?: $d;
+            }
+
+            // Ajuste específico de feriados para Octubre 2026 vs 2025:
+            if ($anio === 2026) {
+                $map[9] = 3;   // Viernes 09/10/26 -> Viernes 03/10/25 regular
+                $map[12] = 10; // Lunes 12/10/26 (Feriado '26) -> Viernes 10/10/25 (Feriado '25)
+            }
+        } elseif ($mes === 12) {
+            for ($d = 1; $d <= $diasMes; $d++) {
+                $dtAct = new DateTime("$anio-12-$d");
+                $dwAct = (int)$dtAct->format('N');
+                if ($d >= 18 && $d <= 24) {
+                    $bestD = null;
+                    $minDiff = 999;
+                    for ($dp = 18; $dp <= 24; $dp++) {
+                        $dtAnt = new DateTime("$anioAnt-12-$dp");
+                        if ((int)$dtAnt->format('N') === $dwAct) {
+                            $diff = abs($dp - $d);
+                            if ($diff < $minDiff) {
+                                $minDiff = $diff;
+                                $bestD = $dp;
+                            }
+                        }
+                    }
+                    $map[$d] = $bestD ?: $d;
+                } else {
+                    $bestD = null;
+                    $minDiff = 999;
+                    for ($dp = 1; $dp <= $diasMesAnt; $dp++) {
+                        $dtAnt = new DateTime("$anioAnt-12-$dp");
+                        if ((int)$dtAnt->format('N') === $dwAct) {
+                            $diff = abs($dp - $d);
+                            if ($diff < $minDiff) {
+                                $minDiff = $diff;
+                                $bestD = $dp;
+                            }
+                        }
+                    }
+                    $map[$d] = $bestD ?: $d;
+                }
+            }
+        } else {
+            for ($d = 1; $d <= $diasMes; $d++) {
+                $dtAct = new DateTime("$anio-$mes-$d");
+                $dwAct = (int)$dtAct->format('N');
+                $bestD = null;
+                $minDiff = 999;
+                for ($dp = 1; $dp <= $diasMesAnt; $dp++) {
+                    $dtAnt = new DateTime("$anioAnt-$mes-$dp");
+                    if ((int)$dtAnt->format('N') === $dwAct) {
+                        $diff = abs($dp - $d);
+                        if ($diff < $minDiff) {
+                            $minDiff = $diff;
+                            $bestD = $dp;
+                        }
+                    }
+                }
+                $map[$d] = $bestD ?: $d;
+            }
+        }
+        ksort($map);
+        return $map;
+    };
+
+    $mapaHomologo = $getMapaHomologo($mes, $anioSel);
 
     // Filtros de sucursales (solo locales propios o según canal/sucursal elegida)
     $sucursalClause = '';
@@ -197,19 +364,32 @@ try {
         ];
     }
 
+    $rawDiasPrev = [];
     foreach ($rowsDias as $r) {
         $d = (int)$r['dia'];
         $a = (int)$r['anio'];
-        if (isset($diasMes[$d])) {
-            if ($a === $anioSel) {
+        if ($a === $anioSel) {
+            if (isset($diasMes[$d])) {
                 $diasMes[$d]['cant_act'] = (float)$r['unidades'];
                 $diasMes[$d]['fact_act'] = (float)$r['facturacion'];
-            } elseif ($a === $anioPrevio) {
-                $diasMes[$d]['cant_prev'] = (float)$r['unidades'];
-                $diasMes[$d]['fact_prev'] = (float)$r['facturacion'];
             }
+        } elseif ($a === $anioPrevio) {
+            $rawDiasPrev[$d] = [
+                'unidades' => (float)$r['unidades'],
+                'facturacion' => (float)$r['facturacion']
+            ];
         }
     }
+
+    foreach ($diasMes as $d => &$dInfo) {
+        $dPrev = $mapaHomologo[$d] ?? $d;
+        if (isset($rawDiasPrev[$dPrev])) {
+            $dInfo['cant_prev'] = $rawDiasPrev[$dPrev]['unidades'];
+            $dInfo['fact_prev'] = $rawDiasPrev[$dPrev]['facturacion'];
+        }
+    }
+    unset($dInfo);
+
     $response['serie_dias'] = array_values($diasMes);
 
     // =========================================================================
@@ -253,16 +433,24 @@ try {
     // =========================================================================
     // 3. APERTURA DIARIA POR SUCURSAL (Día x Día: Facturación y Objetivo)
     // =========================================================================
-    // Obtener maestro de sucursales activas (HABILITADO = 1) y nombres reales
+    // Obtener maestro de sucursales activas (solo PROPIOS y CENTRAL/ECOMMERCE)
     $sqlSucMaestro = "
         SELECT 
             sl.NRO_SUCURSAL as nro, 
             sl.DESC_SUCURSAL as nombre,
+            sl.CANAL as canal,
             ISNULL(sl.HABILITADO, 1) as habilitado
         FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
-        WHERE sl.DESC_SUCURSAL NOT LIKE '%MONTEVIDEO%' 
+        WHERE sl.CANAL IN ('PROPIOS', 'CENTRAL')
+          AND sl.HABILITADO = 1
+          AND sl.DESC_SUCURSAL NOT LIKE '%MONTEVIDEO%' 
           AND sl.DESC_SUCURSAL NOT LIKE '%NUEVOCENTRO%' 
           AND sl.DESC_SUCURSAL NOT LIKE '%TRES CRUCES%'
+          AND sl.DESC_SUCURSAL NOT LIKE '%TASKY%'
+          AND sl.DESC_SUCURSAL NOT LIKE '%CASA CENTRAL%'
+          AND sl.DESC_SUCURSAL NOT LIKE '%CONS. FINAL%'
+          AND sl.DESC_SUCURSAL NOT LIKE '%RURAL%'
+          AND sl.DESC_SUCURSAL NOT LIKE '%HAEDO%'
     ";
     $maestroRows = $query($sqlSucMaestro);
     $sucMap = [];
@@ -285,35 +473,6 @@ try {
         }
 
         if ($nom !== '') {
-            if ($nro === 1 || stripos($nom, 'DAFITI') !== false) {
-                $nom = 'ECOMMERCE ML';
-            }
-            $sucMap[$nro] = $nom;
-        }
-    }
-
-    // Traer sucursales adicionales desde BI_SALES_SUCURSALES si están activas
-    $sqlSucursales = "
-        SELECT DISTINCT 
-            s.NRO_SUCURS as nro, 
-            s.SUCURSAL as nombre
-        FROM BI_SALES_SUCURSALES s
-        WHERE s.NRO_SUCURS IS NOT NULL
-    ";
-    $sucRows = $query($sqlSucursales);
-    foreach ($sucRows as $sr) {
-        $nro = (int)$sr['nro'];
-        $nom = trim($sr['nombre'] ?? '');
-        if (isset($deshabilitadas[$nro]) || isset($uyNros[$nro])) continue;
-        if (stripos($nom, 'FLORES 2') !== false || stripos($nom, 'PALMAS DEL PILAR') !== false) {
-            $deshabilitadas[$nro] = true;
-            continue;
-        }
-        if (stripos($nom, 'MONTEVIDEO') !== false || stripos($nom, 'NUEVOCENTRO') !== false || stripos($nom, 'TRES CRUCES') !== false) {
-            $uyNros[$nro] = true;
-            continue;
-        }
-        if (!isset($sucMap[$nro]) && $nom !== '') {
             if ($nro === 1 || stripos($nom, 'DAFITI') !== false) {
                 $nom = 'ECOMMERCE ML';
             }
@@ -344,27 +503,35 @@ try {
         if (strpos($sucursal, ',') !== false) {
             $parts = array_map('intval', explode(',', $sucursal));
             $ph = implode(',', array_fill(0, count($parts), '?'));
-            $objSucClause = "AND o.NRO_SUCURSAL IN ($ph)";
+            $objSucClause = "AND o.NRO_SUCURS IN ($ph)";
             $paramsObjDia = array_merge($paramsObjDia, $parts);
         } else {
-            $objSucClause = "AND o.NRO_SUCURSAL = ?";
+            $objSucClause = "AND o.NRO_SUCURS = ?";
             $paramsObjDia[] = (int)$sucursal;
         }
     }
     $sqlObjDiaSuc = "
         SELECT 
-            o.NRO_SUCURSAL as nro,
+            o.NRO_SUCURS as nro,
             DAY(o.FECHA) as dia,
             ISNULL(SUM(o.IMPORTE_OBJ), 0) as objetivo
-        FROM dbo.BI_OBJETIVOS_SUCURSALES o
+        FROM dbo.BI_T_VENTAS_VS_OBJETIVOS_PROPIOS o
         WHERE MONTH(o.FECHA) = ? AND YEAR(o.FECHA) = ?
           {$objSucClause}
-        GROUP BY o.NRO_SUCURSAL, DAY(o.FECHA)
+        GROUP BY o.NRO_SUCURS, DAY(o.FECHA)
     ";
     $rowsObjDia = $query($sqlObjDiaSuc, $paramsObjDia);
 
     // Indexar por sucursal y día
     $matrizDiaSuc = [];
+    $factPrevBySucDia = [];
+    foreach ($rowsFactDiaPrev as $r) {
+        $nro = (int)$r['nro'];
+        if (isset($uyNros[$nro]) || !isset($sucMap[$nro])) continue;
+        $dia = (int)$r['dia'];
+        $factPrevBySucDia[$nro][$dia] = (float)$r['facturacion'];
+    }
+
     foreach ($rowsFactDia as $r) {
         $nro = (int)$r['nro'];
         if (isset($uyNros[$nro]) || !isset($sucMap[$nro])) continue;
@@ -373,14 +540,7 @@ try {
         if (!isset($matrizDiaSuc[$nro][$dia])) $matrizDiaSuc[$nro][$dia] = ['fact' => 0, 'obj' => 0, 'fact_prev' => 0];
         $matrizDiaSuc[$nro][$dia]['fact'] = (float)$r['facturacion'];
     }
-    foreach ($rowsFactDiaPrev as $r) {
-        $nro = (int)$r['nro'];
-        if (isset($uyNros[$nro]) || !isset($sucMap[$nro])) continue;
-        $dia = (int)$r['dia'];
-        if (!isset($matrizDiaSuc[$nro])) $matrizDiaSuc[$nro] = [];
-        if (!isset($matrizDiaSuc[$nro][$dia])) $matrizDiaSuc[$nro][$dia] = ['fact' => 0, 'obj' => 0, 'fact_prev' => 0];
-        $matrizDiaSuc[$nro][$dia]['fact_prev'] = (float)$r['facturacion'];
-    }
+
     foreach ($rowsObjDia as $r) {
         $nro = (int)$r['nro'];
         if (isset($uyNros[$nro]) || !isset($sucMap[$nro])) continue;
@@ -389,6 +549,15 @@ try {
         if (!isset($matrizDiaSuc[$nro][$dia])) $matrizDiaSuc[$nro][$dia] = ['fact' => 0, 'obj' => 0, 'fact_prev' => 0];
         $matrizDiaSuc[$nro][$dia]['obj'] = (float)$r['objetivo'];
     }
+
+    // Completar fact_prev mapeado con el día homólogo del año anterior
+    foreach ($matrizDiaSuc as $nro => &$diasObj) {
+        foreach ($diasObj as $diaAct => &$vals) {
+            $diaPrev = $mapaHomologo[$diaAct] ?? $diaAct;
+            $vals['fact_prev'] = $factPrevBySucDia[$nro][$diaPrev] ?? 0;
+        }
+    }
+    unset($diasObj, $vals);
 
     // Función de ordenamiento: ECOMMERCE siempre primero, luego orden alfabético
     $sortEcommerceFirst = function($a, $b) {
@@ -462,11 +631,11 @@ try {
     // Objetivo del mes completo por sucursal
     $sqlObjMes = "
         SELECT 
-            o.NRO_SUCURSAL as nro,
+            o.NRO_SUCURS as nro,
             ISNULL(SUM(o.IMPORTE_OBJ), 0) as obj_mes
-        FROM dbo.BI_OBJETIVOS_SUCURSALES o
+        FROM dbo.BI_T_VENTAS_VS_OBJETIVOS_PROPIOS o
         WHERE MONTH(o.FECHA) = ? AND YEAR(o.FECHA) = ?
-        GROUP BY o.NRO_SUCURSAL
+        GROUP BY o.NRO_SUCURS
     ";
     $rowsObjMes = $query($sqlObjMes, [$mes, $anioSel]);
     $objMesIndex = [];
