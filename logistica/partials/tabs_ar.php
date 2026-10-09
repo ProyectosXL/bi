@@ -477,6 +477,27 @@
 
         <div class="analisis-card">
             <div class="analisis-section-header">
+                <i class="bi bi-diagram-3"></i> Unidades pickeadas por canal
+                <span class="header-sub">Canal del pedido de cada tarea de picking (WMS de Tango)</span>
+            </div>
+            <div class="table-wrap">
+                <table id="tabla-picking-canal">
+                    <thead>
+                        <tr>
+                            <th>Canal</th>
+                            <th class="col-num">Tareas</th>
+                            <th class="col-num">Unidades pickeadas</th>
+                            <th class="col-num">% Unidades</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-picking-canal"></tbody>
+                    <tfoot id="tfoot-picking-canal"></tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="analisis-card">
+            <div class="analisis-section-header">
                 <i class="bi bi-people"></i> Indicadores por usuario
             </div>
             <div class="table-wrap">
@@ -524,11 +545,6 @@
                 <i class="bi bi-stack"></i>
                 Pendiente a despachar: <strong id="kv-pl-wip">—</strong> unid. en <strong id="kv-pl-wip-ped">—</strong> pedidos
                 <span class="plan-wip-venc" id="kv-pl-venc"></span>
-            </span>
-            <span class="plan-prom-badge">
-                <i class="bi bi-person-lines-fill"></i>
-                Promedio picking / día (últ. 7d):
-                <strong id="kv-pl-prom-dia">—</strong> unid.
             </span>
         </div>
         <div class="plan-ventanas">
@@ -825,6 +841,104 @@
             </div>
         </div>
 
+        <!-- Pedidos cargados en un día (por defecto, ayer): vista de supply chain.
+             Cuatro preguntas: cuánto entró vs lo normal, cuándo hay que entregarlo,
+             si se está cumpliendo en plazo y qué está en riesgo. Tiene su propio
+             selector de día (no usa el rango Desde/Hasta). -->
+        <div class="analisis-card">
+            <div class="analisis-section-header fr-header" id="hdr-fr-ingreso">
+                <i class="bi bi-inbox"></i> Pedidos cargados en el día
+                <div class="fr-dia" role="group" aria-label="Día de carga de los pedidos">
+                    <button type="button" class="fr-nav" id="ing-prev" title="Día anterior" aria-label="Día anterior"><i class="bi bi-chevron-left"></i></button>
+                    <input type="date" id="ing-fecha" class="fr-fecha" aria-label="Día de carga">
+                    <button type="button" class="fr-nav" id="ing-next" title="Día siguiente" aria-label="Día siguiente"><i class="bi bi-chevron-right"></i></button>
+                    <button type="button" class="fr-ultimo" id="ing-ayer">Ayer</button>
+                </div>
+                <span class="header-sub" id="fr-ing-fecha">Qué entró, cuándo hay que entregarlo y qué está en riesgo</span>
+            </div>
+
+            <div class="fr-ing-bloque">
+                <div class="fr-ing-pregunta">1. ¿Cuánto entró comparado con un día normal?</div>
+                <div class="fr-ing-kpis">
+                    <div class="fr-ing-kpi"><span>Pedidos cargados</span><b id="kv-fr-ing-ped">—</b><small id="kvar-fr-ing-ped"></small></div>
+                    <div class="fr-ing-kpi"><span>Unidades pedidas</span><b id="kv-fr-ing-unid">—</b><small id="kvar-fr-ing-unid"></small></div>
+                    <div class="fr-ing-kpi"><span>Importe pedido</span><b id="kv-fr-ing-imp">—</b><small id="kvar-fr-ing-imp"></small></div>
+                </div>
+            </div>
+
+            <div class="fr-ing-bloque">
+                <div class="fr-ing-pregunta">2. ¿Se está cumpliendo en plazo? <em>(pedidos)</em></div>
+                <div class="fr-ing-kpis">
+                    <div class="fr-ing-kpi"><span>% de pedidos remitidos a tiempo</span><b id="kv-fr-ing-pct">—</b><small id="kvar-fr-ing-pct"></small></div>
+                    <div class="fr-ing-kpi"><span>Remitidos a tiempo</span><b id="kv-fr-ing-atiempo">—</b><small>pedidos</small></div>
+                    <div class="fr-ing-kpi"><span>Remitidos tarde</span><b id="kv-fr-ing-tarde">—</b><small>pedidos</small></div>
+                    <div class="fr-ing-kpi fr-ing-alerta"><span>Vencidos sin completar</span><b id="kv-fr-ing-venc">—</b><small id="kvar-fr-ing-venc"></small></div>
+                    <div class="fr-ing-kpi fr-ing-aviso"><span>En riesgo (vencen hoy o el próximo día hábil)</span><b id="kv-fr-ing-riesgo">—</b><small id="kvar-fr-ing-riesgo"></small></div>
+                    <div class="fr-ing-kpi"><span>En plazo (todavía no vencen)</span><b id="kv-fr-ing-plazo">—</b><small id="kvar-fr-ing-plazo"></small></div>
+                </div>
+                <div class="fr-ing-nota" id="fr-ing-nota"></div>
+            </div>
+
+            <div class="resumen-row fr-ing-tablas">
+                <div>
+                    <div class="fr-ing-pregunta">3. ¿Cuándo hay que entregarlo? <em>(días desde la carga hasta la entrega comprometida)</em></div>
+                    <div class="table-wrap">
+                        <table id="tabla-fr-plazos">
+                            <thead>
+                                <tr>
+                                    <th>Plazo de entrega</th>
+                                    <th class="col-num">Pedidos</th>
+                                    <th class="col-num">Unidades pedidas</th>
+                                    <th class="col-num">Unidades pendientes</th>
+                                    <th class="fr-bar-th">Peso en unidades</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-fr-plazos"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <div class="fr-ing-pregunta">Por canal</div>
+                    <div class="table-wrap">
+                        <table id="tabla-fr-ingreso">
+                            <thead>
+                                <tr>
+                                    <th>Canal</th>
+                                    <th class="col-num">Pedidos</th>
+                                    <th class="col-num">Unidades pedidas</th>
+                                    <th class="col-num">Unidades pendientes</th>
+                                    <th class="col-num">% pedidos a tiempo</th>
+                                    <th class="col-num">Pedidos a atender</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-fr-ingreso"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fr-ing-bloque">
+                <div class="fr-ing-pregunta">4. ¿Qué hay que atender primero? <em>(pedidos vencidos o que vencen hoy / el próximo día hábil, con unidades pendientes)</em></div>
+                <div class="table-wrap" style="max-height:320px;overflow-y:auto">
+                    <table id="tabla-fr-riesgo">
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Canal</th>
+                                <th>Entrega comprometida</th>
+                                <th class="col-num">Unidades pedidas</th>
+                                <th class="col-num">Unidades pendientes</th>
+                                <th>Situación</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-fr-riesgo"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+
         <div class="analisis-card">
             <div class="analisis-section-header">
                 <i class="bi bi-graph-up"></i> Evolución mensual de pedidos
@@ -1013,12 +1127,8 @@
                             <th class="col-num">Cant. Pedidos</th>
                             <th class="col-num">Prom. Ped./Loc.</th>
                             <th class="col-num">% Pedidos</th>
-<<<<<<< HEAD
                             <th class="col-num">Unid. Remitidas</th>
-=======
-                            <th class="col-num">Unid. Facturadas</th>
                             <th class="col-num">Prom. Unid./Loc.</th>
->>>>>>> b14411c3bd81a6c33b1016861ee18c9cb519d2bf
                             <th class="col-num">% Unid. Fact.</th>
                             <th class="col-num">Unid. Pedidas</th>
                         </tr>
@@ -1207,23 +1317,10 @@
                 <button type="button" class="fr-nav" id="fr-next" title="Día siguiente" aria-label="Día siguiente"><i class="bi bi-chevron-right"></i></button>
                 <button type="button" class="fr-ultimo" id="fr-ultimo">Último día</button>
             </div>
-            <div class="filter-pills" id="fr-tipo" role="group" aria-label="Tipo de remisión">
-                <button type="button" class="pill active" data-t="">Todos</button>
-                <button type="button" class="pill" data-t="REPOSICION">Reposición</button>
-                <button type="button" class="pill" data-t="DIST. INICIAL">Dist. Inicial</button>
-            </div>
             <span class="header-sub" id="fr-carga">Qué se remitió en el día y cómo quedaron esos pedidos</span>
         </div>
 
         <div class="kpi-grid" id="kpis-fill-rate">
-            <div class="kpi-card">
-                <div class="kpi-icon" style="background:rgba(37,99,235,.08);color:var(--accent2)"><i class="bi bi-box-seam"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-label">Unidades remitidas en el día</div>
-                    <div class="kpi-value" id="kv-fr-unid">—</div>
-                    <div class="kpi-var neu" id="kvar-fr-unid"></div>
-                </div>
-            </div>
             <div class="kpi-card">
                 <div class="kpi-icon" style="background:rgba(0,168,120,.08);color:var(--accent)"><i class="bi bi-receipt"></i></div>
                 <div class="kpi-body">
@@ -1257,96 +1354,6 @@
             </div>
         </div>
 
-        <!-- Pedidos cargados el día anterior (D−1): vista de supply chain.
-             Cuatro preguntas: cuánto entró vs lo normal, cuándo hay que entregarlo,
-             si se está cumpliendo en plazo y qué está en riesgo. -->
-        <div class="analisis-card">
-            <div class="analisis-section-header" id="hdr-fr-ingreso">
-                <i class="bi bi-inbox"></i> Pedidos cargados el día anterior
-                <span class="header-sub" id="fr-ing-fecha">Qué entró, cuándo hay que entregarlo y qué está en riesgo</span>
-            </div>
-
-            <div class="fr-ing-bloque">
-                <div class="fr-ing-pregunta">1. ¿Cuánto entró comparado con un día normal?</div>
-                <div class="fr-ing-kpis">
-                    <div class="fr-ing-kpi"><span>Pedidos cargados</span><b id="kv-fr-ing-ped">—</b><small id="kvar-fr-ing-ped"></small></div>
-                    <div class="fr-ing-kpi"><span>Unidades pedidas</span><b id="kv-fr-ing-unid">—</b><small id="kvar-fr-ing-unid"></small></div>
-                    <div class="fr-ing-kpi"><span>Importe pedido</span><b id="kv-fr-ing-imp">—</b><small id="kvar-fr-ing-imp"></small></div>
-                </div>
-            </div>
-
-            <div class="fr-ing-bloque">
-                <div class="fr-ing-pregunta">2. ¿Se está cumpliendo en plazo? <em>(pedidos)</em></div>
-                <div class="fr-ing-kpis">
-                    <div class="fr-ing-kpi"><span>% de pedidos remitidos a tiempo</span><b id="kv-fr-ing-pct">—</b><small id="kvar-fr-ing-pct"></small></div>
-                    <div class="fr-ing-kpi"><span>Remitidos a tiempo</span><b id="kv-fr-ing-atiempo">—</b><small>pedidos</small></div>
-                    <div class="fr-ing-kpi"><span>Remitidos tarde</span><b id="kv-fr-ing-tarde">—</b><small>pedidos</small></div>
-                    <div class="fr-ing-kpi fr-ing-alerta"><span>Vencidos sin completar</span><b id="kv-fr-ing-venc">—</b><small id="kvar-fr-ing-venc"></small></div>
-                    <div class="fr-ing-kpi fr-ing-aviso"><span>En riesgo (vencen hoy o el próximo día hábil)</span><b id="kv-fr-ing-riesgo">—</b><small id="kvar-fr-ing-riesgo"></small></div>
-                    <div class="fr-ing-kpi"><span>En plazo (todavía no vencen)</span><b id="kv-fr-ing-plazo">—</b><small id="kvar-fr-ing-plazo"></small></div>
-                </div>
-                <div class="fr-ing-nota" id="fr-ing-nota"></div>
-            </div>
-
-            <div class="resumen-row fr-ing-tablas">
-                <div>
-                    <div class="fr-ing-pregunta">3. ¿Cuándo hay que entregarlo? <em>(días desde la carga hasta la entrega comprometida)</em></div>
-                    <div class="table-wrap">
-                        <table id="tabla-fr-plazos">
-                            <thead>
-                                <tr>
-                                    <th>Plazo de entrega</th>
-                                    <th class="col-num">Pedidos</th>
-                                    <th class="col-num">Unidades pedidas</th>
-                                    <th class="col-num">Unidades pendientes</th>
-                                    <th class="fr-bar-th">Peso en unidades</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbody-fr-plazos"></tbody>
-                        </table>
-                    </div>
-                </div>
-                <div>
-                    <div class="fr-ing-pregunta">Por canal</div>
-                    <div class="table-wrap">
-                        <table id="tabla-fr-ingreso">
-                            <thead>
-                                <tr>
-                                    <th>Canal</th>
-                                    <th class="col-num">Pedidos</th>
-                                    <th class="col-num">Unidades pedidas</th>
-                                    <th class="col-num">Unidades pendientes</th>
-                                    <th class="col-num">% pedidos a tiempo</th>
-                                    <th class="col-num">Pedidos a atender</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbody-fr-ingreso"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="fr-ing-bloque">
-                <div class="fr-ing-pregunta">4. ¿Qué hay que atender primero? <em>(pedidos vencidos o que vencen hoy / el próximo día hábil, con unidades pendientes)</em></div>
-                <div class="table-wrap" style="max-height:320px;overflow-y:auto">
-                    <table id="tabla-fr-riesgo">
-                        <thead>
-                            <tr>
-                                <th>Pedido</th>
-                                <th>Cliente</th>
-                                <th>Canal</th>
-                                <th>Entrega comprometida</th>
-                                <th class="col-num">Unidades pedidas</th>
-                                <th class="col-num">Unidades pendientes</th>
-                                <th>Situación</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-fr-riesgo"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
         <div class="analisis-card">
             <div class="analisis-section-header">
                 <i class="bi bi-diagram-3"></i> Remitos del día por canal y tipo
@@ -1358,6 +1365,8 @@
                             <th>Canal</th>
                             <th>Tipo</th>
                             <th class="col-num">Unidades remitidas</th>
+                            <th class="col-num" title="Cantidad de kits remitidos (de Tango)">Kits</th>
+                            <th class="col-num" title="Unidades remitidas que forman parte de un kit (incluidas en Unidades remitidas)">Unid. en kits</th>
                             <th class="col-num">Remitos emitidos</th>
                             <th class="col-num">Pedidos</th>
                             <th class="col-num">Pedidos completos</th>

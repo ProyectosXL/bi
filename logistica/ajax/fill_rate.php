@@ -15,8 +15,7 @@ try {
     if (!$dt || $dt->format('Y-m-d') !== $fecha || $fecha > date('Y-m-d')) $fecha = null;
 
     $canal = isset($_GET['canal']) && $_GET['canal'] !== '' ? $_GET['canal'] : null;
-    $tipo  = $_GET['tipo'] ?? '';
-    if (!in_array($tipo, ['REPOSICION', 'DIST. INICIAL'], true)) $tipo = null;
+    $tipo  = LogisticaDB::tipoParam();
 
     $db   = new LogisticaDB();
     $data = $db->getFillRate($fecha, $canal, $tipo);

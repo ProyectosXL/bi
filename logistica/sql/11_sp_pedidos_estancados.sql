@@ -31,7 +31,8 @@ GO
 
 CREATE PROCEDURE dbo.RO_SP_PEDIDOS_ESTANCADOS
     @DIAS  INT           = 90,     -- antigüedad mínima en días corridos
-    @CANAL NVARCHAR(100) = NULL    -- NULL = todos los canales
+    @CANAL NVARCHAR(100) = NULL,   -- NULL = todos los canales
+    @TIPO  NVARCHAR(50)  = NULL    -- NULL = todos los tipos de remisión
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -59,7 +60,8 @@ BEGIN
     WHERE e.FECHA_PEDI >= @INICIO_ANIO
       AND e.FECHA_PEDI <= @CORTE
       AND ISNULL(e.ESTADO_TANGO, '') <> 'CANCELADO'
-      AND (@CANAL IS NULL OR e.CANAL = @CANAL);
+      AND (@CANAL IS NULL OR e.CANAL = @CANAL)
+      AND (@TIPO  IS NULL OR e.TIPO_FACTURACION = @TIPO);
 
     -- Stock Tango del depósito 01 por artículo (solo los artículos con saldo)
     SELECT s.COD_ARTICU, SUM(ISNULL(s.STOCK_TANGO, 0)) AS STOCK

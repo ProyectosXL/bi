@@ -19,7 +19,8 @@ IF OBJECT_ID('dbo.RO_SP_PLANIFICACION','P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.RO_SP_PLANIFICACION
-    @CANAL NVARCHAR(100) = NULL          -- NULL = todos los canales
+    @CANAL NVARCHAR(100) = NULL,         -- NULL = todos los canales
+    @TIPO  NVARCHAR(50)  = NULL          -- NULL = todos los tipos de remisión
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -45,6 +46,23 @@ BEGIN
     -- justamente, uno que todavía no se remitió: excluirlos ocultaba casi toda
     -- la demanda. Las ventanas se acotan por FECHA_ENTREGA y los demorados a
     -- 30 días, así que no se cuelan pedidos viejos.
+    -- ESTADO = 'PENDIENTE' en BI_T_DESPACHO_PEDIDOS = sin ninguna unidad
+    -- remitida (validado oct-2026); 'REMITIDO' = con al menos una.
+
+    -- ── Universo: entrega desde hace 30 días, filtrado por canal y tipo ───
+    -- BI_T_DESPACHO_PEDIDOS no tiene tipo de remisión: sale del pedido en
+    -- BI_EFICIENCIA_LOGISTICA (un pedido tiene un solo tipo).
+    SELECT b.*
+    INTO #B
+    FROM dbo.BI_T_DESPACHO_PEDIDOS b
+    WHERE b.FECHA_ENTREGA >= DATEADD(DAY, -30, @HOY)
+      AND (@CANAL IS NULL OR b.CANAL = @CANAL)
+      AND (@TIPO  IS NULL OR EXISTS (
+            SELECT 1 FROM dbo.BI_EFICIENCIA_LOGISTICA e
+            WHERE e.NRO_PEDIDO = b.NRO_PEDIDO
+              AND e.TALON_PED  = CAST(b.TALON_PED AS SMALLINT)
+              AND e.TIPO_FACTURACION = @TIPO))
+    OPTION (RECOMPILE);   -- plan según @CANAL/@TIPO reales (patrón "@X IS NULL OR")
 
     -- ── Promedio últimos 7 días de picking (para pickers necesarios) ──────
     DECLARE @PROM_PICK_7D FLOAT;
@@ -66,7 +84,7 @@ BEGIN
     -- sobre BI_T_DESPACHO_PEDIDOS (incluye todos los canales, ej. ECOMMERCE).
     SELECT
         (SELECT COUNT(DISTINCT NRO_PEDIDO)
-         FROM dbo.BI_T_DESPACHO_PEDIDOS
+         FROM #B
          WHERE ESTADO = 'PENDIENTE'
            AND FECHA_ENTREGA <  @HOY
            AND FECHA_ENTREGA >= DATEADD(DAY, -30, @HOY)
@@ -79,15 +97,15 @@ BEGIN
         -- Pendiente a despachar (cartera; el WIP real es RO_SP_WIP_PICKING):
         -- entrega de hoy en adelante (vencidos aparte, 30 días)
         (SELECT CAST(ISNULL(SUM(CAST(CANT_PEDIDO AS DECIMAL(18,2))), 0) AS DECIMAL(18,0))
-         FROM dbo.BI_T_DESPACHO_PEDIDOS
+         FROM #B
          WHERE ESTADO = 'PENDIENTE' AND FECHA_ENTREGA >= @HOY
            AND (@CANAL IS NULL OR CANAL = @CANAL))       AS WIP_UNID,
         (SELECT COUNT(DISTINCT NRO_PEDIDO)
-         FROM dbo.BI_T_DESPACHO_PEDIDOS
+         FROM #B
          WHERE ESTADO = 'PENDIENTE' AND FECHA_ENTREGA >= @HOY
            AND (@CANAL IS NULL OR CANAL = @CANAL))       AS WIP_PED,
         (SELECT CAST(ISNULL(SUM(CAST(CANT_PEDIDO AS DECIMAL(18,2))), 0) AS DECIMAL(18,0))
-         FROM dbo.BI_T_DESPACHO_PEDIDOS
+         FROM #B
          WHERE ESTADO = 'PENDIENTE'
            AND FECHA_ENTREGA <  @HOY
            AND FECHA_ENTREGA >= DATEADD(DAY, -30, @HOY)
@@ -120,7 +138,7 @@ BEGIN
             SUM(CAST(b.CANT_PEDIDO AS DECIMAL(18,2)))                             AS UNID_TOTAL,
             SUM(CASE WHEN b.ESTADO = 'PENDIENTE'
                      THEN CAST(b.CANT_PEDIDO AS DECIMAL(18,2)) END)               AS UNID_PEND
-        FROM dbo.BI_T_DESPACHO_PEDIDOS b
+        FROM #B b
         WHERE b.FECHA_ENTREGA = V.FECHA
           AND (@CANAL IS NULL OR b.CANAL = @CANAL)
     ) agg
@@ -141,7 +159,7 @@ BEGIN
             WHEN CAST(b.FECHA_ENTREGA AS DATE) = @MAS_UNO    THEN 'MAS_UNO'
             ELSE 'OTRO'
         END                                                  AS VENTANA
-    FROM dbo.BI_T_DESPACHO_PEDIDOS b
+    FROM #B b
     WHERE b.ESTADO = 'PENDIENTE'
       AND b.FECHA_ENTREGA >= @HOY
       AND (@CANAL IS NULL OR b.CANAL = @CANAL)
@@ -159,7 +177,7 @@ BEGIN
         CAST(b.FECHA_ENTREGA AS DATE)                       AS FECHA_ENTREGA,
         DATEDIFF(DAY, @HOY, b.FECHA_ENTREGA)                AS DIAS,
         CAST(ISNULL(SUM(b.CANT_PEDIDO), 0) AS DECIMAL(18,2)) AS UNIDADES
-    FROM dbo.BI_T_DESPACHO_PEDIDOS b
+    FROM #B b
     WHERE b.ESTADO = 'PENDIENTE'
       AND b.FECHA_ENTREGA <  @HOY
       AND b.FECHA_ENTREGA >= DATEADD(DAY, -30, @HOY)
@@ -180,12 +198,14 @@ BEGIN
              THEN CONVERT(VARCHAR(10), b.FECHA_ENTREGA, 23) ELSE 'POSTERIOR' END AS FECHA,
         COUNT(DISTINCT b.NRO_PEDIDO)                                        AS PEDIDOS,
         CAST(SUM(CAST(b.CANT_PEDIDO AS DECIMAL(18,2))) AS DECIMAL(18,0))    AS UNIDADES
-    FROM dbo.BI_T_DESPACHO_PEDIDOS b
+    FROM #B b
     WHERE b.ESTADO = 'PENDIENTE'
       AND b.FECHA_ENTREGA >= @HOY
       AND (@CANAL IS NULL OR b.CANAL = @CANAL)
     GROUP BY CASE WHEN b.FECHA_ENTREGA <= @WIP_HASTA
                   THEN CONVERT(VARCHAR(10), b.FECHA_ENTREGA, 23) ELSE 'POSTERIOR' END
     ORDER BY 1;   -- 'POSTERIOR' ordena después de las fechas ISO
+
+    DROP TABLE #B;
 END;
 GO

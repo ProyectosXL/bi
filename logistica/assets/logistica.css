@@ -436,27 +436,6 @@
     gap         : 6px;
 }
 .plan-ventanas-title i { color: var(--accent); }
-.plan-prom-badge {
-    display      : flex;
-    align-items  : center;
-    gap          : 7px;
-    font-size    : .8rem;
-    color        : var(--text-2);
-    white-space  : nowrap;
-    background   : rgba(0,168,120,.08);
-    border       : 1px solid rgba(0,168,120,.22);
-    border-radius: var(--radius);
-    padding      : 6px 14px 6px 10px;
-}
-.plan-prom-badge i { color: var(--accent); font-size: 1rem; }
-.plan-prom-badge strong {
-    font-family: var(--font-display);
-    font-size  : 1.45rem;
-    font-weight: 700;
-    color      : var(--accent);
-    line-height: 1;
-}
-
 /* ── Segmented control (toggle sobrantes/faltantes) ─────────────────────── */
 .top-arts-toolbar {
     display    : flex;

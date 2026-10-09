@@ -14,7 +14,7 @@ try {
     $canal = isset($_GET['canal']) && $_GET['canal'] !== '' ? $_GET['canal'] : null;
 
     $db   = new LogisticaDB();
-    $data = $db->getPedidosEstancados($dias, $canal);
+    $data = $db->getPedidosEstancados($dias, $canal, LogisticaDB::tipoParam());
 
     ob_clean();
     // Sin JSON_NUMERIC_CHECK: conserva los ceros a la izquierda de NRO_PEDIDO

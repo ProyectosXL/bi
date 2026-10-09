@@ -23,7 +23,8 @@ GO
 CREATE PROCEDURE dbo.RO_SP_EFICIENCIA_LOGISTICA
     @FECHA_DESDE DATE,
     @FECHA_HASTA DATE,
-    @CANAL       NVARCHAR(100) = NULL
+    @CANAL       NVARCHAR(100) = NULL,
+    @TIPO        NVARCHAR(50)  = 'REPOSICION'   -- NULL = todos los tipos de remisión
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -37,8 +38,9 @@ BEGIN
     --   y se vuelve a unir a BI_EFICIENCIA_LOGISTICA por esas 4 columnas
     --   (INNER JOIN — el match siempre existe, es un self-aggregate).
     --   Filtros finales: ESTADO<>'SIN FACTURAR', ESTADO_TANGO<>'CANCELADO',
-    --                     TIPO_FACTURACION<>'DIST. INICIAL' (sin ISNULL: la
-    --   query de referencia usa NULL SQL estándar, no compensa blanks).
+    --                     TIPO_FACTURACION = @TIPO (default 'REPOSICION':
+    --   equivale al <>'DIST. INICIAL' de la query de referencia, porque no hay
+    --   otros tipos ni NULL). @TIPO = NULL incluye también Dist. Inicial.
     --
     -- OJO: NO usar BI_KPI_LOG_FACTURACION para esto — es una tabla distinta
     -- y da un universo/agrupación diferente al de la query de referencia.
@@ -133,7 +135,7 @@ BEGIN
     WHERE (@CANAL IS NULL OR e.CANAL = @CANAL)
       AND e.FECHA_PEDI BETWEEN @AA_DESDE AND @FECHA_HASTA
       AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
+      AND (@TIPO IS NULL OR e.TIPO_FACTURACION = @TIPO)
       AND est.ESTADO <> 'SIN FACTURAR';
 
     -- ── Result set 2: evolución mensual interanual ────────────────────────
@@ -155,7 +157,7 @@ BEGIN
          AND est.NRO_PEDIDO  = e.NRO_PEDIDO
          AND est.CANAL       = e.CANAL
         WHERE e.ESTADO_TANGO <> 'CANCELADO'
-          AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
+          AND (@TIPO IS NULL OR e.TIPO_FACTURACION = @TIPO)
           AND est.ESTADO <> 'SIN FACTURAR'
     ) fe ON fe.FECHA_PEDI = c.FECHA
         AND (@CANAL IS NULL OR fe.CANAL = @CANAL)
@@ -182,7 +184,7 @@ BEGIN
      AND est.CANAL       = e.CANAL
     WHERE e.FECHA_PEDI BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
+      AND (@TIPO IS NULL OR e.TIPO_FACTURACION = @TIPO)
       AND est.ESTADO <> 'SIN FACTURAR'
       AND e.CANAL IS NOT NULL AND LTRIM(RTRIM(e.CANAL)) <> ''
     GROUP BY e.CANAL
@@ -202,7 +204,7 @@ BEGIN
     WHERE e.FECHA_PEDI BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND (@CANAL IS NULL OR e.CANAL = @CANAL)
       AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
+      AND (@TIPO IS NULL OR e.TIPO_FACTURACION = @TIPO)
       AND est.ESTADO <> 'SIN FACTURAR'
       AND e.CLIENTE IS NOT NULL AND LTRIM(RTRIM(e.CLIENTE)) <> ''
     GROUP BY LTRIM(RTRIM(e.CLIENTE))
@@ -224,7 +226,7 @@ BEGIN
     WHERE e.FECHA_PEDI BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND (@CANAL IS NULL OR e.CANAL = @CANAL)
       AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
+      AND (@TIPO IS NULL OR e.TIPO_FACTURACION = @TIPO)
       AND est.ESTADO <> 'SIN FACTURAR'
     GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(e.RUBRO)), ''), 'SIN RUBRO')
     HAVING SUM(e.CANT_PEDID) > 0 AND SUM(e.CANT_FACTURADA) > 0
@@ -246,7 +248,7 @@ BEGIN
     WHERE e.FECHA_PEDI BETWEEN @FECHA_DESDE AND @FECHA_HASTA
       AND (@CANAL IS NULL OR e.CANAL = @CANAL)
       AND e.ESTADO_TANGO <> 'CANCELADO'
-      AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
+      AND (@TIPO IS NULL OR e.TIPO_FACTURACION = @TIPO)
       AND est.ESTADO <> 'SIN FACTURAR'
       AND e.CLIENTE IS NOT NULL AND LTRIM(RTRIM(e.CLIENTE)) <> ''
     GROUP BY LTRIM(RTRIM(e.CLIENTE)), LTRIM(RTRIM(e.NRO_PEDIDO))
@@ -272,7 +274,7 @@ BEGIN
          AND est.NRO_PEDIDO  = e.NRO_PEDIDO
          AND est.CANAL       = e.CANAL
         WHERE e.ESTADO_TANGO <> 'CANCELADO'
-          AND e.TIPO_FACTURACION <> 'DIST. INICIAL'
+          AND (@TIPO IS NULL OR e.TIPO_FACTURACION = @TIPO)
           AND est.ESTADO <> 'SIN FACTURAR'
     ) fe ON fe.FECHA_PEDI = c.FECHA
         AND (@CANAL IS NULL OR fe.CANAL = @CANAL)

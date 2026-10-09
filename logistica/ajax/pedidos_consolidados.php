@@ -14,7 +14,7 @@ try {
     $canal = isset($_GET['canal']) && $_GET['canal'] !== '' ? $_GET['canal'] : null;
 
     $db   = new LogisticaDB();
-    $data = $db->getPedidosConsolidados($desde, $hasta, $canal);
+    $data = $db->getPedidosConsolidados($desde, $hasta, $canal, LogisticaDB::tipoParam());
 
     ob_clean();
     echo json_encode(['ok' => true, 'data' => $data], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

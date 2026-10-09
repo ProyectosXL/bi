@@ -9,12 +9,12 @@ header('Cache-Control: no-cache');
 require_once __DIR__ . '/../class/LogisticaDB.php';
 
 try {
-    $desde  = isset($_GET['desde'])  && $_GET['desde']  !== '' ? $_GET['desde']  : date('Y-m-01');
-    $hasta  = isset($_GET['hasta'])  && $_GET['hasta']  !== '' ? $_GET['hasta']  : date('Y-m-d');
-    $canal  = isset($_GET['canal'])  && $_GET['canal']  !== '' ? $_GET['canal']  : null;
+    $desde   = isset($_GET['desde'])   && $_GET['desde']   !== '' ? $_GET['desde']   : date('Y-m-01');
+    $hasta   = isset($_GET['hasta'])   && $_GET['hasta']   !== '' ? $_GET['hasta']   : date('Y-m-d');
+    $usuario = isset($_GET['usuario']) && $_GET['usuario'] !== '' ? $_GET['usuario'] : null;
 
     $db   = new LogisticaDB();
-    $data = $db->getEficiencia($desde, $hasta, $canal, LogisticaDB::tipoParam());
+    $data = $db->getPickingCanal($desde, $hasta, $usuario, LogisticaDB::tipoParam());
 
     ob_clean();
     echo json_encode(['ok' => true, 'data' => $data], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

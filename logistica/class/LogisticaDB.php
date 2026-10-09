@@ -8,12 +8,19 @@ class LogisticaDB extends LogisticaDBBase
         parent::__construct('power');
     }
 
+    // Tipo de remisión desde el querystring: solo valores conocidos; '' u otro = todos (null).
+    public static function tipoParam(): ?string
+    {
+        $tipo = $_GET['tipo'] ?? '';
+        return in_array($tipo, ['REPOSICION', 'DIST. INICIAL'], true) ? $tipo : null;
+    }
+
     // ── Área 1: Eficiencia logística ─────────────────────────────────────
-    public function getEficiencia(string $desde, string $hasta, ?string $canal): array
+    public function getEficiencia(string $desde, string $hasta, ?string $canal, ?string $tipo = 'REPOSICION'): array
     {
         $sets = $this->execSP(
-            'EXEC dbo.RO_SP_EFICIENCIA_LOGISTICA ?,?,?',
-            [$desde, $hasta, $canal]
+            'EXEC dbo.RO_SP_EFICIENCIA_LOGISTICA ?,?,?,?',
+            [$desde, $hasta, $canal, $tipo]
         );
         $kpi = $sets[0][0] ?? [];
         $pedidas    = (float)($kpi['UNID_PEDIDAS']            ?? 0);
@@ -42,9 +49,9 @@ class LogisticaDB extends LogisticaDBBase
     }
 
     // ── Área 2: Lead time facturación ────────────────────────────────────
-    public function getLeadTime(string $desde, string $hasta, ?string $canal = null): array
+    public function getLeadTime(string $desde, string $hasta, ?string $canal = null, ?string $tipo = null): array
     {
-        $sets = $this->execSP('EXEC dbo.RO_SP_LEADTIME_FACTURACION ?,?,?', [$desde, $hasta, $canal]);
+        $sets = $this->execSP('EXEC dbo.RO_SP_LEADTIME_FACTURACION ?,?,?,?', [$desde, $hasta, $canal, $tipo]);
         $kpi  = $sets[0][0] ?? [];
         $total    = (int)($kpi['COMP_FACTURADOS'] ?? 0);
         $demorados = (int)($kpi['COMP_DEMORADOS']  ?? 0);
@@ -98,6 +105,19 @@ class LogisticaDB extends LogisticaDBBase
         ];
     }
 
+    // ── Área 5c: unidades pickeadas por canal (WMS de Tango) ─────────────
+    public function getPickingCanal(string $desde, string $hasta, ?string $usuario, ?string $tipo = null): array
+    {
+        $sets = $this->execSP(
+            'EXEC dbo.RO_SP_PICKING_CANAL ?,?,?,?',
+            [$desde, $hasta, $usuario, $tipo]
+        );
+        return [
+            'ok'     => (int)($sets[0][0]['OK'] ?? 0) === 1,
+            'canales'=> $sets[1] ?? [],
+        ];
+    }
+
     // ── Área 5b: WIP de picking (tareas abiertas, situación actual) ──────
     public function getWipPicking(?string $usuario): array
     {
@@ -110,9 +130,9 @@ class LogisticaDB extends LogisticaDBBase
 
     // ── Área 6: Demanda y despacho ───────────────────────────────────────
     // ── Área 6a: Planificación de despacho ───────────────────────────────
-    public function getPlanificacion(?string $canal): array
+    public function getPlanificacion(?string $canal, ?string $tipo = null): array
     {
-        $sets = $this->execSP('EXEC dbo.RO_SP_PLANIFICACION ?', [$canal]);
+        $sets = $this->execSP('EXEC dbo.RO_SP_PLANIFICACION ?,?', [$canal, $tipo]);
         // Result set 1 (ventanas) re-indexado por VENTANA para acceso directo.
         $ventanas = [];
         foreach (($sets[1] ?? []) as $row) {
@@ -128,11 +148,11 @@ class LogisticaDB extends LogisticaDBBase
     }
 
     // ── Área 6b: Eficacia de despacho ────────────────────────────────────
-    public function getDespacho(string $desde, string $hasta, ?string $canal, ?string $cliente): array
+    public function getDespacho(string $desde, string $hasta, ?string $canal, ?string $cliente, ?string $tipo = null): array
     {
         $sets = $this->execSP(
-            'EXEC dbo.RO_SP_DESPACHO ?,?,?,?',
-            [$desde, $hasta, $canal, $cliente]
+            'EXEC dbo.RO_SP_DESPACHO ?,?,?,?,?',
+            [$desde, $hasta, $canal, $cliente, $tipo]
         );
         return [
             'kpis'             => $sets[0][0] ?? [],
@@ -146,11 +166,11 @@ class LogisticaDB extends LogisticaDBBase
     }
 
     // ── Área 7: Pedidos consolidados ─────────────────────────────────────
-    public function getPedidosConsolidados(string $desde, string $hasta, ?string $canal): array
+    public function getPedidosConsolidados(string $desde, string $hasta, ?string $canal, ?string $tipo = null): array
     {
         $sets = $this->execSP(
-            'EXEC dbo.RO_SP_PEDIDOS_CONSOLIDADOS ?,?,?',
-            [$desde, $hasta, $canal]
+            'EXEC dbo.RO_SP_PEDIDOS_CONSOLIDADOS ?,?,?,?',
+            [$desde, $hasta, $canal, $tipo]
         );
         return [
             'kpis'     => $sets[0][0] ?? [],
@@ -161,9 +181,9 @@ class LogisticaDB extends LogisticaDBBase
     }
 
     // ── Área 9: Pedidos estancados (situación actual) ────────────────────
-    public function getPedidosEstancados(int $dias, ?string $canal): array
+    public function getPedidosEstancados(int $dias, ?string $canal, ?string $tipo = null): array
     {
-        $sets = $this->execSP('EXEC dbo.RO_SP_PEDIDOS_ESTANCADOS ?,?', [$dias, $canal]);
+        $sets = $this->execSP('EXEC dbo.RO_SP_PEDIDOS_ESTANCADOS ?,?,?', [$dias, $canal, $tipo]);
         // El caché de execSP guarda con JSON_NUMERIC_CHECK y le quita los ceros
         // a la izquierda a NRO_PEDIDO: se restituye el formato de 13 dígitos.
         $pedidos = array_map(function ($r) {
@@ -193,13 +213,22 @@ class LogisticaDB extends LogisticaDBBase
             'kpis'     => $sets[0][0] ?? [],
             'apertura' => $sets[1] ?? [],
             'detalle'  => $detalle,
-            'ingreso'        => $sets[3][0] ?? [],   // pedidos cargados el día anterior
-            'ingreso_canal'  => $sets[4] ?? [],
-            'ingreso_plazos' => $sets[5] ?? [],      // ¿cuándo hay que entregarlo?
+        ];
+    }
+
+    // ── Pedidos cargados en un día (pestaña Pedidos) ─────────────────────
+    public function getPedidosIngreso(?string $fecha, ?string $canal, ?string $tipo): array
+    {
+        $sets = $this->execSP('EXEC dbo.RO_SP_PEDIDOS_INGRESO ?,?,?', [$fecha, $canal, $tipo]);
+        return [
+            'ingreso'        => $sets[0][0] ?? [],
+            'ingreso_canal'  => $sets[1] ?? [],
+            'ingreso_plazos' => $sets[2] ?? [],      // ¿cuándo hay que entregarlo?
             'ingreso_riesgo' => array_map(function ($r) {   // pedidos a atender primero
+                // El caché le quita los ceros a la izquierda: se restituyen.
                 $r['NRO_PEDIDO'] = str_pad(trim((string)$r['NRO_PEDIDO']), 13, '0', STR_PAD_LEFT);
                 return $r;
-            }, $sets[6] ?? []),
+            }, $sets[3] ?? []),
         ];
     }
 
