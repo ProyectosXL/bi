@@ -43,7 +43,7 @@ class AbastecimientoDB
      * Construye cláusulas WHERE a partir de array de filtros
      * Excluye estrictamente PACKAGING en todos los contextos.
      */
-    private function buildFilterConditions(array $filters, string $artField, string $rubField, string $catField, string $tempField, string $provField, string $canalField = null, string $sucField = null, string $dateField = null): array
+    private function buildFilterConditions(array $filters, string $artField, string $rubField, string $catField, ?string $tempField = null, ?string $provField = null, ?string $canalField = null, ?string $sucField = null, ?string $dateField = null): array
     {
         $where = [];
         $params = [];
@@ -51,7 +51,7 @@ class AbastecimientoDB
         // Excluir PACKAGING siempre
         $where[] = "($rubField IS NULL OR ($rubField <> 'PACKAGING' AND $rubField NOT LIKE '%PACKAGING%'))";
 
-        if (!empty($filters['proveedor'])) {
+        if ($provField && !empty($filters['proveedor'])) {
             $provs = is_array($filters['proveedor']) ? $filters['proveedor'] : [$filters['proveedor']];
             $provs = array_filter(array_map('trim', $provs));
             if (!empty($provs)) {
@@ -81,7 +81,7 @@ class AbastecimientoDB
             }
         }
 
-        if (!empty($filters['temporada'])) {
+        if ($tempField && !empty($filters['temporada'])) {
             $temps = is_array($filters['temporada']) ? $filters['temporada'] : [$filters['temporada']];
             $temps = array_filter(array_map('trim', $temps));
             if (!empty($temps)) {
@@ -267,7 +267,7 @@ class AbastecimientoDB
         if ($stmtVta) sqlsrv_free_stmt($stmtVta);
 
         // 3. Stock Sucursales
-        $fStkLoc = $this->buildFilterConditions($filters, 'S.COD_ARTICULO', 'S.RUBRO', 'S.CATEGORIA', 'S.RUBRO', 'S.PROVEEDOR', null, 'S.SUCURSAL');
+        $fStkLoc = $this->buildFilterConditions($filters, 'S.COD_ARTICULO', 'S.RUBRO', 'S.CATEGORIA', null, 'S.PROVEEDOR', null, 'S.SUCURSAL');
         $sqlStockLoc = "
             SELECT ISNULL(SUM(CAST(S.CANT_STOCK AS FLOAT)), 0) AS stock_sucursal
             FROM BI_STOCK_LOCALES S WITH (NOLOCK)
@@ -473,6 +473,7 @@ class AbastecimientoDB
                 }
                 $m['canales'] = array_values($m['canales']);
             }
+            $y['meses'] = array_values($y['meses']);
         }
 
         return [
@@ -487,7 +488,7 @@ class AbastecimientoDB
     public function getStockSucursales(array $filters = [], int $limit = 500): array
     {
         $conn = $this->getConn('power');
-        $f = $this->buildFilterConditions($filters, 'S.COD_ARTICULO', 'S.RUBRO', 'S.CATEGORIA', 'S.RUBRO', 'S.PROVEEDOR', null, 'S.SUCURSAL');
+        $f = $this->buildFilterConditions($filters, 'S.COD_ARTICULO', 'S.RUBRO', 'S.CATEGORIA', null, 'S.PROVEEDOR', null, 'S.SUCURSAL');
 
         $sql = "
             SELECT TOP ($limit)

@@ -21,8 +21,9 @@ try {
     ];
 
     $db = new AbastecimientoDB();
-    $stockSucursal = $db->getStockSucursales($filters, 200);
-    $stockCentral  = $db->getStockCentral($filters, 200);
+    $limit = !empty($filters['articulo']) ? 500 : 1000;
+    $stockSucursal = $db->getStockSucursales($filters, $limit);
+    $stockCentral  = $db->getStockCentral($filters, $limit);
 
     echo json_encode([
         'ok'             => true,

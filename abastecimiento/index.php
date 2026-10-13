@@ -222,9 +222,13 @@ $ultimaAct = date('d/m/Y H:i:s');
         <section class="abast-row-top">
             <!-- Tabla Ingresos -->
             <div class="abast-panel">
-                <div class="panel-header">
+                <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
                     <div class="panel-title">
                         <i class="bi bi-arrow-down-circle text-primary"></i> Ingresos de Mercadería
+                    </div>
+                    <div id="filter-badge-box" style="display:none; align-items:center; gap:8px;">
+                        <span id="filter-active-badge" class="badge" style="background:#0284c7; color:#fff; font-size:0.75rem; padding:4px 8px; border-radius:4px; font-weight:600;"></span>
+                        <button id="btn-unfilter-art" class="btn-filter-clear" style="padding:2px 8px; font-size:0.75rem;" title="Quitar filtro de artículo"><i class="bi bi-x-circle"></i> Ver todos</button>
                     </div>
                 </div>
                 <div class="panel-body">
@@ -335,11 +339,10 @@ $ultimaAct = date('d/m/Y H:i:s');
                                     <th>Artículo</th>
                                     <th>Color</th>
                                     <th class="num">Disponible</th>
-                                    <th class="num">Temporal</th>
                                 </tr>
                             </thead>
                             <tbody id="tbody-stock-cen">
-                                <tr><td colspan="4" class="center"><div class="bi-loader"><i class="bi bi-arrow-repeat"></i> Cargando stock central...</div></td></tr>
+                                <tr><td colspan="3" class="center"><div class="bi-loader"><i class="bi bi-arrow-repeat"></i> Cargando stock central...</div></td></tr>
                             </tbody>
                         </table>
                     </div>

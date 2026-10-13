@@ -44,6 +44,10 @@ const Abastecimiento = (() => {
         tbodyStockSuc:  document.getElementById('tbody-stock-suc'),
         tbodyStockCen:  document.getElementById('tbody-stock-cen'),
 
+        filterBadgeBox:    document.getElementById('filter-badge-box'),
+        filterActiveBadge: document.getElementById('filter-active-badge'),
+        btnUnfilterArt:    document.getElementById('btn-unfilter-art'),
+
         loadingOverlay:    document.getElementById('loading-overlay'),
         loadingStatusText: document.getElementById('loading-status-text')
     };
@@ -68,6 +72,7 @@ const Abastecimiento = (() => {
     }
 
     function getFilters() {
+        const artInput = el.inputArticulo ? el.inputArticulo.value.trim() : '';
         return {
             proveedor:   el.selProveedor ? el.selProveedor.value : '',
             rubro:       el.selRubro ? el.selRubro.value : '',
@@ -75,7 +80,7 @@ const Abastecimiento = (() => {
             temporada:   el.selTemporada ? el.selTemporada.value : '',
             canal:       el.selCanal ? el.selCanal.value : '',
             sucursal:    el.selSucursal ? el.selSucursal.value : '',
-            articulo:    el.inputArticulo ? el.inputArticulo.value.trim() : '',
+            articulo:    artInput || selectedArticulo || '',
             descripcion: el.inputDesc ? el.inputDesc.value.trim() : '',
             fecha_desde: el.inputDesde ? el.inputDesde.value : '',
             fecha_hasta: el.inputHasta ? el.inputHasta.value : ''
@@ -180,13 +185,6 @@ const Abastecimiento = (() => {
                 `;
             });
             el.tbodyIngresos.innerHTML = html;
-
-            // Seleccionar automáticamente el primer artículo si no hay ninguno seleccionado
-            if (!selectedArticulo && json.data.length > 0) {
-                // Preferir artículos de producto terminado (código tipo X... o longitud >= 10) si los hay
-                const firstProduct = json.data.find(d => /^X[A-Z0-9]{5,}/i.test(d.cod_articu)) || json.data[0];
-                selectProduct(firstProduct.cod_articu, firstProduct.descripcion);
-            }
         } catch (e) {
             console.error('Error cargando ingresos:', e);
             el.tbodyIngresos.innerHTML = '<tr><td colspan="7" class="center" style="color:var(--neg)">Error al conectar con el servidor</td></tr>';
@@ -263,7 +261,7 @@ const Abastecimiento = (() => {
 
         hierarchy.forEach(y => {
             const isYearExp = expandedYears.has(y.anio);
-            const months = y.meses || [];
+            const months = Array.isArray(y.meses) ? y.meses : Object.values(y.meses || {});
 
             if (!isYearExp) {
                 // Año colapsado
@@ -329,38 +327,50 @@ const Abastecimiento = (() => {
             <tr>${rowCanal.join('')}</tr>
         `;
 
-        // Filas del cuerpo de la tabla
+        // Filas del cuerpo de la tabla (respetando si hay un artículo seleccionado)
         let tbHtml = '';
-        filas.forEach(f => {
-            const isActive = (selectedArticulo === f.articulo) ? 'active-row' : '';
-            tbHtml += `<tr class="${isActive}" data-articulo="${f.articulo}">`;
-            tbHtml += `<td><strong>${f.articulo}</strong></td>`;
+        const artNorm = selectedArticulo ? selectedArticulo.trim().toUpperCase() : null;
+        const visibleFilas = artNorm 
+            ? filas.filter(f => {
+                const fArt = (f.articulo || '').trim().toUpperCase();
+                return fArt === artNorm || fArt.startsWith(artNorm) || artNorm.startsWith(fArt);
+            })
+            : filas;
 
-            leafCols.forEach(col => {
-                let val = 0;
-                if (col.type === 'subcanal' || col.type === 'canal') {
-                    val = f.data[col.key] || 0;
-                } else if (col.type === 'month') {
-                    // Sumar todos los canales de ese mes
-                    const prefix = `${col.anio}_${col.mes}_`;
-                    for (const k in f.data) {
-                        // Tomar solo claves primarias de canal (evitar doble suma de subcanales)
-                        if (k.startsWith(prefix) && k.split('_').length === 3) val += f.data[k];
+        if (visibleFilas.length === 0) {
+            tbHtml = `<tr><td colspan="${leafCols.length + 2}" class="center">Sin ventas para el artículo seleccionado</td></tr>`;
+        } else {
+            visibleFilas.forEach(f => {
+                const isActive = (selectedArticulo && (f.articulo === selectedArticulo || f.articulo.trim().toUpperCase() === artNorm)) ? 'active-row' : '';
+                tbHtml += `<tr class="${isActive}" data-articulo="${f.articulo}">`;
+                tbHtml += `<td><strong>${f.articulo}</strong></td>`;
+
+                leafCols.forEach(col => {
+                    let val = 0;
+                    if (col.type === 'subcanal' || col.type === 'canal') {
+                        val = f.data[col.key] || 0;
+                    } else if (col.type === 'month') {
+                        // Sumar todos los canales de ese mes
+                        const prefix = `${col.anio}_${col.mes}_`;
+                        for (const k in f.data) {
+                            // Tomar solo claves primarias de canal (evitar doble suma de subcanales)
+                            if (k.startsWith(prefix) && k.split('_').length === 3) val += f.data[k];
+                        }
+                    } else if (col.type === 'year') {
+                        // Sumar todo el año
+                        const prefix = `${col.anio}_`;
+                        for (const k in f.data) {
+                            if (k.startsWith(prefix) && k.split('_').length === 3) val += f.data[k];
+                        }
                     }
-                } else if (col.type === 'year') {
-                    // Sumar todo el año
-                    const prefix = `${col.anio}_`;
-                    for (const k in f.data) {
-                        if (k.startsWith(prefix) && k.split('_').length === 3) val += f.data[k];
-                    }
-                }
-                tbHtml += `<td class="num">${val > 0 ? numFmt(val) : '—'}</td>`;
+                    tbHtml += `<td class="num">${val > 0 ? numFmt(val) : '—'}</td>`;
+                });
+
+                // Total al final (derecha)
+                tbHtml += `<td class="num font-semibold matrix-total-col" style="border-left:2px solid #2563eb !important;">${numFmt(f.total)}</td>`;
+                tbHtml += '</tr>';
             });
-
-            // Total al final (derecha)
-            tbHtml += `<td class="num font-semibold matrix-total-col" style="border-left:2px solid #2563eb !important;">${numFmt(f.total)}</td>`;
-            tbHtml += '</tr>';
-        });
+        }
         el.tbodyMatrix.innerHTML = tbHtml;
     }
 
@@ -395,7 +405,7 @@ const Abastecimiento = (() => {
 
             // Stock Central
             if (json.stock_central.length === 0) {
-                el.tbodyStockCen.innerHTML = '<tr><td colspan="4" class="center">Sin stock en depósito central</td></tr>';
+                el.tbodyStockCen.innerHTML = '<tr><td colspan="3" class="center">Sin stock en depósito central</td></tr>';
             } else {
                 let htmlC = '';
                 json.stock_central.forEach(r => {
@@ -405,7 +415,6 @@ const Abastecimiento = (() => {
                             <td><strong>${r.articulo}</strong></td>
                             <td>${r.color}</td>
                             <td class="num font-semibold">${numFmt(r.disponible)}</td>
-                            <td class="num">${numFmt(r.temporal)}</td>
                         </tr>
                     `;
                 });
@@ -416,22 +425,99 @@ const Abastecimiento = (() => {
         }
     }
 
+    /* ── Función de filtrado instantáneo en todas las tablas ─── */
+    function filterAllTablesByArticle(articulo) {
+        selectedArticulo = articulo;
+        const artNorm = articulo.trim().toUpperCase();
+
+        // 1. Filtrar filas de Ingresos
+        const tbodyIng = document.querySelector('#tbody-ingresos');
+        if (tbodyIng) {
+            const rows = tbodyIng.querySelectorAll('tr[data-articulo]');
+            let visibleCount = 0;
+            rows.forEach(tr => {
+                const rowArt = (tr.getAttribute('data-articulo') || '').trim().toUpperCase();
+                if (rowArt === artNorm || rowArt.startsWith(artNorm) || artNorm.startsWith(rowArt)) {
+                    tr.style.display = '';
+                    tr.classList.add('active-row');
+                    visibleCount++;
+                } else {
+                    tr.style.display = 'none';
+                    tr.classList.remove('active-row');
+                }
+            });
+
+            let emptyMsgRow = tbodyIng.querySelector('.row-empty-filter');
+            if (visibleCount === 0 && rows.length > 0) {
+                if (!emptyMsgRow) {
+                    emptyMsgRow = document.createElement('tr');
+                    emptyMsgRow.className = 'row-empty-filter';
+                    emptyMsgRow.innerHTML = `<td colspan="7" class="center" style="color:#64748b; font-style:italic;">Sin datos de ingresos para el artículo seleccionado</td>`;
+                    tbodyIng.appendChild(emptyMsgRow);
+                }
+            } else if (emptyMsgRow) {
+                emptyMsgRow.remove();
+            }
+        }
+
+        // 2. Re-renderizar la Matriz de Ventas filtrada para este artículo sin perder el estado de columnas
+        renderVentasMatrix();
+    }
+
+    function clearArticleFilter() {
+        selectedArticulo = null;
+        // Restaurar filas en Ingresos
+        ['#tbody-ingresos'].forEach(selector => {
+            const tbody = document.querySelector(selector);
+            if (!tbody) return;
+            tbody.querySelectorAll('tr[data-articulo]').forEach(tr => {
+                tr.style.display = '';
+                tr.classList.remove('active-row');
+            });
+            const emptyMsgRow = tbody.querySelector('.row-empty-filter');
+            if (emptyMsgRow) emptyMsgRow.remove();
+        });
+
+        // Re-renderizar la Matriz de Ventas con todos los artículos
+        renderVentasMatrix();
+
+        if (el.filterBadgeBox) el.filterBadgeBox.style.display = 'none';
+        if (el.imgPreview) {
+            el.imgPreview.style.display = 'none';
+            el.imgPreview.src = '';
+        }
+        if (el.imgLabel) el.imgLabel.style.display = 'none';
+        if (el.productNoImg) {
+            el.productNoImg.innerHTML = `
+                <i class="bi bi-image" style="font-size: 3rem; color: #94a3b8; margin-bottom: 8px;"></i>
+                <span style="color: #64748b; font-size: 0.88rem;">Seleccione un artículo de la tabla para ver su foto</span>
+            `;
+            el.productNoImg.style.display = 'flex';
+        }
+        // Recargar KPIs globales y stock general al quitar el filtro de artículo
+        loadKPIs();
+        loadStock();
+    }
+
     /* ── 6. Cargar Imagen del Producto ───────────────────────── */
     function selectProduct(articulo, desc = '') {
         if (!articulo) return;
-        selectedArticulo = articulo;
+        // 1. Filtrar instantáneamente la matriz de ventas e ingresos en pantalla
+        filterAllTablesByArticle(articulo);
 
-        document.querySelectorAll('.abast-table tr[data-articulo]').forEach(tr => {
-            if (tr.getAttribute('data-articulo') === articulo) {
-                tr.classList.add('active-row');
-            } else {
-                tr.classList.remove('active-row');
-            }
-        });
+        // 2. Traer KPIs y Stock exacto para este artículo directamente de la base de datos (garantiza exactitud)
+        loadKPIs();
+        loadStock();
 
         if (el.imgLabel) {
             el.imgLabel.textContent = `${articulo} ${desc ? '— ' + desc : ''}`;
             el.imgLabel.style.display = 'block';
+        }
+
+        // Mostrar badge de filtro activo
+        if (el.filterBadgeBox && el.filterActiveBadge) {
+            el.filterActiveBadge.textContent = `Filtro: ${articulo}`;
+            el.filterBadgeBox.style.display = 'flex';
         }
 
         // URL directa exacta de la imagen en el servidor
@@ -501,7 +587,10 @@ const Abastecimiento = (() => {
     /* ── 8. Bind Events ──────────────────────────────────────── */
     function bindEvents() {
         if (el.btnApply) {
-            el.btnApply.addEventListener('click', reloadAll);
+            el.btnApply.addEventListener('click', () => {
+                clearArticleFilter();
+                reloadAll();
+            });
         }
 
         if (el.btnClear) {
@@ -516,7 +605,15 @@ const Abastecimiento = (() => {
                 if (el.inputDesc) el.inputDesc.value = '';
                 const yStart = new Date().getFullYear() + '-01-01';
                 if (el.inputDesde) el.inputDesde.value = yStart;
+                clearArticleFilter();
                 reloadAll();
+            });
+        }
+
+        if (el.btnUnfilterArt) {
+            el.btnUnfilterArt.addEventListener('click', (e) => {
+                e.preventDefault();
+                clearArticleFilter();
             });
         }
 
