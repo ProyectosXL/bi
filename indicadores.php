@@ -398,7 +398,7 @@
                                 <div class="card-body">
                                     <i class="fas fa-dolly card-icon text-danger"></i>
                                     <h5 class="card-title">Abastecimiento</h5>
-                                    <a href="tableros/abastecimiento.html" class="btn btn-danger btn-card">Ver Reporte</a>
+                                    <a href="/bi/abastecimiento/index.php" class="btn btn-danger btn-card">Ver Reporte</a>
                                 </div>
                             </div>
                             <div class="card">
