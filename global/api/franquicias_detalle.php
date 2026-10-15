@@ -82,14 +82,17 @@ try {
         $pSuc = [$da, $haX, $dp, $hpX, $da, $haX, $dp, $hpX];
     } else {
         $sqlSuc = "
-            SELECT DISTINCT sl.NRO_SUCURSAL as nro, sl.DESC_SUCURSAL as nombre
-            FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl
-            WHERE sl.HABILITADO = 1
-            AND sl.NRO_SUCURSAL IN (
-                SELECT DISTINCT NRO_SUCURS FROM BI_SALES_SUCURSALES WITH (NOLOCK) 
-                WHERE (FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?)
-            )
-            ORDER BY sl.DESC_SUCURSAL
+            SELECT s.NRO_SUCURS as nro, MAX(s.SUCURSAL) as nombre
+            FROM BI_SALES_SUCURSALES s WITH (NOLOCK)
+            WHERE ((s.FECHA >= ? AND s.FECHA < ?) OR (s.FECHA >= ? AND s.FECHA < ?))
+              AND s.SUCURSAL IS NOT NULL AND s.SUCURSAL <> ''
+              AND s.NRO_SUCURS IN (
+                  SELECT NRO_SUCURSAL 
+                  FROM [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS 
+                  WHERE HABILITADO = 1
+              )
+            GROUP BY s.NRO_SUCURS
+            ORDER BY MAX(s.SUCURSAL)
         ";
         $pSuc = [$da, $haX, $dp, $hpX];
     }
