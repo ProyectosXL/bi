@@ -116,7 +116,7 @@ no hay que confundir:
 | `tickets_cpromo`      | Sólo los que llevan promo (flag `cp`) |
 | `var_tickets_cpromo`  | Variación de `tickets_cpromo` vs. el período previo |
 | `pct_tickets_cpromo`  | `tickets_cpromo / tickets_total` |
-| `promos_usadas`       | Cuántas promociones se **aplicaron** en total |
+| `promos_usadas`       | Cuántas promociones **internas** se aplicaron (sin bancarias) |
 | `var_promos_usadas`   | Variación de `promos_usadas` vs. el período previo |
 
 `tickets_cpromo` es el que tiene que cuadrar con el KPI "Tickets con Promo" del
@@ -138,27 +138,33 @@ promo: las **concatena en una sola etiqueta separadas por `' / '`**. Así,
 `'PROMO DIA DEL MAESTRO / CUENTA DNI - PROVINCIA'` son DOS promociones en un
 renglón.
 
-Por eso `promos_usadas` no cuenta filas: cuenta **separadores + 1**.
+La etiqueta siempre es `<promo interna> / <promo tarjeta>`, y cada parte tiene su
+propio código en el renglón:
 
-```sql
-1 + (LEN(DESC_PROMOCION_TARJETA + '.')
-     - LEN(REPLACE(DESC_PROMOCION_TARJETA, ' / ', '') + '.')) / 3
-```
+| Columna | Qué trae | Ejemplos |
+|---------|----------|----------|
+| `COD_PROMOCION`         | Promo **interna** (de artículo) | `MAESTRO`, `TOALLA100%`, `PROMO 40%`, `DISC 20%` |
+| `COD_PROMOCION_TARJETA` | Promo de **banco / tarjeta**    | `601` Santander, `702` Provincia, `1900` Naranja |
 
-El `'.'` concatenado de los dos lados protege los espacios finales, que `LEN()`
-recorta — hay promos cargadas como `'BANCO PROVINCIA '`. Es la misma convención
-de separador que usa `detalle.js` para marcar las filas combinadas
-(`row-combinada`).
+**Las promos bancarias no cuentan** (pedido de negocio, octubre 2026), así que
+`promos_usadas` cuenta los renglones con `COD_PROMOCION` cargado. Una combinada
+interna + bancaria cuenta 1, y una bancaria sola cuenta 0.
 
-Cuidado con dos cosas:
+No se usa `BANCO` para decidir: las promos de tarjeta sin banco (Naranja, Banco
+Entre Ríos) vienen con `BANCO = 'DESCONOCIDO'` y se colarían como internas.
+`sql/valida_promo.sql` bloque 12 valida la regla y da el total de control.
 
-- Los nombres con `/` **sin espacios** no son combinaciones y no se parten bien:
-  `'40%OFF 2DA UNIDAD (DM 25/8 AL 14/9)'` cuenta como una sola promo, que es lo
-  correcto.
+> **Limitación conocida:** si el POS aplicó **la misma promo varias veces** en un
+> ticket (p. ej. 4 cremas → 4 promos), `BI_PROMOCIONES` trae el nombre una sola
+> vez y la columna cuenta 1. Negocio quiere que cuente cada aplicación;
+> `sql/diag_promo_articulo.sql` busca dónde está ese dato.
+
+Cuidado con esto:
+
 - La suma es **por renglón**, no por ticket. Si un ticket se pagó con dos
   tarjetas y ambas llevan promo, cuenta las dos — son dos aplicaciones.
   `sql/valida_promo.sql` bloque 11 valida los dos supuestos y mide cuánto pesa
-  el segundo.
+  el segundo (su conteo es el anterior, con bancarias incluidas).
 
 ### Comparativo contra el período previo
 

@@ -575,3 +575,171 @@ INNER JOIN (
 WHERE p.FECHA >= @d2 AND p.FECHA < @h2
 ORDER BY p.FECHA, p.N_COMP;
 GO
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   12) "PROMOS USADAS" SIN BANCARIAS — validar la clasificación
+   ═══════════════════════════════════════════════════════════════════════════
+   Desde octubre 2026 la columna cuenta sólo promos INTERNAS.
+   REGLA ADOPTADA (validada con 12.1 / 12.1b): renglón con COD_PROMOCION
+   cargado = 1 promo interna. Las bancarias sólo traen COD_PROMOCION_TARJETA.
+   12.1 y 12.2 quedan como primera aproximación por BANCO (descartada: TARJETA
+   NARANJA y BANCO ENTRE RIOS vienen con BANCO = DESCONOCIDO). 12.3 es el
+   total de control de la regla adoptada.
+
+   12.1) Clasificación de cada promo que aparece sola.
+   Qué mirar:
+     · Que todas las 'BANCARIA' sean de banco (CUENTA DNI, BANCO X, MODO...).
+     · Las filas con con_banco Y sin_banco > 0 a la vez son las dudosas:
+       la regla decide por mayoría, revisar que haya elegido bien.
+   ═══════════════════════════════════════════════════════════════════════════ */
+DECLARE @desde DATE = '2026-09-01';
+DECLARE @hasta DATE = '2026-10-01';
+
+SELECT UPPER(LTRIM(RTRIM(p.DESC_PROMOCION_TARJETA)))                              AS promo,
+       SUM(CASE WHEN ISNULL(p.BANCO,'') NOT IN ('','DESCONOCIDO') THEN 1 ELSE 0 END) AS con_banco,
+       SUM(CASE WHEN ISNULL(p.BANCO,'')     IN ('','DESCONOCIDO') THEN 1 ELSE 0 END) AS sin_banco,
+       CASE WHEN SUM(CASE WHEN ISNULL(p.BANCO,'') NOT IN ('','DESCONOCIDO') THEN 1 ELSE -1 END) > 0
+            THEN 'BANCARIA' ELSE 'INTERNA' END                                     AS clasificacion,
+       -- Para ver si los códigos distinguen promo de artículo vs. de tarjeta
+       -- mejor que BANCO (caso TARJETA NARANJA: es de tarjeta pero sin banco).
+       MIN(p.COD_PROMOCION)         AS cod_promo_min,
+       MAX(p.COD_PROMOCION)         AS cod_promo_max,
+       MIN(p.COD_PROMOCION_TARJETA) AS cod_tarj_min,
+       MAX(p.COD_PROMOCION_TARJETA) AS cod_tarj_max,
+       COUNT(*)                     AS filas
+FROM dbo.BI_PROMOCIONES p WITH (NOLOCK)
+WHERE p.FECHA >= @desde AND p.FECHA < @hasta
+  AND p.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
+  AND p.DESC_PROMOCION_TARJETA NOT LIKE '% / %'
+GROUP BY UPPER(LTRIM(RTRIM(p.DESC_PROMOCION_TARJETA)))
+ORDER BY clasificacion, COUNT(*) DESC;
+
+-- 12.1b) Cómo vienen los códigos en las combinadas (¿traen los dos códigos?).
+SELECT TOP 30 p.DESC_PROMOCION_TARJETA, p.COD_PROMOCION, p.COD_PROMOCION_TARJETA,
+       p.BANCO, COUNT(*) AS filas
+FROM dbo.BI_PROMOCIONES p WITH (NOLOCK)
+WHERE p.FECHA >= @desde AND p.FECHA < @hasta
+  AND p.DESC_PROMOCION_TARJETA LIKE '% / %'
+GROUP BY p.DESC_PROMOCION_TARJETA, p.COD_PROMOCION, p.COD_PROMOCION_TARJETA, p.BANCO
+ORDER BY filas DESC;
+GO
+
+/* 12.2) Combinadas partidas en segmentos, con la clasificación de cada uno, y
+   total de control (conteo viejo vs. nuevo).
+   Qué mirar:
+     · Que en cada combinada quede marcada como BANCARIA la parte del banco.
+     · promos_nuevo = promos_viejo - segmentos_bancarios (cuadra con la suma de
+       la columna Promos Usadas del dashboard para el mismo período, sin filtros).
+   ═══════════════════════════════════════════════════════════════════════════ */
+DECLARE @desde DATE = '2026-09-01';
+DECLARE @hasta DATE = '2026-10-01';
+
+WITH et AS (
+    SELECT CAST(p.DESC_PROMOCION_TARJETA AS NVARCHAR(400)) AS etiqueta,
+           COUNT(*)                                        AS filas
+    FROM dbo.BI_PROMOCIONES p WITH (NOLOCK)
+    WHERE p.FECHA >= @desde AND p.FECHA < @hasta
+      AND p.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
+    GROUP BY p.DESC_PROMOCION_TARJETA
+),
+sp AS (   -- split recursivo por ' / ' (no depende de STRING_SPLIT)
+    SELECT etiqueta, filas,
+           CAST(LEFT(etiqueta + N' / ', CHARINDEX(N' / ', etiqueta + N' / ') - 1) AS NVARCHAR(400)) AS seg,
+           CAST(STUFF(etiqueta + N' / ', 1, CHARINDEX(N' / ', etiqueta + N' / ') + 2, N'') AS NVARCHAR(400)) AS resto
+    FROM et
+    UNION ALL
+    SELECT etiqueta, filas,
+           CAST(LEFT(resto, CHARINDEX(N' / ', resto) - 1) AS NVARCHAR(400)),
+           CAST(STUFF(resto, 1, CHARINDEX(N' / ', resto) + 2, N'') AS NVARCHAR(400))
+    FROM sp
+    WHERE CHARINDEX(N' / ', resto) > 0
+),
+ban AS (
+    SELECT UPPER(LTRIM(RTRIM(p.DESC_PROMOCION_TARJETA))) AS promo
+    FROM dbo.BI_PROMOCIONES p WITH (NOLOCK)
+    WHERE p.FECHA >= @desde AND p.FECHA < @hasta
+      AND p.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
+      AND p.DESC_PROMOCION_TARJETA NOT LIKE '% / %'
+    GROUP BY UPPER(LTRIM(RTRIM(p.DESC_PROMOCION_TARJETA)))
+    HAVING SUM(CASE WHEN ISNULL(p.BANCO,'') NOT IN ('','DESCONOCIDO') THEN 1 ELSE -1 END) > 0
+),
+cl AS (
+    SELECT sp.etiqueta, sp.filas, LTRIM(RTRIM(sp.seg)) AS seg,
+           CASE WHEN ban.promo IS NOT NULL THEN 'BANCARIA' ELSE 'INTERNA' END AS tipo
+    FROM sp
+    LEFT JOIN ban ON ban.promo = UPPER(LTRIM(RTRIM(sp.seg)))
+    WHERE LTRIM(RTRIM(sp.seg)) <> ''
+)
+SELECT etiqueta, filas, seg, tipo
+FROM cl
+WHERE etiqueta LIKE N'% / %'
+ORDER BY filas DESC, etiqueta, seg
+OPTION (MAXRECURSION 20);
+
+-- Total de control (mismo período). Repetir el WITH: los CTE no sobreviven al SELECT anterior.
+WITH et AS (
+    SELECT CAST(p.DESC_PROMOCION_TARJETA AS NVARCHAR(400)) AS etiqueta, COUNT(*) AS filas
+    FROM dbo.BI_PROMOCIONES p WITH (NOLOCK)
+    WHERE p.FECHA >= @desde AND p.FECHA < @hasta
+      AND p.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
+    GROUP BY p.DESC_PROMOCION_TARJETA
+),
+sp AS (
+    SELECT etiqueta, filas,
+           CAST(LEFT(etiqueta + N' / ', CHARINDEX(N' / ', etiqueta + N' / ') - 1) AS NVARCHAR(400)) AS seg,
+           CAST(STUFF(etiqueta + N' / ', 1, CHARINDEX(N' / ', etiqueta + N' / ') + 2, N'') AS NVARCHAR(400)) AS resto
+    FROM et
+    UNION ALL
+    SELECT etiqueta, filas,
+           CAST(LEFT(resto, CHARINDEX(N' / ', resto) - 1) AS NVARCHAR(400)),
+           CAST(STUFF(resto, 1, CHARINDEX(N' / ', resto) + 2, N'') AS NVARCHAR(400))
+    FROM sp
+    WHERE CHARINDEX(N' / ', resto) > 0
+),
+ban AS (
+    SELECT UPPER(LTRIM(RTRIM(p.DESC_PROMOCION_TARJETA))) AS promo
+    FROM dbo.BI_PROMOCIONES p WITH (NOLOCK)
+    WHERE p.FECHA >= @desde AND p.FECHA < @hasta
+      AND p.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
+      AND p.DESC_PROMOCION_TARJETA NOT LIKE '% / %'
+    GROUP BY UPPER(LTRIM(RTRIM(p.DESC_PROMOCION_TARJETA)))
+    HAVING SUM(CASE WHEN ISNULL(p.BANCO,'') NOT IN ('','DESCONOCIDO') THEN 1 ELSE -1 END) > 0
+)
+SELECT SUM(sp.filas)                                                   AS promos_viejo,
+       SUM(CASE WHEN ban.promo IS NOT NULL THEN sp.filas ELSE 0 END)   AS segmentos_bancarios,
+       SUM(CASE WHEN ban.promo IS NULL     THEN sp.filas ELSE 0 END)   AS promos_nuevo
+FROM sp
+LEFT JOIN ban ON ban.promo = UPPER(LTRIM(RTRIM(sp.seg)))
+WHERE LTRIM(RTRIM(sp.seg)) <> ''
+OPTION (MAXRECURSION 20);
+GO
+
+/* 12.3) Total de control de la regla adoptada (COD_PROMOCION cargado).
+   Qué mirar:
+     · promos_nuevo cuadra con la suma de la columna Promos Usadas del
+       dashboard para el mismo período, sin filtros.
+     · internas_sin_codigo = 0: ninguna etiqueta interna sin COD_PROMOCION.
+       Si da > 0, revisar con el SELECT de abajo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+DECLARE @desde DATE = '2026-09-01';
+DECLARE @hasta DATE = '2026-10-01';
+
+SELECT SUM(CASE WHEN LTRIM(RTRIM(ISNULL(p.COD_PROMOCION,''))) <> '' THEN 1 ELSE 0 END) AS promos_nuevo,
+       SUM(CASE WHEN LTRIM(RTRIM(ISNULL(p.COD_PROMOCION,''))) =  ''
+                 AND LTRIM(RTRIM(ISNULL(p.COD_PROMOCION_TARJETA,''))) = '' THEN 1 ELSE 0 END) AS internas_sin_codigo,
+       COUNT(*) AS renglones_con_promo
+FROM dbo.BI_PROMOCIONES p WITH (NOLOCK)
+WHERE p.FECHA >= @desde AND p.FECHA < @hasta
+  AND p.DESC_PROMOCION_TARJETA <> 'SIN PROMO';
+
+-- Renglones con promo pero sin ningún código (no deberían existir).
+SELECT TOP 20 p.DESC_PROMOCION_TARJETA, p.BANCO, COUNT(*) AS filas
+FROM dbo.BI_PROMOCIONES p WITH (NOLOCK)
+WHERE p.FECHA >= @desde AND p.FECHA < @hasta
+  AND p.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
+  AND LTRIM(RTRIM(ISNULL(p.COD_PROMOCION,''))) = ''
+  AND LTRIM(RTRIM(ISNULL(p.COD_PROMOCION_TARJETA,''))) = ''
+GROUP BY p.DESC_PROMOCION_TARJETA, p.BANCO
+ORDER BY filas DESC;
+GO

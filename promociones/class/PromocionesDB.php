@@ -471,7 +471,8 @@ class PromocionesDB
      *   tickets_cpromo — sólo los que llevan promo (flag cp). Éste es el que
      *                    tiene que cuadrar con el KPI "Tickets con Promo" del
      *                    Resumen (getKPIsBulk).
-     *   promos_usadas  — cuántas promociones se APLICARON en total. Ver nota abajo.
+     *   promos_usadas  — cuántas promociones INTERNAS se aplicaron (las bancarias
+     *                    no cuentan). Ver nota abajo.
      *
      * Las tres, más la facturación y los costos, se calculan para el período
      * actual (is_a) y el previo (is_p) en un solo scan, igual que getKPIsBulk.
@@ -481,8 +482,16 @@ class PromocionesDB
      * Un ticket puede llevar más de una promo, y el modelo NO crea un renglón
      * por promo: las concatena en una sola etiqueta separadas por ' / '
      * (p. ej. 'PROMO DIA DEL MAESTRO / CUENTA DNI - PROVINCIA' son DOS promos).
-     * Por eso promos_usadas cuenta los separadores + 1, en vez de contar filas.
-     * Misma convención que usa detalle.js para marcar las filas combinadas.
+     * La etiqueta es '<promo interna> / <promo tarjeta>', y cada parte tiene su
+     * código: COD_PROMOCION (interna: MAESTRO, TOALLA100%...) y
+     * COD_PROMOCION_TARJETA (banco/tarjeta: 601, 702, 1900 Naranja...).
+     * promos_usadas cuenta sólo las INTERNAS: renglones con COD_PROMOCION
+     * cargado. Una combinada interna + bancaria cuenta 1; una bancaria sola, 0.
+     * Validado en promociones/sql/valida_promo.sql, bloque 12.
+     *
+     * LIMITACIÓN: si el POS aplicó la misma promo varias veces en el ticket
+     * (4 cremas → 4 promos), BI_PROMOCIONES la trae UNA vez y acá cuenta 1.
+     * Ver promociones/sql/diag_promo_articulo.sql.
      *
      * La suma es por RENGLÓN de BI_PROMOCIONES, no por ticket: si un ticket se
      * pagó con dos tarjetas y ambas tienen promo, cuenta las dos (son dos
@@ -514,13 +523,11 @@ class PromocionesDB
             $pF, $pG
         );
 
-        // Promos aplicadas en el renglón = separadores ' / ' + 1.
-        // El '.' concatenado de los dos lados protege los espacios finales, que
-        // LEN() recorta (hay promos cargadas como 'BANCO PROVINCIA ').
-        $promoCount = "(1 + (LEN(s.DESC_PROMOCION_TARJETA + '.')
-                             - LEN(REPLACE(s.DESC_PROMOCION_TARJETA, ' / ', '') + '.')) / 3)";
-
         $tcFac = "s.T_COMP COLLATE Latin1_General_BIN = 'FAC'";
+
+        // Promo interna aplicada en el renglón (las bancarias sólo traen
+        // COD_PROMOCION_TARJETA). Ver nota del docblock.
+        $esInterna = "LTRIM(RTRIM(ISNULL(s.COD_PROMOCION,''))) <> ''";
 
         $sql = "
             SELECT
@@ -533,8 +540,8 @@ class PromocionesDB
                                     THEN s.N_COMP END)                       AS tickets_cpromo,
                 COUNT(DISTINCT CASE WHEN is_p=1 AND cp=1 AND {$tcFac}
                                     THEN s.N_COMP END)                       AS tickets_cpromo_prev,
-                ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 THEN {$promoCount} ELSE 0 END),0) AS promos_usadas,
-                ISNULL(SUM(CASE WHEN is_p=1 AND cp=1 THEN {$promoCount} ELSE 0 END),0) AS promos_usadas_prev,
+                ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 AND {$esInterna} THEN 1 ELSE 0 END),0) AS promos_usadas,
+                ISNULL(SUM(CASE WHEN is_p=1 AND cp=1 AND {$esInterna} THEN 1 ELSE 0 END),0) AS promos_usadas_prev,
                 ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 THEN s.IMPORTE_TO ELSE 0 END),0)  AS fact_cpromo,
                 ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 THEN ISNULL(s.COSTO,0) ELSE 0 END),0) AS costo_promo,
                 ISNULL(SUM(CASE WHEN is_a=1 THEN ISNULL(s.COSTO_PROMO_BANCARIA,0) ELSE 0 END),0) AS costo_banc,
