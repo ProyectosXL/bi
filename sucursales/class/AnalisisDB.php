@@ -81,12 +81,18 @@ class AnalisisDB
     private function fromVentasSucursales(): string
     {
         $tipo = strtoupper(trim($_SESSION['tipo'] ?? 'LOCAL_PROPIO'));
+        $filtroNoComercial = "
+            AND (RUBRO IS NOT NULL AND RUBRO NOT IN ('CONCEPTO','PACKAGING','SIN RUBRO'))
+            AND (COD_ARTICU NOT LIKE '***%' AND COD_ARTICU NOT LIKE 'PACK-%')
+        ";
+
         if ($this->origen !== 'franquicias' && strpos($tipo, 'FRANQUICIA') === false && $tipo !== 'GRUPO') {
-            return '(SELECT * FROM BI_SALES_SUCURSALES WITH (NOLOCK))';
+            return "(SELECT * FROM BI_SALES_SUCURSALES WITH (NOLOCK) WHERE 1=1 {$filtroNoComercial})";
         }
         return "(
             SELECT NRO_SUCURS, FECHA, IMPORTE, CANTIDAD, RUBRO, COD_VENDED, DESC_VENDEDOR, CATEGORIA, COLOR, DESTINO
             FROM BI_SALES_SUCURSALES WITH (NOLOCK)
+            WHERE 1=1 {$filtroNoComercial}
             UNION ALL
             SELECT pv.idTango AS NRO_SUCURS, fd.fecha AS FECHA, fd.importeVentaReal AS IMPORTE, 0 AS CANTIDAD, 'FRANQUICIA_ST' AS RUBRO, '0' AS COD_VENDED, 'SIN TANGO' AS DESC_VENDEDOR, NULL AS CATEGORIA, 'SIN COLOR' AS COLOR, 'SIN DESTINO' AS DESTINO
             FROM sistemas.dbo.FP_ObjetivosFinalesDetalle fd WITH (NOLOCK)
