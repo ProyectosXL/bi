@@ -81,7 +81,7 @@ const PromoDetalle = (() => {
             recalcTotal: t => (t.tickets_total > 0 ? t.tickets_cpromo / t.tickets_total : 0),
         },
         { key: 'promos_usadas',    label: 'Promos Usadas', align: 'right', fmt: num,                xlFmt: 'number', sortKey: 'promos_usadas',
-          tip: 'Cantidad de promociones internas aplicadas (de artículo, como «TOALLA AL 100%»). Las de banco o tarjeta no cuentan: una combinada («PROMO A / BANCO B») cuenta 1 y una bancaria sola, 0. Si la misma promo se aplicó varias veces en un ticket, cuenta 1.' },
+          tip: 'Veces que se aplicaron promociones propias. Si un ticket tuvo 4 cremas en promo, cuenta 4. No incluye bancos ni tarjetas.' },
         {
             key: 'var_promos_usadas', label: 'Var. Promos', align: 'right', fmt: varPct, xlFmt: 'pct1', sortKey: 'var_promos_usadas',
             tip: 'Crecimiento de las promociones aplicadas contra el mismo período del año anterior. Ojo: con una promoción filtrada, si el año pasado se llamaba distinto el período previo da 0.',

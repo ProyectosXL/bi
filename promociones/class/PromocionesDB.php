@@ -489,14 +489,15 @@ class PromocionesDB
      * cargado. Una combinada interna + bancaria cuenta 1; una bancaria sola, 0.
      * Validado en promociones/sql/valida_promo.sql, bloque 12.
      *
-     * LIMITACIÓN: si el POS aplicó la misma promo varias veces en el ticket
-     * (4 cremas → 4 promos), BI_PROMOCIONES la trae UNA vez y acá cuenta 1.
-     * Ver promociones/sql/diag_promo_articulo.sql.
-     *
-     * La suma es por RENGLÓN de BI_PROMOCIONES, no por ticket: si un ticket se
-     * pagó con dos tarjetas y ambas tienen promo, cuenta las dos (son dos
-     * aplicaciones). Ver promociones/sql/valida_promo.sql, bloque 11, para
-     * medir cuánto pesa ese caso.
+     * REPETICIONES (sólo Argentina): BI_PROMOCIONES trae la promo UNA vez por
+     * ticket aunque el POS la haya aplicado varias (4 cremas → 1). Las veces
+     * reales salen de BI_PROMOCIONES_APLICADAS (comprobante × promo, columna
+     * RENGLONES), que carga LOCALES_LAKERS.dbo.SJ_SP_BI_PROMOCIONES_APLICADAS
+     * en XL-LAKERBIS desde CTA_RENGLON_FACTURA_PROMOCION. Se toma un solo
+     * renglón por ticket × promo (rn = 1) para no duplicar los tickets pagados
+     * con dos tarjetas. Ticket que no está en la tabla nueva cuenta 1: la
+     * fuente tiene huecos antes de 2025-08 (mar, abr y jul 2025 casi vacíos).
+     * Franquicias y Uruguay siguen contando 1 por renglón.
      *
      * OJO: el filtro de Banco de la barra superior SÍ entra al WHERE, así que
      * con un banco elegido el denominador (tickets_total, igual que fact_total)
@@ -529,6 +530,16 @@ class PromocionesDB
         // COD_PROMOCION_TARJETA). Ver nota del docblock.
         $esInterna = "LTRIM(RTRIM(ISNULL(s.COD_PROMOCION,''))) <> ''";
 
+        // Veces que se aplicó la promo en el ticket. BI_PROMOCIONES_APLICADAS
+        // sólo existe para Argentina; en los demás orígenes cada renglón vale 1.
+        // rn = 1 toma un solo renglón por ticket × promo (un ticket pagado con
+        // dos tarjetas tiene dos renglones). Ticket que no está en la tabla
+        // nueva (meses con huecos de la fuente) vale 1, como antes.
+        $usaAplicadas = $this->origen === 'argentina';
+        $aplicaciones = $usaAplicadas
+            ? "CASE WHEN s.rn = 1 THEN ISNULL(ap.RENGLONES, 1) ELSE 0 END"
+            : "1";
+
         $sql = "
             SELECT
                 s.NRO_SUCURSAL,
@@ -540,8 +551,8 @@ class PromocionesDB
                                     THEN s.N_COMP END)                       AS tickets_cpromo,
                 COUNT(DISTINCT CASE WHEN is_p=1 AND cp=1 AND {$tcFac}
                                     THEN s.N_COMP END)                       AS tickets_cpromo_prev,
-                ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 AND {$esInterna} THEN 1 ELSE 0 END),0) AS promos_usadas,
-                ISNULL(SUM(CASE WHEN is_p=1 AND cp=1 AND {$esInterna} THEN 1 ELSE 0 END),0) AS promos_usadas_prev,
+                ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 AND {$esInterna} THEN {$aplicaciones} ELSE 0 END),0) AS promos_usadas,
+                ISNULL(SUM(CASE WHEN is_p=1 AND cp=1 AND {$esInterna} THEN {$aplicaciones} ELSE 0 END),0) AS promos_usadas_prev,
                 ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 THEN s.IMPORTE_TO ELSE 0 END),0)  AS fact_cpromo,
                 ISNULL(SUM(CASE WHEN is_a=1 AND cp=1 THEN ISNULL(s.COSTO,0) ELSE 0 END),0) AS costo_promo,
                 ISNULL(SUM(CASE WHEN is_a=1 THEN ISNULL(s.COSTO_PROMO_BANCARIA,0) ELSE 0 END),0) AS costo_banc,
@@ -551,8 +562,7 @@ class PromocionesDB
             $sql .= ", MAX(sl.cod_client) AS cod_client";
         }
 
-        $sql .= "
-            FROM (
+        $base = "
                 SELECT s.*,
                     {$cpSql} AS cp,
                     CASE WHEN s.FECHA >= ? AND s.FECHA < ? THEN 1 ELSE 0 END AS is_a,
@@ -562,8 +572,37 @@ class PromocionesDB
                     (s.FECHA >= ? AND s.FECHA < ?)
                     OR (s.FECHA >= ? AND s.FECHA < ?)
                 )
-                  {$sfF} {$sfG}
-            ) s";
+                  {$sfF} {$sfG}";
+
+        if ($usaAplicadas) {
+            // ORDER BY cp DESC: si el ticket tiene un renglón que pasa el filtro
+            // de promoción y otro que no, el que cuenta es el que pasa.
+            // ap se agrupa antes del JOIN para que nunca multiplique los importes.
+            $sql .= "
+            FROM (
+                SELECT x.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY x.FECHA, x.NRO_SUCURSAL, x.T_COMP, x.N_COMP, x.COD_PROMOCION
+                        ORDER BY x.cp DESC) AS rn
+                FROM ({$base}) x
+            ) s
+            LEFT JOIN (
+                SELECT FECHA, NRO_SUCURSAL, T_COMP, N_COMP, COD_PROMOCION,
+                       SUM(RENGLONES) AS RENGLONES
+                FROM dbo.BI_PROMOCIONES_APLICADAS WITH (NOLOCK)
+                WHERE (FECHA >= ? AND FECHA < ?) OR (FECHA >= ? AND FECHA < ?)
+                GROUP BY FECHA, NRO_SUCURSAL, T_COMP, N_COMP, COD_PROMOCION
+            ) ap
+                ON  ap.FECHA        = s.FECHA
+                AND ap.NRO_SUCURSAL = s.NRO_SUCURSAL
+                AND ap.T_COMP        COLLATE DATABASE_DEFAULT = s.T_COMP        COLLATE DATABASE_DEFAULT
+                AND ap.N_COMP        COLLATE DATABASE_DEFAULT = s.N_COMP        COLLATE DATABASE_DEFAULT
+                AND ap.COD_PROMOCION COLLATE DATABASE_DEFAULT = s.COD_PROMOCION COLLATE DATABASE_DEFAULT";
+            $params = array_merge($params, [$da, $haX, $dp, $hpX]);
+        } else {
+            $sql .= "
+            FROM ({$base}) s";
+        }
 
         if ($this->origen === 'franquicias') {
             $sql .= "

@@ -154,10 +154,35 @@ No se usa `BANCO` para decidir: las promos de tarjeta sin banco (Naranja, Banco
 Entre Ríos) vienen con `BANCO = 'DESCONOCIDO'` y se colarían como internas.
 `sql/valida_promo.sql` bloque 12 valida la regla y da el total de control.
 
-> **Limitación conocida:** si el POS aplicó **la misma promo varias veces** en un
-> ticket (p. ej. 4 cremas → 4 promos), `BI_PROMOCIONES` trae el nombre una sola
-> vez y la columna cuenta 1. Negocio quiere que cuente cada aplicación;
-> `sql/diag_promo_articulo.sql` busca dónde está ese dato.
+#### Repeticiones de la misma promo en un ticket (sólo Argentina)
+
+`BI_PROMOCIONES` trae la promo **una sola vez** por ticket aunque el POS la haya
+aplicado varias (4 cremas con "PROMO CREMA 100%" → 1). El colapso ocurre en la
+vista de origen `LOCALES_LAKERS.dbo.SJ_RESUMENVENTASCONPROMOCIONES_2`, que se
+queda con una promo por comprobante.
+
+Las veces reales vienen de **`BI_PROMOCIONES_APLICADAS`** (una fila por
+comprobante × promo interna, columnas `RENGLONES`, `UNIDADES`, `DESCUENTO`):
+
+| | |
+|---|---|
+| Carga | XL-LAKERBIS · `LOCALES_LAKERS.dbo.SJ_SP_BI_PROMOCIONES_APLICADAS @dias` |
+| Fuente | `CTA_RENGLON_FACTURA_PROMOCION` (renglón × promo) + `CTA02` (fecha, estado) + `CTA03` (cantidad) |
+| Cuándo | Al final de `SJ_SP_BI_PROMOCIONES`, paso 15 del job `BI - SUCURSALES` (borra y recarga 30 días) |
+| Testigos | UNICENTER `B0021300013514` = 4, DOT `B0019400065124` = 3, ABASTO `B0022200099478` = 2 |
+
+`getDetalleSucursales()` la cruza por fecha + sucursal + comprobante + `COD_PROMOCION`:
+
+- Toma **un renglón por ticket × promo** (`rn = 1`): un ticket pagado con dos
+  tarjetas tiene dos renglones en `BI_PROMOCIONES` y contaría doble.
+- Ticket que **no está** en la tabla nueva cuenta **1**, como antes. La fuente
+  tiene huecos antes de agosto 2025 (marzo, abril y julio 2025 casi vacíos,
+  diciembre 2025 incompleto), así que el período previo usa ese respaldo.
+- La tabla se agrupa antes del `JOIN`, así nunca multiplica importes.
+
+Franquicias y Uruguay todavía no tienen la tabla: cuentan 1 por renglón.
+Sus cargas siguen el mismo patrón (`FRANQUICIAS_LAKERS.dbo.RO_SP_BI_PROMOCIONES_FRANQUICIAS`,
+`SUCURSALES_URUGUAY.dbo.RO_SP_BI_PROMOCIONES_SUCURSALES_UY`).
 
 Cuidado con esto:
 
