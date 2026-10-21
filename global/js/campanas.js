@@ -441,23 +441,21 @@ const Campanas = (() => {
                 totalPorDiaFact[d] += fact;
                 totalPorDiaFactPrev[d] += factPrev;
 
-                const cumpl = obj > 0 ? (fact / obj) : (fact > 0 ? 1 : 0);
                 const falta = Math.max(0, obj - fact);
 
                 rowObj      += `<td style="text-align:right" ${tdCls}>${fmtMoney(obj)}</td>`;
                 rowFact     += `<td style="text-align:right; font-weight:600" ${tdCls}>${fmtMoney(fact)}</td>`;
-                rowCumpl    += `<td style="text-align:right; font-weight:600; color:${cumpl >= 1 ? 'var(--pos)' : 'var(--neg)'}" ${tdCls}>${fmtPct(cumpl)}</td>`;
+                rowCumpl    += `<td style="text-align:right; font-weight:600" ${tdCls}>${fmtVar(fact, obj)}</td>`;
                 rowFalta    += `<td style="text-align:right" ${tdCls}>${fmtMoney(falta)}</td>`;
                 rowFactPrev += `<td style="text-align:right; color:var(--text-2)" ${tdCls}>${fmtMoney(factPrev)}</td>`;
                 rowVarPrev  += `<td style="text-align:right; font-weight:600" ${tdCls}>${fmtVar(fact, factPrev)}</td>`;
             }
 
-            const sTotCumpl = sTotObj > 0 ? (sTotFact / sTotObj) : (sTotFact > 0 ? 1 : 0);
             const sTotFalta = Math.max(0, sTotObj - sTotFact);
 
             rowObj      += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(sTotObj)}</td></tr>`;
             rowFact     += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(sTotFact)}</td></tr>`;
-            rowCumpl    += `<td style="text-align:right; font-weight:700; color:${sTotCumpl >= 1 ? 'var(--pos)' : 'var(--neg)'}" class="col-total">${fmtPct(sTotCumpl)}</td></tr>`;
+            rowCumpl    += `<td style="text-align:right; font-weight:700" class="col-total">${fmtVar(sTotFact, sTotObj)}</td></tr>`;
             rowFalta    += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(sTotFalta)}</td></tr>`;
             rowFactPrev += `<td style="text-align:right; font-weight:700; color:var(--text-2)" class="col-total">${fmtMoney(sTotFactPrev)}</td></tr>`;
             rowVarPrev  += `<td style="text-align:right; font-weight:700" class="col-total">${fmtVar(sTotFact, sTotFactPrev)}</td></tr>`;
@@ -482,7 +480,7 @@ const Campanas = (() => {
         // Fila de TOTAL GENERAL (Pie de tabla)
         let tfootObj      = `<tr><td class="sticky-col col-sticky">TOTAL OBJETIVO (${anioAct})</td>`;
         let tfootFact     = `<tr><td class="sticky-col col-sticky">TOTAL FACTURACIÓN (${anioAct})</td>`;
-        let tfootCumpl    = `<tr><td class="sticky-col col-sticky">TOTAL CUMPLIMIENTO</td>`;
+        let tfootCumpl    = `<tr><td class="sticky-col col-sticky">TOTAL FACTURACIÓN VS OBJETIVO</td>`;
         let tfootFalta    = `<tr><td class="sticky-col col-sticky">TOTAL FALTA OBJETIVO</td>`;
         let tfootFactPrev = `<tr><td class="sticky-col col-sticky" style="color:#cbd5e1">TOTAL FACTURACIÓN (${anioPrev})</td>`;
         let tfootVarPrev  = `<tr><td class="sticky-col col-sticky" style="color:#cbd5e1">TOTAL VS AÑO ANTERIOR</td>`;
@@ -497,7 +495,6 @@ const Campanas = (() => {
             gTotFact += dFact;
             gTotFactPrev += dFactPrev;
 
-            const dCumpl = dObj > 0 ? (dFact / dObj) : (dFact > 0 ? 1 : 0);
             const dFalta = Math.max(0, dObj - dFact);
 
             let varHtml = '—';
@@ -514,17 +511,28 @@ const Campanas = (() => {
                 varHtml = '<span class="tfoot-var-pos">+100,0\u00A0%</span>';
             }
 
-            const cumplColor = dFact === 0 ? '#94a3b8' : (dCumpl >= 1 ? '#4ade80' : '#fca5a5');
+            let varObjHtml = '—';
+            if (dObj > 0) {
+                if (dFact === 0) {
+                    varObjHtml = '<span class="tfoot-var-neg">-100,0\u00A0%</span>';
+                } else {
+                    const diffObj = (dFact - dObj) / dObj;
+                    const signObj = diffObj >= 0 ? '+' : '';
+                    const clsObj = diffObj >= 0 ? 'tfoot-var-pos' : 'tfoot-var-neg';
+                    varObjHtml = `<span class="${clsObj}">${signObj}${(diffObj * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u00A0%</span>`;
+                }
+            } else if (dFact > 0) {
+                varObjHtml = '<span class="tfoot-var-pos">+100,0\u00A0%</span>';
+            }
 
             tfootObj      += `<td style="text-align:right" class="col-day">${fmtMoney(dObj)}</td>`;
             tfootFact     += `<td style="text-align:right; font-weight:700" class="col-day">${fmtMoney(dFact)}</td>`;
-            tfootCumpl    += `<td style="text-align:right; font-weight:700; color:${cumplColor}" class="col-day">${dFact === 0 ? '0,0\u00A0%' : fmtPct(dCumpl)}</td>`;
+            tfootCumpl    += `<td style="text-align:right; font-weight:700" class="col-day">${varObjHtml}</td>`;
             tfootFalta    += `<td style="text-align:right" class="col-day">${fmtMoney(dFalta)}</td>`;
             tfootFactPrev += `<td style="text-align:right; color:#cbd5e1" class="col-day">${fmtMoney(dFactPrev)}</td>`;
             tfootVarPrev  += `<td style="text-align:right; font-weight:700" class="col-day">${varHtml}</td>`;
         }
 
-        const gTotCumpl = gTotObj > 0 ? (gTotFact / gTotObj) : (gTotFact > 0 ? 1 : 0);
         const gTotFalta = Math.max(0, gTotObj - gTotFact);
         let gVarHtml = '—';
         if (gTotFactPrev > 0) {
@@ -534,9 +542,19 @@ const Campanas = (() => {
             gVarHtml = `<span class="${gCls}">${gSign}${(gDiff * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u00A0%</span>`;
         }
 
+        let gVarObjHtml = '—';
+        if (gTotObj > 0) {
+            const gDiffObj = (gTotFact - gTotObj) / gTotObj;
+            const gSignObj = gDiffObj >= 0 ? '+' : '';
+            const gClsObj = gDiffObj >= 0 ? 'tfoot-var-pos' : 'tfoot-var-neg';
+            gVarObjHtml = `<span class="${gClsObj}">${gSignObj}${(gDiffObj * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u00A0%</span>`;
+        } else if (gTotFact > 0) {
+            gVarObjHtml = '<span class="tfoot-var-pos">+100,0\u00A0%</span>';
+        }
+
         tfootObj      += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(gTotObj)}</td></tr>`;
         tfootFact     += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(gTotFact)}</td></tr>`;
-        tfootCumpl    += `<td style="text-align:right; font-weight:700; color:${gTotCumpl >= 1 ? '#4ade80' : '#fca5a5'}" class="col-total">${fmtPct(gTotCumpl)}</td></tr>`;
+        tfootCumpl    += `<td style="text-align:right; font-weight:700" class="col-total">${gVarObjHtml}</td></tr>`;
         tfootFalta    += `<td style="text-align:right; font-weight:700" class="col-total">${fmtMoney(gTotFalta)}</td></tr>`;
         tfootFactPrev += `<td style="text-align:right; font-weight:700; color:#cbd5e1" class="col-total">${fmtMoney(gTotFactPrev)}</td></tr>`;
         tfootVarPrev  += `<td style="text-align:right; font-weight:700" class="col-total">${gVarHtml}</td></tr>`;
