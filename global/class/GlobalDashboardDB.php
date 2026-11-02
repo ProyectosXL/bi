@@ -385,16 +385,18 @@ class GlobalDashboardDB
                 COUNT(DISTINCT tt.N_COMP) AS tickets_con_2do,
                 ISNULL(SUM(tt.IMP_TOTAL_TICKET), 0) AS facturacion_con_2do
             FROM BI_SALES_TOTAL_TICKETS tt
-            INNER JOIN (
-                SELECT DISTINCT N_COMP, FECHA
-                FROM BI_SALES_TICKETS tk
-                WHERE tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE))
-                  {$sfTk} {$sfGTk}
-                  AND tk.CANTIDAD > 1
-            ) t2 ON t2.N_COMP = tt.N_COMP AND t2.FECHA = tt.FECHA
             WHERE tt.FECHA >= ? AND tt.FECHA < DATEADD(day,1,CAST(? AS DATE))
               AND tt.T_COMP = 'FAC' {$sfTt} {$sfGTt}
-        ", array_merge([$desde, $hasta], $pTk, $pGTk, [$desde, $hasta], $pTt, $pGTt));
+              AND EXISTS (
+                  SELECT 1
+                  FROM BI_SALES_TICKETS tk
+                  WHERE tk.FECHA >= ? AND tk.FECHA < DATEADD(day,1,CAST(? AS DATE))
+                    AND tk.FECHA = tt.FECHA
+                    AND tk.N_COMP = tt.N_COMP
+                    AND tk.CANTIDAD > 1
+                    {$sfTk} {$sfGTk}
+              )
+        ", array_merge([$desde, $hasta], $pTt, $pGTt, [$desde, $hasta], $pTk, $pGTk));
 
         $cant = (int)($row['tickets_con_2do']     ?? 0);
         $fact = (float)($row['facturacion_con_2do'] ?? 0);
