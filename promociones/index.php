@@ -4,11 +4,39 @@
  * Dashboard Promociones — GERENCIA / SUPERVISIÓN / GRUPO
  */
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
+if (empty($_SESSION['username']) && !empty($_SESSION['fp_auth_user']['username'])) {
+    $_SESSION['username'] = $_SESSION['fp_auth_user']['username'];
+}
 if (!isset($_SESSION['username'])) {
     header('Location: ../../sistemas/login.php');
     exit;
 }
 require_once __DIR__ . '/../class/config.php';
+
+$tipo        = strtoupper(trim($_SESSION['tipo'] ?? ''));
+$rolNombre   = strtoupper(trim($_SESSION['fp_auth_user']['rol_nombre'] ?? $_SESSION['rol_nombre'] ?? ''));
+$rolCodigo   = strtoupper(trim($_SESSION['fp_auth_user']['rol_codigo'] ?? $_SESSION['rol'] ?? ''));
+$puesto      = strtoupper(trim($_SESSION['fp_auth_user']['puesto'] ?? $_SESSION['puesto'] ?? ''));
+$esAdmin     = !empty($_SESSION['fp_auth_user']['es_admin']) || !empty($_SESSION['es_admin']);
+$sinSucursal = empty($_SESSION['numsuc']);
+
+$esGlobal = in_array($tipo, ['GERENCIA', 'SUPERVISION', 'GRUPO', 'ANALISTA', 'ANALISTAS', 'ANALISTA COMERCIAL', 'ANALISTAS COMERCIAL', 'COMERCIAL', 'ADMIN', 'ADMINISTRADOR', 'SISTEMAS', 'DIRECCION', 'DIRECCIÓN', 'PERSONAL'], true)
+    || strpos($tipo, 'ANALISTA') !== false
+    || strpos($rolNombre, 'ANALISTA') !== false
+    || strpos($rolCodigo, 'ANALISTA') !== false
+    || strpos($puesto, 'ANALISTA') !== false
+    || strpos($rolNombre, 'COMERCIAL') !== false
+    || strpos($rolNombre, 'DIRECCI') !== false
+    || strpos($rolNombre, 'GERENC') !== false
+    || strpos($rolNombre, 'SUPERVIS') !== false
+    || $esAdmin
+    || $sinSucursal;
+
+if ($esGlobal && !in_array($tipo, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
+    $_SESSION['tipo'] = 'GERENCIA';
+    $tipo = 'GERENCIA';
+}
+
 $tipoSesion = $_SESSION['tipo'] ?? '';
 if (!in_array($tipoSesion, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
     header('Location: ../');

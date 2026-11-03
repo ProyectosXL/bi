@@ -5,6 +5,38 @@
  * Fuente: tabla BI_PROMOCIONES (mismas columnas en Argentina y Franquicias).
  * Soporta multi-origen vía getConfigForOrigen($origen).
  */
+
+if (!function_exists('promocionesNormalizeSession')) {
+    function promocionesNormalizeSession(): void {
+        if (session_status() === PHP_SESSION_NONE) { session_start(); }
+        $tipo = strtoupper(trim($_SESSION['tipo'] ?? ''));
+        if (!in_array($tipo, ['GERENCIA', 'SUPERVISION', 'GRUPO'], true)) {
+            $esAdmin     = !empty($_SESSION['fp_auth_user']['es_admin']) || !empty($_SESSION['es_admin']);
+            $sinSucursal = empty($_SESSION['numsuc']);
+            $rolNombre   = strtoupper(trim($_SESSION['fp_auth_user']['rol_nombre'] ?? $_SESSION['rol_nombre'] ?? ''));
+            $rolCodigo   = strtoupper(trim($_SESSION['fp_auth_user']['rol_codigo'] ?? $_SESSION['rol'] ?? ''));
+            $puesto      = strtoupper(trim($_SESSION['fp_auth_user']['puesto'] ?? $_SESSION['puesto'] ?? ''));
+
+            $esGlobal = in_array($tipo, ['ADMIN', 'ADMINISTRADOR', 'SISTEMAS', 'COMERCIAL', 'PERSONAL', 'DIRECCION', 'DIRECCIÓN', 'ANALISTA', 'ANALISTAS', 'ANALISTA COMERCIAL', 'ANALISTAS COMERCIAL'], true)
+                || strpos($tipo, 'ANALISTA') !== false
+                || strpos($rolNombre, 'ANALISTA') !== false
+                || strpos($rolCodigo, 'ANALISTA') !== false
+                || strpos($puesto, 'ANALISTA') !== false
+                || strpos($rolNombre, 'COMERCIAL') !== false
+                || strpos($rolNombre, 'DIRECCI') !== false
+                || strpos($rolNombre, 'GERENC') !== false
+                || strpos($rolNombre, 'SUPERVIS') !== false
+                || $esAdmin
+                || $sinSucursal;
+
+            if ($esGlobal) {
+                $_SESSION['tipo'] = 'GERENCIA';
+            }
+        }
+    }
+}
+promocionesNormalizeSession();
+
 class PromocionesDB
 {
     /**
