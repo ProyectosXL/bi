@@ -166,6 +166,14 @@ try {
             }
 
             // 2. Calcular el costo promedio general de las tradicionales
+            $tradParams = [$da, (new DateTime($ha))->modify('+1 day')->format('Y-m-d')];
+            $tradExclSql = '';
+            $globalExcl = $config['_global']['excluidas'] ?? [];
+            if (!empty($globalExcl)) {
+                $tradPl = implode(',', array_fill(0, count($globalExcl), '?'));
+                $tradExclSql = "AND s.DESC_PROMOCION_TARJETA NOT IN ($tradPl)";
+                $tradParams = array_merge($tradParams, $globalExcl);
+            }
             $sqlTrad = "
                 SELECT 
                     ISNULL(SUM(s.COSTO), 0) AS costo_total,
@@ -174,8 +182,9 @@ try {
                 INNER JOIN [XL-LAKERBIS].LOCALES_LAKERS.DBO.SUCURSALES_LAKERS sl WITH (NOLOCK)
                     ON sl.NRO_SUCURSAL = s.NRO_SUCURSAL
                 WHERE s.FECHA >= ? AND s.FECHA < ? AND sl.HABILITADO = 1 AND sl.NRO_SUC_MADRE IS NULL
+                  {$tradExclSql}
             ";
-            $resTrad = $methodQuery->invoke($db, $sqlTrad, [$da, (new DateTime($ha))->modify('+1 day')->format('Y-m-d')]);
+            $resTrad = $methodQuery->invoke($db, $sqlTrad, $tradParams);
             $costoTrad = !empty($resTrad) ? (float)$resTrad[0]['costo_total'] : 0;
             $factTrad = !empty($resTrad) ? (float)$resTrad[0]['fact_total'] : 0;
             $pctCostoPromedio = $factTrad > 0 ? ($costoTrad / $factTrad) : 0.0171;

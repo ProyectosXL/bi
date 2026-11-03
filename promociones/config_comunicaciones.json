@@ -16,7 +16,8 @@
     "_global": {
         "excluidas": [
             "DTO.EMPLEADO 20 TARJETA",
-            "DTO.EMPLEADO 40 EFECTIVO"
+            "DTO.EMPLEADO 40 EFECTIVO",
+            "PROMO 6 CUOTAS"
         ]
     }
 }

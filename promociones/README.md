@@ -105,6 +105,14 @@ cláusula SELECT, en lugar de un filtro WHERE.
 
 ---
 
+## Exclusiones globales por regla de negocio
+
+Existen registros en `BI_PROMOCIONES` que provienen de planes de financiación o bonificaciones no comerciales y **no deben contabilizar como promociones**:
+
+- `PROMO 6 CUOTAS` (código de tarjeta `7000`): Corresponde a financiación de 6 cuotas sin promoción comercial ni bancaria de descuento. Se excluye globalmente por defecto de todo el dashboard (`PromocionesDB::PROMOS_EXCLUIDAS_DEFECTO`), de modo que no figura en los selectores, tabla de promociones, gráficos de donas ni computa en tickets/facturación/costo con promo.
+
+---
+
 ## Tickets en el Detalle por Sucursal
 
 `getDetalleSucursales()` devuelve **tres** medidas distintas sobre tickets, que

@@ -7,6 +7,14 @@
  */
 class PromocionesDB
 {
+    /**
+     * Promociones excluidas por regla de negocio general de todo el dashboard.
+     * 'PROMO 6 CUOTAS' es un plan financiero de cuotas, no una promoción comercial ni bancaria.
+     */
+    public const PROMOS_EXCLUIDAS_DEFECTO = [
+        'PROMO 6 CUOTAS',
+    ];
+
     private $conn;
     private string $origen;
 
@@ -79,15 +87,17 @@ class PromocionesDB
             $sqls[]   = "AND {$alias}.DESC_PROMOCION_TARJETA = ?";
             $params[] = $fp['promocion'];
         }
+        $excluidas = self::PROMOS_EXCLUIDAS_DEFECTO;
         if (!empty($fp['excluir_promociones'])) {
-            $excluidas = is_array($fp['excluir_promociones']) ? $fp['excluir_promociones'] : explode(',', $fp['excluir_promociones']);
-            $excluidas = array_filter(array_map('trim', $excluidas));
-            if (!empty($excluidas)) {
-                $placeholders = implode(',', array_fill(0, count($excluidas), '?'));
-                $sqls[] = "AND {$alias}.DESC_PROMOCION_TARJETA NOT IN ($placeholders)";
-                foreach ($excluidas as $ep) {
-                    $params[] = $ep;
-                }
+            $epArr = is_array($fp['excluir_promociones']) ? $fp['excluir_promociones'] : explode(',', $fp['excluir_promociones']);
+            $excluidas = array_merge($excluidas, $epArr);
+        }
+        $excluidas = array_values(array_unique(array_filter(array_map('trim', $excluidas))));
+        if (!empty($excluidas)) {
+            $placeholders = implode(',', array_fill(0, count($excluidas), '?'));
+            $sqls[] = "AND {$alias}.DESC_PROMOCION_TARJETA NOT IN ($placeholders)";
+            foreach ($excluidas as $ep) {
+                $params[] = $ep;
             }
         }
 
@@ -107,7 +117,7 @@ class PromocionesDB
 
     /**
      * Expresión CASE WHEN para el flag "c/promo" (cp).
-     * Sin filtro de promo: excluye filas 'SIN PROMO'.
+     * Sin filtro de promo: excluye filas 'SIN PROMO' y promociones excluidas por defecto o usuario.
      * Con filtro de promo: usa igualdad exacta (ya implica no-SIN PROMO porque
      * getPromocionesLista() solo devuelve promos que no son 'SIN PROMO').
      *
@@ -118,7 +128,14 @@ class PromocionesDB
         if (!empty($fp['promocion'])) {
             return ["CASE WHEN {$alias}.DESC_PROMOCION_TARJETA = ? THEN 1 ELSE 0 END", [$fp['promocion']]];
         }
-        return ["CASE WHEN {$alias}.DESC_PROMOCION_TARJETA <> 'SIN PROMO' THEN 1 ELSE 0 END", []];
+        $excl = array_merge(['SIN PROMO'], self::PROMOS_EXCLUIDAS_DEFECTO);
+        if (!empty($fp['excluir_promociones'])) {
+            $epArr = is_array($fp['excluir_promociones']) ? $fp['excluir_promociones'] : explode(',', $fp['excluir_promociones']);
+            $excl = array_merge($excl, $epArr);
+        }
+        $excl = array_values(array_unique(array_filter(array_map('trim', $excl))));
+        $placeholders = implode(',', array_fill(0, count($excl), '?'));
+        return ["CASE WHEN {$alias}.DESC_PROMOCION_TARJETA NOT IN ($placeholders) THEN 1 ELSE 0 END", $excl];
     }
 
     /* ──────────────────────────────────────────────
@@ -957,15 +974,18 @@ class PromocionesDB
     public function getBancosLista(): array
     {
         [$sfG, $pG] = $this->grupoFiltro('s');
+        $excl = array_merge(['SIN PROMO'], self::PROMOS_EXCLUIDAS_DEFECTO);
+        $placeholders = implode(',', array_fill(0, count($excl), '?'));
+        $params = array_merge($pG, $excl);
         return $this->query("
             SELECT DISTINCT s.BANCO
             FROM BI_PROMOCIONES s WITH (NOLOCK)
             WHERE s.BANCO IS NOT NULL AND s.BANCO <> ''
               AND s.BANCO <> 'DESCONOCIDO'
-              AND s.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
+              AND s.DESC_PROMOCION_TARJETA NOT IN ($placeholders)
               {$sfG}
             ORDER BY s.BANCO
-        ", $pG);
+        ", $params);
     }
 
     public function getPromocionesLista(?string $desde = null, ?string $hasta = null): array
@@ -977,11 +997,15 @@ class PromocionesDB
             $dateFilter = "AND s.FECHA >= ? AND s.FECHA < ?";
             $params = array_merge([$desde, $hasta], $params);
         }
+        $excl = array_merge(['SIN PROMO'], self::PROMOS_EXCLUIDAS_DEFECTO);
+        $placeholders = implode(',', array_fill(0, count($excl), '?'));
+        $params = array_merge($params, $excl);
+
         return $this->query("
             SELECT DISTINCT s.DESC_PROMOCION_TARJETA AS promocion
             FROM BI_PROMOCIONES s WITH (NOLOCK)
             WHERE s.DESC_PROMOCION_TARJETA IS NOT NULL
-              AND s.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
+              AND s.DESC_PROMOCION_TARJETA NOT IN ($placeholders)
               $dateFilter
               {$sfG}
             ORDER BY s.DESC_PROMOCION_TARJETA
