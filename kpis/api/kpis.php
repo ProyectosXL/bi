@@ -433,47 +433,71 @@ function importarTickets($cidApps, $filas) {
         );
     }
 
-    $insertados   = 0;
-    $actualizados = 0;
+    // Un mismo TICKET repetido en el archivo (varias tareas): queda la de FECHA_TAREA
+    // más reciente. Las fechas vienen como 'YYYY-MM-DD[ HH:MM:SS]', comparables como string.
+    $porTicket  = array();
+    $duplicados = 0;
+    foreach ($validas as $v) {
+        $t = $v['ticket'];
+        if (!isset($porTicket[$t])) { $porTicket[$t] = $v; continue; }
+        $duplicados++;
+        if ($v['fecha_tarea'] !== null && strcmp($v['fecha_tarea'], (string)$porTicket[$t]['fecha_tarea']) >= 0) {
+            $porTicket[$t] = $v;
+        }
+    }
+    $validas = array_values($porTicket);
+
+    // Períodos (YYYY-MM según FECHA_TAREA) presentes en el archivo: lo ya cargado
+    // en esos meses se borra y se reemplaza por completo con lo importado.
+    $periodos = array();
+    foreach ($validas as $v) {
+        if ($v['fecha_tarea'] !== null && preg_match('/^(\d{4}-\d{2})/', $v['fecha_tarea'], $m)) {
+            $periodos[$m[1]] = true;
+        }
+    }
+    $periodos = array_keys($periodos);
+    sort($periodos);
+
+    $insertados = 0;
+    $borrados   = 0;
 
     if (count($validas) > 0) {
         if (!sqlsrv_begin_transaction($cidApps)) {
             throw new Exception('No se pudo iniciar la transacción: ' . print_r(sqlsrv_errors(), true));
         }
         try {
-            foreach ($validas as $v) {
-                $stmtSel = sqlsrv_query($cidApps, "SELECT ID FROM dbo.RO_T_TICKETS_PROYECTOS WHERE TICKET = ?", array($v['ticket']));
-                if ($stmtSel === false) {
-                    throw new Exception('Error verificando TICKET ' . $v['ticket'] . ': ' . print_r(sqlsrv_errors(), true));
+            foreach ($periodos as $periodo) {
+                $desde          = $periodo . '-01';
+                $hastaExclusivo = date('Y-m-d', strtotime($desde . ' +1 month'));
+                $stmt = sqlsrv_query($cidApps,
+                    "DELETE FROM dbo.RO_T_TICKETS_PROYECTOS WHERE FECHA_TAREA >= ? AND FECHA_TAREA < ?",
+                    array($desde, $hastaExclusivo)
+                );
+                if ($stmt === false) {
+                    throw new Exception('Error borrando período ' . $periodo . ': ' . print_r(sqlsrv_errors(), true));
                 }
-                $existe = sqlsrv_fetch_array($stmtSel, SQLSRV_FETCH_ASSOC);
+                $borrados += max(0, sqlsrv_rows_affected($stmt));
+            }
 
-                if ($existe) {
-                    $stmt = sqlsrv_query($cidApps,
-                        "UPDATE dbo.RO_T_TICKETS_PROYECTOS
-                            SET FECHA_TAREA = ?, FECHA_CIERRE = ?, CERRADO = ?, AREA = ?,
-                                USUARIO_ASIGNADO = ?, CONTACTOS = ?, TIPO = ?, FECHA_ACTUALIZACION = GETDATE()
-                          WHERE TICKET = ?",
-                        array($v['fecha_tarea'], $v['fecha_cierre'], $v['cerrado'], $v['area'],
-                              $v['usuario_asignado'], $v['contactos'], $v['tipo'], $v['ticket'])
-                    );
-                    if ($stmt === false) {
-                        throw new Exception('Error actualizando TICKET ' . $v['ticket'] . ': ' . print_r(sqlsrv_errors(), true));
-                    }
-                    $actualizados++;
-                } else {
-                    $stmt = sqlsrv_query($cidApps,
-                        "INSERT INTO dbo.RO_T_TICKETS_PROYECTOS
-                            (FECHA_TAREA, TICKET, FECHA_CIERRE, CERRADO, AREA, USUARIO_ASIGNADO, CONTACTOS, TIPO, FECHA_ACTUALIZACION)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE())",
-                        array($v['fecha_tarea'], $v['ticket'], $v['fecha_cierre'], $v['cerrado'], $v['area'],
-                              $v['usuario_asignado'], $v['contactos'], $v['tipo'])
-                    );
-                    if ($stmt === false) {
-                        throw new Exception('Error insertando TICKET ' . $v['ticket'] . ': ' . print_r(sqlsrv_errors(), true));
-                    }
-                    $insertados++;
+            foreach ($validas as $v) {
+                // Evita duplicados si el TICKET ya estaba cargado con otra FECHA_TAREA (fuera de los períodos).
+                $stmt = sqlsrv_query($cidApps, "DELETE FROM dbo.RO_T_TICKETS_PROYECTOS WHERE TICKET = ?", array($v['ticket']));
+                if ($stmt === false) {
+                    throw new Exception('Error borrando TICKET ' . $v['ticket'] . ': ' . print_r(sqlsrv_errors(), true));
                 }
+                $borrados += max(0, sqlsrv_rows_affected($stmt));
+
+                $stmt = sqlsrv_query($cidApps,
+                    "INSERT INTO dbo.RO_T_TICKETS_PROYECTOS
+                        (FECHA_TAREA, TICKET, FECHA_CIERRE, CERRADO, AREA, USUARIO_ASIGNADO, CONTACTOS, TIPO, FECHA_ACTUALIZACION)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE())",
+                    array($v['fecha_tarea'], $v['ticket'], $v['fecha_cierre'], $v['cerrado'], $v['area'],
+                          $v['usuario_asignado'], $v['contactos'], $v['tipo'])
+                );
+                if ($stmt === false) {
+                    throw new Exception('Error insertando TICKET ' . $v['ticket'] . ': ' . print_r(sqlsrv_errors(), true));
+                }
+                $insertados++;
             }
             sqlsrv_commit($cidApps);
         } catch (Exception $e) {
@@ -486,7 +510,9 @@ function importarTickets($cidApps, $filas) {
         'success'      => true,
         'total_filas'  => count($filas),
         'insertados'   => $insertados,
-        'actualizados' => $actualizados,
+        'borrados'     => $borrados,
+        'duplicados'   => $duplicados,
+        'periodos'     => $periodos,
         'omitidos'     => count($errores),
         'errores'      => $errores
     ));

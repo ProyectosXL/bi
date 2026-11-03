@@ -314,17 +314,16 @@ class PremiosEcommerceDB
      * sector Ecommerce — la misma de la que salen las órdenes (ver ordenesReales()), así VTEX
      * y ML salen de una sola fuente (decidido 2026-10-01).
      *
-     * Criterios, los mismos que las órdenes salvo el envío:
-     *   - **Sin envío**: se excluyen las líneas `***COSTO ENVIO` (COD_ARTICU). El envío es un
-     *     servicio, no venta de producto, y el objetivo está fijado sobre venta.
-     *   - **ESTADO_TANGO <> 'CANCELADO'**: entran COMPLETO y PENDIENTE (todo pedido de
-     *     ecommerce se factura).
+     * Criterios, los mismos que las órdenes:
+     *   - **Con envío y con cancelados** (desde 2026-11-03): el portal de objetivos calcula la
+     *     base sobre esta misma tabla sin filtrar (`$sqlEco` en ObjetivoModel.php), así que el
+     *     real se mide igual. Si el portal vuelve a filtrar, hay que filtrar acá también.
      *   - **FECHA_PEDIDO**, no FECHA_FACT: en esta tabla FECHA_FACT está poblada en una parte
      *     chica de las filas (septiembre 2026, VTEX: $82,2M por FECHA_FACT contra $253,4M por
      *     FECHA_PEDIDO), así que no sirve para cortar el mes.
      *
-     * Septiembre 2026, VTEX: $253.370.635 acá contra $232.807.253 de BI_SALES_SUCURSALES, la
-     * fuente anterior. La diferencia (~9 %) no es el envío, que ya está excluido; sin explicar.
+     * Septiembre 2026, VTEX, sin envío ni cancelados: $253.370.635 acá contra $232.807.253 de
+     * BI_SALES_SUCURSALES, la fuente anterior (~9 % de diferencia, sin explicar).
      *
      * También se devuelve abierta por mes, para cubrir el TOTAL de los meses que la mensual
      * todavía no tiene (ver realesFacturacion()).
@@ -339,8 +338,6 @@ class PremiosEcommerceDB
                        SUM(e.IMPORTE) AS IMP
                 FROM dbo.BI_EFICIENCIA_ECOMMERCE e WITH (NOLOCK)
                 WHERE e.FECHA_PEDIDO >= ? AND e.FECHA_PEDIDO < DATEADD(day, 1, CAST(? AS DATE))
-                  AND e.ESTADO_TANGO <> 'CANCELADO'
-                  AND LTRIM(e.COD_ARTICU) NOT LIKE '***COSTO ENVIO%'
                 GROUP BY EOMONTH(e.FECHA_PEDIDO), UPPER(LTRIM(RTRIM(e.CANAL)))";
 
         $stmt = sqlsrv_query($this->connPower, $sql, [$this->desde, $this->hasta]);
@@ -374,9 +371,11 @@ class PremiosEcommerceDB
      *     Tango, no ORDER_ID: una compra puede abrirse en más de un pedido, y así lo cuenta el
      *     dashboard del área. Septiembre 2026, VTEX: 2.866 pedidos / ~2.734 ORDER_ID con
      *     sufijo / ~2.634 compras sin sufijo.
-     *   - **ESTADO_TANGO <> 'CANCELADO'**: entran COMPLETO y PENDIENTE. Todo pedido de
-     *     ecommerce se factura, así que PENDIENTE es "todavía no facturado", no una venta
-     *     dudosa. Consecuencia: el número de un mes recién cerrado puede moverse unos días.
+     *   - **Con cancelados** (desde 2026-11-03): el objetivo de órdenes lo fija el área sobre
+     *     los Tickets del panel de VTEX, que cuentan los cancelados, así que el real también.
+     *     Ojo: los cancelados en VTEX antes de facturar no llegan a esta tabla (BI marca ~10
+     *     CANCELADO por mes contra ~250 del panel), así que el real sigue quedando por debajo
+     *     del panel. Octubre 2026, VTEX: 4.573 con cancelados, 4.544 sin, 4.654 el panel.
      *   - **FECHA_PEDIDO**: el premio mide actividad comercial del mes, y es la misma base
      *     temporal que la tasa de conversión (pedidos sobre sesiones del período).
      *
@@ -394,7 +393,6 @@ class PremiosEcommerceDB
         $sql = "SELECT UPPER(LTRIM(RTRIM(e.CANAL))) AS CANAL, COUNT(DISTINCT e.NRO_PEDIDO) AS ORDENES
                 FROM dbo.BI_EFICIENCIA_ECOMMERCE e WITH (NOLOCK)
                 WHERE e.FECHA_PEDIDO >= ? AND e.FECHA_PEDIDO < DATEADD(day, 1, CAST(? AS DATE))
-                  AND e.ESTADO_TANGO <> 'CANCELADO'
                 GROUP BY UPPER(LTRIM(RTRIM(e.CANAL)))";
 
         $stmt = sqlsrv_query($this->connPower, $sql, [$this->desde, $this->hasta]);

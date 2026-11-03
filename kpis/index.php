@@ -43,21 +43,28 @@
                 <div class="card">
                     <div class="card-body d-flex flex-wrap align-items-end gap-3">
                         <div>
-                            <label class="form-label small text-muted mb-1">Desde</label>
+                            <label for="filtroMesDesde" class="form-label kpi-filtro-label mb-1">
+                                <i class="fas fa-calendar-day me-1"></i>Desde
+                            </label>
                             <div class="d-flex gap-2">
-                                <select id="filtroMesDesde" class="form-select form-select-sm"></select>
-                                <select id="filtroAnoDesde" class="form-select form-select-sm"></select>
+                                <select id="filtroMesDesde" class="form-select form-select-sm kpi-filtro-mes" aria-label="Mes desde"></select>
+                                <select id="filtroAnoDesde" class="form-select form-select-sm kpi-filtro-ano" aria-label="Año desde"></select>
                             </div>
                         </div>
                         <div>
-                            <label class="form-label small text-muted mb-1">Hasta</label>
+                            <label for="filtroMesHasta" class="form-label kpi-filtro-label mb-1">
+                                <i class="fas fa-calendar-check me-1"></i>Hasta
+                            </label>
                             <div class="d-flex gap-2">
-                                <select id="filtroMesHasta" class="form-select form-select-sm"></select>
-                                <select id="filtroAnoHasta" class="form-select form-select-sm"></select>
+                                <select id="filtroMesHasta" class="form-select form-select-sm kpi-filtro-mes" aria-label="Mes hasta"></select>
+                                <select id="filtroAnoHasta" class="form-select form-select-sm kpi-filtro-ano" aria-label="Año hasta"></select>
                             </div>
                         </div>
                         <button id="btnAplicarPeriodo" class="btn btn-primary btn-sm">
                             <i class="fas fa-filter me-1"></i>Aplicar
+                        </button>
+                        <button id="btnRecargar" class="btn btn-outline-secondary btn-sm" type="button" title="Recargar la página manteniendo el período seleccionado">
+                            <i class="fas fa-rotate-right me-1"></i>Recargar
                         </button>
                         <div id="periodoAviso" class="text-danger small d-none">
                             <i class="fas fa-triangle-exclamation me-1"></i>El período "desde" debe ser anterior o igual a "hasta".
@@ -520,6 +527,8 @@
                             <span class="badge bg-info-subtle text-info-emphasis kpi-import-badge" id="previewTotalFilas"></span>
                             <span class="badge bg-danger-subtle text-danger-emphasis kpi-import-badge d-none" id="previewTotalErrores"></span>
                         </div>
+                        <div id="previewPeriodos" class="alert alert-warning small py-2 mb-2 d-none"></div>
+                        <div id="previewDuplicados" class="alert alert-info small py-2 mb-2 d-none"></div>
                         <div id="previewErroresLista" class="small text-danger mb-2" style="max-height:150px;overflow:auto;"></div>
                         <div class="table-responsive kpi-import-preview-table" style="max-height:240px;overflow:auto;">
                             <table class="table table-sm table-hover mb-0">

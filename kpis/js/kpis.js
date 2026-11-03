@@ -199,7 +199,9 @@ const KpisManager = {
     setupSelectores: function() {
         const now       = new Date();
         const anoActual = now.getFullYear();
-        const mesActual = now.getMonth() + 1;
+        // Por defecto: mes anterior (en enero, diciembre del año previo).
+        const mesAnterior = new Date(anoActual, now.getMonth() - 1, 1);
+        const porDefecto  = mesAnterior.getFullYear() + '-' + String(mesAnterior.getMonth() + 1).padStart(2, '0');
 
         const anos = [];
         for (let a = anoActual; a >= anoActual - 4; a--) anos.push(a);
@@ -210,14 +212,34 @@ const KpisManager = {
         ['filtroMesDesde', 'filtroMesHasta'].forEach(id => { document.getElementById(id).innerHTML = mesOptions; });
         ['filtroAnoDesde', 'filtroAnoHasta'].forEach(id => { document.getElementById(id).innerHTML = anoOptions; });
 
-        document.getElementById('filtroMesDesde').value = mesActual;
-        document.getElementById('filtroMesHasta').value = mesActual;
-        document.getElementById('filtroAnoDesde').value = anoActual;
-        document.getElementById('filtroAnoHasta').value = anoActual;
+        // Si la URL trae ?desde=YYYY-MM&hasta=YYYY-MM (p. ej. tras "Recargar"), se respetan.
+        const url    = new URLSearchParams(window.location.search);
+        const valido = v => /^\d{4}-\d{2}$/.test(v || '') && anos.includes(parseInt(v.split('-')[0]));
+        const desde  = valido(url.get('desde')) ? url.get('desde') : porDefecto;
+        const hasta  = valido(url.get('hasta')) ? url.get('hasta') : porDefecto;
+
+        document.getElementById('filtroAnoDesde').value = parseInt(desde.split('-')[0]);
+        document.getElementById('filtroMesDesde').value = parseInt(desde.split('-')[1]);
+        document.getElementById('filtroAnoHasta').value = parseInt(hasta.split('-')[0]);
+        document.getElementById('filtroMesHasta').value = parseInt(hasta.split('-')[1]);
+    },
+
+    // Refleja el rango aplicado en la URL para que recargar la página lo conserve.
+    guardarFiltrosEnUrl: function(rango) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('desde', rango.desde);
+        url.searchParams.set('hasta', rango.hasta);
+        window.history.replaceState(null, '', url);
     },
 
     setupEventListeners: function() {
         $('#btnAplicarPeriodo').on('click', () => this.cargarKPIResumen());
+
+        $('#btnRecargar').on('click', () => {
+            const rango = this.rangoActivo();
+            if (rango) this.guardarFiltrosEnUrl(rango);
+            window.location.reload();
+        });
 
         $(document).on('click', '.btn-ver-proyectos', (e) => {
             const tipo = e.currentTarget.dataset.tipo;
@@ -252,6 +274,7 @@ const KpisManager = {
         const rango = this.rangoActivo();
         $('#periodoAviso').toggleClass('d-none', !!rango);
         if (!rango) return;
+        this.guardarFiltrosEnUrl(rango);
 
         const params = new URLSearchParams({ action: 'kpi-resumen', fecha_desde: rango.desde, fecha_hasta: rango.hasta });
         fetch(`api/kpis.php?${params}`)
@@ -791,6 +814,25 @@ const KpisManager = {
                 '<td>' + escapeHtml(f.USUARIO_ASIGNADO || '') + '</td><td>' + escapeHtml(f.TIPO || '') + '</td></tr>'
             ).join('')
         );
+        const periodos = [...new Set(this._filasValidadas
+            .map(f => (f.FECHA_TAREA || '').slice(0, 7))
+            .filter(p => /^\d{4}-\d{2}$/.test(p)))].sort();
+        $('#previewPeriodos').html(periodos.length
+            ? '<i class="fas fa-triangle-exclamation me-1"></i>Se van a <b>borrar y reemplazar</b> los tickets ya cargados de: ' +
+              periodos.map(p => this.textoPeriodo({ desde: p, hasta: p })).join(', ') + '.'
+            : '').toggleClass('d-none', periodos.length === 0);
+
+        // Tickets repetidos: se importa solo la tarea con Fecha Tarea más reciente.
+        const porTicket = {};
+        this._filasValidadas.forEach(f => (porTicket[f.TICKET] = porTicket[f.TICKET] || []).push(f));
+        const repetidos = Object.keys(porTicket).filter(t => porTicket[t].length > 1);
+        $('#previewDuplicados').html(repetidos.length
+            ? '<i class="fas fa-clone me-1"></i><b>' + repetidos.length + ' ticket(s) repetido(s)</b> en el archivo: ' +
+              repetidos.map(t => escapeHtml(t) + ' (' + porTicket[t].length + ' filas)').join(', ') +
+              '. Se importa solo la tarea con <b>Fecha Tarea más reciente</b> de cada uno; se van a cargar ' +
+              Object.keys(porTicket).length + ' tickets.'
+            : '').toggleClass('d-none', repetidos.length === 0);
+
         $('#importPreview').removeClass('d-none');
         $('#btnConfirmarImportar').toggleClass('d-none', this._filasValidadas.length === 0);
     },
@@ -810,7 +852,8 @@ const KpisManager = {
             if (!data.success) { alert('Error al importar: ' + (data.error || '')); return; }
             document.getElementById('importResultado').classList.remove('d-none');
             document.getElementById('importResultado').innerHTML =
-                `Importación completa: <b>${data.insertados}</b> nuevos, <b>${data.actualizados}</b> actualizados, ` +
+                `Importación completa: <b>${data.insertados}</b> tickets cargados, <b>${data.borrados}</b> registros previos reemplazados, ` +
+                (data.duplicados ? `<b>${data.duplicados}</b> filas descartadas por ticket repetido, ` : '') +
                 `<b>${data.omitidos}</b> omitidos (de ${data.total_filas} filas).` +
                 (data.errores && data.errores.length
                     ? '<div class="text-danger small mt-2">' +

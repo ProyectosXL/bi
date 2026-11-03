@@ -291,9 +291,9 @@ FP_ObjetivosFinales (idPOS, mes, anio, importeObjetivo, fecha_finalizacion)
 BI_T_ESTADISTICAS_VENTAS_PROPIOS, NRO_SUCURS 9 ('ECOMMERCE', consolidado VTEX+ML), IMP_FACT
 
 -- Facturación real VTEX y ML, y órdenes reales — POWER_BI_CONTROL (conexión 'power'),
--- la tabla del dashboard del área. Sin cancelados, por FECHA_PEDIDO.
+-- la tabla del dashboard del área. Con cancelados y envío, por FECHA_PEDIDO.
 BI_EFICIENCIA_ECOMMERCE, CANAL 'VTEX' / ML
-  facturación: SUM(IMPORTE) sin las líneas '***COSTO ENVIO'
+  facturación: SUM(IMPORTE)
   órdenes:     COUNT(DISTINCT NRO_PEDIDO)
 
 -- Tasa de conversión y objetivo de órdenes — CARGA MANUAL
@@ -328,19 +328,20 @@ persona, así que tienen que ser medidos.
 | Concepto | Fuente | Por qué |
 |---|---|---|
 | FACT E COMM (Agustina) | `BI_T_ESTADISTICAS_VENTAS_PROPIOS`, fila ECOMMERCE | Es el total del canal, y es la fuente contra la que liquidan las otras tres pestañas. Su fila ECOMMERCE ya se muestra en "Locales Propios", así que el número coincide. |
-| FACTURACION VTEX / ML (Vanesa) | `BI_EFICIENCIA_ECOMMERCE`, sin envío, sin cancelados, por `FECHA_PEDIDO` | Es la tabla del dashboard del sector Ecommerce y separa los canales (desde 2026-10-01; antes `BI_SALES_SUCURSALES`). |
+| FACTURACION VTEX / ML (Vanesa) | `BI_EFICIENCIA_ECOMMERCE`, con envío y cancelados, por `FECHA_PEDIDO` | Es la tabla del dashboard del sector Ecommerce y separa los canales (desde 2026-10-01; antes `BI_SALES_SUCURSALES`). |
 
 Criterios de la facturación por canal:
 
-- **Sin envío**: se excluyen las líneas `***COSTO ENVIO`. El envío es un servicio, no venta de
-  producto.
-- **Sin cancelados**: entran COMPLETO y PENDIENTE, igual que las órdenes.
+- **Con envío y con cancelados** (desde 2026-11-03; antes se excluían las líneas `***COSTO
+  ENVIO` y los CANCELADO): el portal de objetivos calcula la base sobre esta misma tabla sin
+  filtrar (`$sqlEco` en `ppp/objetivos/Models/ObjetivoModel.php`), así que el real se mide
+  igual. Si el portal vuelve a filtrar, hay que filtrar acá también.
 - **Por `FECHA_PEDIDO`**: `FECHA_FACT` está poblada en pocas filas (septiembre 2026, VTEX:
   $82,2M por `FECHA_FACT` contra $253,4M por `FECHA_PEDIDO`), así que no sirve para cortar el mes.
 
-Septiembre 2026, VTEX: **$253.370.635** (92,9 % del objetivo) contra $232.807.253 (85,3 %) con
-la fuente anterior. La diferencia (~9 %) no es el envío, que ya está excluido, y no está
-explicada: puede que `IMPORTE` sea antes de descuentos o incluya algo que la BI no cuenta.
+Septiembre 2026, VTEX, con el criterio anterior (sin envío ni cancelados): **$253.370.635**
+(92,9 % del objetivo) contra $232.807.253 (85,3 %) con la fuente anterior. La diferencia (~9 %)
+no es el envío, y no está explicada: puede que `IMPORTE` sea antes de descuentos o incluya algo que la BI no cuenta.
 
 **⚠ Consecuencia conocida y aceptada: las partes no suman el total.** Con la fuente anterior, julio 2026 mostraba
 $389.311.751 en el concepto de Agustina y $224.083.924 + $125.015.550 = $349.099.474 en los
@@ -385,7 +386,7 @@ Criterios de conteo (se cambian solo en `ordenesReales()`):
 |---|---|
 | `FECHA_PEDIDO` | Fecha del pedido: mide actividad comercial del mes, y es la misma base temporal que la tasa de conversión. |
 | `COUNT(DISTINCT NRO_PEDIDO)` | Una fila por artículo, así que `COUNT(*)` sobrecontaría. Se cuentan pedidos de Tango, como el dashboard del área: una compra puede abrirse en más de un pedido. |
-| `ESTADO_TANGO <> 'CANCELADO'` | Entran COMPLETO y PENDIENTE. Todo pedido de ecommerce se factura, así que PENDIENTE es "todavía no facturado": el número de un mes recién cerrado puede moverse unos días. |
+| Con cancelados (desde 2026-11-03) | El área fija el objetivo de órdenes sobre los Tickets del panel de VTEX, que incluyen cancelados, así que el real también los cuenta. Los cancelados en VTEX antes de facturar no llegan a esta tabla (~10 por mes contra ~250 del panel): el real sigue por debajo del panel. Octubre 2026, VTEX: 4.573 con cancelados, 4.544 sin, 4.654 el panel. PENDIENTE es "todavía no facturado": el número de un mes recién cerrado puede moverse unos días. |
 
 Septiembre 2026, VTEX, según qué se cuente en esta tabla:
 
