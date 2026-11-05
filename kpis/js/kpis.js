@@ -8,6 +8,29 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** Monto en pesos: "$ 1.234.567" (0 decimales en tarjetas, 2 en detalles). */
+function formatoPesos(valor, decimales = 0) {
+    if (valor === null || valor === undefined || isNaN(valor)) return '—';
+    const n = Number(valor);
+    const txt = Math.abs(n).toLocaleString('es-AR', { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
+    return (n < 0 ? '-' : '') + '$ ' + txt;
+}
+
+/** 'YYYY-MM-DD[ HH:MM:SS]' -> 'dd/mm/aaaa[ HH:MM]'. */
+function fechaPantalla(valor) {
+    if (!valor) return '—';
+    const m = String(valor).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+    if (!m) return escapeHtml(valor);
+    return m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' ' + m[4] + ':' + m[5] : '');
+}
+
+/** 'YYYY-MM' -> 'Noviembre 2026'. */
+function mesPantalla(valor) {
+    if (!valor) return '—';
+    const [a, m] = String(valor).split('-');
+    return MESES_FULL[parseInt(m, 10) - 1] + ' ' + a;
+}
+
 function renderEstrellas(score) {
     if (score === null || score === undefined) return '—';
     const llenas = Math.round(Math.min(Math.max(score, 0), 5));
@@ -84,6 +107,30 @@ const INSTRUCTIVOS_KPI = {
             'No se filtra por área ni responsable: toda la tabla corresponde al trabajo de relevamiento de Innovación, aunque el proceso documentado pertenezca a otra área de la empresa.'
         ],
         ejemplo: 'Rango de 1 mes con plan de 2 procesos/mes. Se crean 3 procesos en el mes, 2 llegan a score_actual = 2.0 y uno queda en 1.0 (informal). Relevados que cuentan: 2. Resultado: 2 / (2×1) = 100%.'
+    },
+    ahorro: {
+        titulo: 'Ahorro / Beneficio Generado', categoria: 'Impacto',
+        peso: '15%', frecuencia: 'Trimestral', objetivo: 'Objetivo anual de Parámetros, repartido por mes',
+        formula: 'Ahorro devengado en los meses del rango ÷ (Objetivo anual ÷ 12 × meses del rango)',
+        fuente: 'Ahorros cargados por el área en el tablero (tipos: Baja de proveedor, Horas liberadas, Costo evitado, Renegociación / reducción de costo, Ingreso habilitado y Otro). ' +
+            'Cada ahorro aporta por mes: si es mensual, su monto mensual en cada mes entre "desde" y "hasta" (meses enteros, sin prorrateo); si es único, el monto entero en el mes de "desde". ' +
+            'Horas liberadas: horas por mes × costo hora. Baja de proveedor: promedio mensual = total neto facturado en el año antes de la baja ÷ meses transcurridos de enero al mes de la última factura; el ahorro empieza el mes siguiente a esa factura. ' +
+            'La tarjeta también muestra la proyección del año: la suma de los 12 meses del año del mes "hasta". ' +
+            'Para Baja de proveedor, los comprobantes de compras de Tango (CPA04, con el proveedor de CPA01 y el tipo de comprobante de CPA21), en pesos. Ese cálculo se hace en cada consulta, con lo facturado a ese momento. ' +
+            'El objetivo anual y el costo hora por defecto se definen en Parámetros.',
+        reglas: [
+            'Solo suman los ahorros activos: los dados de baja quedan en el historial pero no cuentan.',
+            'Si el objetivo anual es 0 (sin definir), el KPI muestra el ahorro pero no entra en el Cumplimiento General Ponderado.',
+            'Baja de proveedor: entran facturas, notas de débito y notas de crédito (estas restan). Quedan afuera las órdenes de pago, los comprobantes anulados y los tipos del parámetro TANGO_TCOMP_EXCLUIDOS (hoy: diferencias de cambio NCD/NDC y ajustes contables AJC/AJD/AJU).',
+            'Baja de proveedor: si el proveedor es Responsable Monotributo (RS) se toma el total facturado; si no, el importe sin IVA ni percepciones (neto gravado + exento). Los comprobantes en moneda extranjera se pasan a pesos con la cotización del comprobante.',
+            'Baja de proveedor: el universo son los comprobantes desde el 1 de enero del año de la baja hasta el día anterior a la baja. Se promedia sobre los meses transcurridos, no sobre los meses con factura, para que un mes con dos facturas y otro sin ninguna no distorsionen el promedio.',
+            'Baja de proveedor sin facturación en el año previa a la baja: aporta 0 y se avisa.',
+            'Si el proveedor sigue facturando después de la baja, se avisa con el detalle de esos comprobantes, pero no se descuentan del ahorro automáticamente.'
+        ],
+        ejemplo: 'Proveedor RI dado de baja el 15/11/2026. Entre enero y octubre facturó $ 10.200.000 sin IVA (en junio no facturó y en julio facturó dos veces) y en marzo emitió una nota de crédito por $ 200.000. ' +
+            'Total neto: $ 10.000.000. Último comprobante: octubre, así que los meses considerados son 10 (enero a octubre). Promedio mensual: $ 1.000.000. El ahorro empieza en noviembre: ' +
+            'proyección 2026 = $ 1.000.000 × 2 meses = $ 2.000.000. Con un objetivo anual de $ 12.000.000, el objetivo del trimestre octubre-diciembre es $ 3.000.000; ' +
+            'el ahorro de ese trimestre es $ 2.000.000 (noviembre y diciembre), o sea 66,7% de logro.'
     }
 };
 
@@ -98,7 +145,11 @@ const KPIS_GENERAL = [
     { id: 'completados', nombre: 'Completados vs Plan',        peso: 20, objetivo: 60,  getActual: d => d.pct_completados },
     { id: 'sla',         nombre: '% Cumplimiento SLA',          peso: 20, objetivo: 85,  getActual: d => d.pct_sla },
     { id: 'tickets-sla', nombre: '% Tickets dentro SLA',        peso: 15, objetivo: 90,  getActual: d => d.pct_tickets_sla },
-    { id: 'procesos',    nombre: '% Procesos Relevados vs Plan', peso: 5,  objetivo: 100, getActual: d => d.pct_procesos }
+    { id: 'procesos',    nombre: '% Procesos Relevados vs Plan', peso: 5,  objetivo: 100, getActual: d => d.pct_procesos },
+    // Ahorro: pct_ahorro ya es ahorro del rango ÷ objetivo del rango × 100. Sin
+    // objetivo (OBJETIVO_AHORRO_ANUAL = 0) no hay dato y no entra en el ponderado.
+    { id: 'ahorro',      nombre: 'Ahorro / Beneficio Generado',  peso: 15, objetivo: 100,
+      getActual: d => (d.ahorro_objetivo_rango > 0 && d.pct_ahorro !== null && d.pct_ahorro !== undefined) ? d.pct_ahorro : null }
 ];
 
 function calcularCumplimientoGeneral(data) {
@@ -187,11 +238,16 @@ const KpisManager = {
 
     kpiDetalleTipoActivo: null,
 
+    // Comodidad de pantalla, no seguridad: la API valida cada escritura (403).
+    puedeEditar: false,
+
     // ── Init ──────────────────────────────────────────────────────────────────
     init: function() {
+        this.puedeEditar = document.body.dataset.puedeEditar === '1';
         this.setupSelectores();
         this.setupEventListeners();
         this.setupImportListeners();
+        if (typeof AhorrosUI !== 'undefined') AhorrosUI.init();
         this.cargarKPIResumen();
     },
 
@@ -352,8 +408,46 @@ const KpisManager = {
                 ? `${data.total_procesos} de ${data.objetivo_procesos} procesos relevados (plan de ${data.meses_rango} ${data.meses_rango === 1 ? 'mes' : 'meses'})`
                 : 'Sin período seleccionado';
 
+        // KPI 5 — Ahorro / Beneficio Generado
+        this.actualizarTarjetaAhorro(data);
+
         // Cumplimiento General Ponderado
         this.renderCumplimientoGeneral(data);
+    },
+
+    actualizarTarjetaAhorro: function(data) {
+        const valor  = document.getElementById('kpiAhorroValor');
+        const bar    = document.getElementById('kpiBarAhorro');
+        const texto  = document.getElementById('kpiTextAhorro');
+        const logro  = document.getElementById('kpiTextAhorroLogro');
+        const objetivo = document.getElementById('kpiAhorroObjetivo');
+
+        if (data.ahorro_error) {
+            valor.textContent = '—';
+            bar.style.width = '0%';
+            bar.className = 'progress-bar bg-secondary';
+            texto.textContent = 'No se pudo calcular el ahorro';
+            logro.innerHTML = '&nbsp;';
+            objetivo.textContent = '—';
+            this.mostrarError(data.ahorro_error);
+            return;
+        }
+
+        const pct = data.pct_ahorro;
+        valor.textContent = formatoPesos(data.ahorro_rango);
+        bar.style.width = Math.min(pct || 0, 100) + '%';
+        bar.className = 'progress-bar ' + (
+            pct === null ? 'bg-secondary' :
+            pct >= 100   ? 'bg-success'   :
+            pct >= 70    ? 'bg-warning'   : 'bg-danger'
+        );
+        texto.textContent = 'Proyección ' + data.ahorro_anio_proyeccion + ': ' + formatoPesos(data.ahorro_proyeccion);
+        logro.textContent = pct !== null
+            ? pct.toFixed(1) + '% del objetivo del rango (' + formatoPesos(data.ahorro_objetivo_rango) + ')'
+            : 'Sin objetivo definido';
+        objetivo.textContent = data.ahorro_objetivo_anual > 0
+            ? formatoPesos(data.ahorro_objetivo_anual) + ' anual'
+            : 'Sin definir';
     },
 
     renderCumplimientoGeneral: function(data) {
@@ -363,9 +457,15 @@ const KpisManager = {
             pctGeneral !== null ? pctGeneral.toFixed(1) : '—';
 
         const pesoTotalKpis = 100; // suma de pesos de los 6 KPIs de la planilla
+        const ahorroIncluido = detalle.some(d => d.id === 'ahorro');
+        const faltantes = ahorroIncluido
+            ? 'Impacto: % Costo del Área aún sin datos.'
+            : (data.ahorro_error
+                ? 'Impacto: Ahorro/Beneficio Generado no disponible y % Costo del Área aún sin datos.'
+                : 'Impacto: Ahorro/Beneficio Generado sin objetivo definido y % Costo del Área aún sin datos.');
         document.getElementById('kpiTextGeneral').textContent =
             sumaPesos > 0
-                ? `Ponderado sobre los KPIs con datos disponibles (${sumaPesos}% del peso total de ${pesoTotalKpis}%). Impacto (Ahorro/Beneficio Generado y % Costo del Área) aún sin datos.`
+                ? `Ponderado sobre los KPIs con datos disponibles (${sumaPesos}% del peso total de ${pesoTotalKpis}%). ${faltantes}`
                 : 'Sin datos suficientes para calcular el cumplimiento general';
 
         document.getElementById('kpiGeneralBreakdown').innerHTML = detalle.map(d => {
@@ -838,6 +938,7 @@ const KpisManager = {
     },
 
     confirmarImportarTickets: function() {
+        if (!this.puedeEditar) return;
         if (!this._filasValidadas || !this._filasValidadas.length) return;
         const $btn = $('#btnConfirmarImportar');
         $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Importando...');
@@ -876,8 +977,17 @@ const KpisManager = {
         $('#importPreview, #importResultado, #btnConfirmarImportar').addClass('d-none');
     },
 
+    // Muestra el error arriba del tablero (y en consola). Los 401/403 de la
+    // API llegan con el mensaje listo para el usuario en data.error.
     mostrarError: function(msg) {
         console.error(msg);
+        const cont = document.getElementById('kpiAvisos');
+        if (!cont) return;
+        cont.innerHTML =
+            '<div class="alert alert-danger alert-dismissible fade show small py-2" role="alert">' +
+                '<i class="fas fa-triangle-exclamation me-1"></i>' + escapeHtml(msg) +
+                '<button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Cerrar"></button>' +
+            '</div>';
     }
 };
 

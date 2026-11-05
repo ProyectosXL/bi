@@ -318,3 +318,69 @@ body {
     color: #d97706;
     letter-spacing: 1px;
 }
+
+/* ── Permisos ──────────────────────────────────────────────────────────────
+   Los controles de edición llevan .kpi-solo-edicion y se ocultan cuando el
+   usuario no tiene kpis.editar (body[data-puede-editar="0"]). Es comodidad:
+   la API valida cada escritura por su cuenta (403). */
+body[data-puede-editar="0"] .kpi-solo-edicion { display: none !important; }
+
+.kpi-navbar-usuario { white-space: nowrap; }
+.kpi-acceso-card { border-radius: 12px; }
+
+/* ── KPI Ahorro / Beneficio Generado ─────────────────────────────────────── */
+.kpi-value-monto { font-size: 2rem; white-space: nowrap; }
+@media (min-width: 1400px) { .kpi-value-monto { font-size: 1.7rem; } }
+
+@media (min-width: 1200px) { .kpi-modal-ahorros { max-width: min(1800px, 97vw); } }
+.kpi-ahorros-table > tbody > tr > td:nth-child(2) { min-width: 220px; }
+.kpi-ahorros-table > thead th { white-space: nowrap; }
+
+.kpi-ahorro-stat {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: .5rem .75rem;
+    height: 100%;
+}
+.kpi-ahorro-stat-label {
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #64748b;
+}
+.kpi-ahorro-stat-valor { font-size: 1.15rem; font-weight: 700; color: #0f172a; white-space: nowrap; }
+
+.kpi-ahorros-table td, .kpi-ahorros-table th { font-size: .82rem; }
+.kpi-ahorros-table tr.kpi-ahorro-baja td { color: #94a3b8; text-decoration: line-through; }
+.kpi-ahorros-table tr.kpi-ahorro-baja td.kpi-no-tachar { text-decoration: none; }
+.kpi-ahorro-detalle > td { background: #f8fafc !important; }
+.kpi-btn-expandir { border: none; background: none; color: #475569; padding: 0 .25rem; }
+.kpi-btn-expandir[aria-expanded="true"] i { transform: rotate(90deg); }
+.kpi-btn-expandir i { transition: transform .15s ease; }
+.kpi-aviso { white-space: nowrap; }
+
+.kpi-form-label { font-size: .78rem; font-weight: 600; color: #334155; margin-bottom: .2rem; }
+.kpi-modo-bloque {
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    margin-top: 1rem;
+    background: #f8fafc;
+}
+.kpi-monto-vivo { font-size: .95rem; padding-bottom: .3rem; }
+.kpi-buscador-resultados {
+    position: absolute;
+    z-index: 1060;
+    left: 0;
+    right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, .15);
+}
+.kpi-buscador-resultados .list-group-item { font-size: .82rem; padding: .35rem .6rem; }
+
+.kpi-historial-item { border-left: 3px solid #cbd5e1; padding: .25rem 0 .5rem .75rem; margin-bottom: .75rem; }
+.kpi-historial-item.alta { border-left-color: #198754; }
+.kpi-historial-item.edicion { border-left-color: #0d6efd; }
+.kpi-historial-item.baja { border-left-color: #dc3545; }

@@ -11,8 +11,32 @@ header('Content-Type: application/json; charset=UTF-8');
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
+require_once __DIR__ . '/../class/AuthKpis.php';
+
+$action = isset($_GET['action']) ? $_GET['action'] : '';
+
+/* Autorización ANTES de tocar ninguna base: sin usuario 401, sin permiso 403.
+   Lo que exige cada acción está declarado en AuthKpis::LECTURAS/ESCRITURAS;
+   una acción no declarada se rechaza. $usuarioActual es el username del padrón
+   que firma las escrituras. */
+try {
+    $usuarioActual = AuthKpis::exigirAccion($action);
+} catch (AuthKpisSinUsuario $e) {
+    http_response_code(401);
+    echo json_encode(array('success' => false, 'error' => $e->getMessage()));
+    exit;
+} catch (AuthKpisSinPermiso $e) {
+    http_response_code(403);
+    echo json_encode(array('success' => false, 'error' => $e->getMessage()));
+    exit;
+}
+AuthKpis::liberarSesion();
+
+define('KPIS_API', true);
+
 try {
     require_once __DIR__ . '/../../class/conexion.php';
+    require_once __DIR__ . '/ahorros.php';
 
     $conexion = new Conexion();
     $cid = $conexion->conectar('central');
@@ -27,8 +51,6 @@ try {
     }
     asegurarTablaTickets($cidApps);
 
-    $action = isset($_GET['action']) ? $_GET['action'] : '';
-
     list($fechaDesde, $fechaHastaExclusivo) = obtenerRangoFechas(
         isset($_GET['fecha_desde']) ? $_GET['fecha_desde'] : '',
         isset($_GET['fecha_hasta']) ? $_GET['fecha_hasta'] : ''
@@ -39,7 +61,50 @@ try {
             $resumenProyectos = obtenerKPIResumenDatos($cid, $fechaDesde, $fechaHastaExclusivo);
             $resumenTickets   = obtenerKPIResumenTickets($cidApps, $fechaDesde, $fechaHastaExclusivo);
             $resumenProcesos  = obtenerKPIResumenProcesos($cidApps, $fechaDesde, $fechaHastaExclusivo);
-            echo json_encode(array_merge(array('success' => true), $resumenProyectos, $resumenTickets, $resumenProcesos));
+            $resumenAhorros   = obtenerResumenAhorros($cidApps, $cid, $fechaDesde, $fechaHastaExclusivo);
+            echo json_encode(array_merge(array('success' => true), $resumenProyectos, $resumenTickets, $resumenProcesos, $resumenAhorros));
+            break;
+
+        // ── Ahorro / Beneficio Generado (ver ahorros.php) ──────────────────
+        case 'ahorros-listado':
+            accionAhorrosListado($cidApps, $cid, $fechaDesde, $fechaHastaExclusivo,
+                !empty($_GET['incluir_bajas']) && $_GET['incluir_bajas'] !== '0');
+            break;
+
+        case 'ahorros-catalogos':
+            accionAhorrosCatalogos($cidApps);
+            break;
+
+        case 'ahorros-historial':
+            accionHistorial($cidApps, $_GET['entidad'] ?? '', $_GET['id'] ?? '');
+            break;
+
+        case 'buscar-proveedores':
+            accionBuscarProveedores($cid, $_GET['q'] ?? '');
+            break;
+
+        case 'buscar-proyectos':
+            accionBuscarProyectos($cidApps, $cid, $_GET['q'] ?? '');
+            break;
+
+        case 'ahorro-preview-proveedores':
+            $body = leerCuerpoJson();
+            if ($body !== null) accionPreviewProveedores($cidApps, $cid, $body);
+            break;
+
+        case 'ahorro-guardar':
+            $body = leerCuerpoJson();
+            if ($body !== null) accionGuardarAhorro($cidApps, $cid, $body, $usuarioActual);
+            break;
+
+        case 'ahorro-baja':
+            $body = leerCuerpoJson();
+            if ($body !== null) accionBajaAhorro($cidApps, $cid, $body, $usuarioActual);
+            break;
+
+        case 'parametros-guardar':
+            $body = leerCuerpoJson();
+            if ($body !== null) accionGuardarParametros($cidApps, $body, $usuarioActual);
             break;
 
         case 'kpi-detalle':
