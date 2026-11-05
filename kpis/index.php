@@ -1,3 +1,74 @@
+<?php
+require_once __DIR__ . '/class/AuthKpis.php';
+
+/* Sin usuario: aviso de iniciar sesión. Sin permiso de lectura: aviso de sin
+   acceso. En los dos casos no se dibuja nada del tablero ni se pide ningún
+   dato (la API, además, responde 401/403 por su cuenta). */
+$kpisUsuario = AuthKpis::usuario();
+$kpisBloqueo = null;
+if ($kpisUsuario === null) {
+    $kpisBloqueo = 'login';
+    http_response_code(401);
+} elseif (!AuthKpis::puede()) {
+    $kpisBloqueo = 'sin-acceso';
+    http_response_code(403);
+}
+$kpisPuedeEditar = ($kpisBloqueo === null) && AuthKpis::puedeEditar();
+$kpisNombreUsuario = $kpisUsuario ? (trim((string) $kpisUsuario['nombre']) ?: $kpisUsuario['username']) : '';
+
+if ($kpisBloqueo !== null): ?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero de KPIs — Innovación</title>
+    <link rel="icon" type="image/jpg" href="/bi/images/icono.jpg">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="css/kpis.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand">
+                <i class="fas fa-gauge-high me-2"></i>
+                Tablero de KPIs <span class="text-white-50">· Innovación</span>
+            </span>
+        </div>
+    </nav>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-8 col-lg-6">
+                <div class="card kpi-acceso-card text-center">
+                    <div class="card-body p-4">
+                        <?php if ($kpisBloqueo === 'login'): ?>
+                            <i class="fas fa-right-to-bracket fa-2x text-primary mb-3"></i>
+                            <h5 class="mb-2">Tenés que iniciar sesión</h5>
+                            <p class="text-muted mb-4">Para ver el tablero de KPIs de Innovación ingresá con tu usuario.</p>
+                            <a href="/bi/sistemas/login.php" class="btn btn-primary">
+                                <i class="fas fa-right-to-bracket me-1"></i>Ir al login
+                            </a>
+                        <?php else: ?>
+                            <i class="fas fa-lock fa-2x text-danger mb-3"></i>
+                            <h5 class="mb-2">No tenés acceso a este tablero</h5>
+                            <p class="text-muted mb-0">
+                                El usuario <strong><?= htmlspecialchars($kpisUsuario['username']) ?></strong>
+                                (rol: <?= htmlspecialchars($kpisUsuario['rol_nombre']) ?>) no tiene el permiso
+                                para ver el tablero de KPIs de Innovación. Pedilo en Gestión de Usuarios.
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+<?php
+    exit;
+endif;
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -15,17 +86,25 @@
     <!-- Custom CSS -->
     <link href="css/kpis.css" rel="stylesheet">
 </head>
-<body>
+<body<?= AuthKpis::atributoEdicion() ?>>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">
                 <i class="fas fa-gauge-high me-2"></i>
                 Tablero de KPIs <span class="text-white-50">· Innovación</span>
             </a>
+            <span class="navbar-text text-white-50 small ms-auto kpi-navbar-usuario" title="<?= htmlspecialchars($kpisUsuario['username']) ?>">
+                <i class="fas fa-user-circle me-1"></i><?= htmlspecialchars($kpisNombreUsuario) ?>
+                <?php if ($kpisPuedeEditar): ?>
+                    <span class="badge bg-success-subtle text-success-emphasis ms-1">Edición</span>
+                <?php endif; ?>
+            </span>
         </div>
     </nav>
 
     <div class="container-fluid mt-4">
+
+        <div id="kpiAvisos"></div>
 
         <!-- Page title -->
         <div class="row mb-2">
@@ -69,7 +148,7 @@
                         <div id="periodoAviso" class="text-danger small d-none">
                             <i class="fas fa-triangle-exclamation me-1"></i>El período "desde" debe ser anterior o igual a "hasta".
                         </div>
-                        <div class="ms-md-auto">
+                        <div class="ms-md-auto kpi-solo-edicion">
                             <button id="btnImportarTickets" class="btn btn-outline-success btn-sm" type="button"
                                 data-bs-toggle="modal" data-bs-target="#modalImportarTickets">
                                 <i class="fas fa-file-excel me-1"></i>Importar Excel (Tickets)

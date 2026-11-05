@@ -318,3 +318,12 @@ body {
     color: #d97706;
     letter-spacing: 1px;
 }
+
+/* ── Permisos ──────────────────────────────────────────────────────────────
+   Los controles de edición llevan .kpi-solo-edicion y se ocultan cuando el
+   usuario no tiene kpis.editar (body[data-puede-editar="0"]). Es comodidad:
+   la API valida cada escritura por su cuenta (403). */
+body[data-puede-editar="0"] .kpi-solo-edicion { display: none !important; }
+
+.kpi-navbar-usuario { white-space: nowrap; }
+.kpi-acceso-card { border-radius: 12px; }

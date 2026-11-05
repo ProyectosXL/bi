@@ -187,8 +187,12 @@ const KpisManager = {
 
     kpiDetalleTipoActivo: null,
 
+    // Comodidad de pantalla, no seguridad: la API valida cada escritura (403).
+    puedeEditar: false,
+
     // ── Init ──────────────────────────────────────────────────────────────────
     init: function() {
+        this.puedeEditar = document.body.dataset.puedeEditar === '1';
         this.setupSelectores();
         this.setupEventListeners();
         this.setupImportListeners();
@@ -838,6 +842,7 @@ const KpisManager = {
     },
 
     confirmarImportarTickets: function() {
+        if (!this.puedeEditar) return;
         if (!this._filasValidadas || !this._filasValidadas.length) return;
         const $btn = $('#btnConfirmarImportar');
         $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Importando...');
@@ -876,8 +881,17 @@ const KpisManager = {
         $('#importPreview, #importResultado, #btnConfirmarImportar').addClass('d-none');
     },
 
+    // Muestra el error arriba del tablero (y en consola). Los 401/403 de la
+    // API llegan con el mensaje listo para el usuario en data.error.
     mostrarError: function(msg) {
         console.error(msg);
+        const cont = document.getElementById('kpiAvisos');
+        if (!cont) return;
+        cont.innerHTML =
+            '<div class="alert alert-danger alert-dismissible fade show small py-2" role="alert">' +
+                '<i class="fas fa-triangle-exclamation me-1"></i>' + escapeHtml(msg) +
+                '<button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Cerrar"></button>' +
+            '</div>';
     }
 };
 

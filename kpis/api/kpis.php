@@ -11,6 +11,27 @@ header('Content-Type: application/json; charset=UTF-8');
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
+require_once __DIR__ . '/../class/AuthKpis.php';
+
+$action = isset($_GET['action']) ? $_GET['action'] : '';
+
+/* Autorización ANTES de tocar ninguna base: sin usuario 401, sin permiso 403.
+   Lo que exige cada acción está declarado en AuthKpis::LECTURAS/ESCRITURAS;
+   una acción no declarada se rechaza. $usuarioActual es el username del padrón
+   que firma las escrituras. */
+try {
+    $usuarioActual = AuthKpis::exigirAccion($action);
+} catch (AuthKpisSinUsuario $e) {
+    http_response_code(401);
+    echo json_encode(array('success' => false, 'error' => $e->getMessage()));
+    exit;
+} catch (AuthKpisSinPermiso $e) {
+    http_response_code(403);
+    echo json_encode(array('success' => false, 'error' => $e->getMessage()));
+    exit;
+}
+AuthKpis::liberarSesion();
+
 try {
     require_once __DIR__ . '/../../class/conexion.php';
 
@@ -26,8 +47,6 @@ try {
         throw new Exception('Error de conexión (apps): ' . print_r(sqlsrv_errors(), true));
     }
     asegurarTablaTickets($cidApps);
-
-    $action = isset($_GET['action']) ? $_GET['action'] : '';
 
     list($fechaDesde, $fechaHastaExclusivo) = obtenerRangoFechas(
         isset($_GET['fecha_desde']) ? $_GET['fecha_desde'] : '',
