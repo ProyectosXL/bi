@@ -937,6 +937,7 @@ function accionHistorial($cidApps, $entidad, $entidadId) {
         if ($v === null || $v === '') return '—';
         if ($campo === 'tipo_id') return $tipos[intval($v)] ?? $v;
         if ($campo === 'sector_id') return $sectores[intval($v)] ?? $v;
+        if ($campo === 'proyecto_id') return '#' . $v;
         if ($campo === 'proveedores') {
             return $v ? implode(', ', array_map(function ($p) { return $p['cod_provee'] . ' (baja ' . $p['fecha_baja'] . ')'; }, $v)) : '—';
         }

@@ -182,7 +182,7 @@ endif;
         <div class="row mb-4">
 
             <!-- KPI 1: Completados vs Plan % -->
-            <div class="col-12 col-md-6 col-xl-3 mb-3">
+            <div class="col-12 col-md-6 col-xl-4 col-xxl mb-3">
                 <div class="card kpi-card h-100 position-relative">
                     <div class="card-body p-3">
                         <button class="kpi-info-btn"
@@ -221,7 +221,7 @@ endif;
             </div>
 
             <!-- KPI 2: % Cumplimiento SLA -->
-            <div class="col-12 col-md-6 col-xl-3 mb-3">
+            <div class="col-12 col-md-6 col-xl-4 col-xxl mb-3">
                 <div class="card kpi-card h-100 position-relative">
                     <div class="card-body p-3">
                         <button class="kpi-info-btn"
@@ -260,7 +260,7 @@ endif;
             </div>
 
             <!-- KPI 3: % Tickets dentro de SLA -->
-            <div class="col-12 col-md-6 col-xl-3 mb-3">
+            <div class="col-12 col-md-6 col-xl-4 col-xxl mb-3">
                 <div class="card kpi-card h-100 position-relative">
                     <div class="card-body p-3">
                         <button class="kpi-info-btn"
@@ -299,7 +299,7 @@ endif;
             </div>
 
             <!-- KPI 4: % Procesos Relevados vs Plan -->
-            <div class="col-12 col-md-6 col-xl-3 mb-3">
+            <div class="col-12 col-md-6 col-xl-4 col-xxl mb-3">
                 <div class="card kpi-card h-100 position-relative">
                     <div class="card-body p-3">
                         <button class="kpi-info-btn"
@@ -337,28 +337,53 @@ endif;
                 </div>
             </div>
 
+            <!-- KPI 5: Ahorro / Beneficio Generado -->
+            <div class="col-12 col-md-6 col-xl-4 col-xxl mb-3">
+                <div class="card kpi-card h-100 position-relative">
+                    <div class="card-body p-3">
+                        <button class="kpi-info-btn"
+                            data-bs-toggle="popover"
+                            data-bs-placement="top"
+                            data-bs-trigger="hover focus"
+                            title="¿Cómo se calcula?"
+                            data-bs-content="Suma la plata que el área ahorró o generó en los meses elegidos: horas liberadas (horas × costo hora), costos evitados, renegociaciones, ingresos habilitados y proveedores dados de baja (lo que se les pagaba en promedio por mes, desde el mes siguiente a su última factura). Se compara contra el objetivo anual repartido en partes iguales por mes.">
+                            <i class="fas fa-circle-info fa-lg"></i>
+                        </button>
+                        <p class="kpi-label">Ahorro / Beneficio Generado</p>
+                        <div class="d-flex align-items-baseline gap-1 mb-2">
+                            <span class="kpi-value kpi-value-monto" id="kpiAhorroValor">—</span>
+                        </div>
+                        <div class="progress mb-1" style="height:5px;background:rgba(255,255,255,0.15)">
+                            <div class="progress-bar" id="kpiBarAhorro" role="progressbar" style="width:0%;transition:width .8s ease"></div>
+                        </div>
+                        <p class="kpi-sub mb-0" id="kpiTextAhorro">&nbsp;</p>
+                        <p class="kpi-sub" id="kpiTextAhorroLogro">&nbsp;</p>
+                        <div class="kpi-meta">
+                            <span><i class="fas fa-tag me-1"></i>Categoría: Impacto</span>
+                            <span><i class="fas fa-repeat me-1"></i>Frecuencia: Trimestral</span>
+                            <span><i class="fas fa-weight-hanging me-1"></i>Peso: 15%</span>
+                            <span><i class="fas fa-bullseye me-1"></i>Objetivo: <span id="kpiAhorroObjetivo">—</span></span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button class="btn btn-sm btn-outline-light flex-fill btn-ver-ahorros">
+                                <i class="fas fa-list me-1"></i>Ver ahorros
+                            </button>
+                            <button class="btn btn-sm btn-outline-info flex-fill btn-ver-instructivo" data-kpi="ahorro">
+                                <i class="fas fa-book me-1"></i>Instructivo
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning flex-fill btn-parametros kpi-solo-edicion">
+                                <i class="fas fa-sliders me-1"></i>Parámetros
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- Tarjetas KPI en desarrollo (sin datos aún) -->
         <div class="row mb-4">
             <div class="col-12 mb-1"><h6 class="text-muted"><i class="fas fa-flask me-2"></i>En desarrollo — sin datos aún</h6></div>
-
-            <div class="col-12 col-md-6 col-xl-6 mb-3">
-                <div class="card kpi-card kpi-card-placeholder h-100 position-relative">
-                    <div class="card-body p-3">
-                        <span class="badge bg-secondary kpi-badge-desarrollo">En desarrollo</span>
-                        <p class="kpi-label">Ahorro / Beneficio Generado</p>
-                        <div class="kpi-value-placeholder mb-2">—</div>
-                        <p class="kpi-sub mb-2">Impacto · Suma de $ ahorrados o generados por proyectos cerrados en el período (hs liberadas × costo hora, costos evitados, ingresos habilitados).</p>
-                        <div class="kpi-placeholder-meta">
-                            <span><i class="fas fa-tag me-1"></i>Categoría: Impacto</span>
-                            <span><i class="fas fa-repeat me-1"></i>Frecuencia: Trimestral</span>
-                            <span><i class="fas fa-weight-hanging me-1"></i>Peso: 15%</span>
-                            <span><i class="fas fa-bullseye me-1"></i>Objetivo: $ a definir (piso anual / 4)</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <div class="col-12 col-md-6 col-xl-6 mb-3">
                 <div class="card kpi-card kpi-card-placeholder h-100 position-relative">
@@ -633,6 +658,267 @@ endif;
         </div>
     </div>
 
+    <!-- ═══ Modal: Ver ahorros (KPI 5) ═══════════════════════════════════════ -->
+    <div class="modal fade" id="modalAhorros" tabindex="-1" aria-labelledby="ahorrosTitulo" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen-xl-down modal-xl kpi-modal-ahorros modal-dialog-scrollable modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white py-2">
+                    <h5 class="modal-title" id="ahorrosTitulo"><i class="fas fa-piggy-bank me-2"></i>Ahorro / Beneficio Generado</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="kpi-detalle-header">
+                    <p id="ahorrosNota" class="text-muted small mb-2"></p>
+                    <div id="ahorrosResumen" class="row g-2 mb-2"></div>
+                    <div id="ahorrosPorTipo" class="small mb-2"></div>
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="switchAhorrosBajas">
+                            <label class="form-check-label small" for="switchAhorrosBajas">Ver dados de baja</label>
+                        </div>
+                        <button type="button" class="btn btn-success btn-sm ms-auto kpi-solo-edicion" id="btnNuevoAhorro">
+                            <i class="fas fa-plus me-1"></i>Nuevo ahorro
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 kpi-detalle-table kpi-ahorros-table">
+                            <thead class="table-dark kpi-thead-sticky">
+                                <tr>
+                                    <th class="ps-3"></th>
+                                    <th>Descripción</th>
+                                    <th>Tipo</th>
+                                    <th>Sector</th>
+                                    <th>Proyecto</th>
+                                    <th>Periodicidad</th>
+                                    <th>Desde</th>
+                                    <th>Hasta</th>
+                                    <th class="text-end">Monto mensual / único</th>
+                                    <th class="text-end">Ahorro en el rango</th>
+                                    <th class="text-end">Proyección del año</th>
+                                    <th>Avisos</th>
+                                    <th>Última modificación</th>
+                                    <th class="pe-3 kpi-solo-edicion">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ahorrosTabla">
+                                <tr><td colspan="14" class="text-center text-muted py-3">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Modal: Alta / edición de ahorro (solo con kpis.editar) ═══════════ -->
+    <div class="modal fade" id="modalAhorroForm" tabindex="-1" aria-labelledby="ahorroFormTitulo" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white py-2">
+                    <h5 class="modal-title" id="ahorroFormTitulo">Nuevo ahorro</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formAhorro" novalidate autocomplete="off">
+                        <input type="hidden" id="ahorroId">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label for="ahorroTipo" class="form-label kpi-form-label">Tipo <span class="text-danger">*</span></label>
+                                <select id="ahorroTipo" class="form-select form-select-sm"></select>
+                            </div>
+                            <div class="col-12 col-md-8">
+                                <label for="ahorroDescripcion" class="form-label kpi-form-label">Descripción <span class="text-danger">*</span></label>
+                                <input type="text" id="ahorroDescripcion" class="form-control form-control-sm" maxlength="300">
+                            </div>
+                        </div>
+
+                        <div id="ahorroCamposComunes" class="d-none">
+                            <div class="row g-3 mt-0">
+                                <div class="col-12 col-md-6 position-relative">
+                                    <label for="ahorroProyectoBuscar" class="form-label kpi-form-label">Proyecto asociado <span class="text-muted fw-normal">(opcional)</span></label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" id="ahorroProyectoBuscar" class="form-control" placeholder="Buscá por ID o nombre">
+                                        <button class="btn btn-outline-secondary" type="button" id="btnQuitarProyecto" title="Quitar proyecto"><i class="fas fa-xmark"></i></button>
+                                    </div>
+                                    <input type="hidden" id="ahorroProyectoId">
+                                    <div id="ahorroProyectoResultados" class="list-group kpi-buscador-resultados d-none"></div>
+                                    <div id="ahorroProyectoElegido" class="small text-muted mt-1"></div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="ahorroSector" class="form-label kpi-form-label">Sector <span class="text-danger">*</span></label>
+                                    <select id="ahorroSector" class="form-select form-select-sm"></select>
+                                    <div id="ahorroSectorAviso" class="small text-muted mt-1"></div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label for="ahorroPeriodicidad" class="form-label kpi-form-label">Periodicidad <span class="text-danger">*</span></label>
+                                    <select id="ahorroPeriodicidad" class="form-select form-select-sm">
+                                        <option value="">Elegí…</option>
+                                        <option value="MENSUAL">Mensual (recurrente)</option>
+                                        <option value="UNICO">Único</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label for="ahorroDesde" class="form-label kpi-form-label">Fecha desde <span class="text-danger">*</span></label>
+                                    <input type="date" id="ahorroDesde" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label for="ahorroHasta" class="form-label kpi-form-label">Fecha hasta <span class="text-danger">*</span></label>
+                                    <input type="date" id="ahorroHasta" class="form-control form-control-sm">
+                                </div>
+                            </div>
+
+                            <!-- Modo MONTO -->
+                            <div id="ahorroModoMonto" class="kpi-modo-bloque d-none">
+                                <div class="row g-3">
+                                    <div class="col-12 col-md-4">
+                                        <label for="ahorroMonto" class="form-label kpi-form-label"><span id="ahorroMontoLabel">Monto</span> ($) <span class="text-danger">*</span></label>
+                                        <input type="number" id="ahorroMonto" class="form-control form-control-sm" min="0" step="0.01">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Modo HORAS -->
+                            <div id="ahorroModoHoras" class="kpi-modo-bloque d-none">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-6 col-md-3">
+                                        <label for="ahorroHoras" class="form-label kpi-form-label">Horas por mes <span class="text-danger">*</span></label>
+                                        <input type="number" id="ahorroHoras" class="form-control form-control-sm" min="0" step="0.5">
+                                    </div>
+                                    <div class="col-6 col-md-3">
+                                        <label for="ahorroCostoHora" class="form-label kpi-form-label">Costo hora ($) <span class="text-danger">*</span></label>
+                                        <input type="number" id="ahorroCostoHora" class="form-control form-control-sm" min="0" step="0.01">
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <div class="kpi-monto-vivo">Monto <span id="ahorroHorasPeriodo">mensual</span>: <strong id="ahorroHorasMonto">$ 0</strong></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Modo PROVEEDOR -->
+                            <div id="ahorroModoProveedor" class="kpi-modo-bloque d-none">
+                                <p class="small text-muted mb-2">
+                                    <i class="fas fa-circle-info me-1"></i>Elegí los proveedores dados de baja y cargá la fecha de baja de cada uno.
+                                    El monto mensual se calcula con lo facturado en Tango; la periodicidad queda fija en mensual.
+                                </p>
+                                <div class="position-relative mb-2" style="max-width:480px">
+                                    <input type="text" id="ahorroProveedorBuscar" class="form-control form-control-sm" placeholder="Agregar proveedor: buscá por código o nombre">
+                                    <div id="ahorroProveedorResultados" class="list-group kpi-buscador-resultados d-none"></div>
+                                </div>
+                                <table class="table table-sm align-middle mb-2">
+                                    <thead class="table-light">
+                                        <tr><th>Proveedor</th><th style="width:180px">Fecha de baja</th><th style="width:40px"></th></tr>
+                                    </thead>
+                                    <tbody id="ahorroProveedoresTabla">
+                                        <tr class="kpi-sin-proveedores"><td colspan="3" class="text-muted small">Todavía no agregaste proveedores.</td></tr>
+                                    </tbody>
+                                </table>
+                                <h6 class="kpi-seccion-titulo mt-3"><i class="fas fa-calculator me-2"></i>Cálculo con lo facturado en Tango</h6>
+                                <div id="ahorroProveedoresCalculo" class="small text-muted">Agregá un proveedor con su fecha de baja para ver el cálculo.</div>
+                            </div>
+
+                            <div class="row g-3 mt-0">
+                                <div class="col-12">
+                                    <label for="ahorroObservaciones" class="form-label kpi-form-label">Observaciones <span class="text-muted fw-normal">(opcional)</span></label>
+                                    <textarea id="ahorroObservaciones" class="form-control form-control-sm" rows="2" maxlength="1000"></textarea>
+                                </div>
+                                <div class="col-12 d-none" id="ahorroMotivoGrupo">
+                                    <label for="ahorroMotivo" class="form-label kpi-form-label">Motivo del cambio <span class="text-danger">*</span></label>
+                                    <input type="text" id="ahorroMotivo" class="form-control form-control-sm" maxlength="500">
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="ahorroFormErrores" class="alert alert-danger small mt-3 mb-0 d-none"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" id="btnGuardarAhorro">
+                        <i class="fas fa-floppy-disk me-1"></i>Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Modal: Dar de baja un ahorro ═════════════════════════════════════ -->
+    <div class="modal fade" id="modalAhorroBaja" tabindex="-1" aria-labelledby="ahorroBajaTitulo" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white py-2">
+                    <h5 class="modal-title" id="ahorroBajaTitulo"><i class="fas fa-ban me-2"></i>Dar de baja el ahorro</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Vas a dar de baja <strong id="ahorroBajaDescripcion"></strong>. Deja de sumar en la tarjeta y solo se ve con "Ver dados de baja".</p>
+                    <label for="ahorroBajaMotivo" class="form-label kpi-form-label">Motivo <span class="text-danger">*</span></label>
+                    <input type="text" id="ahorroBajaMotivo" class="form-control form-control-sm" maxlength="500">
+                    <div id="ahorroBajaErrores" class="alert alert-danger small mt-3 mb-0 d-none"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="btnConfirmarBajaAhorro"><i class="fas fa-ban me-1"></i>Dar de baja</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Modal: Historial (ahorro o parámetros) ═══════════════════════════ -->
+    <div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="historialTitulo" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white py-2">
+                    <h5 class="modal-title" id="historialTitulo"><i class="fas fa-clock-rotate-left me-2"></i>Historial</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body" id="historialCuerpo"></div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Modal: Parámetros del tablero (solo con kpis.editar) ═════════════ -->
+    <div class="modal fade" id="modalParametros" tabindex="-1" aria-labelledby="parametrosTitulo" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white py-2">
+                    <h5 class="modal-title" id="parametrosTitulo"><i class="fas fa-sliders me-2"></i>Parámetros del KPI de Ahorro</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label for="paramObjetivo" class="form-label kpi-form-label">Objetivo anual de ahorro ($)</label>
+                            <input type="number" id="paramObjetivo" class="form-control form-control-sm" min="0" step="0.01">
+                            <div class="form-text">0 = sin definir: el KPI no entra en el Cumplimiento General.</div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label for="paramCostoHora" class="form-label kpi-form-label">Costo hora por defecto ($)</label>
+                            <input type="number" id="paramCostoHora" class="form-control form-control-sm" min="0" step="0.01">
+                            <div class="form-text">Se precarga en los ahorros de "Horas liberadas"; se puede cambiar en cada uno.</div>
+                        </div>
+                        <div class="col-12">
+                            <label for="paramMotivo" class="form-label kpi-form-label">Motivo del cambio <span class="text-danger">*</span></label>
+                            <input type="text" id="paramMotivo" class="form-control form-control-sm" maxlength="500">
+                        </div>
+                    </div>
+                    <div id="parametrosErrores" class="alert alert-danger small mt-3 mb-0 d-none"></div>
+                    <h6 class="kpi-seccion-titulo mt-4"><i class="fas fa-clock-rotate-left me-2"></i>Historial de cambios</h6>
+                    <div id="parametrosHistorial" class="small"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-success" id="btnGuardarParametros"><i class="fas fa-floppy-disk me-1"></i>Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══ Modal: Instructivo de Medición por KPI ═══════════════════════════ -->
     <div class="modal fade" id="modalInstructivo" tabindex="-1" aria-labelledby="instructivoTitulo" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
@@ -681,6 +967,7 @@ endif;
 
     <!-- Custom JS -->
     <script src="js/kpis.js"></script>
+    <script src="js/ahorros.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {

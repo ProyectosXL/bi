@@ -8,6 +8,29 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** Monto en pesos: "$ 1.234.567" (0 decimales en tarjetas, 2 en detalles). */
+function formatoPesos(valor, decimales = 0) {
+    if (valor === null || valor === undefined || isNaN(valor)) return '—';
+    const n = Number(valor);
+    const txt = Math.abs(n).toLocaleString('es-AR', { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
+    return (n < 0 ? '-' : '') + '$ ' + txt;
+}
+
+/** 'YYYY-MM-DD[ HH:MM:SS]' -> 'dd/mm/aaaa[ HH:MM]'. */
+function fechaPantalla(valor) {
+    if (!valor) return '—';
+    const m = String(valor).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+    if (!m) return escapeHtml(valor);
+    return m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' ' + m[4] + ':' + m[5] : '');
+}
+
+/** 'YYYY-MM' -> 'Noviembre 2026'. */
+function mesPantalla(valor) {
+    if (!valor) return '—';
+    const [a, m] = String(valor).split('-');
+    return MESES_FULL[parseInt(m, 10) - 1] + ' ' + a;
+}
+
 function renderEstrellas(score) {
     if (score === null || score === undefined) return '—';
     const llenas = Math.round(Math.min(Math.max(score, 0), 5));
@@ -196,6 +219,7 @@ const KpisManager = {
         this.setupSelectores();
         this.setupEventListeners();
         this.setupImportListeners();
+        if (typeof AhorrosUI !== 'undefined') AhorrosUI.init();
         this.cargarKPIResumen();
     },
 
@@ -356,8 +380,46 @@ const KpisManager = {
                 ? `${data.total_procesos} de ${data.objetivo_procesos} procesos relevados (plan de ${data.meses_rango} ${data.meses_rango === 1 ? 'mes' : 'meses'})`
                 : 'Sin período seleccionado';
 
+        // KPI 5 — Ahorro / Beneficio Generado
+        this.actualizarTarjetaAhorro(data);
+
         // Cumplimiento General Ponderado
         this.renderCumplimientoGeneral(data);
+    },
+
+    actualizarTarjetaAhorro: function(data) {
+        const valor  = document.getElementById('kpiAhorroValor');
+        const bar    = document.getElementById('kpiBarAhorro');
+        const texto  = document.getElementById('kpiTextAhorro');
+        const logro  = document.getElementById('kpiTextAhorroLogro');
+        const objetivo = document.getElementById('kpiAhorroObjetivo');
+
+        if (data.ahorro_error) {
+            valor.textContent = '—';
+            bar.style.width = '0%';
+            bar.className = 'progress-bar bg-secondary';
+            texto.textContent = 'No se pudo calcular el ahorro';
+            logro.innerHTML = '&nbsp;';
+            objetivo.textContent = '—';
+            this.mostrarError(data.ahorro_error);
+            return;
+        }
+
+        const pct = data.pct_ahorro;
+        valor.textContent = formatoPesos(data.ahorro_rango);
+        bar.style.width = Math.min(pct || 0, 100) + '%';
+        bar.className = 'progress-bar ' + (
+            pct === null ? 'bg-secondary' :
+            pct >= 100   ? 'bg-success'   :
+            pct >= 70    ? 'bg-warning'   : 'bg-danger'
+        );
+        texto.textContent = 'Proyección ' + data.ahorro_anio_proyeccion + ': ' + formatoPesos(data.ahorro_proyeccion);
+        logro.textContent = pct !== null
+            ? pct.toFixed(1) + '% del objetivo del rango (' + formatoPesos(data.ahorro_objetivo_rango) + ')'
+            : 'Sin objetivo definido';
+        objetivo.textContent = data.ahorro_objetivo_anual > 0
+            ? formatoPesos(data.ahorro_objetivo_anual) + ' anual'
+            : 'Sin definir';
     },
 
     renderCumplimientoGeneral: function(data) {
