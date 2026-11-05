@@ -1,0 +1,237 @@
+/**
+ * /bi/velocidad/css/velocidad.css
+ * Tablero "Velocidad de Ventas". Dos temas, igual que el informe de Power BI:
+ *   teal (Argentina / Ranking Negativo) y blue (Uruguay).
+ */
+
+.vv {
+    --vv-head:   #7aafb1;
+    --vv-th:     #7aafb1;
+    --vv-bg:     #d1e3e6;
+    --vv-accent: #3f7f82;
+    --vv-sel:    rgba(63, 127, 130, .18);
+    --vv-card:   #ffffff;
+    --vv-line:   #e3e8ee;
+    --vv-text:   #1f2a37;
+    --vv-soft:   #5b6676;
+
+    background: var(--vv-bg);
+    color: var(--vv-text);
+    min-height: 100vh;
+}
+.vv[data-theme="blue"] {
+    --vv-head:   #00aeff;
+    --vv-th:     #00aeff;
+    --vv-bg:     #a9e2ff;
+    --vv-accent: #0079b5;
+    --vv-sel:    rgba(0, 121, 181, .16);
+}
+
+.vv-shell { max-width: 1500px; margin: 0 auto; padding: 10px 12px 24px; }
+
+/* ── Cabecera ──────────────────────────────────────────────── */
+.vv-head {
+    background: var(--vv-head);
+    color: #fff;
+    border-radius: 4px;
+    display: grid;
+    grid-template-columns: auto 1fr minmax(150px, 220px) auto minmax(190px, 260px);
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+}
+.vv-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.vv-brand-icon { font-size: 2.1rem; line-height: 1; }
+.vv-brand-title { font-weight: 700; font-size: 1.15rem; letter-spacing: .02em; line-height: 1.1; }
+.vv-brand-sub { font-size: .72rem; opacity: .9; margin-top: 2px; }
+.vv-title {
+    font-size: clamp(1.1rem, 2.2vw, 1.9rem);
+    font-weight: 400;
+    text-align: center;
+    letter-spacing: .01em;
+    margin: 0;
+}
+
+.vv-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vv-field label { font-size: .7rem; font-weight: 700; letter-spacing: .02em; }
+.vv-head .vv-field label { color: #fff; }
+.vv-field input,
+.vv-field select {
+    width: 100%;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid #c3ccd6;
+    border-radius: 2px;
+    background: #fff;
+    color: var(--vv-text);
+    font: inherit;
+    font-size: .8rem;
+}
+.vv-field input:focus,
+.vv-field select:focus { outline: 2px solid var(--vv-accent); outline-offset: 0; }
+.vv-dates { display: flex; gap: 6px; }
+.vv-dates input { min-width: 0; padding: 0 4px; }
+
+.vv-logo {
+    display: grid; place-items: center;
+    background: #fff; color: #111; text-decoration: none;
+    width: 78px; height: 54px; border-radius: 3px; line-height: 1;
+}
+.vv-logo-xl { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: 1.7rem; }
+.vv-logo-sub { font-size: .42rem; letter-spacing: .12em; margin-top: -6px; }
+
+/* ── Pestañas ──────────────────────────────────────────────── */
+.vv-tabs { display: flex; gap: 2px; margin: 8px 0 0; flex-wrap: wrap; }
+.vv-tab {
+    border: 0; cursor: pointer;
+    padding: 8px 18px;
+    background: rgba(255, 255, 255, .55);
+    color: var(--vv-text);
+    font: inherit; font-size: .85rem; font-weight: 500;
+    border-radius: 4px 4px 0 0;
+    transition: background .15s;
+}
+.vv-tab:hover { background: rgba(255, 255, 255, .8); }
+.vv-tab.is-active {
+    background: #fff; color: var(--vv-accent); font-weight: 700;
+    box-shadow: inset 0 -3px 0 var(--vv-accent);
+}
+.vv-tab:focus-visible { outline: 2px solid var(--vv-accent); outline-offset: -2px; }
+
+.vv-error {
+    margin-top: 8px; padding: 9px 12px;
+    background: #fff1f0; border: 1px solid #f5a8a3; color: #8a1c13;
+    border-radius: 4px; font-size: .82rem;
+}
+.vv-error[hidden] { display: none; }
+
+/* ── Layout principal ──────────────────────────────────────── */
+.vv-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 210px;
+    gap: 10px;
+    margin-top: 8px;
+    align-items: start;
+}
+.vv-content { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.vv-card { background: var(--vv-card); border-radius: 4px; overflow: hidden; }
+
+/* ── Tabla principal ───────────────────────────────────────── */
+.vv-caption {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 6px 10px; font-size: .74rem; color: var(--vv-soft);
+}
+.vv-count { white-space: nowrap; }
+
+.vv-table-wrap {
+    position: relative;
+    max-height: 400px;
+    overflow: auto;
+}
+.vv-table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: .75rem; }
+.vv-table th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--vv-th); color: #fff;
+    padding: 6px 8px; text-align: left; font-weight: 600; line-height: 1.15;
+    white-space: normal; vertical-align: bottom;
+}
+.vv-table th.num, .vv-table td.num { text-align: right; }
+.vv-table th.sortable { cursor: pointer; user-select: none; }
+.vv-table th.sortable:hover { filter: brightness(.94); }
+.vv-table th .arrow { display: inline-block; margin-left: 3px; font-size: .62rem; }
+.vv-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--vv-line);
+    white-space: nowrap;
+    background: #fff;
+}
+.vv-table tbody tr:nth-child(even) td { background: #f6f8fa; }
+.vv-table tbody tr { cursor: pointer; }
+.vv-table tbody tr:hover td { background: #e9f0f3; }
+.vv-table tbody tr.is-sel td { background: var(--vv-sel); }
+.vv-table tbody tr.is-sel td.sem { box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .25); }
+.vv-table td.sem { text-align: right; font-weight: 600; color: #111; }
+.vv-table td.dim { color: var(--vv-soft); }
+.vv-empty { text-align: center; color: var(--vv-soft); padding: 22px 12px !important; white-space: normal !important; cursor: default; }
+
+.vv-overlay {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: rgba(255, 255, 255, .72); font-size: .85rem; color: var(--vv-soft);
+}
+.vv-overlay[hidden] { display: none; }
+.vv-spinner {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 3px solid var(--vv-line); border-top-color: var(--vv-accent);
+    animation: vv-spin .8s linear infinite;
+}
+@keyframes vv-spin { to { transform: rotate(360deg); } }
+
+/* ── Parte inferior: stock + visualizador ──────────────────── */
+.vv-lower {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 10px;
+    align-items: start;
+}
+.vv-lower.no-stock { grid-template-columns: minmax(0, 1fr); justify-items: end; }
+.vv-lower.no-stock .vv-stock-card { display: none; }
+.vv-lower.no-stock .vv-viz { width: 340px; }
+
+.vv-card-title { padding: 6px 10px; font-size: .78rem; font-weight: 700; }
+.vv-card-sub { font-weight: 400; color: var(--vv-soft); margin-left: 6px; }
+.vv-stock-wrap { max-height: 300px; overflow: auto; }
+.vv-table-stock td, .vv-table-stock th { padding: 4px 10px; }
+.vv-table-stock td.zero { color: var(--vv-soft); }
+
+.vv-viz { background: var(--vv-head); border-radius: 4px; overflow: hidden; color: #fff; }
+.vv-viz-title { text-align: center; font-size: 1.15rem; font-weight: 600; padding: 6px 0 4px; letter-spacing: .02em; }
+.vv-viz-box {
+    background: #fff; margin: 0 10px; height: 300px;
+    display: grid; place-items: center; overflow: hidden;
+}
+.vv-viz-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.vv-viz-empty { color: var(--vv-soft); font-size: .8rem; }
+.vv-viz-label { padding: 6px 10px 2px; font-size: .78rem; min-height: 2.2em; text-align: center; }
+.vv-legend {
+    list-style: none; background: #fff; color: var(--vv-text);
+    margin: 4px 0 0; padding: 8px 12px;
+    font-size: .72rem; display: grid; gap: 5px;
+}
+.vv-legend li { display: flex; align-items: center; gap: 8px; }
+.vv-legend .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+
+/* ── Columna derecha ───────────────────────────────────────── */
+.vv-side { display: flex; flex-direction: column; gap: 10px; }
+.vv-side .vv-field label { color: var(--vv-text); }
+.vv-btn {
+    height: 30px; border: 0; border-radius: 3px; cursor: pointer;
+    background: rgba(255, 255, 255, .8); color: var(--vv-text);
+    font: inherit; font-size: .78rem;
+}
+.vv-btn:hover { background: #fff; }
+
+.vv-thumbs { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.vv-thumb {
+    background: #fff; border: 1px solid #111; border-radius: 6px;
+    padding: 6px 6px 4px; cursor: pointer; text-align: center;
+    font: inherit; width: 100%;
+}
+.vv-thumb:hover { box-shadow: 0 0 0 2px var(--vv-accent); }
+.vv-thumb.is-sel { box-shadow: 0 0 0 3px var(--vv-accent); }
+.vv-thumb img { display: block; margin: 0 auto 3px; height: 92px; max-width: 100%; object-fit: contain; }
+.vv-thumb span { display: block; font-size: .7rem; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 1180px) {
+    .vv-head { grid-template-columns: 1fr auto; }
+    .vv-title { grid-column: 1 / -1; order: 3; }
+    .vv-main { grid-template-columns: 1fr; }
+    .vv-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; }
+    .vv-thumbs { grid-column: 1 / -1; flex-direction: row; }
+    .vv-thumb { flex: 1; }
+}
+@media (max-width: 820px) {
+    .vv-lower, .vv-lower.no-stock { grid-template-columns: 1fr; justify-items: stretch; }
+    .vv-lower.no-stock .vv-viz { width: auto; }
+}
