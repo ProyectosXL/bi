@@ -66,14 +66,24 @@ class AuthKpis {
      * quien no puede guardar.
      */
     const ESCRITURAS = [
-        'importar-tickets'
+        'importar-tickets',
+        // Ahorros: el cálculo previo de proveedores es el primer paso de guardar.
+        'ahorro-preview-proveedores',
+        'ahorro-guardar',
+        'ahorro-baja',
+        'parametros-guardar'
     ];
 
     /** Las acciones que solo leen. Ver ESCRITURAS. */
     const LECTURAS = [
         'kpi-resumen',
         'kpi-detalle',
-        'tickets-usuarios-3m'
+        'tickets-usuarios-3m',
+        'ahorros-listado',
+        'ahorros-catalogos',
+        'ahorros-historial',
+        'buscar-proveedores',
+        'buscar-proyectos'
     ];
 
     private static $inicializado = false;
