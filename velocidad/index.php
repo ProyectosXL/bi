@@ -176,8 +176,9 @@ $h = function (string $s): string {
         </section>
 
         <aside class="vv-card vv-detail" id="vv-detail" aria-live="polite">
-            <div class="vv-detail-img">
+            <div class="vv-detail-img" id="vv-viz" role="button" tabindex="0" title="Ver detalle y ampliar la foto">
                 <img id="vv-viz-img" class="vv-img" alt="" hidden>
+                <span class="vv-detail-zoom" aria-hidden="true"><i class="bi bi-arrows-fullscreen"></i></span>
                 <div class="vv-detail-empty" id="vv-viz-empty"><i class="bi bi-image"></i><span>Elegí un modelo de la tabla</span></div>
             </div>
             <div class="vv-detail-body">
@@ -198,6 +199,25 @@ $h = function (string $s): string {
 
     </main>
 </div>
+
+<dialog class="vv-modal" id="vv-modal" aria-labelledby="vv-modal-title">
+    <div class="vv-modal-in">
+        <div class="vv-modal-viewer" id="vv-modal-viewer">
+            <img id="vv-modal-img" class="vv-img" alt="" draggable="false">
+            <div class="vv-modal-tools">
+                <button type="button" data-zoom="out" title="Alejar"><i class="bi bi-zoom-out"></i></button>
+                <span id="vv-modal-zl">100 %</span>
+                <button type="button" data-zoom="in" title="Acercar"><i class="bi bi-zoom-in"></i></button>
+                <button type="button" data-zoom="reset" title="Ajustar a la ventana"><i class="bi bi-aspect-ratio"></i></button>
+            </div>
+            <p class="vv-modal-hint">Rueda o doble click para ampliar · arrastrá para mover</p>
+            <div class="vv-modal-thumbs" id="vv-modal-thumbs" hidden></div>
+            <a class="vv-modal-shop" id="vv-modal-shop" target="_blank" rel="noopener" hidden><i class="bi bi-bag"></i> Ver en la tienda</a>
+        </div>
+        <div class="vv-modal-body vv-detail-body" id="vv-modal-body"></div>
+        <button type="button" class="vv-modal-close" id="vv-modal-close" title="Cerrar (Esc)" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+    </div>
+</dialog>
 
 <script>
     window.VV_CONFIG = {

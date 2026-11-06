@@ -75,7 +75,10 @@ const VelocidadVentas = (() => {
         kModelos: $('k-modelos'), kModelosFoot: $('k-modelos-foot'), kVta15: $('k-vta15'), kVta15Foot: $('k-vta15-foot'),
         kPct15: $('k-pct15'), kPct15Foot: $('k-pct15-foot'), kDias: $('k-dias'),
         kSembar: $('k-sembar'), kSemchips: $('k-semchips'),
-        vizImg: $('vv-viz-img'), vizEmpty: $('vv-viz-empty'),
+        viz: $('vv-viz'), vizImg: $('vv-viz-img'), vizEmpty: $('vv-viz-empty'),
+        modal: $('vv-modal'), mViewer: $('vv-modal-viewer'), mImg: $('vv-modal-img'),
+        mBody: $('vv-modal-body'), mZl: $('vv-modal-zl'), mClose: $('vv-modal-close'),
+        mThumbs: $('vv-modal-thumbs'), mShop: $('vv-modal-shop'),
         dName: $('d-name'), dCode: $('d-code'), dStats: $('d-stats'),
         stock: $('vv-stock'), stockList: $('vv-stock-list'), stockTotal: $('vv-stock-total'), stockNa: $('vv-stock-na'),
     };
@@ -552,6 +555,155 @@ const VelocidadVentas = (() => {
             if (e.name === 'AbortError') return;
             el.stockList.innerHTML = '<li class="s-msg">No se pudo cargar el stock: ' + esc(e.message) + '</li>';
         }
+        syncModal();
+    }
+
+    // ── Modal: foto ampliable + detalle ───────────────────────
+
+    const Z = { s: 1, x: 0, y: 0, min: 1, max: 6 };
+
+    function applyZoom() {
+        if (Z.s <= Z.min) { Z.s = Z.min; Z.x = 0; Z.y = 0; }
+        // Limitar el desplazamiento para no "perder" la foto fuera del visor.
+        const w = el.mViewer.clientWidth, h = el.mViewer.clientHeight;
+        const mx = (w * (Z.s - 1)) / 2, my = (h * (Z.s - 1)) / 2;
+        Z.x = Math.max(-mx, Math.min(mx, Z.x));
+        Z.y = Math.max(-my, Math.min(my, Z.y));
+        el.mImg.style.transform = 'translate(' + Z.x + 'px,' + Z.y + 'px) scale(' + Z.s + ')';
+        el.mZl.textContent = Math.round(Z.s * 100) + ' %';
+        el.mViewer.classList.toggle('is-zoomed', Z.s > 1);
+    }
+
+    // Zoom hacia un punto (cx, cy relativos al centro del visor) para que ese punto quede fijo.
+    function zoomTo(s, cx, cy) {
+        s = Math.max(Z.min, Math.min(Z.max, s));
+        const k = s / Z.s;
+        Z.x = cx - (cx - Z.x) * k;
+        Z.y = cy - (cy - Z.y) * k;
+        Z.s = s;
+        applyZoom();
+    }
+
+    function viewerPoint(ev) {
+        const r = el.mViewer.getBoundingClientRect();
+        return [ev.clientX - r.left - r.width / 2, ev.clientY - r.top - r.height / 2];
+    }
+
+    // Copia el detalle del panel (nombre, stats y stock) al modal, sin ids duplicados.
+    function syncModal() {
+        if (!el.modal.open) return;
+        const body = el.dName.parentElement.cloneNode(true);
+        body.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+        const name = body.querySelector('.vv-detail-name');
+        if (name) name.id = 'vv-modal-title';
+        el.mBody.replaceChildren(...body.childNodes);
+    }
+
+    function openModal() {
+        if (!S.selected || el.vizImg.hidden) return;
+        // Misma cadena de respaldo que el panel (clase vv-img + data-cod → proxy → marcador).
+        el.mImg.dataset.cod = S.selected;
+        if (el.vizImg.dataset.fb) el.mImg.dataset.fb = el.vizImg.dataset.fb; else delete el.mImg.dataset.fb;
+        el.mImg.src = el.vizImg.currentSrc || el.vizImg.src;
+        el.mImg.alt = el.vizImg.alt;
+        el.mThumbs.hidden = true; el.mThumbs.innerHTML = '';
+        el.mShop.hidden = true;
+        Z.s = 1; Z.x = 0; Z.y = 0;
+        el.modal.showModal();
+        applyZoom();
+        syncModal();
+        el.mClose.focus();
+        loadFotosHd(S.selected);
+    }
+
+    // Fotos en alta desde el catálogo de la tienda (VTEX). La de /Imagenes es de 300x300:
+    // se muestra al instante y se reemplaza cuando la de alta terminó de bajar.
+    const fotosCache = {};
+
+    async function loadFotosHd(modelo) {
+        let d = fotosCache[modelo];
+        if (!d) {
+            try {
+                d = (await getJson('fotos', 'fotos.php', new URLSearchParams({ modelo }))).data;
+                fotosCache[modelo] = d;
+            } catch (e) {
+                return;   // sin fotos en alta: queda la de siempre
+            }
+        }
+        if (!el.modal.open || S.selected !== modelo) return;
+        if (d.link) { el.mShop.href = d.link; el.mShop.hidden = false; }
+        if (!d.fotos || !d.fotos.length) return;
+        if (d.fotos.length > 1) {
+            el.mThumbs.innerHTML = d.fotos.map((u, i) =>
+                '<button type="button" data-i="' + i + '" title="Foto ' + (i + 1) + '"><img src="' + esc(thumbUrl(u)) + '" alt=""></button>').join('');
+            el.mThumbs.hidden = false;
+        }
+        showFotoHd(modelo, d.fotos, 0);
+    }
+
+    // VTEX redimensiona con /ids/{id}-{ancho}-{alto}/ ; sin tamaño devuelve la original.
+    const thumbUrl = (u) => u.replace(/(\/arquivos\/ids\/\d+)\//, '$1-120-150/');
+
+    function showFotoHd(modelo, fotos, i) {
+        el.mThumbs.querySelectorAll('button').forEach((b) => b.classList.toggle('is-on', Number(b.dataset.i) === i));
+        const pre = new Image();
+        pre.onload = () => {
+            if (!el.modal.open || S.selected !== modelo) return;
+            el.mImg.dataset.fb = '2';   // si fallara, directo al marcador
+            el.mImg.src = pre.src;
+            Z.s = 1; applyZoom();
+        };
+        pre.src = fotos[i];
+    }
+
+    function bindModal() {
+        el.viz.addEventListener('click', openModal);
+        el.viz.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openModal(); }
+        });
+        el.mClose.addEventListener('click', () => el.modal.close());
+        // Click en el fondo (fuera del contenido) cierra.
+        el.modal.addEventListener('click', (ev) => { if (ev.target === el.modal) el.modal.close(); });
+
+        el.mThumbs.addEventListener('click', (ev) => {
+            const b = ev.target.closest('button[data-i]');
+            const d = fotosCache[S.selected];
+            if (b && d) showFotoHd(S.selected, d.fotos, Number(b.dataset.i));
+        });
+        el.modal.querySelector('.vv-modal-tools').addEventListener('click', (ev) => {
+            const b = ev.target.closest('button[data-zoom]');
+            if (!b) return;
+            if (b.dataset.zoom === 'reset') { Z.s = 1; applyZoom(); return; }
+            zoomTo(Z.s * (b.dataset.zoom === 'in' ? 1.5 : 1 / 1.5), 0, 0);
+        });
+        el.mViewer.addEventListener('wheel', (ev) => {
+            ev.preventDefault();
+            const [cx, cy] = viewerPoint(ev);
+            zoomTo(Z.s * (ev.deltaY < 0 ? 1.2 : 1 / 1.2), cx, cy);
+        }, { passive: false });
+        el.mImg.addEventListener('dblclick', (ev) => {
+            const [cx, cy] = viewerPoint(ev);
+            if (Z.s > 1) { Z.s = 1; applyZoom(); } else zoomTo(2.5, cx, cy);
+        });
+
+        // Arrastrar para mover la foto ampliada (mouse y touch).
+        let drag = null;
+        el.mImg.addEventListener('pointerdown', (ev) => {
+            if (Z.s <= 1) return;
+            drag = { px: ev.clientX, py: ev.clientY, x: Z.x, y: Z.y };
+            el.mImg.setPointerCapture(ev.pointerId);
+            el.mViewer.classList.add('is-dragging');
+        });
+        el.mImg.addEventListener('pointermove', (ev) => {
+            if (!drag) return;
+            Z.x = drag.x + ev.clientX - drag.px;
+            Z.y = drag.y + ev.clientY - drag.py;
+            applyZoom();
+        });
+        const endDrag = () => { drag = null; el.mViewer.classList.remove('is-dragging'); };
+        el.mImg.addEventListener('pointerup', endDrag);
+        el.mImg.addEventListener('pointercancel', endDrag);
+        window.addEventListener('resize', () => { if (el.modal.open) applyZoom(); });
     }
 
     // ── Exportar ──────────────────────────────────────────────
@@ -672,6 +824,7 @@ const VelocidadVentas = (() => {
             loadRanking();
         });
         el.btnCsv.addEventListener('click', exportCsv);
+        bindModal();
     }
 
     function init() {
