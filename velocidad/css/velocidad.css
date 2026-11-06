@@ -1,0 +1,467 @@
+/**
+ * /bi/velocidad/css/velocidad.css
+ * Tablero "Velocidad de Ventas". Sigue las variables del portal (/bi/css/base.css):
+ * tipografía Barlow, cabecera navy y tarjetas blancas. Cada pestaña cambia solo el color
+ * de acento (Argentina teal, Uruguay azul, Negativo violeta), como los dos temas del informe.
+ * Los colores del semáforo son de estado: no se reutilizan para otra cosa.
+ */
+
+.vv {
+    --vv-accent:      #0f8b8d;
+    --vv-accent-ink:  #0b6668;
+    --vv-accent-soft: #e3f3f3;
+
+    --vv-bg:      #f0f2f7;
+    --vv-card:    #ffffff;
+    --vv-card-2:  #f7f8fc;
+    --vv-line:    #e2e6f0;
+    --vv-line-2:  #eef0f6;
+    --vv-ink-1:   #1a2340;
+    --vv-ink-2:   #4b5674;
+    --vv-ink-3:   #8e96ae;
+    --vv-head:    #1a2340;
+    --vv-head-2:  #243060;
+
+    --vv-good:     #0ca30c;
+    --vv-warn:     #fab219;
+    --vv-crit:     #d03b3b;
+    --vv-good-bg:  #e3f5e3;
+    --vv-warn-bg:  #fff3d6;
+    --vv-crit-bg:  #fbe5e5;
+    --vv-up:       #127a3a;
+    --vv-down:     #b42323;
+
+    --vv-radius:    12px;
+    --vv-radius-sm: 8px;
+    --vv-shadow:    0 1px 2px rgba(26, 35, 64, .05), 0 4px 16px rgba(26, 35, 64, .06);
+
+    background: var(--vv-bg);
+    color: var(--vv-ink-1);
+    font-variant-numeric: tabular-nums;
+}
+.vv[data-mode="uy"]  { --vv-accent: #1d6fd6; --vv-accent-ink: #1557a8; --vv-accent-soft: #e4eefb; }
+.vv[data-mode="neg"] { --vv-accent: #6b4fbb; --vv-accent-ink: #533b99; --vv-accent-soft: #eeeafa; }
+
+.vv [hidden] { display: none !important; }
+
+/* ── Barra superior ───────────────────────────────────────── */
+.vv-top {
+    background: linear-gradient(100deg, var(--vv-head) 0%, var(--vv-head-2) 100%);
+    color: #fff;
+    position: sticky; top: 0; z-index: 30;
+    box-shadow: 0 2px 10px rgba(10, 16, 36, .18);
+}
+.vv-top::after {   /* filete del color de la pestaña activa */
+    content: ""; display: block; height: 3px; background: var(--vv-accent);
+    transition: background .2s ease;
+}
+.vv-top-in {
+    max-width: 1680px; margin: 0 auto;
+    padding: 10px 20px;
+    display: flex; align-items: center; gap: 18px;
+}
+.vv-back {
+    display: grid; place-items: center; flex: none;
+    width: 34px; height: 34px; border-radius: 50%;
+    color: #fff; text-decoration: none; font-size: 1rem;
+    background: rgba(255, 255, 255, .08);
+    transition: background .15s;
+}
+.vv-back:hover { background: rgba(255, 255, 255, .18); }
+
+.vv-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.vv-brand-mark {
+    display: grid; place-items: center; flex: none;
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--vv-accent); font-size: 1.25rem;
+    transition: background .2s ease;
+}
+.vv-brand-title {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: 1.45rem; letter-spacing: .02em; line-height: 1; margin: 0;
+    text-transform: uppercase; white-space: nowrap;
+}
+.vv-brand-sub { font-size: .8rem; opacity: .75; margin-top: 3px; white-space: nowrap; }
+.vv-brand-sub i { font-size: .75rem; }
+
+.vv-tabs {
+    margin-left: auto;
+    display: flex; gap: 4px; padding: 4px;
+    background: rgba(255, 255, 255, .07);
+    border-radius: 999px;
+}
+.vv-tab {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 0; cursor: pointer; white-space: nowrap;
+    padding: 7px 16px; border-radius: 999px;
+    background: transparent; color: rgba(255, 255, 255, .78);
+    font: inherit; font-size: .92rem; font-weight: 500;
+    transition: background .15s, color .15s;
+}
+.vv-tab:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+.vv-tab.is-active { background: #fff; color: var(--vv-accent-ink); font-weight: 600; }
+.vv-tab:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.vv-tab-flag {
+    font-family: var(--font-display); font-weight: 700; font-size: .72rem; letter-spacing: .04em;
+    padding: 1px 5px; border-radius: 4px;
+    background: rgba(255, 255, 255, .14); color: inherit;
+}
+.vv-tab.is-active .vv-tab-flag { background: var(--vv-accent-soft); }
+
+.vv-logo {
+    display: grid; place-items: center; flex: none;
+    background: #fff; color: #111;
+    width: 64px; height: 42px; border-radius: 8px; line-height: 1;
+}
+.vv-logo-xl { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: 1.35rem; }
+.vv-logo-sub { font-size: .38rem; letter-spacing: .14em; margin-top: -5px; }
+
+/* ── Contenedor ───────────────────────────────────────────── */
+.vv-shell { max-width: 1680px; margin: 0 auto; padding: 16px 20px 32px; }
+
+/* ── Filtros ──────────────────────────────────────────────── */
+.vv-filters {
+    display: grid;
+    grid-template-columns: minmax(270px, 1.5fr) repeat(5, minmax(130px, 1fr)) auto;
+    gap: 12px; align-items: end;
+    background: var(--vv-card);
+    border: 1px solid var(--vv-line);
+    border-radius: var(--vv-radius);
+    padding: 12px 14px;
+    box-shadow: var(--vv-shadow);
+}
+.vv-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.vv-field label {
+    font-size: .74rem; font-weight: 600; color: var(--vv-ink-2);
+    text-transform: uppercase; letter-spacing: .05em;
+}
+.vv-field input,
+.vv-field select {
+    width: 100%; height: 36px; padding: 0 10px;
+    border: 1px solid var(--vv-line); border-radius: var(--vv-radius-sm);
+    background: var(--vv-card-2); color: var(--vv-ink-1);
+    font: inherit; font-size: .92rem;
+    transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.vv-field input:hover,
+.vv-field select:hover { border-color: #cfd5e3; }
+.vv-field input:focus,
+.vv-field select:focus {
+    outline: none; background: #fff;
+    border-color: var(--vv-accent);
+    box-shadow: 0 0 0 3px var(--vv-accent-soft);
+}
+.vv-field.is-set input,
+.vv-field.is-set select { background: var(--vv-accent-soft); border-color: var(--vv-accent); font-weight: 500; }
+.vv-dates { display: flex; align-items: center; gap: 6px; }
+.vv-dates input { min-width: 0; padding: 0 8px; }
+.vv-dates-sep { color: var(--vv-ink-3); }
+
+.vv-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 36px; padding: 0 14px; border-radius: var(--vv-radius-sm);
+    border: 1px solid var(--vv-line); cursor: pointer;
+    background: var(--vv-card); color: var(--vv-ink-1);
+    font: inherit; font-size: .9rem; font-weight: 500; white-space: nowrap;
+    transition: background .15s, border-color .15s, color .15s;
+}
+.vv-btn:hover { background: var(--vv-card-2); border-color: #cfd5e3; }
+.vv-btn:focus-visible { outline: 2px solid var(--vv-accent); outline-offset: 2px; }
+.vv-btn-sm { height: 30px; padding: 0 10px; font-size: .84rem; }
+
+.vv-error {
+    margin-top: 12px; padding: 10px 14px;
+    background: var(--vv-crit-bg); border: 1px solid #f2b8b8; color: #7f1d1d;
+    border-radius: var(--vv-radius-sm); font-size: .9rem;
+}
+
+/* ── Indicadores ──────────────────────────────────────────── */
+.vv-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.6fr);
+    gap: 12px; margin-top: 12px;
+}
+.vv-kpi {
+    background: var(--vv-card);
+    border: 1px solid var(--vv-line);
+    border-radius: var(--vv-radius);
+    padding: 12px 16px;
+    box-shadow: var(--vv-shadow);
+    min-width: 0;
+}
+.vv-kpi-label {
+    font-size: .74rem; font-weight: 600; color: var(--vv-ink-2);
+    text-transform: uppercase; letter-spacing: .05em;
+}
+.vv-kpi-hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--vv-ink-3); }
+.vv-kpi-value {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: 2rem; line-height: 1.1; margin-top: 4px;
+    display: flex; align-items: center; gap: 8px;
+}
+.vv-kpi-foot { font-size: .8rem; color: var(--vv-ink-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.vv-sembar {
+    display: flex; gap: 2px; height: 12px; margin: 10px 0 10px;
+    border-radius: 4px; overflow: hidden; background: var(--vv-line-2);
+}
+.vv-sembar span { display: block; height: 100%; min-width: 2px; transition: flex-grow .3s ease; }
+.vv-semchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.vv-semchip {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--vv-line); background: var(--vv-card);
+    border-radius: 999px; padding: 3px 10px 3px 6px;
+    font: inherit; font-size: .84rem; color: var(--vv-ink-1); cursor: pointer;
+    transition: background .15s, border-color .15s, opacity .15s;
+}
+.vv-semchip b { font-weight: 600; }
+.vv-semchip:hover { background: var(--vv-card-2); }
+.vv-semchip.is-on { border-color: var(--vv-ink-1); background: var(--vv-card-2); }
+.vv-semchips.has-on .vv-semchip:not(.is-on) { opacity: .55; }
+.vv-semchip:focus-visible { outline: 2px solid var(--vv-accent); outline-offset: 2px; }
+
+/* Ícono + color: el estado nunca depende solo del color. */
+.vv-dot {
+    display: inline-grid; place-items: center; flex: none;
+    width: 18px; height: 18px; border-radius: 50%;
+    font-size: .8rem; line-height: 1; color: #fff;
+}
+.vv-dot.g { background: var(--vv-good); }
+.vv-dot.y { background: var(--vv-warn); color: #0b0b0b; }
+.vv-dot.r { background: var(--vv-crit); }
+
+/* ── Cuerpo ───────────────────────────────────────────────── */
+.vv-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 12px; margin-top: 12px;
+    align-items: start;
+}
+.vv-card {
+    background: var(--vv-card);
+    border: 1px solid var(--vv-line);
+    border-radius: var(--vv-radius);
+    box-shadow: var(--vv-shadow);
+    min-width: 0;
+}
+.vv-table-card { overflow: hidden; display: flex; flex-direction: column; }
+.vv-card-head {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 14px 16px 10px;
+}
+.vv-card-title {
+    font-family: var(--font-display); font-weight: 700; font-size: 1.25rem;
+    letter-spacing: .02em; text-transform: uppercase; margin: 0;
+}
+.vv-card-sub { font-size: .86rem; color: var(--vv-ink-2); margin-top: 2px; }
+.vv-card-tools { display: flex; align-items: center; gap: 10px; flex: none; }
+.vv-count {
+    font-size: .84rem; color: var(--vv-ink-2);
+    background: var(--vv-card-2); border: 1px solid var(--vv-line);
+    border-radius: 999px; padding: 3px 10px; white-space: nowrap;
+}
+
+/* Destacados (top 5 / 5 con menos venta) */
+.vv-podium {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px; padding: 0 16px 12px;
+}
+.vv-pod {
+    display: flex; align-items: center; gap: 10px; min-width: 0;
+    border: 1px solid var(--vv-line); border-radius: var(--vv-radius-sm);
+    background: var(--vv-card); padding: 6px 10px 6px 6px;
+    font: inherit; text-align: left; cursor: pointer; color: inherit;
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.vv-pod:hover { border-color: var(--vv-accent); transform: translateY(-1px); }
+.vv-pod.is-sel { border-color: var(--vv-accent); box-shadow: 0 0 0 2px var(--vv-accent-soft); }
+.vv-pod:focus-visible { outline: 2px solid var(--vv-accent); outline-offset: 2px; }
+.vv-pod-img { width: 48px; height: 48px; flex: none; border-radius: 6px; background: var(--vv-card-2); object-fit: contain; }
+.vv-pod-txt { min-width: 0; display: flex; flex-direction: column; }
+.vv-pod-txt > span { display: block; }
+.vv-pod-rank { font-size: .72rem; font-weight: 600; color: var(--vv-accent-ink); text-transform: uppercase; letter-spacing: .04em; }
+.vv-pod-name { font-size: .86rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vv-pod-val { font-size: .8rem; color: var(--vv-ink-2); }
+
+/* ── Tabla ────────────────────────────────────────────────── */
+.vv-table-wrap {
+    position: relative;
+    max-height: calc(100vh - 360px);
+    min-height: 320px;
+    overflow: auto;
+    border-top: 1px solid var(--vv-line);
+}
+.vv-table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: .88rem; }
+.vv-table th {
+    position: sticky; z-index: 3;
+    background: var(--vv-card-2); color: var(--vv-ink-2);
+    font-weight: 600; text-align: left; white-space: nowrap;
+}
+.vv-table thead tr.grp th {
+    top: 0; height: 26px; padding: 4px 10px;
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--vv-ink-3);
+    border-bottom: 1px solid var(--vv-line-2);
+}
+.vv-table thead tr.grp th.g-on { color: var(--vv-accent-ink); }
+.vv-table thead tr.grp th + th { border-left: 1px solid var(--vv-line); }
+.vv-table thead tr.cols th {
+    top: 26px; padding: 6px 10px;
+    font-size: .78rem; line-height: 1.2; white-space: normal; vertical-align: bottom;
+    border-bottom: 1px solid var(--vv-line);
+}
+.vv-table th.sortable { cursor: pointer; user-select: none; }
+.vv-table th.sortable:hover { color: var(--vv-ink-1); }
+.vv-table th.is-sorted { color: var(--vv-accent-ink); }
+.vv-table th .arrow { margin-left: 3px; font-size: .7rem; }
+.vv-table th.num, .vv-table td.num { text-align: right; }
+.vv-table .g-start { border-left: 1px solid var(--vv-line); }
+
+.vv-table td {
+    padding: 6px 10px; white-space: nowrap;
+    border-bottom: 1px solid var(--vv-line-2);
+    background: var(--vv-card);
+}
+.vv-table td.dim { color: var(--vv-ink-2); }
+.vv-table td.muted { color: var(--vv-ink-3); }
+.vv-table tbody tr { cursor: pointer; }
+.vv-table tbody tr:hover td { background: #f6f8fc; }
+.vv-table tbody tr.is-sel td { background: var(--vv-accent-soft); }
+.vv-table tbody tr.is-sel td:first-child { box-shadow: inset 3px 0 0 var(--vv-accent); }
+.vv-table tbody tr:focus-visible { outline: 2px solid var(--vv-accent); outline-offset: -2px; }
+
+/* Primera columna fija: foto + nombre + código */
+.vv-table .c-art { position: sticky; left: 0; z-index: 2; min-width: 250px; max-width: 300px; }
+.vv-table th.c-art { z-index: 4; }
+.vv-table thead tr.grp th.c-art { z-index: 5; }
+.vv-table td.c-art { box-shadow: 1px 0 0 var(--vv-line); }
+.vv-art { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.vv-art-img {
+    width: 38px; height: 38px; flex: none; border-radius: 6px;
+    background: var(--vv-card-2); object-fit: contain;
+    border: 1px solid var(--vv-line-2);
+}
+.vv-art-txt { min-width: 0; }
+.vv-art-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.vv-art-code { font-size: .76rem; color: var(--vv-ink-3); letter-spacing: .02em; }
+.vv-rank { display: inline-block; min-width: 24px; color: var(--vv-ink-3); font-size: .78rem; text-align: right; flex: none; }
+
+/* Semáforo dentro de la celda */
+.vv-sem {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px 2px 3px; border-radius: 999px;
+    font-weight: 600; color: var(--vv-ink-1);
+}
+.vv-sem.g { background: var(--vv-good-bg); }
+.vv-sem.y { background: var(--vv-warn-bg); }
+.vv-sem.r { background: var(--vv-crit-bg); }
+.vv-sem .vv-dot { width: 16px; height: 16px; font-size: .72rem; }
+
+.vv-delta.up { color: var(--vv-up); }
+.vv-delta.down { color: var(--vv-down); }
+
+.vv-empty { text-align: center; color: var(--vv-ink-3); padding: 40px 12px !important; white-space: normal !important; cursor: default; }
+.vv-empty i { display: block; font-size: 1.6rem; margin-bottom: 6px; }
+
+.vv-overlay {
+    position: absolute; inset: 0; z-index: 6;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: rgba(255, 255, 255, .7); backdrop-filter: blur(1px);
+    font-size: .92rem; color: var(--vv-ink-2);
+}
+.vv-spinner {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 3px solid var(--vv-line); border-top-color: var(--vv-accent);
+    animation: vv-spin .8s linear infinite;
+}
+@keyframes vv-spin { to { transform: rotate(360deg); } }
+
+.vv-legend {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+    padding: 10px 16px; border-top: 1px solid var(--vv-line);
+    font-size: .82rem; color: var(--vv-ink-2);
+}
+.vv-legend-title { font-weight: 600; color: var(--vv-ink-1); }
+.vv-legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── Panel de detalle ─────────────────────────────────────── */
+.vv-detail { position: sticky; top: 84px; overflow: hidden; }
+.vv-detail-img {
+    position: relative; aspect-ratio: 1 / 1; max-height: 320px; width: 100%;
+    background: radial-gradient(circle at 50% 40%, #fff 0%, var(--vv-card-2) 75%);
+    display: grid; place-items: center;
+    border-bottom: 1px solid var(--vv-line);
+}
+.vv-detail-img img { max-width: 88%; max-height: 88%; object-fit: contain; }
+.vv-detail-empty { display: grid; justify-items: center; gap: 6px; color: var(--vv-ink-3); font-size: .9rem; }
+.vv-detail-empty i { font-size: 2rem; }
+.vv-detail-body { padding: 14px 16px 16px; }
+.vv-detail-name { font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; line-height: 1.15; text-transform: uppercase; letter-spacing: .01em; }
+.vv-detail-code { font-size: .84rem; color: var(--vv-ink-3); margin-top: 2px; }
+
+.vv-detail-stats {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px; margin: 12px 0 0;
+    background: var(--vv-line); border: 1px solid var(--vv-line);
+    border-radius: var(--vv-radius-sm); overflow: hidden;
+}
+.vv-detail-stats div { background: var(--vv-card); padding: 8px 10px; min-width: 0; }
+.vv-detail-stats dt { font-size: .68rem; line-height: 1.2; color: var(--vv-ink-3); text-transform: uppercase; letter-spacing: .03em; }
+.vv-detail-stats dd { margin: 2px 0 0; font-weight: 600; font-size: 1rem; display: flex; align-items: center; gap: 4px; }
+
+.vv-stock { margin-top: 14px; }
+.vv-stock-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: .74rem; font-weight: 600; color: var(--vv-ink-2);
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px;
+}
+.vv-stock-total { text-transform: none; letter-spacing: 0; color: var(--vv-ink-1); font-size: .86rem; }
+.vv-stock-list { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow: auto; }
+.vv-stock-list li {
+    display: grid; grid-template-columns: minmax(0, 1fr) 90px 34px;
+    align-items: center; gap: 8px;
+    padding: 4px 0; font-size: .86rem;
+    border-bottom: 1px dashed var(--vv-line-2);
+}
+.vv-stock-list li:last-child { border-bottom: 0; }
+.vv-stock-list .s-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vv-stock-list .s-bar { height: 8px; background: var(--vv-line-2); border-radius: 4px; overflow: hidden; }
+.vv-stock-list .s-bar i { display: block; height: 100%; background: var(--vv-accent); border-radius: 0 4px 4px 0; }
+.vv-stock-list .s-val { text-align: right; font-weight: 600; }
+.vv-stock-list .s-msg { display: block; color: var(--vv-ink-3); padding: 10px 0; border: 0; }
+.vv-stock-na { margin: 14px 0 0; font-size: .84rem; color: var(--vv-ink-3); }
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 1380px) {
+    .vv-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .vv-field-dates { grid-column: span 2; }
+    .vv-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .vv-kpi-sem { grid-column: 1 / -1; }
+}
+@media (max-width: 1180px) {
+    .vv-main { grid-template-columns: 1fr; }
+    .vv-detail { position: static; display: grid; grid-template-columns: 280px minmax(0, 1fr); }
+    .vv-detail-img { border-bottom: 0; border-right: 1px solid var(--vv-line); max-height: none; }
+    .vv-table-wrap { max-height: 70vh; }
+    .vv-tab { padding: 7px 12px; }
+    .vv-logo { display: none; }
+}
+@media (max-width: 900px) {
+    .vv-top-in { flex-wrap: wrap; gap: 10px; padding: 10px 16px; }
+    .vv-tabs { margin-left: 0; width: 100%; overflow-x: auto; }
+    .vv-tab { flex: 1; justify-content: center; }
+    .vv-shell { padding: 12px 16px 24px; }
+    .vv-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .vv-field-dates { grid-column: 1 / -1; }
+    .vv-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .vv-podium { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 200px; overflow-x: auto; }
+    .vv-detail { display: block; }
+    .vv-detail-img { border-right: 0; border-bottom: 1px solid var(--vv-line); max-height: 260px; }
+}
+@media (max-width: 520px) {
+    .vv-brand-title { font-size: 1.2rem; }
+    .vv-tab { font-size: .84rem; padding: 7px 8px; }
+    .vv-tab-flag, .vv-tab .bi { display: none; }
+    .vv-kpi-value { font-size: 1.6rem; }
+    .vv-card-head { flex-wrap: wrap; }
+    .vv-table .c-art { min-width: 200px; }
+}
