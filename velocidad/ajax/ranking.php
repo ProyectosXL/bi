@@ -20,11 +20,12 @@ try {
     $rows = $db->getRanking($origen, $modo, vv_filtros_desde_get(), $limit);
 
     vv_json([
-        'ok'     => true,
-        'origen' => $origen,
-        'modo'   => $modo,
-        'total'  => count($rows),
-        'data'   => $rows,
+        'ok'          => true,
+        'origen'      => $origen,
+        'modo'        => $modo,
+        'total'       => count($rows),
+        'actualizado' => $db->getUltimaActualizacion($origen),
+        'data'        => $rows,
     ]);
 } catch (Throwable $e) {
     vv_json(['ok' => false, 'error' => $e->getMessage()], 500);

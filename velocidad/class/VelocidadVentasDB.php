@@ -227,10 +227,16 @@ class VelocidadVentasDB
     }
 
     /**
-     * Ranking por modelo.
-     *   $modo = 'top'    -> ordenado por ventas a 15 días (desc)        [Ranking Argentina / Uruguay]
-     *   $modo = 'bottom' -> 50 peores por Venta / ingreso 15 días (asc)  [Ranking Negativo]
-     * Desempate siempre por código de modelo ascendente (igual que el informe).
+     * Ranking por modelo (validado celda por celda contra el modelo de Power BI, 06/11/2026).
+     *   $modo = 'top'    -> todos los modelos, por ventas a 15 días (desc)        [Ranking Argentina / Uruguay]
+     *   $modo = 'bottom' -> los 50 con MENOS ventas a 15 días, empates incluidos,
+     *                       mostrados por Venta / ingreso 15 días (asc)          [Ranking Negativo]
+     *     (filtro Top N del visual: Bottom 50 de MODELOS por [15 Dias]. TOPN de DAX incluye
+     *      los empates del puesto 50, por eso puede devolver más de 50 filas.)
+     *
+     * Filtro de visual de Power BI "[Ingreso central] > 0": se aplica en Argentina y en el
+     * Negativo. En Uruguay el visual lo tiene contra la medida de la tabla ARGENTINA, que no
+     * filtra las filas de Uruguay, así que en la práctica no aplica y acá tampoco.
      *
      * @param array $f desde, hasta, rubro, categoria, color, linea, modelo
      */
@@ -241,13 +247,18 @@ class VelocidadVentasDB
         $t    = $cfg['rotacion'];
         $w    = $this->where($f);
 
+        $soloConIngresoCentral = ($origen === 'ar') ? 'WHERE ingreso_central > 0' : '';
+
         if ($modo === 'bottom') {
-            $top   = self::TOP_NEGATIVO;
-            // los NULL (sin ingreso inicial) van al final: no son "los peores", son datos incompletos
-            $order = 'CASE WHEN pct_venta_15 IS NULL THEN 1 ELSE 0 END, pct_venta_15 ASC, modelo ASC';
+            $select = "SELECT * FROM (
+                    SELECT TOP " . self::TOP_NEGATIVO . " WITH TIES * FROM calc
+                    WHERE vta_15 IS NOT NULL" . ($soloConIngresoCentral ? ' AND ingreso_central > 0' : '') . "
+                    ORDER BY vta_15 ASC
+                ) b
+                ORDER BY CASE WHEN pct_venta_15 IS NULL THEN 1 ELSE 0 END, pct_venta_15 ASC, modelo ASC";
         } else {
-            $top   = max(1, min($limit, 5000));
-            $order = 'vta_15 DESC, modelo ASC';
+            $top    = max(1, min($limit, 5000));
+            $select = "SELECT TOP $top * FROM calc $soloConIngresoCentral ORDER BY vta_15 DESC, modelo ASC";
         }
 
         $sql =
@@ -264,7 +275,9 @@ class VelocidadVentasDB
                     SUM(CANT_PRIMER_INGRESO)   AS cant_primer_ingreso,
                     SUM([15_DIAS])             AS vta_15,
                     SUM([30_DIAS])             AS vta_30,
-                    SUM([60_DIAS])             AS vta_60
+                    SUM([60_DIAS])             AS vta_60,
+                    SUM(STOCK_LOCALES)         AS stock_locales,
+                    SUM(STOCK_CENTRAL)         AS stock_central
                 FROM $t WITH (NOLOCK)
                 WHERE " . $w['sql'] . "
                 GROUP BY LTRIM(RTRIM(COD_ARTICU))
@@ -277,15 +290,36 @@ class VelocidadVentasDB
                     (CAST(vta_60 AS float) - vta_15) / NULLIF(CAST(vta_15 AS float), 0)           AS crecimiento_60
                 FROM agg a
             )
-            SELECT TOP " . (int)$top . " * FROM calc ORDER BY " . $order;
+            " . $select;
 
         return $this->query($conn, $sql, $w['params']);
     }
 
     /**
+     * Fecha/hora de la última carga de la tabla de rotación (equivale a la tarjeta
+     * "Última actualización" del informe). null si SQL Server no lo informa.
+     */
+    public function getUltimaActualizacion(string $origen): ?string
+    {
+        $cfg  = $this->cfg($origen);
+        $conn = $this->conn($cfg['conn']);
+        $stmt = sqlsrv_query($conn,
+            "SELECT MAX(last_user_update) AS u FROM sys.dm_db_index_usage_stats
+             WHERE database_id = DB_ID() AND object_id = OBJECT_ID(?)",
+            [$cfg['rotacion']], ['QueryTimeout' => 15]);
+        if ($stmt === false) {
+            return null;
+        }
+        $r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
+        sqlsrv_free_stmt($stmt);
+        $u = $r['u'] ?? null;
+        return ($u instanceof DateTimeInterface) ? $u->format('Y-m-d H:i') : null;
+    }
+
+    /**
      * Stock por sucursal de un modelo (solo Argentina: BI_STOCK_LOCALES).
-     * Lista TODAS las sucursales; las que no tienen stock del modelo vienen con stock = null
-     * (así se ve igual que el panel "Stock Locales" de Power BI).
+     * Igual que el panel "Stock Locales" de Power BI: solo las sucursales donde la medida
+     * [Stock por local] no da vacío, de mayor a menor.
      */
     public function getStock(string $modelo): array
     {
@@ -297,19 +331,13 @@ class VelocidadVentasDB
         $s    = $cfg['stock'];
 
         $suc = $this->query($conn,
-            "SELECT s.SUCURSAL AS sucursal, x.stock AS stock
-             FROM (
-                SELECT DISTINCT LTRIM(RTRIM(SUCURSAL)) AS SUCURSAL
-                FROM $s WITH (NOLOCK)
-                WHERE SUCURSAL IS NOT NULL AND LTRIM(RTRIM(SUCURSAL)) <> ''
-             ) s
-             LEFT JOIN (
-                SELECT LTRIM(RTRIM(SUCURSAL)) AS SUCURSAL, SUM(CANT_STOCK) AS stock
-                FROM $s WITH (NOLOCK)
-                WHERE LTRIM(RTRIM(MODELO)) = ?
-                GROUP BY LTRIM(RTRIM(SUCURSAL))
-             ) x ON x.SUCURSAL = s.SUCURSAL
-             ORDER BY s.SUCURSAL",
+            "SELECT LTRIM(RTRIM(SUCURSAL)) AS sucursal, SUM(CANT_STOCK) AS stock
+             FROM $s WITH (NOLOCK)
+             WHERE LTRIM(RTRIM(MODELO)) = ?
+               AND SUCURSAL IS NOT NULL AND LTRIM(RTRIM(SUCURSAL)) <> ''
+             GROUP BY LTRIM(RTRIM(SUCURSAL))
+             HAVING SUM(CANT_STOCK) IS NOT NULL
+             ORDER BY stock DESC, sucursal",
             [$modelo]);
 
         $meta = $this->query($conn,
