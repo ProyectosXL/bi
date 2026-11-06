@@ -451,6 +451,8 @@
 
 /* ── Modal de detalle ─────────────────────────────────────── */
 .vv-modal {
+    /* Centrado explícito: algún reset global pisa el margin:auto nativo del <dialog>. */
+    position: fixed; inset: 0; margin: auto;
     width: min(1100px, calc(100vw - 32px)); max-width: none;
     height: min(720px, calc(100vh - 32px)); max-height: none;
     padding: 0; border: 0; border-radius: var(--vv-radius);
