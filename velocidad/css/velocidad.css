@@ -313,6 +313,8 @@
 .vv-table th.sortable:hover { color: var(--vv-ink-1); }
 .vv-table th.is-sorted { color: var(--vv-accent-ink); }
 .vv-table th .arrow { margin-left: 3px; font-size: .7rem; }
+.vv-table th.has-tip { cursor: help; }
+.vv-table th .vv-th-tip { font-size: .7rem; opacity: .6; }
 .vv-table th.num, .vv-table td.num { text-align: right; }
 .vv-table .g-start { border-left: 1px solid var(--vv-line); }
 

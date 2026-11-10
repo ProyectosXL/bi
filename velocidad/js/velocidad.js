@@ -52,9 +52,11 @@ const VelocidadVentas = (() => {
         { k: 'pct_venta_15',              t: 'Venta / ingreso',           f: 'sem',    g: 'd15', csv: 'Venta / ingreso 15 días' },
         { k: 'dias_stock',                t: 'Días de stock',             f: 'int',    g: 'd15' },
         { k: 'vta_30',                    t: 'Venta',                     f: 'int',    g: 'd30', csv: 'Vta. 30 días' },
-        { k: 'crecimiento_30',            t: 'Crecimiento',               f: 'delta',  g: 'd30', csv: 'Crecimiento a 30 días' },
+        { k: 'crecimiento_30',            t: 'Venta / ingreso',           f: 'delta',  g: 'd30', csv: 'Venta / ingreso 30 días',
+          tip: 'Crecimiento de la venta a 30 días respecto de la de 15 días: (venta 30 d − venta 15 d) / venta 15 d. No es venta sobre ingreso.' },
         { k: 'vta_60',                    t: 'Venta',                     f: 'int',    g: 'd60', csv: 'Vta. 60 días' },
-        { k: 'crecimiento_60',            t: 'Crecimiento',               f: 'delta',  g: 'd60', csv: 'Crecimiento a 60 días' },
+        { k: 'crecimiento_60',            t: 'Venta / ingreso',           f: 'delta',  g: 'd60', csv: 'Venta / ingreso 60 días',
+          tip: 'Crecimiento de la venta a 60 días respecto de la de 15 días: (venta 60 d − venta 15 d) / venta 15 d. No es venta sobre ingreso.' },
         { k: 'stock_locales',             t: 'Locales',                   f: 'int',    g: 'stk', csv: 'Stock locales' },
         { k: 'stock_central',             t: 'Central',                   f: 'int',    g: 'stk', csv: 'Stock central' },
     ];
@@ -359,9 +361,12 @@ const VelocidadVentas = (() => {
             if (!['art', 'txt', 'date'].includes(c.f)) cls.push('num');
             if (prevG !== null && prevG !== c.g) cls.push('g-start');
             if (isSort) cls.push('is-sorted');
+            if (c.tip) cls.push('has-tip');
             prevG = c.g;
-            return '<th class="' + cls.join(' ') + '" data-k="' + c.k + '" scope="col" aria-sort="' +
-                (isSort ? (S.sort.dir === 1 ? 'ascending' : 'descending') : 'none') + '">' + esc(colTitle(c)) + arrow + '</th>';
+            return '<th class="' + cls.join(' ') + '" data-k="' + c.k + '" scope="col"' +
+                (c.tip ? ' title="' + esc(c.tip) + '"' : '') + ' aria-sort="' +
+                (isSort ? (S.sort.dir === 1 ? 'ascending' : 'descending') : 'none') + '">' + esc(colTitle(c)) +
+                (c.tip ? ' <i class="bi bi-info-circle vv-th-tip" aria-hidden="true"></i>' : '') + arrow + '</th>';
         }).join('') + '</tr>';
 
         el.thead.innerHTML = rowGrp + rowCols;
@@ -504,8 +509,8 @@ const VelocidadVentas = (() => {
             stat('Venta 15 d', isNull(r.vta_15) ? '' : num(r.vta_15)) +
             stat('Vta/ingreso 15 d', s ? semDot(s) + pct(r.pct_venta_15) : '') +
             stat('Días de stock', isNull(r.dias_stock) ? '' : num(r.dias_stock)) +
-            stat('Crec. 30 d', fmtCell({ f: 'delta' }, r.crecimiento_30)) +
-            stat('Crec. 60 d', fmtCell({ f: 'delta' }, r.crecimiento_60)) +
+            stat('Vta/ingreso 30 d', fmtCell({ f: 'delta' }, r.crecimiento_30)) +
+            stat('Vta/ingreso 60 d', fmtCell({ f: 'delta' }, r.crecimiento_60)) +
             stat('Ing. locales', isNull(r.ingreso_locales) ? '' : num(r.ingreso_locales)) +
             stat('Stock locales', isNull(r.stock_locales) ? '' : num(r.stock_locales)) +
             stat('Stock central ' + m.central, isNull(r.stock_central) ? '' : num(r.stock_central)) +

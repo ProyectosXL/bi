@@ -44,7 +44,7 @@ $h = function (string $s): string {
 <!-- ══ BARRA SUPERIOR ═══════════════════════════════════════════ -->
 <header class="vv-top">
     <div class="vv-top-in">
-        <a class="vv-back" href="/bi/index.php" title="Volver al menú de BI" aria-label="Volver al menú de BI">
+        <a class="vv-back" href="/ppp/index.php" title="Volver al menú principal" aria-label="Volver al menú principal">
             <i class="bi bi-chevron-left"></i>
         </a>
         <div class="vv-brand">
