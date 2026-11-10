@@ -11,6 +11,10 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 
 require_once __DIR__ . '/../class/PromocionesDB.php';
+require_once __DIR__ . '/../class/PromoCache.php';
+// La sesión sólo se lee: liberar el lock para que las llamadas del tablero
+// corran en paralelo (con el lock tomado, PHP las atiende de a una).
+session_write_close();
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
@@ -42,8 +46,12 @@ try {
         }
     }
 
-    $db   = new PromocionesDB($origen);
-    $data = $db->getSerieAnualMensual($fp);
+    // Recorre toda la historia: es la consulta más pesada del tablero.
+    $data = PromoCache::remember(
+        PromoCache::key('mensual', ['origen' => $origen] + $fp),
+        600,
+        fn() => (new PromocionesDB($origen))->getSerieAnualMensual($fp)
+    );
 
     ob_clean();
     echo json_encode(array_merge(['ok' => true], $data), JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

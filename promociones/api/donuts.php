@@ -10,6 +10,10 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 
 require_once __DIR__ . '/../class/PromocionesDB.php';
+require_once __DIR__ . '/../class/PromoCache.php';
+// La sesión sólo se lee: liberar el lock para que las llamadas del tablero
+// corran en paralelo (con el lock tomado, PHP las atiende de a una).
+session_write_close();
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
@@ -49,8 +53,11 @@ try {
         [$da, $ha] = array_slice(PromocionesDB::calcularPeriodo($periodo), 0, 2);
     }
 
-    $db     = new PromocionesDB($origen);
-    $donuts = $db->getDonutDesglose($da, $ha, $fp);
+    $donuts = PromoCache::remember(
+        PromoCache::key('donuts', ['origen' => $origen, 'da' => $da, 'ha' => $ha] + $fp),
+        600,
+        fn() => (new PromocionesDB($origen))->getDonutDesglose($da, $ha, $fp)
+    );
 
     ob_clean();
     echo json_encode(['ok' => true, 'donuts' => $donuts], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

@@ -11,6 +11,10 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 
 require_once __DIR__ . '/../class/PromocionesDB.php';
+require_once __DIR__ . '/../class/PromoCache.php';
+// La sesión sólo se lee: liberar el lock para que las llamadas del tablero
+// corran en paralelo (con el lock tomado, PHP las atiende de a una).
+session_write_close();
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
@@ -59,14 +63,16 @@ try {
         [$da, $ha, $dp, $hp] = PromocionesDB::calcularPeriodo($periodo);
     }
 
-    $db = new PromocionesDB($origen);
+    $cacheKey = ['origen' => $origen, 'da' => $da, 'ha' => $ha, 'dp' => $dp, 'hp' => $hp] + $fp;
 
     if ($action === 'promociones') {
-        $rows = $db->getDetallePromociones($da, $ha, $dp, $hp, $fp);
+        $rows = PromoCache::remember(PromoCache::key('det_promo', $cacheKey), 600,
+            fn() => (new PromocionesDB($origen))->getDetallePromociones($da, $ha, $dp, $hp, $fp));
         ob_clean();
         echo json_encode(['ok' => true, 'promociones' => $rows], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
     } else {
-        $rows = $db->getDetalleSucursales($da, $ha, $dp, $hp, $fp);
+        $rows = PromoCache::remember(PromoCache::key('det_suc', $cacheKey), 600,
+            fn() => (new PromocionesDB($origen))->getDetalleSucursales($da, $ha, $dp, $hp, $fp));
         ob_clean();
         echo json_encode(['ok' => true, 'sucursales' => $rows], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
     }

@@ -316,7 +316,9 @@
 /* ── Donuts ──────────────────────────────────────────────────── */
 .promo-donuts-row {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    /* Siempre 3 columnas que ocupan todo el ancho (auto-fill dejaba
+       columnas vacías a la derecha en pantallas anchas). */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap    : 18px;
     margin : 16px 0;
 }
@@ -377,6 +379,7 @@
 
 .promo-donut-legend {
     flex      : 1;
+    min-width : 0;   /* permite que el ellipsis de las etiquetas funcione */
     display   : flex;
     flex-direction: column;
     gap       : 7px;
@@ -917,6 +920,10 @@
 }
 
 /* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 1150px) {
+    /* 3 donuts no entran con la leyenda legible: pasar a 2 columnas */
+    .promo-donuts-row  { grid-template-columns: 1fr 1fr; }
+}
 @media (max-width: 900px) {
     .promo-summary-row { grid-template-columns: 1fr 1fr; }
     .promo-donuts-row  { grid-template-columns: 1fr 1fr; }

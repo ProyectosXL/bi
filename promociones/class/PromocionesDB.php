@@ -458,54 +458,53 @@ class PromocionesDB
 
         $baseParams = array_merge([$da, $haX], $pF, $pG);
 
-        // Desglose Facturación: todas las promos (incluye SIN PROMO)
-        $rowsFact = $this->query("
-            SELECT s.DESC_PROMOCION_TARJETA AS etiqueta,
+        // UN solo scan agrupado por promo × banco; los tres desgloses se arman
+        // en PHP (antes eran tres queries sobre el mismo rango).
+        $rows = $this->query("
+            SELECT s.DESC_PROMOCION_TARJETA AS promo,
+                   s.BANCO                  AS banco,
                    ISNULL(SUM(s.IMPORTE_TO),0) AS valor,
                    ISNULL(SUM(s.COSTO),0)       AS costo_promo
             FROM BI_PROMOCIONES s WITH (NOLOCK)
             WHERE s.FECHA >= ? AND s.FECHA < ? {$sfF} {$sfG}
-            GROUP BY s.DESC_PROMOCION_TARJETA
-            ORDER BY valor DESC
+            GROUP BY s.DESC_PROMOCION_TARJETA, s.BANCO
         ", $baseParams);
 
-        // Desglose Promociones: excluye SIN PROMO
-        $rowsPromo = $this->query("
-            SELECT s.DESC_PROMOCION_TARJETA AS etiqueta,
-                   ISNULL(SUM(s.IMPORTE_TO),0) AS valor,
-                   ISNULL(SUM(s.COSTO),0)       AS costo_promo
-            FROM BI_PROMOCIONES s WITH (NOLOCK)
-            WHERE s.FECHA >= ? AND s.FECHA < ?
-              AND s.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
-              {$sfF} {$sfG}
-            GROUP BY s.DESC_PROMOCION_TARJETA
-            ORDER BY valor DESC
-        ", $baseParams);
+        $fact = $promo = $bancos = [];
+        $acc = function(array &$bucket, $etiqueta, float $v, float $c): void {
+            $k = $etiqueta === null ? "\0null" : (string)$etiqueta;
+            if (!isset($bucket[$k])) $bucket[$k] = ['etiqueta' => $etiqueta, 'valor' => 0.0, 'costo_promo' => 0.0];
+            $bucket[$k]['valor']       += $v;
+            $bucket[$k]['costo_promo'] += $c;
+        };
 
-        // Desglose Bancos: excluye SIN PROMO y DESCONOCIDO
-        $rowsBancos = $this->query("
-            SELECT s.BANCO AS etiqueta,
-                   ISNULL(SUM(s.IMPORTE_TO),0) AS valor,
-                   ISNULL(SUM(s.COSTO),0)       AS costo_promo
-            FROM BI_PROMOCIONES s WITH (NOLOCK)
-            WHERE s.FECHA >= ? AND s.FECHA < ?
-              AND s.DESC_PROMOCION_TARJETA <> 'SIN PROMO'
-              AND s.BANCO <> 'DESCONOCIDO'
-              {$sfF} {$sfG}
-            GROUP BY s.BANCO
-            ORDER BY valor DESC
-        ", $baseParams);
+        foreach ($rows as $r) {
+            $p = $r['promo'];
+            $b = $r['banco'];
+            $v = (float)$r['valor'];
+            $c = (float)$r['costo_promo'];
 
-        $toArr = fn(array $rows): array => array_map(fn($r) => [
-            'etiqueta'   => $r['etiqueta'],
-            'valor'      => (float)$r['valor'],
-            'costo_promo'=> (float)$r['costo_promo'],
-        ], $rows);
+            // Facturación: todas las promos (incluye SIN PROMO)
+            $acc($fact, $p, $v, $c);
+            // Mismas reglas que el SQL anterior: "<> 'SIN PROMO'" también descarta NULL
+            // (comparación como la collation CI de SQL Server: sin mayúsculas ni espacios finales)
+            if ($p === null || strtoupper(rtrim($p)) === 'SIN PROMO') continue;
+            // Promociones: excluye SIN PROMO
+            $acc($promo, $p, $v, $c);
+            // Bancos: excluye además DESCONOCIDO (y NULL)
+            if ($b !== null && strtoupper(rtrim($b)) !== 'DESCONOCIDO') $acc($bancos, $b, $v, $c);
+        }
+
+        $sorted = function(array $bucket): array {
+            $arr = array_values($bucket);
+            usort($arr, fn($x, $y) => $y['valor'] <=> $x['valor']);
+            return $arr;
+        };
 
         return [
-            'facturacion' => $toArr($rowsFact),
-            'promociones' => $toArr($rowsPromo),
-            'bancos'      => $toArr($rowsBancos),
+            'facturacion' => $sorted($fact),
+            'promociones' => $sorted($promo),
+            'bancos'      => $sorted($bancos),
         ];
     }
 
@@ -1023,15 +1022,21 @@ class PromocionesDB
     public function getPromocionesLista(?string $desde = null, ?string $hasta = null): array
     {
         [$sfG, $pG] = $this->grupoFiltro('s');
-        $dateFilter = "";
-        $params = $pG;
-        if ($desde && $hasta) {
-            $dateFilter = "AND s.FECHA >= ? AND s.FECHA < ?";
-            $params = array_merge([$desde, $hasta], $params);
-        }
         $excl = array_merge(['SIN PROMO'], self::PROMOS_EXCLUIDAS_DEFECTO);
         $placeholders = implode(',', array_fill(0, count($excl), '?'));
-        $params = array_merge($params, $excl);
+
+        // Los params van en el MISMO orden en que aparecen los "?" en el SQL:
+        // NOT IN → fechas → grupo. (Antes las fechas iban primero y SQL Server
+        // fallaba al convertir 'SIN PROMO' a fecha: el filtro quedaba vacío.)
+        $params     = $excl;
+        $dateFilter = "";
+        if ($desde && $hasta) {
+            // $hasta es inclusivo (último día del período)
+            $hastaX     = (new DateTime($hasta))->modify('+1 day')->format('Y-m-d');
+            $dateFilter = "AND s.FECHA >= ? AND s.FECHA < ?";
+            $params     = array_merge($params, [$desde, $hastaX]);
+        }
+        $params = array_merge($params, $pG);
 
         return $this->query("
             SELECT DISTINCT s.DESC_PROMOCION_TARJETA AS promocion

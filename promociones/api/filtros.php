@@ -3,13 +3,22 @@
  * /bi/promociones/api/filtros.php
  * Listas para los selectores del dashboard de Promociones:
  * bancos, promociones, sucursales.
+ *
+ * Las listas se cachean (PromoCache): bancos y sucursales recorren toda la
+ * tabla y casi no cambian, así que se guardan 1 hora; la lista de
+ * promociones depende del período y se guarda 30 minutos.
  */
 session_start();
 ob_start();
+set_time_limit(120);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 
 require_once __DIR__ . '/../class/PromocionesDB.php';
+require_once __DIR__ . '/../class/PromoCache.php';
+// La sesión sólo se lee: liberar el lock para que las demás llamadas del
+// tablero (kpis, bancos, donuts) corran en paralelo y no en fila.
+session_write_close();
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
@@ -28,35 +37,45 @@ try {
     $origen           = $isGrupo ? 'franquicias'
         : (in_array($_GET['origen'] ?? '', $origenPermitidos, true) ? $_GET['origen'] : 'argentina');
 
-    $db = new PromocionesDB($origen);
-
-    // Calcular fechas si se pasa período
+    // Calcular fechas si se pasa período (hasta inclusivo)
     $desde = $_GET['desde'] ?? null;
     $hasta = $_GET['hasta'] ?? null;
     if (isset($_GET['periodo']) && !$desde) {
-        [$da, $ha] = PromocionesDB::calcularPeriodo($_GET['periodo']);
+        [$da, $ha] = array_slice(PromocionesDB::calcularPeriodo($_GET['periodo']), 0, 2) + [null, null];
         $desde = $da;
         $hasta = $ha;
     }
 
-    $obtenPromociones = function() use ($db, $desde, $hasta) {
-        return $db->getPromocionesLista($desde, $hasta);
+    // La conexión se abre sólo si alguna lista no está en caché.
+    $db = null;
+    $getDb = function() use (&$db, $origen) {
+        return $db ??= new PromocionesDB($origen);
     };
 
-    $tryCall = function(callable $fn) {
-        try { return $fn(); } catch (Throwable $e) {
-            error_log('[promociones/filtros.php] ' . $e->getMessage());
+    $tryCall = function(string $nombre, int $ttl, array $keyParams, callable $fn) {
+        try {
+            return PromoCache::remember(PromoCache::key("filtros_{$nombre}", $keyParams), $ttl, $fn);
+        } catch (Throwable $e) {
+            error_log('[promociones/filtros.php] ' . $nombre . ': ' . $e->getMessage());
             return [];
         }
     };
 
+    $kOrigen = ['origen' => $origen];
+
+    $bancos      = $tryCall('bancos',      3600, $kOrigen, fn() => $getDb()->getBancosLista());
+    $promociones = $tryCall('promociones', 1800, $kOrigen + ['desde' => $desde, 'hasta' => $hasta],
+                            fn() => $getDb()->getPromocionesLista($desde, $hasta));
+    $sucursales  = $tryCall('sucursales',  3600, $kOrigen, fn() => $getDb()->getSucursalesLista());
+    $activas     = $isGrupo ? [] : $tryCall('activas', 3600, $kOrigen, fn() => $getDb()->getSucursalesActivasIds());
+
     ob_clean();
     echo json_encode([
         'ok'                => true,
-        'bancos'            => $tryCall(fn() => $db->getBancosLista()),
-        'promociones'       => $tryCall($obtenPromociones),
-        'sucursales'        => $tryCall(fn() => $db->getSucursalesLista()),
-        'sucursales_activas'=> $isGrupo ? [] : $tryCall(fn() => $db->getSucursalesActivasIds()),
+        'bancos'            => $bancos,
+        'promociones'       => $promociones,
+        'sucursales'        => $sucursales,
+        'sucursales_activas'=> $activas,
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {

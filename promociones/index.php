@@ -625,26 +625,37 @@ window.BI_CONFIG = {
         document.getElementById(t.btn).addEventListener('click', () => activateTab(t.pane));
     });
 
+    function activeTabName() {
+        const activePane = document.querySelector('.tab-pane.active');
+        return (TABS.find(t => t.pane === activePane?.id) ?? TABS[0]).name;
+    }
+
+    // Recarga la pestaña activa y, EN PARALELO, las listas de los filtros.
+    // Los datos no dependen de que los filtros terminen de cargar: se leen
+    // los valores elegidos en el momento y las listas se completan solas.
+    function reloadAll(msg) {
+        Object.keys(loaded).forEach(k => loaded[k] = false);
+        Promociones.setLoading(true, msg);
+        return Promise.all([
+            Promociones.loadFilters(),
+            loadTab(activeTabName()),
+        ])
+            .catch(err => console.error('[Promociones] Error de carga:', err))
+            .finally(() => Promociones.setLoading(false));
+    }
+
     // Origen toggle
     document.querySelectorAll('.origen-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             if (btn.classList.contains('active')) return;
             document.querySelectorAll('.origen-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            Object.keys(loaded).forEach(k => loaded[k] = false);
-            Promociones.setLoading(true, 'Cambiando entorno…');
-            Promociones.loadFilters()
-                .then(() => {
-                    // Reset again: handles race where initial load's .then() fired during loadFilters
-                    Object.keys(loaded).forEach(k => loaded[k] = false);
-                    const activePane = document.querySelector('.tab-pane.active');
-                    const tab = TABS.find(t => t.pane === activePane?.id) ?? TABS[0];
-                    return loadTab(tab.name);
-                })
-                .catch(e => {
-                    console.error('[Promociones] Origen toggle error:', e);
-                    Promociones.setLoading(false);
-                });
+            // Sucursal y banco del entorno anterior pueden no existir en el nuevo
+            ['sel-sucursal', 'sel-banco'].forEach(id => {
+                const sel = document.getElementById(id);
+                if (sel) { sel.value = ''; Promociones.syncSearchableSelect(id); }
+            });
+            reloadAll('Cambiando entorno…');
         });
     });
 
@@ -665,26 +676,20 @@ window.BI_CONFIG = {
 
     // Aplicar filtros
     document.getElementById('btn-aplicar').addEventListener('click', () => {
-        Promociones.setLoading(true, 'Aplicando filtros…');
-        Promociones.loadFilters()
-            .then(() => {
-                Object.keys(loaded).forEach(k => loaded[k] = false);
-                const activePane = document.querySelector('.tab-pane.active');
-                const tab = TABS.find(t => t.pane === activePane?.id) ?? TABS[0];
-                return loadTab(tab.name);
-            })
-            .catch(err => console.error('[Promociones] Error al aplicar filtros:', err))
-            .finally(() => Promociones.setLoading(false));
+        reloadAll('Aplicando filtros…');
     });
 
-    // Reload pestaña activa
+    // Reload pestaña activa: trae datos frescos (saltea la caché del servidor)
     const btnReload = document.getElementById('btn-reload-tab');
     btnReload.addEventListener('click', () => {
-        const activePane = document.querySelector('.tab-pane.active');
-        const tab = TABS.find(t => t.pane === activePane?.id) ?? TABS[0];
+        const name = activeTabName();
         btnReload.classList.add('spinning');
-        loaded[tab.name] = false;
-        loadTab(tab.name).finally(() => btnReload.classList.remove('spinning'));
+        loaded[name] = false;
+        Promociones.setForceFresh(true);
+        loadTab(name).finally(() => {
+            Promociones.setForceFresh(false);
+            btnReload.classList.remove('spinning');
+        });
     });
 
     // Solo activas
@@ -692,9 +697,7 @@ window.BI_CONFIG = {
     if (chkSoloActivas) {
         chkSoloActivas.addEventListener('change', () => {
             Object.keys(loaded).forEach(k => loaded[k] = false);
-            const activePane = document.querySelector('.tab-pane.active');
-            const tab = TABS.find(t => t.pane === activePane?.id) ?? TABS[0];
-            loadTab(tab.name);
+            loadTab(activeTabName());
         });
     }
 
@@ -704,11 +707,10 @@ window.BI_CONFIG = {
     Promociones.initDonutModals();
     PromoMensual.init();
 
-    // Carga inicial: filtros + Resumen automático (igual que el tablero Global)
-    // Mensual y Detalle cargan al seleccionar la pestaña.
-    Promociones.loadFilters()
-        .then(() => loadTab('resumen'))
-        .catch(err => console.error('[Promociones] Error en carga inicial:', err));
+    // Carga inicial: Resumen y listas de filtros EN PARALELO, con spinner
+    // desde el primer instante (antes el Resumen esperaba a filtros.php y la
+    // pantalla quedaba vacía sin aviso). Las demás pestañas cargan al abrirlas.
+    reloadAll('Cargando Resumen…');
 
 })();
 </script>

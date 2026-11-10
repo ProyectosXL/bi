@@ -52,11 +52,11 @@ const VelocidadVentas = (() => {
         { k: 'pct_venta_15',              t: 'Venta / ingreso',           f: 'sem',    g: 'd15', csv: 'Venta / ingreso 15 días' },
         { k: 'dias_stock',                t: 'Días de stock',             f: 'int',    g: 'd15' },
         { k: 'vta_30',                    t: 'Venta',                     f: 'int',    g: 'd30', csv: 'Vta. 30 días' },
-        { k: 'crecimiento_30',            t: 'Venta / ingreso',           f: 'delta',  g: 'd30', csv: 'Venta / ingreso 30 días',
-          tip: 'Crecimiento de la venta a 30 días respecto de la de 15 días: (venta 30 d − venta 15 d) / venta 15 d. No es venta sobre ingreso.' },
+        { k: 'pct_venta_30',              t: 'Venta / ingreso',           f: 'pct',    g: 'd30', csv: 'Venta / ingreso 30 días',
+          tip: 'Venta de los primeros 30 días / unidades remitidas a locales propios desde el ingreso a central hasta el día 30.' },
         { k: 'vta_60',                    t: 'Venta',                     f: 'int',    g: 'd60', csv: 'Vta. 60 días' },
-        { k: 'crecimiento_60',            t: 'Venta / ingreso',           f: 'delta',  g: 'd60', csv: 'Venta / ingreso 60 días',
-          tip: 'Crecimiento de la venta a 60 días respecto de la de 15 días: (venta 60 d − venta 15 d) / venta 15 d. No es venta sobre ingreso.' },
+        { k: 'pct_venta_60',              t: 'Venta / ingreso',           f: 'pct',    g: 'd60', csv: 'Venta / ingreso 60 días',
+          tip: 'Venta de los primeros 60 días / unidades remitidas a locales propios desde el ingreso a central hasta el día 60.' },
         { k: 'stock_locales',             t: 'Locales',                   f: 'int',    g: 'stk', csv: 'Stock locales' },
         { k: 'stock_central',             t: 'Central',                   f: 'int',    g: 'stk', csv: 'Stock central' },
     ];
@@ -125,6 +125,7 @@ const VelocidadVentas = (() => {
         switch (col.f) {
             case 'int':    return num(v, 0);
             case 'pctLoc': return pct(v, MODES[S.mode].pctLoc);
+            case 'pct':    return pct(v);
             case 'date':   return fdate(v);
             case 'delta': {
                 const cls = v > 0 ? 'up' : v < 0 ? 'down' : '';
@@ -509,8 +510,8 @@ const VelocidadVentas = (() => {
             stat('Venta 15 d', isNull(r.vta_15) ? '' : num(r.vta_15)) +
             stat('Vta/ingreso 15 d', s ? semDot(s) + pct(r.pct_venta_15) : '') +
             stat('Días de stock', isNull(r.dias_stock) ? '' : num(r.dias_stock)) +
-            stat('Vta/ingreso 30 d', fmtCell({ f: 'delta' }, r.crecimiento_30)) +
-            stat('Vta/ingreso 60 d', fmtCell({ f: 'delta' }, r.crecimiento_60)) +
+            stat('Vta/ingreso 30 d', fmtCell({ f: 'pct' }, r.pct_venta_30)) +
+            stat('Vta/ingreso 60 d', fmtCell({ f: 'pct' }, r.pct_venta_60)) +
             stat('Ing. locales', isNull(r.ingreso_locales) ? '' : num(r.ingreso_locales)) +
             stat('Stock locales', isNull(r.stock_locales) ? '' : num(r.stock_locales)) +
             stat('Stock central ' + m.central, isNull(r.stock_central) ? '' : num(r.stock_central)) +
@@ -721,12 +722,12 @@ const VelocidadVentas = (() => {
         const val = (c, v) => {
             if (isNull(v)) return '';
             if (c.f === 'date') return fdate(v);
-            if (['pctLoc', 'sem', 'delta'].includes(c.f)) return num(v * 100, 2);
+            if (['pctLoc', 'sem', 'delta', 'pct'].includes(c.f)) return num(v * 100, 2);
             if (c.f === 'int') return num(v, 2).replace(/\./g, '');
             return v;
         };
         const head = ['Posición', 'Modelo', 'Descripción'].concat(cs.filter((c) => c.f !== 'art').map((c) =>
-            c.k === 'stock_central' ? 'Stock central (' + MODES[S.mode].central + ')' : (c.csv || c.t) + (['pctLoc', 'sem', 'delta'].includes(c.f) ? ' (%)' : '')));
+            c.k === 'stock_central' ? 'Stock central (' + MODES[S.mode].central + ')' : (c.csv || c.t) + (['pctLoc', 'sem', 'delta', 'pct'].includes(c.f) ? ' (%)' : '')));
         const lines = [head.map(q).join(';')].concat(rows.map((r) =>
             [r._rank, r.modelo, r.descripcion].concat(cs.filter((c) => c.f !== 'art').map((c) => val(c, r[c.k]))).map(q).join(';')));
         const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });

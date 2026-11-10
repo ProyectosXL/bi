@@ -12,6 +12,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/global/class/GlobalDashboardDB.php';
+session_write_close(); // sesión de sólo lectura: no bloquear llamadas paralelas
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');

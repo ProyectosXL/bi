@@ -10,6 +10,10 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 
 require_once __DIR__ . '/../class/PromocionesDB.php';
+require_once __DIR__ . '/../class/PromoCache.php';
+// La sesión sólo se lee: liberar el lock para que las llamadas del tablero
+// corran en paralelo (con el lock tomado, PHP las atiende de a una).
+session_write_close();
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
@@ -57,8 +61,11 @@ try {
         [$da, $ha, $dp, $hp] = PromocionesDB::calcularPeriodo($periodo);
     }
 
-    $db    = new PromocionesDB($origen);
-    $cards = $db->getCardsBancos($da, $ha, $dp, $hp, $fp, 6);
+    $cards = PromoCache::remember(
+        PromoCache::key('bancos', ['origen' => $origen, 'da' => $da, 'ha' => $ha, 'dp' => $dp, 'hp' => $hp] + $fp),
+        600,
+        fn() => (new PromocionesDB($origen))->getCardsBancos($da, $ha, $dp, $hp, $fp, 6)
+    );
 
     ob_clean();
     echo json_encode(['ok' => true, 'bancos' => $cards], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);

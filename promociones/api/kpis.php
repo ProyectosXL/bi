@@ -10,7 +10,10 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');
 
 require_once __DIR__ . '/../class/PromocionesDB.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/bi/global/class/GlobalDashboardDB.php';
+require_once __DIR__ . '/../class/PromoCache.php';
+// La sesión sólo se lee: liberar el lock para que las llamadas del tablero
+// corran en paralelo (con el lock tomado, PHP las atiende de a una).
+session_write_close();
 
 try {
     date_default_timezone_set('America/Argentina/Buenos_Aires');
@@ -61,8 +64,11 @@ try {
         [$da, $ha, $dp, $hp] = PromocionesDB::calcularPeriodo($periodo);
     }
 
-    $db   = new PromocionesDB($origen);
-    $bulk = $db->getKPIsBulk($da, $ha, $dp, $hp, $fp);
+    $bulk = PromoCache::remember(
+        PromoCache::key('kpis', ['origen' => $origen, 'da' => $da, 'ha' => $ha, 'dp' => $dp, 'hp' => $hp] + $fp),
+        600,
+        fn() => (new PromocionesDB($origen))->getKPIsBulk($da, $ha, $dp, $hp, $fp)
+    );
 
     $act  = $bulk['actual'];
     $prev = $bulk['previo'];
@@ -72,17 +78,8 @@ try {
 
     $ratio = fn($n, $d) => $d > 0 ? $n / $d : 0;
 
-    // Cotización — siempre desde argentina
-    $cotizacion = null;
-    try {
-        if ($origen === 'uruguay') {
-            // RO_V_DOLAR_OFICIAL_BCRA no existe en power_uy; tomar tcc_actual de cotizaciones UY
-            $cot = (new GlobalDashboardDB('uruguay'))->getCotizacionesMensuales($da, $ha);
-            $cotizacion = ['tcc' => $cot['tcc_actual'], 'fecha' => ''];
-        } else {
-            $cotizacion = (new GlobalDashboardDB('argentina'))->getCotizacionDolar();
-        }
-    } catch (Throwable $_) {}
+    // La cotización la trae el front aparte (api/cotizacion.php); acá ya no se
+    // consulta: abría otra conexión y nadie leía 'cotizacion_dolar'.
 
     $dias_act  = (new DateTime($da))->diff(new DateTime($ha))->days + 1;
     $dias_prev = (new DateTime($dp))->diff(new DateTime($hp))->days + 1;
@@ -90,7 +87,6 @@ try {
     ob_clean();
     echo json_encode([
         'ok'              => true,
-        'cotizacion_dolar' => $cotizacion,
         'periodo' => [
             'tipo'       => $periodo,
             'desde_act'  => $da,

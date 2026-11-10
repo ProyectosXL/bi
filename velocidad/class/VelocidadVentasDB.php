@@ -7,7 +7,10 @@
  *   % Venta / ingreso locales = SUM(VENTA_TOTAL)  / SUM(INGRESO_LOCALES)
  *   % Venta 15 dias           = SUM(15_DIAS)      / SUM(CANT_PRIMER_INGRESO)   <- el que lleva semáforo
  *   Días de stock             = SUM(INGRESO_LOCALES) / (SUM(15_DIAS) / 15)
- *   Crecimiento 1 / 2         = (SUM(30_DIAS | 60_DIAS) - SUM(15_DIAS)) / SUM(15_DIAS)
+ *   % Venta 30 / 60 dias      = SUM(30_DIAS | 60_DIAS) / SUM(CANT_INGRESO_30 | CANT_INGRESO_60)
+ *     (misma lógica que la de 15 días con su propia ventana. Reemplaza al "Crecimiento 1 / 2" del
+ *      informe, (30_DIAS − 15_DIAS) / 15_DIAS, que tenía el mismo título pero no era venta sobre ingreso.
+ *      Si la tabla todavía no tiene las columnas CANT_INGRESO_30/60, por ejemplo en UY, el valor queda vacío.)
  *
  * Relaciones del modelo que se respetan en los filtros:
  *   Fecha  -> INGRESO (CALENDARIO[FECHA])      Modelo -> COD_ARTICU (MODELOS[MODELOS])
@@ -249,6 +252,11 @@ class VelocidadVentasDB
 
         $soloConIngresoCentral = ($origen === 'ar') ? 'WHERE ingreso_central > 0' : '';
 
+        // Denominadores de 30/60 días: columnas agregadas al ETL en 11/2026 (puede que no existan en UY).
+        $tiene3060 = $this->tieneColumna($conn, $t, 'CANT_INGRESO_30') && $this->tieneColumna($conn, $t, 'CANT_INGRESO_60');
+        $cant30 = $tiene3060 ? 'SUM(CANT_INGRESO_30)' : 'CAST(NULL AS float)';
+        $cant60 = $tiene3060 ? 'SUM(CANT_INGRESO_60)' : 'CAST(NULL AS float)';
+
         if ($modo === 'bottom') {
             $select = "SELECT * FROM (
                     SELECT TOP " . self::TOP_NEGATIVO . " WITH TIES * FROM calc
@@ -276,6 +284,8 @@ class VelocidadVentasDB
                     SUM([15_DIAS])             AS vta_15,
                     SUM([30_DIAS])             AS vta_30,
                     SUM([60_DIAS])             AS vta_60,
+                    $cant30                    AS cant_ingreso_30,
+                    $cant60                    AS cant_ingreso_60,
                     SUM(STOCK_LOCALES)         AS stock_locales,
                     SUM(STOCK_CENTRAL)         AS stock_central
                 FROM $t WITH (NOLOCK)
@@ -286,13 +296,20 @@ class VelocidadVentasDB
                     CAST(venta_total AS float)  / NULLIF(CAST(ingreso_locales AS float), 0)       AS pct_venta_ingreso_locales,
                     CAST(vta_15 AS float)       / NULLIF(CAST(cant_primer_ingreso AS float), 0)   AS pct_venta_15,
                     CAST(ingreso_locales AS float) / NULLIF(CAST(vta_15 AS float) / 15.0, 0)      AS dias_stock,
-                    (CAST(vta_30 AS float) - vta_15) / NULLIF(CAST(vta_15 AS float), 0)           AS crecimiento_30,
-                    (CAST(vta_60 AS float) - vta_15) / NULLIF(CAST(vta_15 AS float), 0)           AS crecimiento_60
+                    CAST(vta_30 AS float)       / NULLIF(CAST(cant_ingreso_30 AS float), 0)       AS pct_venta_30,
+                    CAST(vta_60 AS float)       / NULLIF(CAST(cant_ingreso_60 AS float), 0)       AS pct_venta_60
                 FROM agg a
             )
             " . $select;
 
         return $this->query($conn, $sql, $w['params']);
+    }
+
+    /** true si la tabla tiene la columna (para convivir con tablas que aún no tienen columnas nuevas del ETL). */
+    private function tieneColumna($conn, string $tabla, string $columna): bool
+    {
+        $r = $this->query($conn, 'SELECT COL_LENGTH(?, ?) AS l', [$tabla, $columna]);
+        return !empty($r) && $r[0]['l'] !== null && $r[0]['l'] !== '';
     }
 
     /**

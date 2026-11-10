@@ -52,6 +52,7 @@ const Promociones = (() => {
     let _moneda              = 'ARS';
     let _lastPeriodo         = null;
     let _sucursalesActivasIds = new Set();
+    let _forceFresh          = false;
 
     function isSoloActivas() {
         const cfg = window.BI_CONFIG ?? {};
@@ -161,6 +162,8 @@ const Promociones = (() => {
             solo_activas: isSoloActivas() ? '1' : '0',
             ...extra
         };
+        // Botón "Recargar pestaña": pide al servidor saltear la caché (PromoCache)
+        if (_forceFresh) p._fresh = '1';
         if (p.periodo === 'custom') {
             p.desde     = $('input-desde')?.value     ?? '';
             p.hasta     = $('input-hasta')?.value     ?? '';
@@ -497,9 +500,8 @@ const Promociones = (() => {
             legend.innerHTML = top.map((item, idx) => {
                 const v   = convertir(item.valor);
                 const pct = total > 0 ? (v / total * 100).toFixed(1) : '0.0';
-                const lbl = (item.etiqueta ?? '').length > 28
-                    ? (item.etiqueta ?? '').substring(0, 26) + '…'
-                    : (item.etiqueta ?? '—');
+                // Sin recorte fijo: el CSS corta con "…" según el ancho disponible
+                const lbl = item.etiqueta ?? '—';
                 return `<div class="promo-legend-item" title="${item.etiqueta ?? ''}">
                     <span class="promo-legend-dot" style="background:${colors[idx]}"></span>
                     <span class="promo-legend-label">${lbl}</span>
@@ -856,5 +858,6 @@ const Promociones = (() => {
         getLastPeriodo   : () => _lastPeriodo,
         getSucActivasIds : () => _sucursalesActivasIds,
         isSoloActivas,
+        setForceFresh    : v => { _forceFresh = !!v; },
     };
 })();
