@@ -1470,22 +1470,27 @@ const Dashboard = (() => {
 
         // Ventas
         setText('fact-act',  moneyKOrMask(a.facturacion));
-        setVar ('fact-var',  v.facturacion);
+        setVar ('fact-var',  v.facturacion, moneyOrMask(p.facturacion), moneyOrMask(a.facturacion));
         setText('fact-prev', moneyKOrMask(p.facturacion));
 
         // Objetivo
         setText('obj-act',   moneyKOrMask(a.objetivo));
-        setVar ('obj-var',   v.objetivo);
+        setVar ('obj-var',   v.objetivo, moneyOrMask(a.objetivo), moneyOrMask(a.facturacion), {
+            title: 'Objetivo a la fecha',
+            labelActual: 'Ventas',
+            labelPrev: 'Objetivo',
+            labelVar: 'Desvío',
+        });
         setText('obj-total', moneyKOrMask(a.objetivo_total));
 
         // Unidades
         setText('unid-act',  fmt.num(a.unidades));
-        setVar ('unid-var',  v.unidades);
+        setVar ('unid-var',  v.unidades, fmt.num(p.unidades), fmt.num(a.unidades));
         setText('unid-prev', fmt.num(p.unidades));
 
         // Tickets
         setText('tickets-act',  fmt.num(a.tickets));
-        setVar ('tickets-var',  v.tickets);
+        setVar ('tickets-var',  v.tickets, fmt.num(p.tickets), fmt.num(a.tickets));
         setText('tickets-prev', fmt.num(p.tickets));
 
         // KPI cards
@@ -1522,7 +1527,7 @@ const Dashboard = (() => {
     function renderConversion(cd) {
         const a = cd.actual ?? {}, p = cd.previo ?? {}, v = cd.variacion ?? {};
         setText('conv-act',      fmt.pct(a.conversion));
-        setVar ('conv-var',      v.conversion);
+        setVar ('conv-var',      v.conversion, fmt.pct(p.conversion), fmt.pct(a.conversion));
         setText('conv-prev',     fmt.pct(p.conversion));
         setText('conv-ingresos', fmt.num(a.ingresos));
         setText('conv-merodeo',  fmt.num(a.merodeo));
@@ -1586,11 +1591,20 @@ const Dashboard = (() => {
 
     /* ── DOM helpers ─────────────────────────── */
     function setText(id, text) { const el = $(id); if (el) el.textContent = text; }
-    function setVar(id, ratio) {
+    function applyVarTooltip(el, prevText = null, actualText = null, meta = null) {
+        if (prevText   !== null) el.dataset.prev   = prevText;   else delete el.dataset.prev;
+        if (actualText !== null) el.dataset.actual = actualText; else delete el.dataset.actual;
+        if (meta?.title)       el.dataset.ttTitle       = meta.title;       else delete el.dataset.ttTitle;
+        if (meta?.labelActual) el.dataset.ttLabelActual = meta.labelActual; else delete el.dataset.ttLabelActual;
+        if (meta?.labelPrev)   el.dataset.ttLabelPrev   = meta.labelPrev;   else delete el.dataset.ttLabelPrev;
+        if (meta?.labelVar)    el.dataset.ttLabelVar    = meta.labelVar;    else delete el.dataset.ttLabelVar;
+    }
+    function setVar(id, ratio, prevText = null, actualText = null, meta = null) {
         const el = $(id);
         if (!el) return;
         el.textContent = fmt.varPct(ratio);
         el.className   = 'summary-var ' + (ratio === null || ratio === undefined ? '' : (ratio >= 0 ? 'pos' : 'neg'));
+        applyVarTooltip(el, prevText, actualText, meta);
     }
     function setKpiVar(id, ratio, prevText = null, actualText = null) {
         const el = $(id);
@@ -1598,8 +1612,7 @@ const Dashboard = (() => {
         const sign = ratio >= 0 ? '+' : '';
         el.textContent = sign + (ratio * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '\u00A0%';
         el.className   = 'kpi-var ' + (ratio >= 0 ? 'pos' : 'neg');
-        if (prevText   !== null) el.dataset.prev   = prevText;
-        if (actualText !== null) el.dataset.actual = actualText;
+        applyVarTooltip(el, prevText, actualText);
     }
     function setVarDiff(id, diff, inverse = false, prevText = null, actualText = null) {
         const el = $(id);
@@ -1608,8 +1621,7 @@ const Dashboard = (() => {
         el.textContent = sign + (diff * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '\u00A0pp';
         const good = inverse ? diff <= 0 : diff >= 0;
         el.className   = 'kpi-var ' + (good ? 'pos' : 'neg');
-        if (prevText   !== null) el.dataset.prev   = prevText;
-        if (actualText !== null) el.dataset.actual = actualText;
+        applyVarTooltip(el, prevText, actualText);
     }
 
     /* ── Loading state ───────────────────────── */
@@ -1818,23 +1830,28 @@ const Dashboard = (() => {
     };
 })();
 
-/* ── Tooltip período previo en KPI vars ── */
+/* ── Tooltip período previo en KPI vars y summary vars ── */
 (function () {
+    const VAR_TOOLTIP_SEL = '.kpi-var[data-prev], .summary-var[data-prev]';
     const tt = document.createElement('div');
     tt.className = 'sparkline-tooltip';
     tt.style.display = 'none';
     document.body.appendChild(tt);
 
     document.addEventListener('mouseover', function (e) {
-        const el = e.target.closest('.kpi-var[data-prev]');
+        const el = e.target.closest(VAR_TOOLTIP_SEL);
         if (!el) return;
         if (el.dataset.actual) {
-            const varCls = el.classList.contains('pos') ? 'pos' : 'neg';
+            const title       = el.dataset.ttTitle       || 'Período anterior';
+            const labelActual = el.dataset.ttLabelActual || 'Actual';
+            const labelPrev   = el.dataset.ttLabelPrev   || 'Anterior';
+            const labelVar    = el.dataset.ttLabelVar    || 'Variación';
+            const varCls = el.classList.contains('pos') ? 'pos' : (el.classList.contains('neg') ? 'neg' : '');
             tt.innerHTML =
-                '<div style="font-size:.68rem;color:#9ba8c8;margin-bottom:5px;font-weight:600">Período anterior</div>' +
-                '<div class="tooltip-row"><span>Actual</span><strong>' + el.dataset.actual + '</strong></div>' +
-                '<div class="tooltip-row"><span>Anterior</span><strong>' + el.dataset.prev + '</strong></div>' +
-                '<div class="tooltip-row"><span>Variación</span><strong class="' + varCls + '">' + el.textContent.trim() + '</strong></div>';
+                '<div style="font-size:.68rem;color:#9ba8c8;margin-bottom:5px;font-weight:600">' + title + '</div>' +
+                '<div class="tooltip-row"><span>' + labelActual + '</span><strong>' + el.dataset.actual + '</strong></div>' +
+                '<div class="tooltip-row"><span>' + labelPrev + '</span><strong>' + el.dataset.prev + '</strong></div>' +
+                '<div class="tooltip-row"><span>' + labelVar + '</span><strong class="' + varCls + '">' + el.textContent.trim() + '</strong></div>';
         } else {
             tt.innerHTML = '<span class="tooltip-date">Período previo</span><span class="tooltip-value">' + el.dataset.prev + '</span>';
         }
@@ -1848,7 +1865,7 @@ const Dashboard = (() => {
         tt.style.top  = (y < 8 ? e.clientY + 12 : y) + 'px';
     });
     document.addEventListener('mouseout', function (e) {
-        if (!e.target.closest('.kpi-var[data-prev]')) return;
+        if (!e.target.closest(VAR_TOOLTIP_SEL)) return;
         tt.style.display = 'none';
     });
 })();

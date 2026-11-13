@@ -848,7 +848,8 @@
     font-weight: 700;
     display    : block;
 }
-.kpi-var[data-prev] { cursor: default; }
+.kpi-var[data-prev],
+.summary-var[data-prev] { cursor: default; }
 
 .tooltip-row {
     display        : flex;

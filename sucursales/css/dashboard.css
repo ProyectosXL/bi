@@ -601,7 +601,8 @@ body.is-loading .toolbar {
     line-height: 1;
     margin-top : 8px;
 }
-.kpi-var[data-prev] { cursor: default; }
+.kpi-var[data-prev],
+.summary-var[data-prev] { cursor: default; }
 
 .kpi-grid-header {
     display        : flex;
