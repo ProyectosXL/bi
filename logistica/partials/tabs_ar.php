@@ -1151,7 +1151,7 @@
 
         <!-- Umbral de antigüedad -->
         <div class="plan-ventanas-header">
-            <span class="plan-ventanas-title"><i class="bi bi-hourglass-bottom"></i> Pedidos del año con unidades pendientes, sin cancelar</span>
+            <span class="plan-ventanas-title"><i class="bi bi-hourglass-bottom"></i> Pedidos del año abiertos en Tango, con unidades pendientes</span>
             <div class="filter-pills" id="est-umbral" role="group" aria-label="Antigüedad mínima">
                 <button type="button" class="pill" data-d="30">+30 días</button>
                 <button type="button" class="pill" data-d="60">+60 días</button>

@@ -143,7 +143,7 @@
             'kv-rem-propios-total': ['Locales Propios', ['Unidades remitidas (o pedidos) para locales propios en el período.', '= Distribución + Reposición']],
             'kv-rem-franq-total': ['Franquicias', ['Unidades remitidas (o pedidos) para franquicias en el período.', '= Distribución + Reposición']],
             'kv-rem-gran-total' : ['Total General', ['Volumen global de Locales Propios y Franquicias.', '= Distribución Total + Reposición Total']],
-            'kv-est-ped'        : ['Pedidos estancados', ['Mide PEDIDOS: pedidos del año en curso, sin cancelar, que todavía tienen unidades pendientes y fueron cargados hace más días que el umbral elegido.', '= Pedidos con unidades pendientes > 0 y (Hoy − Fecha de pedido) ≥ umbral', 'Abajo: cuántos están remitidos en parte y cuántos no tienen nada remitido.']],
+            'kv-est-ped'        : ['Pedidos estancados', ['Mide PEDIDOS: pedidos del año en curso, abiertos en Tango (estado Pendiente), que todavía tienen unidades pendientes y fueron cargados hace más días que el umbral elegido.', 'No cuenta los pedidos cerrados en Tango: su saldo ya no se va a remitir.', '= Pedidos con unidades pendientes > 0 y (Hoy − Fecha de pedido) ≥ umbral', 'Abajo: cuántos están remitidos en parte y cuántos no tienen nada remitido.']],
             'kv-est-unid'       : ['Unidades pendientes', ['Mide UNIDADES: cuántas unidades faltan remitir en esos pedidos.', '= Σ Unidades pendientes']],
             'kv-est-imp'        : ['Importe pendiente', ['Mide PESOS: importe de las unidades que faltan remitir.', '= Σ Importe pendiente']],
             'kv-fr-remitos'     : ['Remitos emitidos', ['Mide REMITOS: cantidad de remitos distintos emitidos en el día.', 'Un remito puede llevar artículos de varios pedidos.', 'Abajo: cuántos remitos y unidades no se pudieron vincular a un pedido (sobre todo Dist. Inicial).']],
@@ -334,7 +334,7 @@
                 'Días corridos desde la carga. Ámbar: 90–180. Rojo: más de 180.',
                 'Canal del pedido.',
                 'Cliente.',
-                'Estado del pedido en Tango (un COMPLETO con saldo es un dato inconsistente).',
+                'Estado del pedido en Tango (siempre PENDIENTE: los cerrados no se listan).',
                 'Sin remitir: ninguna unidad remitida. Remitido en parte: tiene saldo.',
                 'Unidades pedidas en total.',
                 'Unidades que faltan remitir.',
@@ -2220,8 +2220,6 @@
               `<b>${fmt.num(k.UNID_SIN_STOCK)}</b> (${fmt.pct(1 - pCon, 0)}) no tienen stock en el depósito 01.`
             : 'No hay unidades pendientes.');
         $('#est-stock-con').css('width', (pCon * 100).toFixed(1) + '%');
-        const inc = parseInt(k.PED_TANGO_COMPLETO, 10) || 0;
-        if (inc > 0) $('#est-stock-txt').append(`<br><small>Dato inconsistente: ${fmt.num(inc)} pedido(s) figuran COMPLETO en Tango pero tienen unidades pendientes.</small>`);
 
         // 3. Pedidos según la cobertura de stock del saldo
         const cob = data.cobertura || [];

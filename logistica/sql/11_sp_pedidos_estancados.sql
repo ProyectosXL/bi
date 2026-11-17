@@ -3,8 +3,17 @@ GO
 -- ============================================================
 -- 11_sp_pedidos_estancados.sql
 -- RO_SP_PEDIDOS_ESTANCADOS
--- Pedidos estancados: no cancelados, con saldo pendiente, del AÑO EN
--- CURSO y con antigüedad >= @DIAS. Pestaña de ANÁLISIS (no sugiere
+-- Pedidos estancados: ABIERTOS en Tango (ESTADO_TANGO = 'PENDIENTE'),
+-- con saldo pendiente, del AÑO EN CURSO y con antigüedad >= @DIAS.
+--
+-- Estados de BI_EFICIENCIA_LOGISTICA vs GVA21.ESTADO de Tango
+-- (verificado 17/11/2026 sobre una muestra de pedidos):
+--   PENDIENTE  = 2 Pendiente  → saldo abierto: es lo único que puede estar estancado
+--   COMPLETO   = 3 Cumplido
+--   INCOMPLETO = 4 Cerrado    → saldo dado de baja, no se va a remitir
+--   CANCELADO  = 5 Anulado
+-- Los INCOMPLETO con saldo no son pedidos trabados: quedan fuera.
+-- Pestaña de ANÁLISIS (no sugiere
 -- acciones): cuánto hay trabado, si hay stock para el saldo, desde
 -- cuándo se acumula y dónde se concentra.
 --
@@ -59,7 +68,7 @@ BEGIN
     FROM dbo.BI_EFICIENCIA_LOGISTICA e
     WHERE e.FECHA_PEDI >= @INICIO_ANIO
       AND e.FECHA_PEDI <= @CORTE
-      AND ISNULL(e.ESTADO_TANGO, '') <> 'CANCELADO'
+      AND e.ESTADO_TANGO = 'PENDIENTE'
       AND (@CANAL IS NULL OR e.CANAL = @CANAL)
       AND (@TIPO  IS NULL OR e.TIPO_FACTURACION = @TIPO);
 
@@ -118,8 +127,6 @@ BEGIN
         -- ¿Por qué está trabado? stock para el saldo
         CAST(ISNULL(SUM(UNID_CON_STOCK), 0) AS DECIMAL(18,0))                AS UNID_CON_STOCK,
         CAST(ISNULL(SUM(UNID_PENDIENTES - UNID_CON_STOCK), 0) AS DECIMAL(18,0)) AS UNID_SIN_STOCK,
-        -- Calidad de datos: Tango los marca COMPLETO pero figuran con saldo
-        SUM(CASE WHEN ESTADO_TANGO = 'COMPLETO' THEN 1 ELSE 0 END)           AS PED_TANGO_COMPLETO,
         @DIAS                                                                AS UMBRAL,
         @INICIO_ANIO                                                         AS DESDE,
         @CORTE                                                               AS HASTA

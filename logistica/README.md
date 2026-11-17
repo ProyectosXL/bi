@@ -39,7 +39,7 @@ Ejecutar en SQL Server Management Studio sobre `POWER_BI_CONTROL`, en orden:
 | 7 | `sql/07_sp_planificacion.sql` | SP Área 6a: Planificación (`RO_SP_PLANIFICACION`) — ventanas HOY / próxima entrega / +1 |
 | 8 | `sql/09_sp_despacho.sql` | SP Área 6b: Despacho (`RO_SP_DESPACHO`) — eficacia por canal/cliente/pedido, demorados, evolución |
 | 9 | `sql/08_sp_pedidos_consolidados.sql` | SP Área 7: Pedidos consolidados |
-| 9b | `sql/11_sp_pedidos_estancados.sql` | SP Área 9: Pedidos estancados (`RO_SP_PEDIDOS_ESTANCADOS`) — sin cancelar, con saldo y antigüedad ≥ umbral (60/90/180/365) |
+| 9b | `sql/11_sp_pedidos_estancados.sql` | SP Área 9: Pedidos estancados (`RO_SP_PEDIDOS_ESTANCADOS`) — abiertos en Tango (`ESTADO_TANGO = 'PENDIENTE'`; INCOMPLETO = Cerrado), con saldo y antigüedad ≥ umbral (60/90/180/365) |
 | 9c | `sql/12_sp_fill_rate.sql` | SP Área 10: Fill Rate por remito (`RO_SP_FILL_RATE`) — remitos de un día → pedido → cumplimiento acumulado |
 | 10 | `sql/00_indices.sql` | Índices cubrientes (ejecutar en cualquier momento) |
 
