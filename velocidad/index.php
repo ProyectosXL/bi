@@ -85,10 +85,20 @@ $h = function (string $s): string {
                 <input type="date" id="f-hasta" value="<?= $h($HASTA_DEFAULT) ?>" data-default="<?= $h($HASTA_DEFAULT) ?>" aria-label="Hasta">
             </div>
         </div>
-        <div class="vv-field">
+        <div class="vv-field vv-multi" id="f-linea-wrap">
             <label for="f-linea">Línea</label>
-            <input id="f-linea" list="dl-linea" placeholder="Todas" autocomplete="off">
-            <datalist id="dl-linea"></datalist>
+            <button type="button" id="f-linea" class="vv-multi-btn" aria-haspopup="listbox" aria-expanded="false">
+                <span class="vv-multi-txt" id="f-linea-txt">Todas</span>
+                <i class="bi bi-chevron-down" aria-hidden="true"></i>
+            </button>
+            <div class="vv-multi-pop" id="f-linea-pop" hidden>
+                <input type="search" class="vv-multi-search" id="f-linea-q" placeholder="Buscar línea…" autocomplete="off">
+                <div class="vv-multi-actions">
+                    <button type="button" data-act="all">Marcar visibles</button>
+                    <button type="button" data-act="none">Quitar todas</button>
+                </div>
+                <ul class="vv-multi-list" id="f-linea-list" role="listbox" aria-multiselectable="true"></ul>
+            </div>
         </div>
         <div class="vv-field">
             <label for="f-rubro">Rubro</label>

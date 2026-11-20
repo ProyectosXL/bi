@@ -155,9 +155,17 @@ class VelocidadVentasDB
             'modelo'    => 'COD_ARTICU',  // MODELOS[MODELOS] <- BI_ROTACION_VENTAS[COD_ARTICU]
         ];
         foreach ($mapa as $key => $col) {
-            if (isset($f[$key]) && $f[$key] !== '') {
+            $val = $f[$key] ?? '';
+            if (is_array($val)) {
+                // Selección múltiple (ej. varias líneas): IN (?, ?, ...)
+                $val = array_values(array_filter($val, function ($x) { return $x !== '' && $x !== null; }));
+                if ($val) {
+                    $w[] = "LTRIM(RTRIM($col)) IN (" . implode(', ', array_fill(0, count($val), '?')) . ')';
+                    array_push($p, ...$val);
+                }
+            } elseif ($val !== '') {
                 $w[] = "LTRIM(RTRIM($col)) = ?";
-                $p[] = $f[$key];
+                $p[] = $val;
             }
         }
 

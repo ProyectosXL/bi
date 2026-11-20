@@ -56,6 +56,8 @@ igual; filtros de rubro/categoría/color/línea iguales.
 Diferencias conocidas **del informe de Power BI** que la web no copia a propósito:
 - En la página Uruguay, el slicer **Línea** apunta a `LINEAS` (la tabla de Argentina) y no filtra nada.
   La web sí filtra Uruguay por línea.
+- **Línea** admite selección múltiple, como el slicer de Power BI (desde 20/11/2026): el endpoint recibe
+  `linea[]=A&linea[]=B` y filtra con `NOMBRE IN (...)`. Un único `linea=A` sigue funcionando.
 - La leyenda de texto del Ranking Negativo dice 40 % / 50 %, pero la celda se pinta con la regla de 30 % / 40 %.
 - El orden entre empates (mismo valor) no está definido en Power BI; la web desempata por posición.
 - No se replicó la cuarta página del informe, "Display" (galería con fotos de los 20 más vendidos).

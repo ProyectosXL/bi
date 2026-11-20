@@ -153,6 +153,52 @@
 }
 .vv-field.is-set input,
 .vv-field.is-set select { background: var(--vv-accent-soft); border-color: var(--vv-accent); font-weight: 500; }
+/* Selección múltiple (Línea) */
+.vv-multi { position: relative; }
+.vv-multi-btn {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    width: 100%; height: 36px; padding: 0 10px; cursor: pointer; text-align: left;
+    border: 1px solid var(--vv-line); border-radius: var(--vv-radius-sm);
+    background: var(--vv-card-2); color: var(--vv-ink-1);
+    font: inherit; font-size: .92rem;
+    transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.vv-multi-btn:hover { border-color: #cfd5e3; }
+.vv-multi-btn:focus-visible,
+.vv-multi-btn[aria-expanded="true"] {
+    outline: none; background: #fff;
+    border-color: var(--vv-accent); box-shadow: 0 0 0 3px var(--vv-accent-soft);
+}
+.vv-multi-btn .bi { color: var(--vv-ink-3); font-size: .8rem; flex: none; }
+.vv-multi-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vv-field.is-set .vv-multi-btn { background: var(--vv-accent-soft); border-color: var(--vv-accent); font-weight: 500; }
+.vv-multi-pop {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 40;
+    width: max(100%, 260px);
+    background: var(--vv-card); border: 1px solid var(--vv-line);
+    border-radius: var(--vv-radius-sm); box-shadow: 0 8px 24px rgba(10, 16, 36, .16);
+    padding: 8px;
+}
+.vv-multi-pop[hidden] { display: none; }
+.vv-field .vv-multi-search,
+.vv-field.is-set .vv-multi-search { height: 32px; font-size: .88rem; background: var(--vv-card-2); border-color: var(--vv-line); font-weight: 400; }
+.vv-field .vv-multi-search:focus { background: #fff; border-color: var(--vv-accent); }
+.vv-multi-actions { display: flex; justify-content: space-between; gap: 8px; margin: 6px 2px; }
+.vv-multi-actions button {
+    border: 0; background: none; padding: 2px 0; cursor: pointer;
+    color: var(--vv-accent); font: inherit; font-size: .8rem; font-weight: 600;
+}
+.vv-multi-actions button:hover { text-decoration: underline; }
+.vv-multi-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+.vv-field .vv-multi-opt {
+    display: flex; align-items: center; gap: 8px; padding: 6px 6px; border-radius: 6px;
+    cursor: pointer; font-size: .88rem; color: var(--vv-ink-1);
+    text-transform: none; letter-spacing: 0; font-weight: 400;
+}
+.vv-field .vv-multi-opt:hover { background: var(--vv-card-2); }
+.vv-field .vv-multi-opt input { width: 16px; height: 16px; padding: 0; flex: none; accent-color: var(--vv-accent); }
+.vv-multi-empty { padding: 8px 6px; color: var(--vv-ink-3); font-size: .86rem; }
+
 .vv-dates { display: flex; align-items: center; gap: 6px; }
 .vv-dates input { min-width: 0; padding: 0 8px; }
 .vv-dates-sep { color: var(--vv-ink-3); }

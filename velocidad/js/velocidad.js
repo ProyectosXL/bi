@@ -70,7 +70,9 @@ const VelocidadVentas = (() => {
         tabs: Array.from(document.querySelectorAll('.vv-tab')),
         fLinea: $('f-linea'), fDesde: $('f-desde'), fHasta: $('f-hasta'),
         fRubro: $('f-rubro'), fCategoria: $('f-categoria'), fModelo: $('f-modelo'), fColor: $('f-color'),
-        dlLinea: $('dl-linea'), dlModelo: $('dl-modelo'), btnClear: $('btn-clear'), btnCsv: $('btn-csv'),
+        fLineaWrap: $('f-linea-wrap'), fLineaTxt: $('f-linea-txt'), fLineaPop: $('f-linea-pop'),
+        fLineaQ: $('f-linea-q'), fLineaList: $('f-linea-list'),
+        dlModelo: $('dl-modelo'), btnClear: $('btn-clear'), btnCsv: $('btn-csv'),
         thead: $('vv-table').tHead, tbody: $('vv-table').tBodies[0],
         overlay: $('vv-overlay'), tableWrap: $('vv-table-wrap'),
         podium: $('vv-podium'), legend: $('vv-legend'),
@@ -92,6 +94,7 @@ const VelocidadVentas = (() => {
         sem: null,               // filtro de semáforo local: null | 'g' | 'y' | 'r'
         selected: null,          // código de modelo seleccionado
         lists: {},               // listas de filtros por origen (cache en memoria)
+        lineas: new Set(),       // líneas elegidas (vacío = todas), igual que el segmentador de Power BI
         rankReq: 0,
     };
 
@@ -201,7 +204,7 @@ const VelocidadVentas = (() => {
         return {
             desde: el.fDesde.value, hasta: el.fHasta.value,
             rubro: el.fRubro.value, categoria: el.fCategoria.value,
-            color: el.fColor.value, linea: el.fLinea.value.trim(), modelo: el.fModelo.value.trim(),
+            color: el.fColor.value, linea: Array.from(S.lineas), modelo: el.fModelo.value.trim(),
         };
     }
 
@@ -209,14 +212,18 @@ const VelocidadVentas = (() => {
         const m = MODES[S.mode];
         const p = new URLSearchParams({ origen: m.origen, modo: m.rank });
         const f = filtros();
-        Object.keys(f).forEach((k) => { if (f[k]) p.set(k, f[k]); });
+        Object.keys(f).forEach((k) => {
+            if (Array.isArray(f[k])) f[k].forEach((v) => p.append(k + '[]', v));
+            else if (f[k]) p.set(k, f[k]);
+        });
         return p;
     }
 
     function markSetFields() {
-        [el.fLinea, el.fRubro, el.fCategoria, el.fModelo, el.fColor].forEach((c) => {
+        [el.fRubro, el.fCategoria, el.fModelo, el.fColor].forEach((c) => {
             c.closest('.vv-field').classList.toggle('is-set', !!c.value.trim());
         });
+        el.fLineaWrap.classList.toggle('is-set', S.lineas.size > 0);
         const dChanged = el.fDesde.value !== el.fDesde.dataset.default || el.fHasta.value !== el.fHasta.dataset.default;
         el.fDesde.closest('.vv-field').classList.toggle('is-set', dChanged);
     }
@@ -243,7 +250,8 @@ const VelocidadVentas = (() => {
         fillSelect(el.fRubro, l.rubros, 'Todos');
         fillSelect(el.fColor, l.colores, 'Todos');
         fillCategorias();
-        el.dlLinea.innerHTML = l.lineas.map((v) => '<option value="' + esc(v) + '"></option>').join('');
+        S.lineas.forEach((v) => { if (!l.lineas.includes(v)) S.lineas.delete(v); });
+        renderLineas();
         el.dlModelo.innerHTML = l.modelos.map((m) =>
             '<option value="' + esc(m.modelo) + '" label="' + esc(m.descripcion || '') + '"></option>').join('');
     }
@@ -261,7 +269,43 @@ const VelocidadVentas = (() => {
 
     function resetSelectionFilters() {
         el.fRubro.value = ''; el.fCategoria.value = ''; el.fColor.value = '';
-        el.fLinea.value = ''; el.fModelo.value = '';
+        el.fModelo.value = '';
+        S.lineas.clear();
+        el.fLineaQ.value = '';
+        renderLineas();
+    }
+
+    // ── Línea: selección múltiple ─────────────────────────────
+
+    /** Texto del botón: "Todas" · el nombre si es una sola · "N líneas". */
+    function lineaLabel() {
+        const n = S.lineas.size;
+        if (!n) return 'Todas';
+        if (n === 1) return Array.from(S.lineas)[0];
+        return n + ' líneas';
+    }
+
+    function renderLineas() {
+        const l = S.lists[MODES[S.mode].origen];
+        const all = l ? l.lineas : [];
+        const q = el.fLineaQ.value.trim().toLocaleLowerCase('es');
+        const vis = q ? all.filter((v) => v.toLocaleLowerCase('es').includes(q)) : all;
+        el.fLineaList.innerHTML = vis.length
+            ? vis.map((v) => {
+                const on = S.lineas.has(v);
+                return '<li role="option" aria-selected="' + on + '"><label class="vv-multi-opt">' +
+                    '<input type="checkbox" value="' + esc(v) + '"' + (on ? ' checked' : '') + '>' +
+                    '<span>' + esc(v) + '</span></label></li>';
+            }).join('')
+            : '<li class="vv-multi-empty">Sin resultados</li>';
+        el.fLineaTxt.textContent = lineaLabel();
+        el.fLinea.title = S.lineas.size > 1 ? Array.from(S.lineas).join('\n') : '';
+    }
+
+    function openLineas(open) {
+        el.fLineaPop.hidden = !open;
+        el.fLinea.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) { el.fLineaQ.focus(); }
     }
 
     // ── Indicadores ───────────────────────────────────────────
@@ -411,7 +455,10 @@ const VelocidadVentas = (() => {
         const parts = [];
         if (el.fRubro.value) parts.push('Rubro: ' + el.fRubro.value);
         if (el.fCategoria.value) parts.push('Categoría: ' + el.fCategoria.value);
-        if (el.fLinea.value.trim()) parts.push('Línea: ' + el.fLinea.value.trim());
+        if (S.lineas.size) {
+            const ls = Array.from(S.lineas);
+            parts.push((ls.length > 1 ? 'Líneas: ' : 'Línea: ') + (ls.length > 3 ? ls.slice(0, 3).join(', ') + ' y ' + (ls.length - 3) + ' más' : ls.join(', ')));
+        }
         if (el.fColor.value) parts.push('Color: ' + el.fColor.value);
         parts.push('Ingreso a locales ' + (el.fDesde.value ? fdate(el.fDesde.value) : '…') + ' – ' + (el.fHasta.value ? fdate(el.fHasta.value) : '…'));
         el.caption.textContent = parts.join(' · ');
@@ -818,8 +865,38 @@ const VelocidadVentas = (() => {
         const reload = debounce(loadRanking, 250);
         [el.fDesde, el.fHasta, el.fRubro, el.fColor, el.fCategoria].forEach((c) => c.addEventListener('change', reload));
         el.fRubro.addEventListener('change', fillCategorias);
-        // Línea y Modelo son combos con búsqueda: aplican al confirmar (elegir de la lista, Enter o salir del campo).
-        [el.fLinea, el.fModelo].forEach((c) => c.addEventListener('change', reload));
+        // Modelo es un combo con búsqueda: aplica al confirmar (elegir de la lista, Enter o salir del campo).
+        el.fModelo.addEventListener('change', reload);
+
+        // Línea: selección múltiple. Cada tilde aplica sola (con una pausa corta para poder marcar varias seguidas).
+        const reloadLineas = debounce(loadRanking, 600);
+        const lineasCambiaron = () => { el.fLineaTxt.textContent = lineaLabel(); markSetFields(); reloadLineas(); };
+        el.fLinea.addEventListener('click', () => openLineas(el.fLineaPop.hidden));
+        el.fLineaQ.addEventListener('input', renderLineas);
+        el.fLineaList.addEventListener('change', (ev) => {
+            const cb = ev.target;
+            if (!(cb instanceof HTMLInputElement)) return;
+            if (cb.checked) S.lineas.add(cb.value); else S.lineas.delete(cb.value);
+            cb.closest('li').setAttribute('aria-selected', cb.checked ? 'true' : 'false');
+            lineasCambiaron();
+        });
+        el.fLineaPop.addEventListener('click', (ev) => {
+            const b = ev.target.closest('button[data-act]');
+            if (!b) return;
+            if (b.dataset.act === 'none') {
+                S.lineas.clear();
+            } else {
+                el.fLineaList.querySelectorAll('input[type=checkbox]').forEach((cb) => S.lineas.add(cb.value));
+            }
+            renderLineas();
+            lineasCambiaron();
+        });
+        document.addEventListener('click', (ev) => {
+            if (!el.fLineaPop.hidden && !el.fLineaWrap.contains(ev.target)) openLineas(false);
+        });
+        el.fLineaWrap.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape' && !el.fLineaPop.hidden) { ev.stopPropagation(); openLineas(false); el.fLinea.focus(); }
+        });
 
         el.btnClear.addEventListener('click', () => {
             resetSelectionFilters();

@@ -1,7 +1,7 @@
 <?php
 /**
  * /bi/velocidad/ajax/ranking.php
- * GET: origen=ar|uy, modo=top|bottom, desde, hasta, rubro, categoria, color, linea, modelo, limit
+ * GET: origen=ar|uy, modo=top|bottom, desde, hasta, rubro, categoria, color, linea[] (una o varias), modelo, limit
  */
 require __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../class/VelocidadVentasDB.php';

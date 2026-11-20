@@ -39,6 +39,25 @@ function vv_txt($v, int $max = 120): string
     return mb_substr(trim($v), 0, $max);
 }
 
+/**
+ * Lista de textos (selección múltiple): acepta `x[]=a&x[]=b` o un único `x=a`.
+ * Sin vacíos ni repetidos y con tope de elementos.
+ */
+function vv_lista($v, int $maxItems = 200): array
+{
+    if (!is_array($v)) {
+        $v = [$v];
+    }
+    $out = [];
+    foreach ($v as $item) {
+        $t = vv_txt($item);
+        if ($t !== '') {
+            $out[$t] = true;
+        }
+    }
+    return array_slice(array_keys($out), 0, $maxItems);
+}
+
 /** Fecha 'YYYY-MM-DD' válida o null. */
 function vv_fecha($v): ?string
 {
@@ -58,7 +77,7 @@ function vv_filtros_desde_get(): array
         'rubro'     => vv_txt($_GET['rubro'] ?? ''),
         'categoria' => vv_txt($_GET['categoria'] ?? ''),
         'color'     => vv_txt($_GET['color'] ?? ''),
-        'linea'     => vv_txt($_GET['linea'] ?? ''),
+        'linea'     => vv_lista($_GET['linea'] ?? []),   // selección múltiple
         'modelo'    => vv_txt($_GET['modelo'] ?? ''),
     ];
 }
